@@ -2,7 +2,12 @@ import { clerkMiddleware, createRouteMatcher } from "@clerk/nextjs/server";
 
 import { intlMiddleware } from "./tools/intl/middleware/intl-middleware";
 
-const isPublicRoute = createRouteMatcher(["/", "/sign-in(.*)", "/sign-up(.*)"]);
+const isPublicRoute = createRouteMatcher([
+  "/",
+  "/api/clerk/webhooks(.*)",
+  "/sign-in(.*)",
+  "/sign-up(.*)",
+]);
 
 export default clerkMiddleware(async (auth, request) => {
   if (!isPublicRoute(request)) {
@@ -15,5 +20,10 @@ export default clerkMiddleware(async (auth, request) => {
 });
 
 export const config = {
-  matcher: ["/((?!_next|_vercel|.*\\..*).*)", "/api(.*)"],
+  matcher: [
+    // Skip Next.js internals and all static files, unless found in search params
+    "/((?!_next|_vercel|.*\\..*).*)",
+    // Always run for API routes
+    "/api(.*)",
+  ],
 };

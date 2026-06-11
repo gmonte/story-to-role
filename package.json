@@ -1,0 +1,37 @@
+{
+  "name": "company-balance",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": "24.14.1"
+  },
+  "packageManager": "pnpm@10.33.0",
+  "scripts": {
+    "build": "lerna run build",
+    "build:web": "lerna run build --scope='web' --stream",
+    "dev:web": "lerna run dev --scope='web' --stream",
+    "start:web": "lerna run start --scope='web' --stream",
+    "dev": "lerna run dev --stream",
+    "lint:fix": "lerna run lint:fix",
+    "lint": "lerna run lint",
+    "test": "lerna run test --stream",
+    "predeploy:web": "lerna run predeploy --scope='web' --stream",
+    "prepare": "node .husky/install.mjs",
+    "typecheck": "lerna run typecheck"
+  },
+  "devDependencies": {
+    "@commitlint/cli": "catalog:root",
+    "@commitlint/config-conventional": "catalog:root",
+    "@repo/prettier-config": "workspace:*",
+    "@repo/typescript-config": "workspace:*",
+    "commitizen": "catalog:root",
+    "cz-pnpm-workspace-changelog": "catalog:root",
+    "husky": "catalog:root",
+    "lerna": "catalog:root",
+    "lint-staged": "catalog:quality",
+    "prettier": "catalog:quality",
+    "tsx": "catalog:common",
+    "typescript": "catalog:common"
+  }
+}

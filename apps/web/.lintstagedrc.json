@@ -1,0 +1,7 @@
+{
+  "src/**/*.{ts,tsx}": [
+    "bash -c 'tsc --noEmit -p tsconfig.base.json'",
+    "eslint --fix --max-warnings=0 --no-warn-ignored"
+  ],
+  "**/*.json": ["prettier --write"]
+}

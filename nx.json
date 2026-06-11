@@ -1,0 +1,35 @@
+{
+  "targetDefaults": {
+    "build": {
+      "cache": true,
+      "dependsOn": ["^build"],
+      "outputs": [
+        "{projectRoot}/.next",
+        "!{projectRoot}/.next/cache",
+        "{projectRoot}/.vercel",
+        "{projectRoot}/build",
+        "{projectRoot}/dist"
+      ]
+    },
+    "predeploy": {
+      "cache": true,
+      "dependsOn": ["^predeploy"]
+    },
+    "lint": {
+      "cache": true,
+      "dependsOn": ["typecheck", "^lint"]
+    },
+    "lint:fix": {
+      "cache": true,
+      "dependsOn": ["typecheck", "^lint:fix"]
+    },
+    "test": {
+      "cache": true,
+      "dependsOn": ["typecheck"]
+    },
+    "typecheck": {
+      "cache": true,
+      "dependsOn": ["^typecheck"]
+    }
+  }
+}

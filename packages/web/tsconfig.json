@@ -1,0 +1,13 @@
+{
+  "extends": "@repo/typescript-config/library.json",
+  "compilerOptions": {
+    "baseUrl": ".",
+    "jsx": "react-jsx",
+    "paths": {
+      "@repo/web/*": ["./src/*"],
+      "@repo/common/*": ["../common/src/*"],
+      "@repo/intl/*": ["../intl/src/*"]
+    }
+  },
+  "include": ["src", "vitest.*.ts"]
+}

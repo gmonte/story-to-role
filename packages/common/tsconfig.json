@@ -1,0 +1,9 @@
+{
+  "extends": "@repo/typescript-config/library.json",
+  "include": ["src", "vitest.*.ts"],
+  "compilerOptions": {
+    "paths": {
+      "@repo/common/*": ["./src/*"]
+    }
+  }
+}

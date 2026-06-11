@@ -1,0 +1,43 @@
+{
+  "name": "@repo/intl",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./*": "./src/*.ts",
+    "./*/index": "./src/*/index.ts",
+    "./eslint.config": "./eslint.config.js"
+  },
+  "scripts": {
+    "intl:compile": "formatjs compile-folder extracted compiled --ast --format lokalise",
+    "intl:extract": "tsx scripts/extract-messages.ts",
+    "intl:types": "tsx scripts/make-types.ts",
+    "lint": "eslint . --max-warnings=0 --no-warn-ignored",
+    "lint:fix": "eslint . --fix",
+    "postinstall": "pnpm intl:types && pnpm intl:extract && pnpm intl:compile",
+    "test": "vitest run --passWithNoTests",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@formatjs/intl": "catalog:intl",
+    "@formatjs/intl-localematcher": "catalog:intl",
+    "@repo/common": "workspace:*",
+    "react-intl": "catalog:intl"
+  },
+  "devDependencies": {
+    "@formatjs/cli": "catalog:intl",
+    "@repo/eslint-config": "workspace:*",
+    "@repo/typescript-config": "workspace:*",
+    "@types/node": "catalog:common",
+    "@types/react": "catalog:web",
+    "@vitejs/plugin-react": "catalog:testing",
+    "@vitest/coverage-v8": "catalog:testing",
+    "react": "catalog:web",
+    "tsx": "catalog:common",
+    "vitest": "catalog:testing"
+  },
+  "peerDependencies": {
+    "@types/react": "catalog:web",
+    "react": "catalog:web"
+  }
+}

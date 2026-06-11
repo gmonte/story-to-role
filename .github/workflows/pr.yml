@@ -1,0 +1,63 @@
+name: pr
+
+on:
+  pull_request:
+    branches-ignore:
+      - main
+
+concurrency:
+  group: pr-${{ github.head_ref }}
+  cancel-in-progress: true
+
+env:
+  PNPM_VERSION: 10.33.0
+  NODE_VERSION: 24.14.1
+  SKIP_ENV_VALIDATION: "true"
+  NODE_DISABLE_COMPILE_CACHE: "1"
+  NODE_OPTIONS: --no-node-snapshot
+  VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+  VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+
+jobs:
+  quality:
+    name: lint, typecheck, test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Detect changed files
+        id: changes
+        run: |
+          git fetch origin "${{ github.base_ref }}" --depth=1
+          git diff --name-only "origin/${{ github.base_ref }}"...HEAD > changed.txt
+          if grep -E '\.(ts|tsx|js|jsx)$|configs/|package\.json$|eslint\.config\.|tsconfig.*\.json$' changed.txt > lint_files.txt; then
+            echo "has_relevant_changes=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_relevant_changes=false" >> "$GITHUB_OUTPUT"
+          fi
+          echo "Files to lint:"
+          cat lint_files.txt || true
+
+      - name: Setup pnpm
+        if: steps.changes.outputs.has_relevant_changes == 'true'
+        uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - name: Setup Node.js
+        if: steps.changes.outputs.has_relevant_changes == 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+
+      - name: Install dependencies
+        if: steps.changes.outputs.has_relevant_changes == 'true'
+        run: pnpm install --frozen-lockfile
+
+      - name: Lint, typecheck and test
+        if: steps.changes.outputs.has_relevant_changes == 'true'
+        run: pnpm lerna run lint,test --verbose

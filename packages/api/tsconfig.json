@@ -1,0 +1,15 @@
+{
+  "extends": "@repo/typescript-config/library.json",
+  "compilerOptions": {
+    "declaration": false,
+    "declarationMap": false,
+    "emitDeclarationOnly": false,
+    "noEmit": true,
+    "paths": {
+      "@repo/api/*": ["./src/*"],
+      "@repo/common/*": ["../common/src/*"],
+      "@repo/intl/*": ["../intl/src/*"]
+    }
+  },
+  "include": ["src", "drizzle.config.ts", "@types/*.d.ts", "vitest.*.ts"]
+}

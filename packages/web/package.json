@@ -1,0 +1,55 @@
+{
+  "name": "@repo/web",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./*": "./src/*.ts",
+    "./*/index": "./src/*/index.ts",
+    "./globals.css": "./src/styles/globals.css",
+    "./eslint.config": "./eslint.config.js"
+  },
+  "scripts": {
+    "lint": "eslint . --max-warnings=0 --no-warn-ignored",
+    "lint:fix": "eslint . --fix",
+    "test": "vitest run --passWithNoTests",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@hookform/resolvers": "catalog:common",
+    "@repo/common": "workspace:*",
+    "@repo/intl": "workspace:*",
+    "class-variance-authority": "catalog:web",
+    "clsx": "catalog:web",
+    "lucide-react": "catalog:web",
+    "next": "catalog:web",
+    "next-themes": "catalog:web",
+    "radix-ui": "catalog:web",
+    "react-hook-form": "catalog:common",
+    "sonner": "catalog:web",
+    "tailwind-merge": "catalog:web",
+    "tw-animate-css": "catalog:web",
+    "zod": "catalog:common"
+  },
+  "devDependencies": {
+    "@repo/eslint-config": "workspace:*",
+    "@repo/typescript-config": "workspace:*",
+    "@testing-library/react": "catalog:testing",
+    "@types/node": "catalog:common",
+    "@types/react": "catalog:web",
+    "@types/react-dom": "catalog:web",
+    "@vitejs/plugin-react": "catalog:testing",
+    "@vitest/coverage-v8": "catalog:testing",
+    "jsdom": "catalog:testing",
+    "react": "catalog:web",
+    "react-dom": "catalog:web",
+    "tailwindcss": "catalog:web",
+    "type-fest": "catalog:common",
+    "vitest": "catalog:testing"
+  },
+  "peerDependencies": {
+    "@types/react": "catalog:web",
+    "react": "catalog:web",
+    "react-dom": "catalog:web"
+  }
+}

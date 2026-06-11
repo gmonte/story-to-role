@@ -1,0 +1,63 @@
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+lerna-debug.log*
+.pnpm-debug.log*
+
+# Editor
+.vscode/*
+!.vscode/settings.json
+!.vscode/extensions.json
+.idea/
+
+# Node
+node_modules/
+.pnpm-store/
+
+# TypeScript
+*.tsbuildinfo
+next-env.d.ts
+
+# Coverage
+coverage
+*.lcov
+.nyc_output
+
+# Next.js
+.next/
+out/
+
+# Build output
+dist/
+build/
+
+# Caches
+.eslintcache
+.cache
+
+# dotenv
+.env
+.env.*.local
+.env.local
+
+# vercel
+.vercel
+
+# lerna & nx
+.nx/cache
+.nx/workspace-data
+
+# intl
+packages/intl/intl-message-types.ts
+packages/intl/extracted/
+packages/intl/compiled/
+
+# clerk
+/.clerk/

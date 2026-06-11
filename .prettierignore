@@ -1,0 +1,4 @@
+pnpm-lock.yaml
+packages/web/src/components/ui/*
+packages/intl/extracted/*
+packages/intl/compiled/*

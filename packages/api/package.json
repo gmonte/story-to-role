@@ -1,0 +1,47 @@
+{
+  "name": "@repo/api",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./*": "./src/*.ts",
+    "./*/index": "./src/*/index.ts",
+    "./eslint.config": "./eslint.config.js",
+    "./package.json": "./package.json"
+  },
+  "scripts": {
+    "db:up": "pnpm db:generate && pnpm db:migrate",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "DB_MIGRATING=true drizzle-kit migrate",
+    "db:push": "DB_MIGRATING=true drizzle-kit push",
+    "db:studio": "drizzle-kit studio",
+    "lint": "eslint . --max-warnings=0 --no-warn-ignored",
+    "lint:fix": "eslint . --fix",
+    "predeploy": "pnpm db:migrate",
+    "test": "vitest run --passWithNoTests",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@clerk/nextjs": "catalog:web",
+    "@repo/common": "workspace:*",
+    "@repo/intl": "workspace:*",
+    "@trpc/server": "catalog:common",
+    "drizzle-orm": "catalog:api",
+    "drizzle-zod": "catalog:api",
+    "postgres": "catalog:api",
+    "superjson": "catalog:common",
+    "trpc-to-openapi": "catalog:web",
+    "tsx": "catalog:common",
+    "zod": "catalog:common"
+  },
+  "devDependencies": {
+    "@electric-sql/pglite": "catalog:testing",
+    "@repo/eslint-config": "workspace:*",
+    "@repo/typescript-config": "workspace:*",
+    "@types/node": "catalog:common",
+    "@vitest/coverage-v8": "catalog:testing",
+    "drizzle-kit": "catalog:api",
+    "type-fest": "catalog:common",
+    "vitest": "catalog:testing"
+  }
+}

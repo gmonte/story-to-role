@@ -1,0 +1,28 @@
+{
+  "name": "@repo/eslint-config",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./base": "./base.js",
+    "./nextjs": "./nextjs.js",
+    "./react": "./react.js",
+    "./utils/create-restricted-import-config": "./utils/create-restricted-import-config.js"
+  },
+  "devDependencies": {
+    "@eslint/js": "catalog:quality",
+    "@next/eslint-plugin-next": "catalog:quality",
+    "@tanstack/eslint-plugin-query": "catalog:quality",
+    "eslint": "catalog:quality",
+    "eslint-config-prettier": "catalog:quality",
+    "eslint-plugin-check-file": "catalog:quality",
+    "eslint-plugin-formatjs": "catalog:quality",
+    "eslint-plugin-import": "catalog:quality",
+    "eslint-plugin-prettier": "catalog:quality",
+    "eslint-plugin-react": "catalog:quality",
+    "eslint-plugin-react-hooks": "catalog:quality",
+    "globals": "catalog:quality",
+    "typescript-eslint": "catalog:quality",
+    "zod": "catalog:common"
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "extends": "@repo/typescript-config/nextjs.json",
+  "compilerOptions": {
+    "baseUrl": ".",
+    "outDir": "dist",
+    "paths": {
+      "~/*": ["./src/*"],
+      "@repo/api/*": ["../../packages/api/src/*"],
+      "@repo/common/*": ["../../packages/common/src/*"],
+      "@repo/intl/*": ["../../packages/intl/src/*"],
+      "@repo/web/*": ["../../packages/web/src/*"]
+    }
+  }
+}

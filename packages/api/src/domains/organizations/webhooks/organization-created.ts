@@ -22,7 +22,10 @@ export const organizationCreatedWebhook = async (
   const newOrg = prepareClerkOrganizationData(event.data);
 
   const preExisting = await db.query.organizationsTable.findFirst({
-    where: eq(organizationsTable.clerkOrganizationId, newOrg.clerkOrganizationId),
+    where: eq(
+      organizationsTable.clerkOrganizationId,
+      newOrg.clerkOrganizationId
+    ),
   });
 
   if (preExisting) {

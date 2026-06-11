@@ -11,7 +11,7 @@ export function getLocaleFromHeaders(headers: Headers): Locale {
 
   const languages = acceptLanguage
     .split(",")
-    .map((part) => part.split(";")[0]!.trim())
+    .map((part) => part.split(";")[0].trim())
     .filter(Boolean);
 
   try {

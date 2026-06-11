@@ -61,3 +61,9 @@ jobs:
       - name: Lint, typecheck and test
         if: steps.changes.outputs.has_relevant_changes == 'true'
         run: pnpm lerna run lint,test --verbose
+
+      - name: Notify Vercel
+        if: always()
+        uses: vercel/repository-dispatch/actions/status@v1
+        with:
+          name: quality

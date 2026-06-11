@@ -2,8 +2,8 @@ name: pr
 
 on:
   pull_request:
-    branches-ignore:
-      - main
+    branches:
+      - staging
 
 concurrency:
   group: pr-${{ github.head_ref }}
@@ -19,8 +19,8 @@ env:
   VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
 
 jobs:
-  quality:
-    name: lint, typecheck, test
+  quality-and-preview:
+    name: quality + preview
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -42,28 +42,42 @@ jobs:
           cat lint_files.txt || true
 
       - name: Setup pnpm
-        if: steps.changes.outputs.has_relevant_changes == 'true'
         uses: pnpm/action-setup@v4
         with:
           version: ${{ env.PNPM_VERSION }}
 
       - name: Setup Node.js
-        if: steps.changes.outputs.has_relevant_changes == 'true'
         uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: pnpm
 
       - name: Install dependencies
-        if: steps.changes.outputs.has_relevant_changes == 'true'
         run: pnpm install --frozen-lockfile
 
       - name: Lint, typecheck and test
         if: steps.changes.outputs.has_relevant_changes == 'true'
         run: pnpm lerna run lint,test --verbose
 
-      - name: Notify Vercel
-        if: always()
-        uses: vercel/repository-dispatch/actions/status@v1
+      - name: Pull Vercel preview env
+        run: npx vercel pull --yes --environment=preview --token=${{ secrets.VERCEL_TOKEN }}
+
+      - name: Build for Vercel
+        run: npx vercel build --token=${{ secrets.VERCEL_TOKEN }}
+
+      - name: Deploy to Vercel
+        id: deploy
+        run: |
+          url=$(npx vercel deploy --prebuilt --token=${{ secrets.VERCEL_TOKEN }})
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+
+      - name: Alias preview to pr-${{ github.event.pull_request.number }}
+        run: |
+          npx vercel alias set "${{ steps.deploy.outputs.url }}" "pr-${{ github.event.pull_request.number }}-companybalance.vercel.app" --token=${{ secrets.VERCEL_TOKEN }}
+
+      - name: Comment preview URL on PR
+        uses: marocchino/sticky-pull-request-comment@v2
         with:
-          name: quality
+          header: preview
+          message: |
+            Preview deployed: https://pr-${{ github.event.pull_request.number }}-companybalance.vercel.app

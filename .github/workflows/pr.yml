@@ -69,7 +69,7 @@ jobs:
             ${{ runner.os }}-pnpm-
 
       - name: Install dependencies
-        if: steps.changes.outputs.has_relevant_changes == 'true' && steps.cache-deps.outputs.cache-hit != 'true'
+        if: steps.changes.outputs.has_relevant_changes == 'true'
         run: pnpm install --frozen-lockfile
 
       - name: Lint, typecheck and test
@@ -112,7 +112,6 @@ jobs:
             ${{ runner.os }}-pnpm-
 
       - name: Install dependencies
-        if: steps.cache-deps.outputs.cache-hit != 'true'
         run: pnpm install --frozen-lockfile
 
       - name: Pull Vercel preview env

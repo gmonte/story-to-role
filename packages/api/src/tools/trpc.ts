@@ -33,18 +33,20 @@ const t = initTRPC
   .meta<OpenApiMeta>()
   .context<typeof createTRPCContext>()
   .create({
-  transformer: SuperJSON,
-  errorFormatter({ shape, error }) {
-    return {
-      ...shape,
-      data: {
-        ...shape.data,
-        zodError:
-          error.cause instanceof ZodError ? z.treeifyError(error.cause) : null,
-      },
-    };
-  },
-});
+    transformer: SuperJSON,
+    errorFormatter({ shape, error }) {
+      return {
+        ...shape,
+        data: {
+          ...shape.data,
+          zodError:
+            error.cause instanceof ZodError
+              ? z.treeifyError(error.cause)
+              : null,
+        },
+      };
+    },
+  });
 
 export const createTRPCRouter = t.router;
 export const createCallerFactory = t.createCallerFactory;

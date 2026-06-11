@@ -11,7 +11,7 @@ This is a pnpm workspace monorepo (lerna + nx).
 
 **Important**: For UI formatting and i18n, get `t` from `@repo/intl`: use `useTranslation` in client components and `getTranslation` in server components.
 
-**Important**: Never hand-write database migrations. Edit the drizzle schema (`packages/api/src/domains/*/db/*-tables.ts`), then run `pnpm --filter @repo/api db:generate` to generate the SQL. After it's created, edit the generated `.sql` file to add `IF NOT EXISTS` (or `IF EXISTS` for drops) to every statement so the migration can be re-run without errors.
+**Important**: Never hand-write database migrations. Edit the drizzle schema (`packages/api/src/domains/*/db/*-tables.ts`), then run `pnpm --filter @repo/api db:generate --name <migration-name>` to generate the SQL. Create a unique migration name each time you generate a migration that reflects the changes made to the schema (e.g., `add_column_name`). If a migration with the same name already exists, it will be overwritten, so be careful! After it's created, edit the generated `.sql` file to add `IF NOT EXISTS` (or `IF EXISTS` for drops) to every statement so the migration can be re-run without errors.
 
 Commands:
 

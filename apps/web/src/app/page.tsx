@@ -1,4 +1,4 @@
-import { SignedIn, SignedOut, SignInButton, UserButton } from "@clerk/nextjs";
+import { Show, SignInButton, UserButton } from "@clerk/nextjs";
 import Link from "next/link";
 
 import { getTranslation } from "@repo/intl/get-translation";
@@ -25,26 +25,28 @@ export default async function HomePage() {
             {t.formatMessage({ defaultMessage: "Company Balance" })}
           </CardTitle>
           <CardDescription>
-            {t.formatMessage({ defaultMessage: "Hello, world!" })}
+            {t.formatMessage({
+              defaultMessage: "Track your company finances with ease.",
+            })}
           </CardDescription>
         </CardHeader>
         <CardContent>
           <div className="flex items-center justify-between gap-3">
-            <SignedOut>
+            <Show when="signed-out">
               <SignInButton mode="modal">
                 <Button>
                   {t.formatMessage({ defaultMessage: "Sign in" })}
                 </Button>
               </SignInButton>
-            </SignedOut>
-            <SignedIn>
+            </Show>
+            <Show when="signed-in">
               <Button asChild variant="outline">
                 <Link href="/app">
                   {t.formatMessage({ defaultMessage: "Go to dashboard" })}
                 </Link>
               </Button>
               <UserButton />
-            </SignedIn>
+            </Show>
           </div>
         </CardContent>
       </Card>

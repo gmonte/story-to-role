@@ -51,7 +51,6 @@ jobs:
             ${{ runner.os }}-pnpm-
 
       - name: Install dependencies
-        if: steps.cache-deps.outputs.cache-hit != 'true'
         run: pnpm install --frozen-lockfile
 
       - name: Pull Vercel production env

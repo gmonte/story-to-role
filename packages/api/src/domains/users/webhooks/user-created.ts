@@ -50,7 +50,7 @@ export const userCreatedWebhook = async (
       .insert(usersTable)
       .values(newUser)
       .returning();
-    userInternalId = createdUser!.id;
+    userInternalId = createdUser.id;
   }
 
   // Mirror our internal id back to Clerk public metadata so it can be embedded

@@ -7,7 +7,6 @@ import { Geist, Geist_Mono } from "next/font/google";
 import { ThemeProvider } from "next-themes";
 
 import { getTranslation } from "@repo/intl/get-translation";
-import type { Locale } from "@repo/intl/intl-config";
 import { IntlProvider } from "@repo/intl/intl-provider";
 import { Toaster } from "@repo/web/components/ui/sonner";
 import { cn } from "@repo/web/lib/utils";
@@ -61,7 +60,7 @@ export default async function RootLayout({
             "bg-background font-sans antialiased"
           )}
         >
-          <IntlProvider locale={t.locale as Locale} messages={t.messages}>
+          <IntlProvider locale={t.locale} messages={t.messages}>
             <TRPCReactProvider>
               <ThemeProvider
                 attribute="class"

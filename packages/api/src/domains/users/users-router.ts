@@ -8,10 +8,7 @@ import { organizationSchema } from "@repo/api/domains/organizations/schemas/orga
 import { usersTable } from "@repo/api/domains/users/db/users-tables";
 import { userSchema } from "@repo/api/domains/users/schemas/user";
 import { db } from "@repo/api/tools/db";
-import {
-  createTRPCRouter,
-  protectedProcedure,
-} from "@repo/api/tools/trpc";
+import { createTRPCRouter, protectedProcedure } from "@repo/api/tools/trpc";
 
 const myOrganizationOutput = organizationSchema.extend({
   clerkRole: z.string(),
@@ -70,10 +67,7 @@ export const usersRouter = createTRPCRouter({
         )
         .innerJoin(
           organizationsTable,
-          eq(
-            organizationsTable.id,
-            organizationMembershipsTable.organizationId
-          )
+          eq(organizationsTable.id, organizationMembershipsTable.organizationId)
         )
         .where(eq(usersTable.clerkUserId, ctx.session.userId));
 

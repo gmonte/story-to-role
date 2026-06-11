@@ -41,7 +41,9 @@ function mergeExtractedMessages(locale: string) {
   }
 
   const sorted = Object.fromEntries(
-    Object.entries(mergedContents).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
+    Object.entries(mergedContents).sort(([a], [b]) =>
+      a < b ? -1 : a > b ? 1 : 0
+    )
   );
 
   const prevRaw = JSON.stringify(prevContents, null, 2) + "\n";

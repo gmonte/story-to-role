@@ -25,7 +25,9 @@ export default async function HomePage() {
             {t.formatMessage({ defaultMessage: "Company Balance" })}
           </CardTitle>
           <CardDescription>
-            {t.formatMessage({ defaultMessage: "Hello, world!" })}
+            {t.formatMessage({
+              defaultMessage: "Track your company finances with ease.",
+            })}
           </CardDescription>
         </CardHeader>
         <CardContent>

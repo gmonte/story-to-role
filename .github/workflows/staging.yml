@@ -63,9 +63,25 @@ jobs:
       - name: Deploy to Vercel
         id: deploy
         run: |
-          url=$(npx vercel deploy --prebuilt --token=${{ secrets.VERCEL_TOKEN }})
+          url=$(npx vercel deploy --prebuilt \
+            --meta branch=staging \
+            --token=${{ secrets.VERCEL_TOKEN }})
           echo "url=$url" >> "$GITHUB_OUTPUT"
 
       - name: Alias staging to stg-companybalance.vercel.app
         run: |
           npx vercel alias set "${{ steps.deploy.outputs.url }}" "stg-companybalance.vercel.app" --token=${{ secrets.VERCEL_TOKEN }}
+
+      - name: Prune older staging deployments
+        continue-on-error: true
+        run: |
+          IDS=$(curl -sf -H "Authorization: Bearer ${{ secrets.VERCEL_TOKEN }}" \
+            "https://api.vercel.com/v6/deployments?projectId=${{ secrets.VERCEL_PROJECT_ID }}&teamId=${{ secrets.VERCEL_ORG_ID }}&meta-branch=staging&limit=100" \
+            | jq -r '.deployments[1:][].uid')
+          while IFS= read -r id; do
+            [ -z "$id" ] && continue
+            echo "Deleting $id"
+            curl -sf -X DELETE -H "Authorization: Bearer ${{ secrets.VERCEL_TOKEN }}" \
+              "https://api.vercel.com/v13/deployments/$id?teamId=${{ secrets.VERCEL_ORG_ID }}" \
+              && echo "  ok" || echo "  failed"
+          done <<< "$IDS"

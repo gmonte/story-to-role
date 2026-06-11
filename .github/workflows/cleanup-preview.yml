@@ -1,0 +1,37 @@
+name: cleanup pr preview
+
+on:
+  pull_request:
+    types: [closed]
+
+env:
+  VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+  VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+
+jobs:
+  cleanup:
+    name: cleanup pr preview
+    runs-on: ubuntu-latest
+    steps:
+      - name: Remove pr-${{ github.event.pull_request.number }} alias
+        continue-on-error: true
+        run: |
+          npx vercel alias rm "pr-${{ github.event.pull_request.number }}-companybalance.vercel.app" --yes --token=${{ secrets.VERCEL_TOKEN }}
+
+      - name: Delete all deployments for this PR
+        run: |
+          PR="${{ github.event.pull_request.number }}"
+          IDS=$(curl -sf -H "Authorization: Bearer ${{ secrets.VERCEL_TOKEN }}" \
+            "https://api.vercel.com/v6/deployments?projectId=${{ secrets.VERCEL_PROJECT_ID }}&teamId=${{ secrets.VERCEL_ORG_ID }}&meta-prNumber=$PR&limit=100" \
+            | jq -r '.deployments[].uid')
+          if [ -z "$IDS" ]; then
+            echo "No deployments to delete for PR #$PR"
+            exit 0
+          fi
+          while IFS= read -r id; do
+            [ -z "$id" ] && continue
+            echo "Deleting $id"
+            curl -sf -X DELETE -H "Authorization: Bearer ${{ secrets.VERCEL_TOKEN }}" \
+              "https://api.vercel.com/v13/deployments/$id?teamId=${{ secrets.VERCEL_ORG_ID }}" \
+              && echo "  ok" || echo "  failed"
+          done <<< "$IDS"

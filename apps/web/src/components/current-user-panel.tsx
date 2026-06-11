@@ -52,8 +52,18 @@ export function CurrentUserPanel() {
           <ul className="list-disc pl-5">
             {orgs.map((org) => (
               <li key={org.id}>
-                {org.name}{" "}
-                <span className="text-muted-foreground">({org.clerkRole})</span>
+                {t.formatMessage(
+                  {
+                    defaultMessage: "{name} <muted>({role})</muted>",
+                  },
+                  {
+                    name: org.name,
+                    role: org.clerkRole,
+                    muted: (chunks) => (
+                      <span className="text-muted-foreground">{chunks}</span>
+                    ),
+                  }
+                )}
               </li>
             ))}
           </ul>

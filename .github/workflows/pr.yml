@@ -15,7 +15,7 @@ env:
   SKIP_ENV_VALIDATION: "true"
   NODE_DISABLE_COMPILE_CACHE: "1"
   NODE_OPTIONS: --no-node-snapshot
-  VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+  VERCEL_TEAM_ID: ${{ secrets.VERCEL_TEAM_ID }}
   VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
 
 jobs:
@@ -139,13 +139,13 @@ jobs:
         run: |
           PR="${{ github.event.pull_request.number }}"
           IDS=$(curl -sf -H "Authorization: Bearer ${{ secrets.VERCEL_TOKEN }}" \
-            "https://api.vercel.com/v6/deployments?projectId=${{ secrets.VERCEL_PROJECT_ID }}&teamId=${{ secrets.VERCEL_ORG_ID }}&meta-prNumber=$PR&limit=100" \
+            "https://api.vercel.com/v6/deployments?projectId=${{ secrets.VERCEL_PROJECT_ID }}&teamId=${{ secrets.VERCEL_TEAM_ID }}&meta-prNumber=$PR&limit=100" \
             | jq -r '.deployments[1:][].uid')
           while IFS= read -r id; do
             [ -z "$id" ] && continue
             echo "Deleting $id"
             curl -sf -X DELETE -H "Authorization: Bearer ${{ secrets.VERCEL_TOKEN }}" \
-              "https://api.vercel.com/v13/deployments/$id?teamId=${{ secrets.VERCEL_ORG_ID }}" \
+              "https://api.vercel.com/v13/deployments/$id?teamId=${{ secrets.VERCEL_TEAM_ID }}" \
               && echo "  ok" || echo "  failed"
           done <<< "$IDS"
 

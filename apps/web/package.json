@@ -51,6 +51,7 @@
     "@vitejs/plugin-react": "catalog:testing",
     "@vitest/coverage-v8": "catalog:testing",
     "babel-plugin-formatjs": "catalog:intl",
+    "babel-plugin-react-compiler": "catalog:web",
     "jsdom": "catalog:testing",
     "tailwindcss": "catalog:web",
     "type-fest": "catalog:common",

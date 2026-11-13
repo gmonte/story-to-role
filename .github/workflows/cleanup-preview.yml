@@ -16,7 +16,7 @@ jobs:
       - name: Remove pr-${{ github.event.pull_request.number }} alias
         continue-on-error: true
         run: |
-          npx vercel alias rm "pr-${{ github.event.pull_request.number }}-companybalance.vercel.app" --yes --token=${{ secrets.VERCEL_TOKEN }}
+          npx vercel alias rm "pr-${{ github.event.pull_request.number }}-storytorole.vercel.app" --yes --token=${{ secrets.VERCEL_TOKEN }}
 
       - name: Delete all deployments for this PR
         run: |

@@ -29,7 +29,7 @@ export async function generateMetadata(): Promise<Metadata> {
   const t = await getTranslation(locale);
 
   return {
-    title: t.formatMessage({ defaultMessage: "Company Balance" }),
+    title: t.formatMessage({ defaultMessage: "StoryToRole" }),
     description: t.formatMessage({
       defaultMessage: "Hello, world!",
     }),

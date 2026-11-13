@@ -131,7 +131,7 @@ jobs:
 
       - name: Alias preview to pr-${{ github.event.pull_request.number }}
         run: |
-          npx vercel alias set "${{ steps.deploy.outputs.url }}" "pr-${{ github.event.pull_request.number }}-companybalance.vercel.app" --token=${{ secrets.VERCEL_TOKEN }}
+          npx vercel alias set "${{ steps.deploy.outputs.url }}" "pr-${{ github.event.pull_request.number }}-storytorole.vercel.app" --token=${{ secrets.VERCEL_TOKEN }}
 
       - name: Prune older deployments for this PR
         continue-on-error: true
@@ -153,4 +153,4 @@ jobs:
         with:
           header: preview
           message: |
-            Preview deployed: https://pr-${{ github.event.pull_request.number }}-companybalance.vercel.app
+            Preview deployed: https://pr-${{ github.event.pull_request.number }}-storytorole.vercel.app

@@ -8,7 +8,7 @@ import { SwaggerUi } from "./swagger-ui";
 
 export default function DocsPage() {
   const openApiDocument = generateOpenApiDocument(appRouter, {
-    title: "Company Balance API",
+    title: "StoryToRole API",
     version: packageJson.version,
     baseUrl: `${getBaseUrl()}/api/rest`,
   });

@@ -53,7 +53,7 @@ export function parseHeaderCookie(
 }
 
 function getCookiePrefix(): string {
-  return "company-balance-";
+  return "story-to-role-";
 }
 
 function getCookieSuffix(): string {

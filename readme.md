@@ -1,4 +1,4 @@
-# company-balance
+# story-to-role
 
 Hello-world monorepo built with the same architecture as the production repo it was copied from.
 

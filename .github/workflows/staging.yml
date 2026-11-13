@@ -67,9 +67,9 @@ jobs:
             --token=${{ secrets.VERCEL_TOKEN }})
           echo "url=$url" >> "$GITHUB_OUTPUT"
 
-      - name: Alias staging to stg-companybalance.vercel.app
+      - name: Alias staging to stg-storytorole.vercel.app
         run: |
-          npx vercel alias set "${{ steps.deploy.outputs.url }}" "stg-companybalance.vercel.app" --token=${{ secrets.VERCEL_TOKEN }}
+          npx vercel alias set "${{ steps.deploy.outputs.url }}" "stg-storytorole.vercel.app" --token=${{ secrets.VERCEL_TOKEN }}
 
       - name: Prune older staging deployments
         continue-on-error: true

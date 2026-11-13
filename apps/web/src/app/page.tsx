@@ -22,7 +22,7 @@ export default async function HomePage() {
       <Card className="w-full max-w-xl">
         <CardHeader>
           <CardTitle className="text-2xl">
-            {t.formatMessage({ defaultMessage: "Company Balance" })}
+            {t.formatMessage({ defaultMessage: "StoryToRole" })}
           </CardTitle>
           <CardDescription>
             {t.formatMessage({

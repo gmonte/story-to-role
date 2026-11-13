@@ -8,6 +8,16 @@ StoryToRole helps job seekers produce tailored resumes, cover letters and interv
 A role the user holds or has held at one employer, with a title and a period; the unit the guided interview works through one at a time.
 _Avoid_: Job, experience, role
 
+## Openings and applications
+
+**Opening**:
+A job vacancy at a company, described by the text the user pastes; it is open or closed regardless of what the user does.
+_Avoid_: Job, vacancy, role, posting
+
+**Application**:
+The user's pursuit of one opening, which starts when a resume is first generated for it and ends hired, rejected or withdrawn.
+_Avoid_: Candidacy, job, tracker entry
+
 ## Guided interview
 
 **Interface language**:

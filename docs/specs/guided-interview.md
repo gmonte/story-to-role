@@ -155,7 +155,7 @@ Agents change state only through these tools; each one is a tRPC procedure that 
 | --- | --- | --- |
 | `propose_add_position` | Position agent, orchestrator | A new position with employer, title and dates, inserted in chronological order |
 | `propose_remove_position` | Position agent, orchestrator | Removing a position; its evidence is kept hidden so the removal can be undone |
-| `propose_merge_positions` | Orchestrator | Joining duplicates, for example the same job imported from two resumes |
+| `propose_merge_positions` | Orchestrator | Joining duplicates, for example the same position imported from two resumes |
 | `propose_split_position` | Position agent | Splitting one entry in two, for example a promotion with a new scope |
 | `propose_resolve_conflict` | Orchestrator | Choosing between conflicting titles or dates found in different resumes |
 
@@ -214,7 +214,7 @@ Approved extraction is the compaction: context is cut at checkpoints the user co
 | Position agent | Instructions, timeline skeleton, summaries of the previous and next positions, known facts for this position, notes from other positions, and the current session's turns |
 | Subsession (project) | The same, plus summaries of already closed projects of this position instead of their turns |
 | Narrative agent | Approved position summaries and the career timeline |
-| Generation (resume, letter, prep) | Only the evidence relevant to the job, after sensitive-data filtering |
+| Generation (resume, letter, prep) | Only the evidence relevant to the opening, after sensitive-data filtering |
 
 **Rules**
 
@@ -226,13 +226,13 @@ Approved extraction is the compaction: context is cut at checkpoints the user co
 
 ## Integration with generation
 
-Every later feature reads the evidence base through one function that selects, filters and formats evidence for a given job.
+Every later feature reads the evidence base through one function that selects, filters and formats evidence for a given opening.
 
 | Feature | Reads | Comes from meu-emprego-novo |
 | --- | --- | --- |
-| Fit assessment | Job description, skills, evidence kinds, timeline | New (gap identified against Rolevera) |
+| Fit assessment | Opening description, skills, evidence kinds, timeline | New (gap identified against Rolevera) |
 | Tailored resume | Locked facts, relevant evidence, narrative | Strategist, hiring manager and editor loop; best-rated version kept; locked facts and length rules from `policy.py` |
-| Cover letter | Narrative, top stories for the job | New |
+| Cover letter | Narrative, top stories for the opening | New |
 | Interview prep | Stories, skills, gaps from the fit assessment | Interview coach agent |
 | Evidence trace | Source turn ids on each evidence item | New: each generated line links back to what the user said |
 
@@ -245,9 +245,9 @@ StoryToRole is not a general chatbot: every AI call must serve the interview or 
 Each user message passes these layers in order; the first one that fails answers from code, with no call to the main model.
 
 1. **No open chat surface.** The UI only offers the interview, approvals and generation flows. There is no "ask anything" box.
-2. **Input limits in code.** Maximum characters per message, maximum voice-recording length, maximum file size and pages per upload, maximum job-description length.
+2. **Input limits in code.** Maximum characters per message, maximum voice-recording length, maximum file size and pages per upload, maximum opening-description length.
 3. **Topic gate.** A small, cheap model classifies each message as on topic (career, the current position, the interview itself), off topic, or an attempt to override instructions. Off-topic messages get a fixed reply in the interview language that steers back to the current question.
-4. **Content checks on inputs that trigger generation.** An upload must look like a resume and a pasted job description must look like a job posting; anything else is refused before generation, so the generation flow cannot be used as a free writing tool.
+4. **Content checks on inputs that trigger generation.** An upload must look like a resume and a pasted opening description must look like a job posting; anything else is refused before generation, so the generation flow cannot be used as a free writing tool.
 5. **Scoped prompts and tools.** The main model's instructions limit it to the interview, and it has no tools beyond those in this spec: no web access, no code execution.
 6. **Output limits.** A maximum number of output tokens per call, set per call type.
 7. **Budgets and rate limits.** Session size (see session checkpoints), sessions per day, and a monthly usage allowance per plan, enforced before each call. The user sees a usage meter; at the limit the app stops calling the AI and offers an upgrade or an extra pack.
@@ -278,7 +278,7 @@ Thresholds (message length, turns, budgets, cooldown) are settings to tune with 
 **Acceptance criteria**
 
 - [ ] A user with an imported resume completes and approves one position in a single session.
-- [ ] Two resumes listing the same job produce one timeline entry; conflicting dates are shown for the user to pick.
+- [ ] Two resumes listing the same position produce one timeline entry; conflicting dates are shown for the user to pick.
 - [ ] The user can add, edit, merge and remove positions on the timeline without uploading a file.
 - [ ] A position added, split, merged or removed by the interviewer changes the timeline only after the user confirms.
 - [ ] A removed position can be restored with its evidence.

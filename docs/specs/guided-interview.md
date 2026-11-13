@@ -48,6 +48,8 @@ The user sees one continuous chat with a career timeline beside it; behind it, e
 
 The chat language follows the interview language setting; extracted data is stored in the language it was told in and translated at generation time, never at extraction.
 
+The interview language can change at any time and takes effect from the next turn; most users will keep one language for the whole interview. Each evidence item keeps the language it was told in. The approval screen and the timeline show a small language badge (EN/PT) on each item only when the career holds evidence in both languages.
+
 ## Architecture
 
 The user sees one conversation; the system runs a light orchestrator and one short-lived agent context per position, with the database as the only shared memory.
@@ -270,7 +272,6 @@ Thresholds (message length, turns, budgets, cooldown) are settings to tune with 
 
 **Open questions**
 
-- Whether the interview language can change mid-interview, and how mixed-language evidence is shown.
 - Whether the key stays in the browser (calls from the client) or on the server (encrypted).
 - Final product name. Transcription provider for voice input, and whether it is included in every plan.
 

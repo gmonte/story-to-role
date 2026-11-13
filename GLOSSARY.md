@@ -10,6 +10,14 @@ _Avoid_: Job, experience, role
 
 ## Guided interview
 
+**Interface language**:
+The language the app's screens are shown in, set independently of every other language.
+_Avoid_: Locale, app language
+
+**Interview language**:
+The language the user and the interviewer converse in; each evidence item keeps the interview language it was told in.
+_Avoid_: Chat language, AI language
+
 **Session**:
 One slice of the guided interview about a single position (or one project of it), whose turns are never loaded again once it closes.
 _Avoid_: Conversation, chat, thread

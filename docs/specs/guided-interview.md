@@ -216,7 +216,7 @@ Approved extraction is the compaction: context is cut at checkpoints the user co
 
 **Rules**
 
-- A session that grows past a set turn budget proposes a checkpoint: extract what was said so far, ask for approval, continue in a fresh session. The budget is a setting to tune with real usage.
+- A session's size is measured in tokens of its turns, not in turn count, since one long dictated answer can weigh as much as ten short ones. Past a set threshold N the interviewer proposes a session checkpoint: extract what was said so far, ask for approval, continue in a fresh session. The user may postpone it; at 2N the checkpoint is mandatory. The rule is the same whether tokens are paid by StoryToRole or by the user's own key. N is a setting to tune with real usage (starting point: about 20k tokens).
 - Stable parts of a prompt (instructions, timeline, summaries) come first so provider prompt caching applies; on Anthropic models cached input is billed at roughly a tenth of the normal rate.
 - Token usage is stored per session and per user, which feeds the cost estimate shown before generation and the plan limits for AI-included plans.
 
@@ -248,11 +248,11 @@ Each user message passes these layers in order; the first one that fails answers
 4. **Content checks on inputs that trigger generation.** An upload must look like a resume and a pasted job description must look like a job posting; anything else is refused before generation, so the generation flow cannot be used as a free writing tool.
 5. **Scoped prompts and tools.** The main model's instructions limit it to the interview, and it has no tools beyond those in this spec: no web access, no code execution.
 6. **Output limits.** A maximum number of output tokens per call, set per call type.
-7. **Budgets and rate limits.** Turns per session, sessions per day, and a monthly token budget per plan, enforced before each call. The user sees a usage meter; at the limit the app stops calling the AI and offers an upgrade or an extra pack.
+7. **Budgets and rate limits.** Session size (see session checkpoints), sessions per day, and a monthly usage allowance per plan, enforced before each call. The user sees a usage meter; at the limit the app stops calling the AI and offers an upgrade or an extra pack.
 8. **Repeated misuse.** Off-topic and override attempts are counted; after a set number in a short window the chat pauses for a cooldown.
 9. **Monitoring.** Cost per user per day is tracked, with an alert for outliers.
 
-**Bring-your-own-key users** pay for their own tokens, but the same guardrails apply: the terms of use cover the product's purpose, and the topic gate runs on StoryToRole's key so it cannot be skipped.
+**Bring-your-own-key users** pay for their own tokens, so the usage allowance does not stop them; their usage and estimated cost are shown as information only. Every other guardrail applies, session checkpoints included: the terms of use cover the product's purpose, and the topic gate runs on StoryToRole's key so it cannot be skipped.
 
 Thresholds (message length, turns, budgets, cooldown) are settings to tune with real usage, not fixed in this spec.
 
@@ -270,7 +270,6 @@ Thresholds (message length, turns, budgets, cooldown) are settings to tune with 
 
 **Open questions**
 
-- Turn budget per session before a checkpoint is proposed.
 - Whether the interview language can change mid-interview, and how mixed-language evidence is shown.
 - Whether the key stays in the browser (calls from the client) or on the server (encrypted).
 - Final product name. Transcription provider for voice input, and whether it is included in every plan.

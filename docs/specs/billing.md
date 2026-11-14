@@ -23,6 +23,10 @@ One subscription size at launch, monthly or annual. A larger tier comes only whe
 - Welcome credits never expire.
 - Each debit consumes the credits that expire first.
 
+## Currencies
+
+Two independent price tables: BRL for Brazil and USD for everyone else, chosen by billing country, not by converting at the day's exchange rate. BRL prices follow local purchasing power and always stay above AI cost plus margin. A credit buys the same AI work in both currencies.
+
 ## Free plan
 
 The Free plan lets the user record their recent history and build one resume in each output language and one cover letter. The full career interview is part of the paid plans.

@@ -88,6 +88,8 @@ Rules: about one page; personal, honest and enthusiastic; every sentence earns i
 ## Output language
 
 - The user picks the output language before generating. It is preselected from the language detected in the opening description.
+- Output languages come from a tested list, starting with English and Brazilian Portuguese; each new language is added only after testing, with its market's conventions (date formats, section names, expected length) configured.
+- No resume includes a photo, age or marital status in the MVP, whatever the market's custom. A user who wants that kind of information asks for it in one opening (as an application instruction) or in their global template.
 - After generating, the user can ask for a document in another output language at any time, which creates a new version of that document. Every snapshot is kept. Two choices are offered, kept few on purpose so they stay clear to non-technical users: **Adapt from** an existing version (the default; same content rewritten for the new language, priced as an adjustment) or **Generate from scratch** from the evidence (priced as a generation). Only adaptation (and recreating, which is an adaptation) links the two versions for language sync; a version generated from scratch is independent.
 
 ## Adaptations
@@ -98,6 +100,7 @@ A snapshot in another output language is an **adaptation** of an existing snapsh
 - It rewrites wording for a native reader of that language and market: idiomatic action verbs, section names, date and number formats, and the opening's keywords in that language. Phrasing that does not work in the target language is reworked rather than translated word for word.
 - It adds no new fact and never converts figures (no currency conversion, which would invent an exchange rate).
 - The same code checks as any generation apply: locked facts and forbidden terms.
+- **Titles in another language:** the first adaptation into a language proposes an equivalent for each position's title ("Analista de Sistemas Sênior" becomes "Senior Systems Analyst"); the user approves or edits it once, and that version becomes a locked fact of the position in that language. Code then accepts either the original or the approved title. Company names are never translated.
 - Generating again from the evidence in the new language remains available as a separate action.
 
 ## Versions and snapshots
@@ -155,5 +158,3 @@ Resume and cover letter layout are specified separately.
 
 ## Open points
 
-- Which output languages are offered.
-- How locked facts such as job titles appear in another language.

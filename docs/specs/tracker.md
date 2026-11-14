@@ -12,7 +12,21 @@ The tracker follows every application the user pursues, from the first document 
 - **External applications:** the user can create an application by hand for an opening they applied to outside StoryToRole (company, title, link and, optionally, the description), with no documents and no credits spent. It is marked external; it stops being external once a document is generated or copied for it.
 - When the user marks an application as applied, it records the exact snapshot of each version sent; documents are never frozen.
 
+## Statuses and events
+
+| Status | Meaning |
+| --- | --- |
+| In preparation | The application exists (a document was generated or copied) but was not sent |
+| Applied | The user marked it as sent; the sent snapshots are recorded |
+| In process | The company responded: screening, interview or test |
+| Offer | An offer was received |
+| Hired | The user accepted (closed) |
+| Rejected | The company said no (closed) |
+| Withdrawn | The user gave up (closed) |
+| No response | Closed automatically after a configurable number of days with no event (30 by default); reopens if anything happens |
+
+Details live in **events**, dated entries on the application's timeline ("HR interview on Nov 20", "technical test delivered"), instead of becoming statuses. Few statuses keep the funnel readable.
+
 ## Open points
 
-- Application statuses and the events recorded over time.
 - Reminders and next steps.

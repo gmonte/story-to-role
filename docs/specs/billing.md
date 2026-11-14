@@ -131,6 +131,5 @@ Thinking tokens are billed as output and are the largest uncertainty; the estima
 
 ## Open points
 
-- Whether the career interview consumes credits.
 - Credits granted per plan and plan prices.
 

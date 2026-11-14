@@ -15,8 +15,8 @@ _Avoid_: Job, experience, role
 ## Openings and applications
 
 **Opening**:
-A job vacancy at a company, described by the text the user pastes; it is open or closed regardless of what the user does.
-_Avoid_: Job, vacancy, role, posting
+A target the user may apply to at one company: a posted vacancy, or a company the user wants to approach even with no vacancy open.
+_Avoid_: Job, vacancy, role, posting, target
 
 **Application**:
 The user's pursuit of one opening, which starts when the first document is generated for it and ends hired, rejected or withdrawn.

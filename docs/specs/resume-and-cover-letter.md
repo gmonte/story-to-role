@@ -8,6 +8,11 @@ For one opening, StoryToRole generates a tailored resume and cover letter from t
 
 Hiring interview prep is out of the MVP.
 
+## Openings and general documents
+
+- Anything with a target is an opening: a posted vacancy, or a company the user wants to approach with no vacancy open (for example, a cover letter for Airbnb). Openings of either kind can become applications and appear in the tracker.
+- A **general document** is a resume or cover letter with no target at all, generated from the evidence base only. General documents live in a library outside any application, use the same language versions, snapshots, undo, adaptation and language sync, skip the fit check and never appear in the tracker. Generating one does not start an application.
+
 ## Flow
 
 1. The user adds an opening by pasting its description. Code first checks that the text looks like a job posting.

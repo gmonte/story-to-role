@@ -30,8 +30,10 @@ export const env = createEnv({
     // container from `compose.yaml`.
     UPSTASH_REDIS_REST_URL: z.string(),
     UPSTASH_REDIS_REST_TOKEN: z.string(),
-    // Prefix for every Redis key, one per environment.
-    REDIS_KEY_PREFIX: z.string(),
+    // Prefix for every Redis key. Staging and PR previews share one Upstash
+    // database, so CI passes one per preview (`stg:`, `pr-<number>:`);
+    // production and local development each have their own and need none.
+    REDIS_KEY_PREFIX: z.string().default(""),
 
     TRIGGER_PROJECT_REF: z.string(),
     TRIGGER_SECRET_KEY: z.string(),
@@ -97,6 +99,21 @@ export const env = createEnv({
     NEXT_PUBLIC_LOGGER_LEVEL: process.env.NEXT_PUBLIC_LOGGER_LEVEL,
     NEXT_PUBLIC_LOGGER_TRACE: process.env.NEXT_PUBLIC_LOGGER_TRACE,
   },
+
+  createFinalSchema: (shape, isServer) =>
+    z.object(shape).superRefine((env, ctx) => {
+      if (
+        isServer &&
+        env.NEXT_PUBLIC_ENV === "preview" &&
+        !env.REDIS_KEY_PREFIX
+      ) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["REDIS_KEY_PREFIX"],
+          message: "REDIS_KEY_PREFIX is required when NEXT_PUBLIC_ENV=preview",
+        });
+      }
+    }),
 
   skipValidation: !!process.env.SKIP_ENV_VALIDATION,
   emptyStringAsUndefined: true,

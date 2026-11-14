@@ -111,8 +111,10 @@ jobs:
           OLD_DEPLOY_URL=$(vercel inspect "$PREVIEW_URL" --token $VERCEL_TOKEN 2>&1 | grep -o 'https://[^ ]*\.vercel\.app' | head -1 || true)
 
           # APP_URL is the alias the deployment is served from, which Vercel
-          # doesn't expose on its own (getBaseUrl reads it).
-          DEPLOY_URL=$(vercel deploy --token $VERCEL_TOKEN --target preview -b "APP_URL=$PREVIEW_URL" -e "APP_URL=$PREVIEW_URL")
+          # doesn't expose on its own (getBaseUrl reads it). Previews share one
+          # Upstash database, so each gets its own REDIS_KEY_PREFIX.
+          REDIS_KEY_PREFIX="pr-${{ github.event.pull_request.number }}:"
+          DEPLOY_URL=$(vercel deploy --token $VERCEL_TOKEN --target preview -b "APP_URL=$PREVIEW_URL" -e "APP_URL=$PREVIEW_URL" -b "REDIS_KEY_PREFIX=$REDIS_KEY_PREFIX" -e "REDIS_KEY_PREFIX=$REDIS_KEY_PREFIX")
           vercel alias --token $VERCEL_TOKEN set "$DEPLOY_URL" "$PREVIEW_URL"
 
           # Remove the previous deployment of this PR to stay within free plan limits

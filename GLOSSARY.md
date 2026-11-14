@@ -134,6 +134,18 @@ _Avoid_: Model list, preset, integration
 
 ## Plans and usage
 
+**Plan**:
+What a user is entitled to use: Free, the subscription, or the courtesy plan.
+_Avoid_: Tier, package, BYOK plan
+
+**AI funding**:
+Who pays for a user's AI calls: StoryToRole credits or the user's own key from a certified provider.
+_Avoid_: Billing mode, BYOK plan
+
+**Courtesy plan**:
+The paid plan granted by the owner to a user without a subscription.
+_Avoid_: Free upgrade, comp, gift
+
 **Credit**:
 The unit every AI action is paid in; plans and packs grant credits, and each action costs a known number of them.
 _Avoid_: Token, point, coin

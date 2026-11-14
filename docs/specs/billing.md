@@ -12,6 +12,13 @@ Users pay for what they use plus a margin that keeps the project running. The st
 - Plans grant **credits**.
 - Every AI action consumes credits: fit checks, generations and adjustments (adaptation to another language, language sync, cover letter update). Credits replace separate counters for evaluation and generation; actions still differ in how many credits they cost.
 
+## Plans and AI funding
+
+A user's **plan** (what they can use) is separate from their **AI funding** (who pays for each AI call: StoryToRole credits or the user's own key).
+
+- **Bring your own key is a funding mode, not a separate plan.** A subscriber who adds a key from a certified provider switches to key funding; removing the key switches back to credits.
+- **Courtesy plan:** the owner can grant the paid plan to selected users without a subscription. It works without a key, funded by StoryToRole credits; the user may add their own key so the owner does not carry the whole AI cost, and then the key funds the AI calls.
+
 ## Subscription
 
 One subscription size at launch, monthly or annual. A larger tier comes only when usage data shows a group of subscribers buying packs every month.

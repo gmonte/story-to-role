@@ -1,6 +1,7 @@
-import { UserButton } from "@clerk/nextjs";
+import { SignOutButton, UserButton } from "@clerk/nextjs";
 
 import { getTranslation } from "@repo/intl/get-translation";
+import { Button } from "@repo/web/components/ui/button";
 import {
   Card,
   CardContent,
@@ -22,7 +23,15 @@ export default async function AppPage() {
           <CardTitle>
             {t.formatMessage({ defaultMessage: "Dashboard" })}
           </CardTitle>
-          <UserButton />
+          <div className="flex items-center gap-2">
+            {/* Temporary: explicit sign-out until the app shell exists. */}
+            <SignOutButton redirectUrl="/">
+              <Button variant="outline" size="sm">
+                {t.formatMessage({ defaultMessage: "Sign out" })}
+              </Button>
+            </SignOutButton>
+            <UserButton />
+          </div>
         </CardHeader>
         <CardContent>
           <CurrentUserPanel />

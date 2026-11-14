@@ -97,6 +97,8 @@ Stripe directly, through an account opened in Brazil under the owner's CNPJ; Cle
 
 Webhook destinations use the account scope (no Stripe Connect), snapshot payloads and API version `2026-10-28.endive`, which the Stripe SDK pins too so event and request shapes match. Subscribed events: `checkout.session.completed`, `checkout.session.async_payment_succeeded`, `checkout.session.async_payment_failed` (Pix completes asynchronously), `invoice.paid`, `invoice.payment_failed`, `customer.subscription.updated`, `customer.subscription.deleted`, `charge.refunded`. The sandbox destination for staging points to `https://stg-storytorole.vercel.app/api/webhooks/stripe`; its signing secret belongs in staging's `STRIPE_WEBHOOK_SECRET`, distinct from the local one printed by `stripe listen`.
 
+Locally, `stripe listen` does not use the dashboard destination's event list: by default it forwards every event of the sandbox account. A `pnpm stripe:listen` script passes the same eight events with `--events`. The webhook route answers 200 to any event it does not handle, and ignores Stripe customers that do not exist in its environment's database, since all non-production environments share one sandbox and receive each other's events.
+
 Stripe Brazil standard fees (stripe.com/br/pricing, read 2026-11-14):
 
 | Item | Fee |

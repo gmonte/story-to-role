@@ -275,7 +275,7 @@ Each user message passes these layers in order; the first one that fails answers
 8. **Repeated misuse.** Off-topic and override attempts are counted; after a set number in a short window the chat pauses for a cooldown.
 9. **Monitoring.** Cost per user per day is tracked, with an alert for outliers.
 
-**Bring-your-own-key users** pay for their own tokens, so the usage allowance does not stop them; their usage and estimated cost are shown as information only. Every other guardrail applies, session checkpoints included: the terms of use cover the product's purpose, and the topic gate runs on StoryToRole's key so it cannot be skipped.
+**Bring-your-own-key users** pay for their own tokens, so credits do not limit them; their usage and estimated cost are shown as information only. Every other guardrail applies, session checkpoints included: the terms of use cover the product's purpose, and the topic gate always runs on StoryToRole's key with one tested model (Haiku). The server calls the gate whatever key is used; running it on StoryToRole's key keeps it out of each provider's certification, keeps the platform protected when a user's key is invalid, out of credit, rate-limited or down, and costs about US$0.0001 per message. A local classifier may replace it after the MVP.
 
 Thresholds (message length, turns, budgets, cooldown) are settings to tune with real usage, not fixed in this spec.
 

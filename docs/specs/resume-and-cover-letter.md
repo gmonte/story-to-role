@@ -11,6 +11,7 @@ Hiring interview prep is out of the MVP.
 ## Openings and library documents
 
 - An opening always has someone on the other side: a posted vacancy, or a company the user wants to approach with no vacancy open (for example, a cover letter for Airbnb). Openings of either kind can become applications and appear in the tracker.
+- An unsolicited opening (no vacancy) requires only the company; the intended role or area, free notes and links are optional. With no requirements to compare, the fit check does not run, but the opening's vector (company, role, notes) still suggests similar library documents, and the intended role feeds `<Title>` in file names. It starts open and the user can close it, for example when the company replies that it has no vacancies.
 - A **library document** is a resume or cover letter with no company behind it, generated from the evidence base. A user can keep several, each with a required **focus** that serves as its title: a stack or kind of role ("React Native", "React Web", "Frontend", "Full-stack Node"), or "General" for one that presents the strongest evidence overall. In the interface, the Library lists them by focus, with plain "New resume" and "New cover letter" actions. Library documents live outside any application, use the same versions, snapshots, undo, adaptation and language sync, skip the fit check and never appear in the tracker. Generating one does not start an application.
 
 ## Flow

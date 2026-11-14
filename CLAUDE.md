@@ -37,4 +37,4 @@ Secrets live in `.env.local` (git-ignored); `.env.example` lists every variable.
 - **Clerk webhooks:** `ngrok http --url=greatly-central-ladybird.ngrok-free.app 3000`; the dev endpoint is `https://greatly-central-ladybird.ngrok-free.app/api/clerk/webhooks` (`user.created`, `user.updated`, `user.deleted`).
 - **Stripe (sandbox):** `stripe listen --forward-to localhost:3000/api/webhooks/stripe` prints the local `STRIPE_WEBHOOK_SECRET`.
 - **Storage:** `STORAGE_DRIVER=local` writes to `.storage/`.
-- **AI:** `ANTHROPIC_API_KEY` is StoryToRole's own key (topic gate and the default provider package). Tests must mock providers, Stripe and Trigger.dev.
+- **AI:** `ANTHROPIC_API_KEY` is StoryToRole's own key (the default provider package, and the topic gate for credit-funded users). Tests must mock providers, Stripe and Trigger.dev.

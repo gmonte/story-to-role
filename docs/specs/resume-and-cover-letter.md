@@ -10,15 +10,19 @@ Hiring interview prep is out of the MVP.
 
 ## Openings and general documents
 
-- Anything with a target is an opening: a posted vacancy, or a company the user wants to approach with no vacancy open (for example, a cover letter for Airbnb). Openings of either kind can become applications and appear in the tracker.
-- A **general document** is a resume or cover letter with no target at all, generated from the evidence base only. General documents live in a library outside any application, use the same language versions, snapshots, undo, adaptation and language sync, skip the fit check and never appear in the tracker. Generating one does not start an application.
+- An opening always has someone on the other side: a posted vacancy, or a company the user wants to approach with no vacancy open (for example, a cover letter for Airbnb). Openings of either kind can become applications and appear in the tracker.
+- A **general document** is a resume or cover letter with no company behind it, generated from the evidence base. It may have an optional free-text focus, such as a stack or a kind of role ("React Native with Expo"); without one it presents the strongest evidence overall. General documents live in a library outside any application, use the same language versions, snapshots, undo, adaptation and language sync, skip the fit check and never appear in the tracker. Generating one does not start an application.
 
 ## Flow
 
 1. The user adds an opening by pasting its description. Code first checks that the text looks like a job posting.
 2. StoryToRole runs a **fit check** automatically and shows it as a hint, never as a gate: a band (high, medium or low fit), the opening's requirements that have evidence in the user's base (each linked to its evidence) and the main gaps. There is no percentage score, which would claim a precision the analysis does not have. It reads only the opening, the user's skills and the position summaries, never the whole evidence base, so it stays cheap. It counts as an evaluation in the plan, separate from generation. It is lighter than the review that follows resume generation; details belong to the fit assessment spec.
-3. Whatever the fit check says, the user may generate a resume, a cover letter or both. Each document is generated only on demand.
-4. The application starts when the first document is generated for the opening. Openings that were analyzed but never generated for stay in a list of analyzed openings, outside the tracker.
+3. Next to the fit check, StoryToRole suggests existing documents similar to what this opening needs: general documents and documents from other applications, frozen ones included.
+4. Whatever the fit check says, the user may get a resume, a cover letter or both, each only on demand, in one of three ways:
+   - **Use as is:** the latest snapshot of the chosen document's language version is copied as the first snapshot of this application's document. No AI call is made. The source document does not change.
+   - **Use as reference:** a new document is generated for this opening with the chosen document as a reference, keeping what still fits and tailoring the rest. The user reviews the result. The source document does not change.
+   - **Generate from scratch** from the evidence base.
+5. The application starts when the first document is generated or copied for the opening. Openings that were analyzed but never generated for stay in a list of analyzed openings, outside the tracker.
 
 ## Application instructions
 

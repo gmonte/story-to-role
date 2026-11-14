@@ -39,7 +39,7 @@ Free-text statements the user adds for one application's generation only; each p
 _Avoid_: Extra prompt, custom prompt, notes
 
 **Outdated**:
-The state of a document whose source changed after it was produced: a language version behind another language version, or a cover letter whose resume got a new snapshot.
+The state of a document whose source changed after it was produced: a version behind another version of the same document, or a cover letter whose resume got a new snapshot.
 _Avoid_: Stale, out of sync, dirty
 
 **Output language**:
@@ -47,23 +47,27 @@ The language a generated resume or cover letter is written in, chosen by the use
 _Avoid_: Target language, resume language
 
 **Document**:
-A resume or a cover letter belonging to one application; an application has at most one of each.
+A resume or a cover letter, either belonging to one application (at most one of each) or kept in the library.
 _Avoid_: Artifact, file, output
 
-**Language version**:
-The line of snapshots of one document in one output language; a document has at most one per language, and its latest snapshot is the official one.
-_Avoid_: Branch, translation, variant
+**Version**:
+The line of snapshots of one document in one output language; a document may hold several, even in the same language, and each version's latest snapshot is the official one.
+_Avoid_: Branch, language version, variant, copy
+
+**Library document**:
+A resume or cover letter with no company behind it, kept in the library and titled by its required focus.
+_Avoid_: General document, generic resume, master resume, template
 
 **Snapshot**:
-An immutable copy of a generated document's content at one point in its language version's history.
-_Avoid_: Commit, version, revision, draft; the interface calls it a change
+An immutable copy of a generated document's content at one point in its version's history.
+_Avoid_: Commit, revision, draft; the interface calls it a change
 
 **Submission freeze**:
 The point at which an application is marked as applied and all of its documents become read-only.
 _Avoid_: Lock, finalization
 
 **Language sync**:
-Carrying the changes of one language version into another language version of the same document, preserving the target's own edits.
+Carrying the changes of one version into another version of the same document, preserving the target's own edits.
 _Avoid_: Translation update, merge
 
 **Locked-fact override**:
@@ -71,7 +75,7 @@ A different employer, title or dates for one position that the user declares for
 _Avoid_: Exception, custom title
 
 **Adaptation**:
-A snapshot that rewrites a generated document in another output language from the latest snapshot of another language version, keeping its evidence and adding no new fact.
+A snapshot that rewrites a generated document in another output language from the latest snapshot of another version, keeping its evidence and adding no new fact.
 _Avoid_: Translation, localization
 
 ## Guided interview

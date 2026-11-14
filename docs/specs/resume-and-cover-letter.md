@@ -8,10 +8,10 @@ For one opening, StoryToRole generates a tailored resume and cover letter from t
 
 Hiring interview prep is out of the MVP.
 
-## Openings and general documents
+## Openings and library documents
 
 - An opening always has someone on the other side: a posted vacancy, or a company the user wants to approach with no vacancy open (for example, a cover letter for Airbnb). Openings of either kind can become applications and appear in the tracker.
-- A **general document** is a resume or cover letter with no company behind it, generated from the evidence base. It may have an optional free-text focus, such as a stack or a kind of role ("React Native with Expo"); without one it presents the strongest evidence overall. General documents live in a library outside any application, use the same language versions, snapshots, undo, adaptation and language sync, skip the fit check and never appear in the tracker. Generating one does not start an application.
+- A **library document** is a resume or cover letter with no company behind it, generated from the evidence base. A user can keep several, each with a required **focus** that serves as its title: a stack or kind of role ("React Native", "React Web", "Frontend", "Full-stack Node"), or "General" for one that presents the strongest evidence overall. In the interface, the Library lists them by focus, with plain "New resume" and "New cover letter" actions. Library documents live outside any application, use the same versions, snapshots, undo, adaptation and language sync, skip the fit check and never appear in the tracker. Generating one does not start an application.
 
 ## Flow
 
@@ -19,7 +19,7 @@ Hiring interview prep is out of the MVP.
 2. StoryToRole runs a **fit check** automatically and shows it as a hint, never as a gate. A small AI call extracts the opening's keywords (hard skills, tools, certifications, languages) and requirements (seniority, years of experience, location, work model). Each keyword and requirement retrieves the closest evidence by vector similarity; a cheap AI call then judges each one, seeing only the requirements and the retrieved evidence, never the whole evidence base, as met, partial or a gap. Vector similarity alone does not decide, since it misses seniority ("8+ years" against a junior history reads as similar) and hard requirements such as location or language. The hint shows a band (high, medium or low fit), each requirement linked to its evidence, and the main gaps; there is no percentage score, which would claim a precision the analysis does not have. It counts as an evaluation in the plan, separate from generation.
 3. Next to the fit check, StoryToRole suggests existing documents similar to this opening, ranked by vector similarity between the opening and each document: general documents and documents from other applications, frozen ones included.
 4. Whatever the fit check says, the user may get a resume, a cover letter or both, each only on demand, in one of three ways:
-   - **Use as is:** the latest snapshot of the chosen document's language version is copied as the first snapshot of this application's document. No AI call is made. If the chosen document is in another language than the output language, it is copied and adapted instead, following the adaptation rules; this makes an AI call and counts as a generation, which the user is told before confirming. The source document does not change.
+   - **Use as is:** the latest snapshot of the chosen document's version is copied as the first snapshot of this application's document. No AI call is made. If the chosen document is in another language than the output language, it is copied and adapted instead, following the adaptation rules; this makes an AI call and counts as a generation, which the user is told before confirming. The source document does not change.
    - **Use as reference:** a new document is generated for this opening with the chosen document as a reference, keeping what still fits and tailoring the rest. The user reviews the result. The source document does not change.
    - **Generate from scratch** from the evidence base.
 5. The application starts when the first document is generated or copied for the opening. Openings that were analyzed but never generated for stay in a list of analyzed openings, outside the tracker.
@@ -28,7 +28,7 @@ Hiring interview prep is out of the MVP.
 
 Embeddings are part of the MVP.
 
-- Vectors exist for every approved evidence item, skill, document (the latest snapshot of each language version), opening and opening keyword. An opening's vector is computed as soon as it is added, whether or not the user has documents yet.
+- Vectors exist for every approved evidence item, skill, document (the latest snapshot of each version), opening and opening keyword. An opening's vector is computed as soon as it is added, whether or not the user has documents yet.
 - They are computed by a local multilingual embedding model running in a Trigger.dev task, since an opening may be in English while the evidence is in Portuguese. No AI vendor receives the text for this.
 - They are stored with pgvector in the application's Postgres database.
 
@@ -64,14 +64,14 @@ The ATS check applies to generated resumes only; it plays no part in suggesting 
 ## Cover letter and its resume
 
 - A cover letter can be generated without a resume, but it is more accurate when generated from one.
-- When generating a cover letter, the resume in the same output language is preselected if it exists; the user can pick another language version of the resume or generate without one.
-- A cover letter generated from a resume records the exact resume snapshot it used. When that resume language version later gets a new snapshot, the cover letter is marked **outdated**, with a notice that the resume changed after the letter was generated. Changes to other language versions of the resume do not affect it.
+- When generating a cover letter, the most recently changed resume version in the same output language is preselected if one exists; the user can pick another version of the resume or generate without one.
+- A cover letter generated from a resume records the exact resume snapshot it used. When that resume version later gets a new snapshot, the cover letter is marked **outdated**, with a notice that the resume changed after the letter was generated. Changes to other versions of the resume do not affect it.
 - The notice offers two actions: **Update the cover letter** (primary), which adjusts only the passages affected by what changed in the resume since the snapshot it used, keeps the user's own edits, and is reviewed before becoming a snapshot; and **Generate again**, which rewrites the letter from the current resume (the old content stays in history). The user may also keep the letter as it is and dismiss the notice.
 
 ## Output language
 
 - The user picks the output language before generating. It is preselected from the language detected in the opening description.
-- After generating, the user can ask for a document in another output language at any time, which creates a new language version of that document. Every snapshot is kept. Two choices are offered, kept few on purpose so they stay clear to non-technical users: **Adapt from** an existing language version (the default; same content rewritten for the new language, priced as an adjustment) or **Generate from scratch** from the evidence (priced as a generation). Only adaptation (and recreating, which is an adaptation) links the two language versions for language sync; a version generated from scratch is independent.
+- After generating, the user can ask for a document in another output language at any time, which creates a new version of that document. Every snapshot is kept. Two choices are offered, kept few on purpose so they stay clear to non-technical users: **Adapt from** an existing version (the default; same content rewritten for the new language, priced as an adjustment) or **Generate from scratch** from the evidence (priced as a generation). Only adaptation (and recreating, which is an adaptation) links the two versions for language sync; a version generated from scratch is independent.
 
 ## Adaptations
 
@@ -83,37 +83,38 @@ A snapshot in another output language is an **adaptation** of an existing snapsh
 - The same code checks as any generation apply: locked facts and forbidden terms.
 - Generating again from the evidence in the new language remains available as a separate action.
 
-## Language versions and snapshots
+## Versions and snapshots
 
-Documents are versioned like a git history, stored as rows in Postgres rather than in a git repository. In git terms, a language version is a branch and a snapshot is a commit.
+Documents are versioned like a git history, stored as rows in Postgres rather than in a git repository. In git terms, a version is a branch and a snapshot is a commit.
 
 - An application has up to two **documents**: a resume and a cover letter.
-- Each document has at most one **language version** per output language, created only when the user asks for it. For example, an application may hold one resume in Portuguese, one resume in English and one cover letter in English. Language versions are independent of each other, and the resume and the cover letter are independent of each other.
+- Each document has one or more **versions**, created only when the user asks for it. Each version has an output language and its own line of snapshots; a document may hold several versions in the same language. When the user asks for a version in a language the document already has, StoryToRole asks whether they really want another one. Versions are independent of each other, and the resume and the cover letter are independent of each other.
+- **Duplicate** creates a new version in the same document from the latest snapshot of the current one, for example to keep a safe copy while experimenting. A duplicate is independent: it is not linked for language sync.
 - Every change to a document creates an immutable **snapshot**: a full copy of the structured content, its parent snapshot, its origin (generated, adapted, edited), its author (user or AI) and its time. Diffs between any two snapshots are computed when shown.
-- The **latest snapshot of each language version is the official one**. There is no manual "current" marker; the history exists so actions can be undone.
+- The **latest snapshot of each version is the official one**. There is no manual "current" marker; the history exists so actions can be undone.
 - Snapshots behave as a stack. **Undo** deletes the latest snapshot, making the previous one official; a snapshot below the top cannot be deleted on its own. Restoring an old snapshot creates a new latest snapshot with that content.
-- The user can delete a whole language version, which deletes all of its snapshots and any cached files rendered from them. There is no archive: deletion is final and asks for confirmation.
-- Side effects of deletion: when the snapshot a language sync would use as its base is gone, the sync uses the nearest remaining ancestor, or offers to recreate when none is left; when the resume snapshot a cover letter was generated from is gone, the letter is treated as generated without a resume; when a language version that another one was adapted from is gone, the other one simply continues on its own.
-- An adaptation takes the latest snapshot of one language version as its base and writes the result either into a new language version or into an existing one. Into an existing language version it **recreates** it: the result becomes its new latest snapshot, replacing its content (edits made only in that language version are not carried over). Earlier snapshots stay in history, so recreating can be undone. Example: after many edits in English, the user recreates the Portuguese language version from the English one.
+- The user can delete a whole version, which deletes all of its snapshots and any cached files rendered from them. There is no archive: deletion is final and asks for confirmation.
+- Side effects of deletion: when the snapshot a language sync would use as its base is gone, the sync uses the nearest remaining ancestor, or offers to recreate when none is left; when the resume snapshot a cover letter was generated from is gone, the letter is treated as generated without a resume; when a version that another one was adapted from is gone, the other one simply continues on its own.
+- An adaptation takes the latest snapshot of one version as its base and writes the result either into a new version or into an existing one. Into an existing version it **recreates** it: the result becomes its new latest snapshot, replacing its content (edits made only in that version are not carried over). Earlier snapshots stay in history, so recreating can be undone. Example: after many edits in English, the user recreates the Portuguese version from the English one.
 
 ## Language sync
 
-When one language version of a document has changes that another language version of the same document has not received, the behind one is marked outdated ("Outdated relative to Portuguese: 3 changes"). Nothing changes on its own.
+When one version of a document has changes that another version of the same document has not received, the behind one is marked outdated ("Outdated relative to Portuguese: 3 changes"). Nothing changes on its own.
 
 - On demand, **language sync** carries the same ideas into the target by a three-way merge: the base is the source snapshot the target last came from (by adaptation or a previous sync), the source is the source's latest snapshot, and the target is the target's latest snapshot, whose own edits are preserved.
 - The changes found in the source are listed one by one, all selected by default; the user unselects any they do not want. One AI call then adapts the selected changes into the target.
 - Where both sides changed the same passage, both are shown and the user chooses.
 - The result is a proposal: the user reviews the diff and accepts or discards it. Accepting creates a new latest snapshot in the target, which records the source snapshot as its new base.
-- It works in any direction, always within one document (resume to resume, cover letter to cover letter). Recreating from another language version remains the alternative when the user wants to replace everything.
+- It works in any direction, always within one document (resume to resume, cover letter to cover letter). Recreating from another version remains the alternative when the user wants to replace everything.
 
 ## Submission freeze
 
-- When the user marks an application as applied, they say which language versions of each document were sent (for example, the English resume and the English cover letter).
-- From then on every document of the application, in every language version, is read-only: no new snapshots, no syncs, no undo, no deletion of snapshots or language versions.
+- When the user marks an application as applied, they say which versions of each document were sent (for example, the English resume and the English cover letter).
+- From then on every document of the application, in every version, is read-only: no new snapshots, no syncs, no undo, no deletion of snapshots or versions.
 
 ## Interface wording
 
-The interface calls snapshots "changes" ("alterações" in Brazilian Portuguese): "Change history", "Restore this change". A language version is shown by its language name only, as a tab per language.
+The interface calls snapshots "changes" ("alterações" in Brazilian Portuguese): "Change history", "Restore this change". Each version is shown as a tab named by its language, with a short label when a language repeats ("Portuguese", "Portuguese · copy"), which the user can rename.
 
 ## Rendering
 

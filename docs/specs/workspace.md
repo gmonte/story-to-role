@@ -8,9 +8,9 @@ Every interaction between the user and the AI happens in one workspace modelled 
 
 ## Layout
 
-- **Sidebar (left):** fixed items at the top, as in the Claude app: **My career** (the interview and the evidence base), **Library** (general documents) and **New opening**. Below them, the openings grouped by status: analyzed, in preparation, applied, in process, closed.
+- **Sidebar (left):** fixed items at the top, as in the Claude app: **My career** (the interview and the evidence base), **Library** (library documents, listed by focus) and **New opening**. Below them, the openings grouped by status: analyzed, in preparation, applied, in process, closed.
 - **Chat (center):** the interaction itself. The user can attach files and links in the chat to do anything the product offers.
-- **Side panel (right):** for an opening, four blocks are always shown: **Analysis** (the fit check's band, requirements and gaps), **Documents** (resume and cover letter with language tabs, outdated notices, ATS check and freeze status), **Context** (what the AI is using in this chat: application instructions, sensitive-item overrides, locked-fact overrides) and **Usage** (plan consumption, or estimated cost for bring-your-own-key users). While a task runs, its agents and progress appear there too ("Generating resume: revision 2 of 3"). In the career interview, the panel shows the timeline of positions.
+- **Side panel (right):** for an opening, four blocks are always shown: **Analysis** (the fit check's band, requirements and gaps), **Documents** (resume and cover letter with a tab per version, outdated notices, ATS check and freeze status), **Context** (what the AI is using in this chat: application instructions, sensitive-item overrides, locked-fact overrides) and **Usage** (plan consumption, or estimated cost for bring-your-own-key users). While a task runs, its agents and progress appear there too ("Generating resume: revision 2 of 3"). In the career interview, the panel shows the timeline of positions.
 - **Documents:** opening a document edits it in the same screen, as the Claude app does with artifacts.
 
 ## Chat scope

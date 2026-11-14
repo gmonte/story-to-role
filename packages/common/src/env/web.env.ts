@@ -9,8 +9,10 @@ export const env = createEnv({
     PORT: z.coerce.number().default(3000),
 
     VERCEL_URL: z.string().optional(),
-    // The fixed alias a preview or staging deployment is served from, passed
-    // by CI (`vercel deploy -b/-e APP_URL=...`); Vercel doesn't expose it.
+    // The fixed host a deployment is served from (no scheme), which Vercel
+    // doesn't expose: CI passes it to staging and PR previews
+    // (`vercel deploy -b/-e APP_URL=...`), and production sets it as a Vercel
+    // Production env var (storytorole.vercel.app).
     APP_URL: z.string().optional(),
 
     DATABASE_URL: z.string(),
@@ -23,6 +25,27 @@ export const env = createEnv({
 
     CLERK_SECRET_KEY: z.string(),
     CLERK_WEBHOOK_SIGNING_SECRET: z.string(),
+
+    // Standard Upstash names (`Redis.fromEnv()` reads them); locally the SRH
+    // container from `compose.yaml`.
+    UPSTASH_REDIS_REST_URL: z.string(),
+    UPSTASH_REDIS_REST_TOKEN: z.string(),
+    // Prefix for every Redis key, one per environment.
+    REDIS_KEY_PREFIX: z.string(),
+
+    TRIGGER_PROJECT_REF: z.string(),
+    TRIGGER_SECRET_KEY: z.string(),
+
+    // StoryToRole's own key: the topic gate and the default provider package.
+    ANTHROPIC_API_KEY: z.string(),
+
+    STRIPE_SECRET_KEY: z.string(),
+    STRIPE_WEBHOOK_SECRET: z.string(),
+
+    // `local` is only allowed when NEXT_PUBLIC_ENV=development.
+    STORAGE_DRIVER: z.enum(["local", "vercel-blob"]).default("vercel-blob"),
+    // Required when STORAGE_DRIVER=vercel-blob.
+    BLOB_READ_WRITE_TOKEN: z.string().optional(),
   },
 
   client: {
@@ -52,6 +75,16 @@ export const env = createEnv({
     DB_MIGRATING: process.env.DB_MIGRATING,
     CLERK_SECRET_KEY: process.env.CLERK_SECRET_KEY,
     CLERK_WEBHOOK_SIGNING_SECRET: process.env.CLERK_WEBHOOK_SIGNING_SECRET,
+    UPSTASH_REDIS_REST_URL: process.env.UPSTASH_REDIS_REST_URL,
+    UPSTASH_REDIS_REST_TOKEN: process.env.UPSTASH_REDIS_REST_TOKEN,
+    REDIS_KEY_PREFIX: process.env.REDIS_KEY_PREFIX,
+    TRIGGER_PROJECT_REF: process.env.TRIGGER_PROJECT_REF,
+    TRIGGER_SECRET_KEY: process.env.TRIGGER_SECRET_KEY,
+    ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY,
+    STRIPE_SECRET_KEY: process.env.STRIPE_SECRET_KEY,
+    STRIPE_WEBHOOK_SECRET: process.env.STRIPE_WEBHOOK_SECRET,
+    STORAGE_DRIVER: process.env.STORAGE_DRIVER,
+    BLOB_READ_WRITE_TOKEN: process.env.BLOB_READ_WRITE_TOKEN,
 
     NEXT_PUBLIC_ENV: process.env.NEXT_PUBLIC_ENV,
     NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY:

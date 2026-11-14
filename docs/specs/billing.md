@@ -73,7 +73,7 @@ Stripe Brazil standard fees (stripe.com/br/pricing, read 2026-11-14):
 | Checkout, Payment Links, 3D Secure | Included |
 | Dispute | R$55 received, plus R$55 if countered (returned when won) |
 
-Examples: a R$49 subscription on a Brazilian card keeps R$46.31 (5.5% in fees); a R$29 pack keeps R$27.45 (5.3%); a US$12 subscription on a foreign card keeps about US$11.13 (7.3%). Still to confirm with Stripe: the currency conversion fee for USD charges settled in BRL. Brazilian taxes on revenue are outside Stripe and need an accountant.
+Examples: a R$49 subscription on a Brazilian card keeps R$46.31 (5.5% in fees); a R$29 pack keeps R$27.45 (5.3%); a US$12 subscription on a foreign card keeps about US$11.13 (7.3%). Still to confirm with Stripe: the currency conversion fee for USD charges settled in BRL. Neither Stripe's localize-prices page (manual currency prices: "0% fee paid by Stripe users", while conversion in general "is subject to fees as detailed on our pricing page") nor a third-party fee table from November 2025 (Brazil row: 3.99% + R$0.39, +2% for international cards; most other countries add "+2% if currency conversion is required") states one for Brazil. Until a test charge's balance transaction or Stripe support confirms it, USD prices assume the worst case of an extra 2%: about 8.7% + US$0.07 on a US$12 subscription paid with a foreign card. Brazilian taxes on revenue are outside Stripe and need an accountant.
 
 ## Cost model (estimate)
 

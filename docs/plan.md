@@ -24,6 +24,12 @@ Goal: the plumbing every later slice relies on.
 - Provider package abstraction with the Anthropic package (Haiku 5.5 classification, Sonnet 5.5 writing, Opus 5.5 maximum level); every call records token usage.
 - Topic gate that follows the AI funding (user's key with key funding, StoryToRole's key with credits) and fails closed, and rate limits with `@upstash/ratelimit` (local SRH via `docker compose up -d`).
 - Workspace shell (workspace spec): sidebar with My career, Library, New opening and openings by status; chat center; side panel; interface language via `@repo/intl`.
+- Brand assets. The mark is four straight lines with round caps (stroke 7 in a 64×64 viewBox) whose ends trace an S, the last line in the accent color ending in a dot:
+  - Lines (x1 → x2 at y): 21 → 48 at 13, 11 → 35 at 26, 22 → 52 at 39, and the accent line 10 → 41 at 52 with a dot at (52.5, 52), r 4.75.
+  - Colors: ink `#15171C` and accent `#D9480F` on light; `#F6F6F3` and `#FF8A4C` on dark.
+  - Lockup: the mark plus "StoryToRole" in Space Grotesk 600, one color.
+  - Favicon and app icon: the mark in white on an accent rounded square, the upper lines at 65% opacity; at 16 and 24 px a three-line cut (24 → 50 at 16, 11 → 37 at 32, the accent line 10 → 38 at 48 with a dot at (53, 48), stroke 10).
+  - Ship `apps/web/src/app/icon.svg`, `apps/web/src/app/apple-icon.png`, the mark and lockup SVGs (light and dark) in `apps/web/public/brand/`, and the lockup in the workspace shell.
 
 Acceptance:
 - [ ] Signing up creates a local user through the Clerk webhook; no organization tables remain.

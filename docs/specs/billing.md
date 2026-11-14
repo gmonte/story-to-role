@@ -19,6 +19,14 @@ A user's **plan** (what they can use) is separate from their **AI funding** (who
 - **Bring your own key is a funding mode, not a separate plan.** A subscriber who adds a key from a certified provider switches to key funding; removing the key switches back to credits.
 - **Courtesy plan:** the owner can grant the paid plan to selected users without a subscription. It works without a key, funded by StoryToRole credits; the user may add their own key so the owner does not carry the whole AI cost, and then the key funds the AI calls.
 
+**Funding order.** Each AI call is funded in this order, so a user is never charged twice for the same month:
+
+1. The plan's monthly credits, already paid for and the first to expire.
+2. The user's own key, when there is one.
+3. Stored credits (packs and welcome credits), only once both of the above are exhausted, and only after the user confirms ("Finish with credits"); never silently.
+
+A subscriber who adds a key mid-month keeps spending that month's credits first; the key takes over when they run out. The subscription switches to the key price at the next renewal, when no new monthly credits are granted; removing the key switches back at the next renewal as well.
+
 ## Subscription
 
 One subscription size at launch, monthly or annual. A larger tier comes only when usage data shows a group of subscribers buying packs every month.
@@ -56,7 +64,8 @@ Packs also serve bring-your-own-key users: when their key runs out of credit, th
 
 ## Credit meter
 
-- The user always sees the credits consumed, the balance and the cost of the next action before taking it.
+- The meter leads with what the user can still spend this month, translated into actions from the user's own usual choices: "You can still spend 470 credits this month (about 9 resumes or 33 cover letters)". One tap shows the breakdown by source and expiry: "320 from the plan, expire on Nov 30; 150 from a pack, valid until Mar 2027". With key funding, it shows the estimated spend on the user's key this month, with credits shown as a reserve.
+- The user always sees the cost of the next action before taking it.
 - A **credit reserve** keeps enough credits for the step the user came for: in the Free plan, the resume generation. When the balance approaches the reserve, the interviewer is told to wrap up the current position with what was said, and the user sees an alert, so the interview never consumes the credits the resume needs.
 
 ## Payments

@@ -18,6 +18,14 @@ _Avoid_: Job, vacancy, role, posting
 The user's pursuit of one opening, which starts when a resume is first generated for it and ends hired, rejected or withdrawn.
 _Avoid_: Candidacy, job, tracker entry
 
+**Output language**:
+The language a generated resume or cover letter is written in, chosen by the user for each generation.
+_Avoid_: Target language, resume language
+
+**Adaptation**:
+A version of a generated document rewritten in another output language from an existing version, keeping its evidence and adding no new fact.
+_Avoid_: Translation, localization
+
 ## Guided interview
 
 **Interview**:

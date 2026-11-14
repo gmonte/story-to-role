@@ -238,7 +238,7 @@ Every later feature reads the evidence base through one function that selects, f
 | Cover letter | Narrative, top stories for the opening | New |
 | Evidence trace | Source turn ids on each evidence item | New: each generated line links back to what the user said |
 
-Generated text is written in the job's language (English or Brazilian Portuguese), translating evidence stored in the other language. Forbidden terms from the sensitive-data control are checked on every output.
+Generated text is written in the output language the user picks, adapting evidence stored in another language (see [resume-and-cover-letter.md](./resume-and-cover-letter.md)). Forbidden terms from the sensitive-data control are checked on every output.
 
 ## Usage guardrails
 

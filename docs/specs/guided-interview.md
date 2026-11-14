@@ -131,7 +131,17 @@ The interviewer follows six stages per position, asks one question at a time, an
 | 5. Evidence | Numbers (before and after, scale, time, money, people), tools and technologies actually used, awards | Every claim has a number, a scope or an explicit "no number" |
 | 6. Boundaries | What must never appear, client names, confidential figures, internal codenames | Sensitive items are flagged for review |
 
-**Depth.** Besides its workflow status, each position shows how complete its story is, so the user sees their progress and where more detail would pay off. Depth follows the stages of the script already covered with concrete evidence, alongside counts of approved evidence and of results with numbers, and nudges such as "2 achievements at Company X have no number".
+**Depth.** Besides its workflow status, each position shows how complete its story is, so the user sees their progress and where more detail would pay off. Depth is shown as named levels that follow the script, never as a percentage, alongside counts of approved evidence and of results with numbers, and a nudge toward the next step ("2 achievements at Company X have no number"):
+
+| Level | Meaning |
+| --- | --- |
+| Confirmed | Employer, title and dates confirmed (what an imported resume provides) |
+| Contextualized | Company, team and scale are clear; projects are listed |
+| With stories | At least one story with problem, action and result |
+| Evidenced | Results with numbers or scope; tools actually used |
+| Complete | Every stage, including the sensitive-data review |
+
+A position handled with the short script is considered done at "With stories"; the system does not push for more.
 
 **Short script.** For positions older than about ten years, outside the target area, or in the Free plan, the interviewer uses a short script that covers only the highlights: confirmation, one or two projects and their results. The user can always ask for the full script.
 

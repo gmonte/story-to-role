@@ -38,11 +38,13 @@ Token assumptions per action, to be replaced by measured usage from the first pr
 | Cover letter | Draft, review, edit; 8k prefix cached | Sonnet | 0.093 |
 | Resume | 7 calls (strategist, review, editor, about two revision rounds, report); 9.5k prefix cached; 2.5k out each | Sonnet | 0.24 |
 | Resume | Same | Opus | 0.46 |
+| Resume, ten positions | Same 7 calls; relevant evidence only (about 600 tokens per position, 10k prefix cached); 3.5k out each | Sonnet | 0.32 |
+| Resume, ten positions | Same, sending the whole evidence base instead of retrieved evidence (54k prefix) | Sonnet | 0.52 |
 | Interview turn | Topic gate (Haiku) + turn with 15k cached history, 0.7k out | Haiku + Sonnet | 0.011 |
 | Interview, one position | About 30 turns + 1.5 extractions (20k in, 3k out) | Sonnet | 0.44 |
 | Interview, eight positions | | Sonnet | 3.51 |
 
-Thinking tokens are billed as output and are the largest uncertainty; the estimates assume moderate effort.
+Thinking tokens are billed as output and are the largest uncertainty; the estimates assume moderate effort. Output dominates generation cost: each call of the revision loop rewrites the whole resume, so the number of revisions is the largest lever, and a longer career costs more mainly because the resume is longer, not because more context is sent.
 
 ## Open points
 

@@ -32,6 +32,10 @@ Embeddings are part of the MVP.
 - They are computed by a local multilingual embedding model running in a Trigger.dev task, since an opening may be in English while the evidence is in Portuguese. No AI vendor receives the text for this.
 - They are stored with pgvector in the application's Postgres database.
 
+## Gap questions
+
+The career interview is not repeated for every opening: the goal is that, once the evidence base is built, the user only adds an opening and asks for a document. Before generating, StoryToRole turns each gap found by the fit check into a question, one per point: does the user really lack it, or do they want to add a story for it? A story added there is an application instruction, so it can stay in this application or be promoted to the global evidence base, point by point, as any instruction.
+
 ## ATS check
 
 After a resume is generated for an opening, StoryToRole compares it against the opening's keywords (hard skills, tools, certifications, languages) the way an applicant tracking system reads it: literally, as the opening spells each term. The result is factual ("14 of 18 keywords"), and the missing keywords are split in two:

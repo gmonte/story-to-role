@@ -16,13 +16,21 @@ Hiring interview prep is out of the MVP.
 ## Flow
 
 1. The user adds an opening by pasting its description. Code first checks that the text looks like a job posting.
-2. StoryToRole runs a **fit check** automatically and shows it as a hint, never as a gate: a band (high, medium or low fit), the opening's requirements that have evidence in the user's base (each linked to its evidence) and the main gaps. There is no percentage score, which would claim a precision the analysis does not have. It reads only the opening, the user's skills and the position summaries, never the whole evidence base, so it stays cheap. It counts as an evaluation in the plan, separate from generation. It is lighter than the review that follows resume generation; details belong to the fit assessment spec.
-3. Next to the fit check, StoryToRole suggests existing documents similar to what this opening needs: general documents and documents from other applications, frozen ones included.
+2. StoryToRole runs a **fit check** automatically and shows it as a hint, never as a gate. A small AI call extracts the opening's keywords (hard skills, tools, certifications, languages) and requirements (seniority, years of experience, location, work model). Each keyword and requirement retrieves the closest evidence by vector similarity; a cheap AI call then judges each one, seeing only the requirements and the retrieved evidence, never the whole evidence base, as met, partial or a gap. Vector similarity alone does not decide, since it misses seniority ("8+ years" against a junior history reads as similar) and hard requirements such as location or language. The hint shows a band (high, medium or low fit), each requirement linked to its evidence, and the main gaps; there is no percentage score, which would claim a precision the analysis does not have. It counts as an evaluation in the plan, separate from generation.
+3. Next to the fit check, StoryToRole suggests existing documents similar to this opening, ranked by vector similarity between the opening and each document: general documents and documents from other applications, frozen ones included.
 4. Whatever the fit check says, the user may get a resume, a cover letter or both, each only on demand, in one of three ways:
    - **Use as is:** the latest snapshot of the chosen document's language version is copied as the first snapshot of this application's document. No AI call is made. The source document does not change.
    - **Use as reference:** a new document is generated for this opening with the chosen document as a reference, keeping what still fits and tailoring the rest. The user reviews the result. The source document does not change.
    - **Generate from scratch** from the evidence base.
 5. The application starts when the first document is generated or copied for the opening. Openings that were analyzed but never generated for stay in a list of analyzed openings, outside the tracker.
+
+## Embeddings
+
+Embeddings are part of the MVP.
+
+- Vectors exist for every approved evidence item, skill, document (the latest snapshot of each language version), opening and opening keyword. An opening's vector is computed as soon as it is added, whether or not the user has documents yet.
+- They are computed by a local multilingual embedding model running in a Trigger.dev task, since an opening may be in English while the evidence is in Portuguese. No AI vendor receives the text for this.
+- They are stored with pgvector in the application's Postgres database.
 
 ## ATS check
 

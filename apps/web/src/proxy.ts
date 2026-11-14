@@ -1,4 +1,5 @@
 import { clerkMiddleware, createRouteMatcher } from "@clerk/nextjs/server";
+import { NextResponse } from "next/server";
 
 import { intlMiddleware } from "./tools/intl/middleware/intl-middleware";
 
@@ -12,6 +13,12 @@ const isPublicRoute = createRouteMatcher([
 export default clerkMiddleware(async (auth, request) => {
   if (!isPublicRoute(request)) {
     await auth.protect();
+  }
+
+  // The workspace opens on My career. An HTTP redirect, unlike redirect() in
+  // a page, is also followed by the client-side navigation after sign-in.
+  if (request.nextUrl.pathname === "/app") {
+    return NextResponse.redirect(new URL("/app/career", request.url));
   }
 
   if (!request.nextUrl.pathname.startsWith("/api")) {

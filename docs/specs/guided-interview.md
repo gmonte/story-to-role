@@ -32,7 +32,7 @@ It replaces two manual steps of the meu-emprego-novo CLI: writing `profile_truth
 Five rules shape every decision below; when a design choice conflicts with one, the rule wins.
 
 1. **One position at a time.** A position is closed and approved before the next one opens. Mentions of other positions are noted, not discussed.
-2. **The AI invents nothing.** The AI only records what the user said or uploaded. Every saved fact keeps a link to its source turn or document. StoryToRole does not judge whether what the user states is true: the user is responsible for how they use the tool.
+2. **The AI invents nothing.** The AI only records what the user said or uploaded. Every saved fact keeps the exact quote of its source (the user's words or the document passage), which survives the deletion of transcripts. StoryToRole does not judge whether what the user states is true: the user is responsible for how they use the tool.
 3. **The user approves what is saved.** Extraction is a proposal; nothing reaches the evidence base without explicit approval, and every item stays editable.
 4. **Code enforces, the AI suggests.** Sensitive-data choices, locked facts (employers, titles, dates) and forbidden terms are applied in code before and after each AI call, never left to a prompt.
 5. **Bounded context.** No AI call carries the whole career. Each call gets only the slice it needs, so cost per turn does not grow with career length.
@@ -201,7 +201,7 @@ The user can trigger the same actions from the UI (approve, skip, reopen); the a
 
 ## Data model
 
-The evidence base is relational and owned by one user; transcripts are kept for audit but no AI call reads them back.
+The evidence base is relational and owned by one user. Transcripts are temporary: they exist while a session runs and are deleted 7 days after its extraction is approved (see the privacy spec).
 
 | Table | Key fields | Notes |
 | --- | --- | --- |
@@ -210,8 +210,8 @@ The evidence base is relational and owned by one user; transcripts are kept for 
 | `positions` | profile id, employer, title, start, end, location, status (pending, in progress, approved, removed), origin (imported, manual, interview), source document ids, order | Employer, title and dates are locked facts once approved; removal is soft, so evidence can be restored |
 | `projects` | position id, name, period, status | Subsessions of long positions |
 | `interview_sessions` | position id, project id (optional), status, token usage | One per conversation slice; closed sessions are never reloaded |
-| `interview_turns` | session id, role, content, language, created at | Audit trail and source links |
-| `evidence` | position id, project id, kind (achievement, responsibility, metric, tool, award), text, language, source turn ids, approved at | The only facts generation may use |
+| `interview_turns` | session id, role, content (encrypted per user), language, created at | Temporary: deleted 7 days after the session's extraction is approved |
+| `evidence` | position id, project id, kind (achievement, responsibility, metric, tool, award), text, language, source quote (encrypted per user), source document id, approved at | The only facts generation may use |
 | `stories` | position id, problem, action, partners, result, evidence ids | Problem, action, result stories that feed resume bullets and cover letters |
 | `skills` | profile id, name, evidence ids | A skill without linked evidence is not usable |
 | `sensitive_items` | position id, kind (client, codename, figure, person), original text, choice (use, generalize, exclude), generalized text | Default choice: generalize for clients and figures |
@@ -306,7 +306,7 @@ Thresholds (message length, turns, budgets, cooldown) are settings to tune with 
 | The AI embellishes during extraction | Source turn ids on every fact; approval screen shows the user's own words beside each extracted line |
 | A weak model chosen with a user's own key gives poor interviews | Only tested models are offered |
 | Leaked API keys | Encryption at rest, no logging, one-click revoke |
-| Personal data under LGPD | Privacy policy, account deletion that removes transcripts and evidence, data not used for training |
+| Personal data under LGPD | See [privacy.md](./privacy.md): per-user encryption, short-lived transcripts, no content in logs, self-service export and deletion |
 
 **Open questions**
 

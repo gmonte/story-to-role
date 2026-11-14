@@ -2,6 +2,7 @@ import { createEnv } from "@t3-oss/env-nextjs";
 import { z } from "zod";
 
 import { refineServerEnv } from "./refine-server-env";
+import { webEnvRuntime } from "./web-env-runtime";
 
 export const env = createEnv({
   server: {
@@ -77,41 +78,7 @@ export const env = createEnv({
       .transform((val) => val === "true"),
   },
 
-  runtimeEnv: {
-    NODE_ENV: process.env.NODE_ENV,
-    PORT: process.env.PORT,
-    VERCEL_URL: process.env.VERCEL_URL,
-    APP_URL: process.env.APP_URL,
-    DATABASE_URL: process.env.DATABASE_URL,
-    DATABASE_DB_PREFIX: process.env.DATABASE_DB_PREFIX,
-    DB_MIGRATING: process.env.DB_MIGRATING,
-    CLERK_SECRET_KEY: process.env.CLERK_SECRET_KEY,
-    CLERK_WEBHOOK_SIGNING_SECRET: process.env.CLERK_WEBHOOK_SIGNING_SECRET,
-    UPSTASH_REDIS_REST_URL: process.env.UPSTASH_REDIS_REST_URL,
-    UPSTASH_REDIS_REST_TOKEN: process.env.UPSTASH_REDIS_REST_TOKEN,
-    REDIS_KEY_PREFIX: process.env.REDIS_KEY_PREFIX,
-    TRIGGER_PROJECT_REF: process.env.TRIGGER_PROJECT_REF,
-    TRIGGER_SECRET_KEY: process.env.TRIGGER_SECRET_KEY,
-    ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY,
-    STRIPE_SECRET_KEY: process.env.STRIPE_SECRET_KEY,
-    STRIPE_WEBHOOK_SECRET: process.env.STRIPE_WEBHOOK_SECRET,
-    STORAGE_DRIVER: process.env.STORAGE_DRIVER,
-    BLOB_READ_WRITE_TOKEN: process.env.BLOB_READ_WRITE_TOKEN,
-    ENCRYPTION_MASTER_KEY: process.env.ENCRYPTION_MASTER_KEY,
-    ENCRYPTION_PREVIOUS_MASTER_KEYS:
-      process.env.ENCRYPTION_PREVIOUS_MASTER_KEYS,
-
-    NEXT_PUBLIC_ENV: process.env.NEXT_PUBLIC_ENV,
-    NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY:
-      process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY,
-    NEXT_PUBLIC_CLERK_SIGN_IN_URL: process.env.NEXT_PUBLIC_CLERK_SIGN_IN_URL,
-    NEXT_PUBLIC_CLERK_SIGN_IN_FALLBACK_REDIRECT_URL:
-      process.env.NEXT_PUBLIC_CLERK_SIGN_IN_FALLBACK_REDIRECT_URL,
-    NEXT_PUBLIC_CLERK_SIGN_UP_FALLBACK_REDIRECT_URL:
-      process.env.NEXT_PUBLIC_CLERK_SIGN_UP_FALLBACK_REDIRECT_URL,
-    NEXT_PUBLIC_LOGGER_LEVEL: process.env.NEXT_PUBLIC_LOGGER_LEVEL,
-    NEXT_PUBLIC_LOGGER_TRACE: process.env.NEXT_PUBLIC_LOGGER_TRACE,
-  },
+  runtimeEnv: webEnvRuntime,
 
   createFinalSchema: (shape, isServer) =>
     z.object(shape).superRefine((env, ctx) => {

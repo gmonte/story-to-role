@@ -102,7 +102,7 @@ StoryToRole starts from a clone of the private `gmonte/company-balance` repo, wh
 | Web app | Next.js App Router, shadcn/ui components | Chat view with streaming, timeline panel, approval and sensitive-data screens |
 | API | tRPC routers plus a REST bridge and Swagger docs | `interview`, `positions`, `evidence`, `sensitiveItems` routers |
 | Database | Postgres with Drizzle schemas per domain and generated migrations | Tables from the data model section |
-| Auth | Clerk, synced to local `users` through webhooks | Ownership checks on every interview record |
+| Auth | Clerk, synced to local `users` through webhooks (`user.created`, `user.updated`, `user.deleted`); the base repo's Clerk Organizations sync (`organizations`, `organization_memberships`, their webhooks and domain code) is removed, since StoryToRole has no team accounts in the MVP | Ownership checks on every interview record; the admin role (for courtesy grants) is a user attribute in Clerk metadata, not an organization; webhook logs record only the event type and user id |
 | i18n | `@repo/intl`, locale from a cookie, `useTranslation` and `getTranslation` | English and Brazilian Portuguese messages; a separate interview-language setting per user |
 | Tests | Vitest, PGlite for database tests | Tests for context building, sensitive-data filtering and extraction approval |
 | AI processing | None | Every AI call (interview turns, extraction, generation, fit checks, embeddings) runs as a Trigger.dev task; progress and tokens are streamed to the client through Trigger.dev Realtime, and results are saved to Postgres |

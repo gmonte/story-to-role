@@ -17,7 +17,7 @@ Goal: the plumbing every later slice relies on.
 
 - Remove the inherited Clerk Organizations sync: `organizations` and `organization_memberships` tables (generated migration), their webhook handlers, domain code and router entries. Keep `user.created`, `user.updated`, `user.deleted`.
 - Webhook logging records only the event type and user id.
-- Environment schema (`packages/common/src/env/web.env.ts`): add `STORAGE_DRIVER`, `UPSTASH_REDIS_REST_URL`, `UPSTASH_REDIS_REST_TOKEN`, `TRIGGER_PROJECT_REF`, `TRIGGER_SECRET_KEY`, `ANTHROPIC_API_KEY`, `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET` (Stripe optional until slice 6). App refuses to start with `STORAGE_DRIVER=local` unless `NEXT_PUBLIC_ENV=development`.
+- Environment schema (`packages/common/src/env/web.env.ts`): add `STORAGE_DRIVER`, `KV_REST_API_URL`, `KV_REST_API_TOKEN` (the names the Vercel Upstash integration sets), `TRIGGER_PROJECT_REF`, `TRIGGER_SECRET_KEY`, `ANTHROPIC_API_KEY`, `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET` (Stripe optional until slice 6). App refuses to start with `STORAGE_DRIVER=local` unless `NEXT_PUBLIC_ENV=development`.
 - A script that loads `.env.local` before drizzle-kit commands.
 - Storage interface (put, get, delete) with `local` (git-ignored `.storage/`) and `vercel-blob` drivers.
 - Per-user envelope encryption utilities (AES-256-GCM, master key in its own env var with a version) for career content and bring-your-own keys.

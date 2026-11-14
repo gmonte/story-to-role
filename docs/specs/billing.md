@@ -16,7 +16,7 @@ Users pay for what they use plus a margin that keeps the project running. The st
 The Free plan lets the user record their recent history and build one resume in each output language and one cover letter. The full career interview is part of the paid plans.
 
 1. The user uploads their current resume and an opening. The resume pre-fills the career timeline and the opening gets a fit check.
-2. A short interview covers the two most recent positions (or the only one, when there is just one), using the short script. When the user has no position yet (a first job or a career change), the interview asks what they want to work with and which notable experiences they have in that area: projects, studies, volunteering, freelance work.
+2. The interview is limited only by credits: the user decides where to spend them, going deep on a few positions or telling a little about each, with the short script suggested by default. The two most recent positions are proposed first. When the user has no position yet (a first job or a career change), the interview asks what they want to work with and which notable experiences they have in that area: projects, studies, volunteering, freelance work.
 3. StoryToRole generates a new resume tailored to the opening.
 
 ## Credit meter

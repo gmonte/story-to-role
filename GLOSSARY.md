@@ -92,6 +92,10 @@ _Avoid_: Locale, app language
 The language the user and the interviewer converse in; each evidence item keeps the interview language it was told in.
 _Avoid_: Chat language, AI language
 
+**Depth**:
+How complete a position's story is in the evidence base, shown beside its workflow status.
+_Avoid_: Status, progress, score
+
 **Short script**:
 A reduced interview script that covers only a position's highlights, used for old or off-target positions and in the Free plan.
 _Avoid_: Quick interview, light mode

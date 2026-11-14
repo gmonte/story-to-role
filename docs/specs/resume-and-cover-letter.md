@@ -154,6 +154,11 @@ Documents are downloaded as PDF only, in every plan, with no watermark. There is
 - The pattern is a suggestion: the user can edit the file name before downloading.
 - An application can also be downloaded as one ZIP (`<FirstName>_<LastName>_<Title>.zip`) holding the PDF of the official snapshot of every version of its documents. When two versions would get the same file name, the version's label is appended (`..._Curriculo_copia.pdf`).
 
+## Writing style and tone
+
+- **Style profile:** the user provides one to three samples of their own writing (an old cover letter, a post, a resume they like); when they provide none, their interview answers serve as the sample. A cheap call extracts a style profile (sentence length, formality, preferred vocabulary, words to avoid, use of first person), which the user reviews and approves. It enters every generation as a style instruction and never copies sentences or facts from the samples.
+- **Suggested tones**, chosen per document on top of the style profile: **Your style** (default), **Formal** (banks, government, traditional consultancies), **Direct** (startups, technical roles: short sentences, strong verbs, no adjectives), **Warm** (mission-driven organizations) and **Technical** (highly specialized roles: more domain vocabulary and numbers). When an opening is added, the AI suggests a tone from its description ("this is a traditional bank; we suggest Formal") and the user accepts or changes it. The choice is saved with the application. A tone changes form, never facts.
+
 ## Global template
 
 Each user has a global template that defines which sections their resume has. A section can be conditional:

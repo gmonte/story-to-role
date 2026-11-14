@@ -13,6 +13,15 @@ Every interaction between the user and the AI happens in one workspace modelled 
 - **Side panel (right):** for an opening, four blocks are always shown: **Analysis** (the fit check's band, requirements and gaps), **Documents** (resume and cover letter with a tab per version, outdated notices, ATS check and which snapshot was sent), **Context** (what the AI is using in this chat: application instructions, sensitive-item overrides, locked-fact overrides) and **Usage** (plan consumption, or estimated cost for bring-your-own-key users). While a task runs, its agents and progress appear there too ("Generating resume: revision 2 of 3"). In the career interview, the panel shows the timeline of positions.
 - **Documents:** opening a document edits it in the same screen, as the Claude app does with artifacts.
 
+## Onboarding
+
+Right after sign-up the user chooses how to start:
+
+- **"I have an opening in mind"** (highlighted): paste the opening or its link; upload the current resume, a truth file, or say there is none; see the fit check right away as the first proof of value; answer a short interview about what the opening needs that the base lacks; get the resume.
+- **"I want to organize my career first":** languages, privacy notice, import and the career interview, then the first opening.
+
+Language choices and the privacy notice appear along the way, only when needed.
+
 ## Chat scope
 
 Every chat belongs to a context: the career interview, an opening or a document. There is no general-purpose chat. The topic gate judges each message against its context; off-topic messages get a fixed reply and never reach the main model.

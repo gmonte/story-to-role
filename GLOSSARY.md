@@ -12,6 +12,16 @@ _Avoid_: Fixed field, protected field
 A role the user holds or has held at one employer, with a title and a period; the unit the guided interview works through one at a time.
 _Avoid_: Job, experience, role
 
+## Writing style
+
+**Style profile**:
+How the user writes, extracted from their own samples and approved by them, applied to every generation.
+_Avoid_: Voice, persona, writing template
+
+**Tone**:
+A per-document adjustment on top of the style profile (formal, direct, warm, technical) that changes form, never facts.
+_Avoid_: Style, mood
+
 ## Openings and applications
 
 **Opening**:

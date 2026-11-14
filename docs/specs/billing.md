@@ -129,7 +129,11 @@ Token assumptions per action, to be replaced by measured usage from the first pr
 
 Thinking tokens are billed as output and are the largest uncertainty; the estimates assume moderate effort. Output dominates generation cost: each call of the revision loop rewrites the whole resume, so the number of revisions is the largest lever, and a longer career costs more mainly because the resume is longer, not because more context is sent.
 
+## Prices (initial hypothesis)
+
+Final prices are set after a closed beta that measures real consumption, with testers on courtesy grants. The starting hypothesis: an active user spends about 300 to 700 credits a month (10 to 20 openings analyzed, 5 to 10 resumes, some cover letters and adjustments). The subscription grants 600 credits a month, about US$6 of AI cost in the worst case; with Stripe fees and a 50% margin on total cost, that suggests around R$59 or US$12 a month. Pack credits cost about 30% more than subscription credits; key funding costs about a third of the subscription.
+
 ## Open points
 
-- Credits granted per plan and plan prices.
+- Final credits per plan and prices, after the beta.
 

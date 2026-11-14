@@ -24,6 +24,15 @@ StoryToRole handles the most personal professional data a person has. It keeps o
 - **Deletion:** deleting the account stops all use immediately; removal is final within 30 days, the time for database backups to expire, which must match the retention configured in Neon. Deleting the user's key makes any copy left in a backup unreadable.
 - Only records the law requires are kept (invoices in Stripe), with no career content. Clerk data is deleted with the account; Upstash data expires on its own.
 
+## Data location and subprocessors
+
+- Services run in the United States by default, where most free tiers of the stack operate (Vercel, Neon, Clerk, Trigger.dev, Upstash); Stripe and Anthropic (later OpenAI) are also abroad. The LGPD allows this with a valid transfer mechanism.
+- Before launch, each vendor's data processing agreement is checked for the ANPD standard contractual clauses (Resolution CD/ANPD 19/2024, mandatory for contract-based transfers since August 23, 2025) or a Brazil addendum. If a data subject asks, the full clauses are provided within 15 days.
+- The privacy policy lists each subprocessor, its country and what it receives, and states that Anthropic and OpenAI do not train models on API data.
+- The database region is chosen for latency and cost, not for legal reasons.
+- A contact channel for data subjects replaces a formal data protection officer while the ANPD rules for small processing agents allow it.
+- The privacy policy gets a quick legal review before publication.
+
 ## Open points
 
-- Data location, subprocessors and the data protection officer.
+None at the moment.

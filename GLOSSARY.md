@@ -126,6 +126,12 @@ _Avoid_: Privacy setting, visibility
 An exception to a sensitivity choice that applies to a single application only.
 _Avoid_: Per-job override, exception rule
 
+## AI providers
+
+**Provider package**:
+A certified mapping of every AI role in the pipeline to one provider's models.
+_Avoid_: Model list, preset, integration
+
 ## Plans and usage
 
 **Credit**:

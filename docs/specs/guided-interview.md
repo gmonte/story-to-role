@@ -109,6 +109,16 @@ StoryToRole starts from a clone of the private `gmonte/company-balance` repo, wh
 
 - **Bring your own key:** the user picks a provider and a model from a tested list and enters an API key. Keys live on the server only, since calls must pass the guardrails and generation runs in the background. Each key is encrypted with AES-256-GCM before it reaches the database, under a master key held in its own environment variable (separate from the database URL, marked sensitive in the deploy). Every encrypted key records the master-key version, and a script re-encrypts all keys when the master key rotates. A saved key is never shown again (only its last characters), is decrypted in memory only for the call, is masked by the logger, is validated with a minimal provider call when saved, and is deleted on revoke. A managed key vault (KMS) is deferred until paying users or compliance require it.
 - **When a user's key runs out of credit or is refused:** the running task stops at a safe point (a generation keeps its best version so far) and the user sees why, including when the provider's credits renew (for example, the monthly API credits of a Claude Max or Team plan, granted to a linked Console organization). Nothing is charged. If the user has StoryToRole credits or buys a pack, a "Finish with credits" action shows the estimate for the remaining work; it never switches automatically.
+
+**Provider packages.** A **provider package** maps every AI role in the pipeline to one provider's models: classification (content checks, opening keywords, fit check judgment, gap questions, instruction splitting), writing and fact extraction (resume import, interview, extraction, narrative, generation, adjustments) and, optionally, a maximum writing level. A provider is offered only through a **certified** package:
+
+- every role has a tested model and the shared test suite passes on each of them;
+- structured outputs and tool use are available;
+- the price table is known, so cost estimates can be shown.
+
+Packages are versioned; changing a model re-runs the tests first, and a provider whose model is being replaced is marked "under review" until it passes. The interface shows certified packages with a "tested integration" badge. PDF and DOCX files are converted to text by code, so no provider needs document input; the topic gate and embeddings are not package roles (they run on StoryToRole's key and locally). Which package the AI-included plans use is a system setting, not a constant; bring-your-own-key users use the package of their key's provider.
+
+At launch only the Anthropic package is certified: Haiku 5.5 for classification, Sonnet 5.5 for writing and fact extraction, Opus 5.5 for the maximum level. OpenAI comes next, with "Sign in with ChatGPT" (paying with the user's ChatGPT plan allowance) as its main way in, once its package is certified and OpenAI's documentation confirms any developer can enable plan usage; its weekly cap can stop a task, which then behaves as a key out of credit. Mixing providers across roles is a possible later step.
 - **AI included:** StoryToRole's own key, with monthly limits per plan.
 
 The adapter reports token usage per call so the app can show cost estimates before a run and actual usage after.

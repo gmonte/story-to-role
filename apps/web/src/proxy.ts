@@ -25,5 +25,7 @@ export const config = {
     "/((?!_next|_vercel|.*\\..*).*)",
     // Always run for API routes
     "/api(.*)",
+    // Clerk's auto-proxy for production *.vercel.app hosts
+    "/__clerk/:path*",
   ],
 };

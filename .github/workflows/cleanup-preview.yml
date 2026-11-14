@@ -3,6 +3,9 @@ name: cleanup pr preview
 on:
   pull_request:
     types: [closed]
+    # Only pull requests into staging get a preview; release PRs into main don't.
+    branches:
+      - staging
 
 env:
   VERCEL_CLI_VERSION: "65.16.0"

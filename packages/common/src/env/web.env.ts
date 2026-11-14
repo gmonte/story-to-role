@@ -9,6 +9,9 @@ export const env = createEnv({
     PORT: z.coerce.number().default(3000),
 
     VERCEL_URL: z.string().optional(),
+    // The fixed alias a preview or staging deployment is served from, passed
+    // by CI (`vercel deploy -b/-e APP_URL=...`); Vercel doesn't expose it.
+    APP_URL: z.string().optional(),
 
     DATABASE_URL: z.string(),
     DATABASE_DB_PREFIX: z.string().default(""),
@@ -43,6 +46,7 @@ export const env = createEnv({
     NODE_ENV: process.env.NODE_ENV,
     PORT: process.env.PORT,
     VERCEL_URL: process.env.VERCEL_URL,
+    APP_URL: process.env.APP_URL,
     DATABASE_URL: process.env.DATABASE_URL,
     DATABASE_DB_PREFIX: process.env.DATABASE_DB_PREFIX,
     DB_MIGRATING: process.env.DB_MIGRATING,

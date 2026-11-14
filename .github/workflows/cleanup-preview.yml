@@ -5,36 +5,26 @@ on:
     types: [closed]
 
 env:
-  VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
-  VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+  VERCEL_CLI_VERSION: "65.16.0"
 
 jobs:
   cleanup:
     name: cleanup pr preview
-    # Deploys stay off until the repository variable DEPLOY_ENABLED is set to
-    # "true" (Settings > Secrets and variables > Actions > Variables).
-    if: vars.DEPLOY_ENABLED == 'true'
     runs-on: ubuntu-latest
     steps:
-      - name: Remove pr-${{ github.event.pull_request.number }} alias
-        continue-on-error: true
-        run: |
-          npx vercel alias rm "pr-${{ github.event.pull_request.number }}-storytorole.vercel.app" --yes --token=${{ secrets.VERCEL_TOKEN }}
+      - name: Install Vercel CLI
+        run: npm i -g vercel@${{ env.VERCEL_CLI_VERSION }}
 
-      - name: Delete all deployments for this PR
+      - name: Remove the PR deployment
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_PROJECT_NAME: ${{ vars.VERCEL_PROJECT_NAME }}
         run: |
-          PR="${{ github.event.pull_request.number }}"
-          IDS=$(curl -sf -H "Authorization: Bearer ${{ secrets.VERCEL_TOKEN }}" \
-            "https://api.vercel.com/v6/deployments?projectId=${{ secrets.VERCEL_PROJECT_ID }}&teamId=${{ secrets.VERCEL_ORG_ID }}&meta-prNumber=$PR&limit=100" \
-            | jq -r '.deployments[].uid')
-          if [ -z "$IDS" ]; then
-            echo "No deployments to delete for PR #$PR"
-            exit 0
+          vercel link --token $VERCEL_TOKEN --project $VERCEL_PROJECT_NAME --yes
+
+          PREVIEW_URL="pr-${{ github.event.pull_request.number }}-storytorole.vercel.app"
+          OLD_DEPLOY_URL=$(vercel inspect "$PREVIEW_URL" --token $VERCEL_TOKEN 2>&1 | grep -o 'https://[^ ]*\.vercel\.app' | head -1 || true)
+          if [ -n "$OLD_DEPLOY_URL" ]; then
+            echo "Removing PR deployment: $OLD_DEPLOY_URL"
+            vercel rm "$OLD_DEPLOY_URL" --token $VERCEL_TOKEN --yes || true
           fi
-          while IFS= read -r id; do
-            [ -z "$id" ] && continue
-            echo "Deleting $id"
-            curl -sf -X DELETE -H "Authorization: Bearer ${{ secrets.VERCEL_TOKEN }}" \
-              "https://api.vercel.com/v13/deployments/$id?teamId=${{ secrets.VERCEL_ORG_ID }}" \
-              && echo "  ok" || echo "  failed"
-          done <<< "$IDS"

@@ -15,8 +15,7 @@ env:
   SKIP_ENV_VALIDATION: "true"
   NODE_DISABLE_COMPILE_CACHE: "1"
   NODE_OPTIONS: --no-node-snapshot
-  VERCEL_TEAM_ID: ${{ secrets.VERCEL_TEAM_ID }}
-  VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+  VERCEL_CLI_VERSION: "65.16.0"
 
 jobs:
   quality:
@@ -63,9 +62,6 @@ jobs:
   preview:
     name: preview
     needs: quality
-    # Deploys stay off until the repository variable DEPLOY_ENABLED is set to
-    # "true" (Settings > Secrets and variables > Actions > Variables).
-    if: vars.DEPLOY_ENABLED == 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -101,33 +97,29 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Deploy to Vercel
-        id: deploy
-        run: |
-          url=$(npx vercel deploy \
-            --meta prNumber="${{ github.event.pull_request.number }}" \
-            --meta branch="${{ github.head_ref }}" \
-            --token=${{ secrets.VERCEL_TOKEN }})
-          echo "url=$url" >> "$GITHUB_OUTPUT"
+      - name: Install Vercel CLI
+        run: npm i -g vercel@${{ env.VERCEL_CLI_VERSION }}
 
-      - name: Alias preview to pr-${{ github.event.pull_request.number }}
+      - name: Deploy preview
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_PROJECT_NAME: ${{ vars.VERCEL_PROJECT_NAME }}
         run: |
-          npx vercel alias set "${{ steps.deploy.outputs.url }}" "pr-${{ github.event.pull_request.number }}-storytorole.vercel.app" --token=${{ secrets.VERCEL_TOKEN }}
+          vercel link --token $VERCEL_TOKEN --project $VERCEL_PROJECT_NAME --yes
 
-      - name: Prune older deployments for this PR
-        continue-on-error: true
-        run: |
-          PR="${{ github.event.pull_request.number }}"
-          IDS=$(curl -sf -H "Authorization: Bearer ${{ secrets.VERCEL_TOKEN }}" \
-            "https://api.vercel.com/v6/deployments?projectId=${{ secrets.VERCEL_PROJECT_ID }}&teamId=${{ secrets.VERCEL_TEAM_ID }}&meta-prNumber=$PR&limit=100" \
-            | jq -r '.deployments[1:][].uid')
-          while IFS= read -r id; do
-            [ -z "$id" ] && continue
-            echo "Deleting $id"
-            curl -sf -X DELETE -H "Authorization: Bearer ${{ secrets.VERCEL_TOKEN }}" \
-              "https://api.vercel.com/v13/deployments/$id?teamId=${{ secrets.VERCEL_TEAM_ID }}" \
-              && echo "  ok" || echo "  failed"
-          done <<< "$IDS"
+          PREVIEW_URL="pr-${{ github.event.pull_request.number }}-storytorole.vercel.app"
+          OLD_DEPLOY_URL=$(vercel inspect "$PREVIEW_URL" --token $VERCEL_TOKEN 2>&1 | grep -o 'https://[^ ]*\.vercel\.app' | head -1 || true)
+
+          # APP_URL is the alias the deployment is served from, which Vercel
+          # doesn't expose on its own (getBaseUrl reads it).
+          DEPLOY_URL=$(vercel deploy --token $VERCEL_TOKEN --target preview -b "APP_URL=$PREVIEW_URL" -e "APP_URL=$PREVIEW_URL")
+          vercel alias --token $VERCEL_TOKEN set "$DEPLOY_URL" "$PREVIEW_URL"
+
+          # Remove the previous deployment of this PR to stay within free plan limits
+          if [ -n "$OLD_DEPLOY_URL" ]; then
+            echo "Removing previous PR deployment: $OLD_DEPLOY_URL"
+            vercel rm "$OLD_DEPLOY_URL" --token $VERCEL_TOKEN --yes || true
+          fi
 
       - name: Comment preview URL on PR
         uses: marocchino/sticky-pull-request-comment@v2

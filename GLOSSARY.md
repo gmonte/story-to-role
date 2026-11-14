@@ -26,6 +26,10 @@ _Avoid_: Candidacy, job, tracker entry
 A quick analysis, run automatically when an opening is added and shown as a hint, of whether the opening makes sense for the user's skills.
 _Avoid_: Fit score, match, assessment
 
+**Review round**:
+One review and edit pass over a generated document during generation; the user picks how many rounds to allow.
+_Avoid_: Iteration, revision, pass
+
 **ATS check**:
 A literal comparison of a generated resume against an opening's keywords, as an applicant tracking system would read it.
 _Avoid_: ATS score, keyword score, match rate

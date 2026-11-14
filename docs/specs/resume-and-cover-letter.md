@@ -32,6 +32,14 @@ Embeddings are part of the MVP.
 - They are computed by a local multilingual embedding model running in a Trigger.dev task, since an opening may be in English while the evidence is in Portuguese. No AI vendor receives the text for this.
 - They are stored with pgvector in the application's Postgres database.
 
+## Review rounds
+
+Generating a resume runs a loop: a strategist drafts, a reviewer rates the draft against the opening and lists gaps, and an editor applies the review. Each **review round** (review plus edit) rewrites the whole document, which makes rounds the largest generation cost.
+
+- The user picks the depth before generating: **Quick** (one round) or **Thorough** (up to three rounds, stopping early when the rating reaches the target or stops improving). The best-rated version is kept. Each option shows its credit estimate.
+- The number of rounds behind each option is a setting, not a constant, so it can be tuned with real data.
+- Every round's rating, cost and outcome are stored, so the quality gained per extra round can be measured.
+
 ## Gap questions
 
 The career interview is not repeated for every opening: the goal is that, once the evidence base is built, the user only adds an opening and asks for a document. Before generating, StoryToRole turns each gap found by the fit check into a question, one per point: does the user really lack it, or do they want to add a story for it? A story added there is an application instruction, so it can stay in this application or be promoted to the global evidence base, point by point, as any instruction.

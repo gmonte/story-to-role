@@ -1,6 +1,8 @@
 import { createEnv } from "@t3-oss/env-nextjs";
 import { z } from "zod";
 
+import { refineServerEnv } from "./refine-server-env";
+
 export const env = createEnv({
   server: {
     NODE_ENV: z
@@ -48,6 +50,14 @@ export const env = createEnv({
     STORAGE_DRIVER: z.enum(["local", "vercel-blob"]).default("vercel-blob"),
     // Required when STORAGE_DRIVER=vercel-blob.
     BLOB_READ_WRITE_TOKEN: z.string().optional(),
+
+    // Wraps every user's data key (envelope encryption of career content and
+    // bring-your-own keys): `v<version>:<base64 of 32 random bytes>`. Generate
+    // one with `echo "v1:$(openssl rand -base64 32)"`. When rotating, move the
+    // old value to ENCRYPTION_PREVIOUS_MASTER_KEYS (comma-separated) so data
+    // keys wrapped by it stay readable.
+    ENCRYPTION_MASTER_KEY: z.string().regex(/^v\d+:[A-Za-z0-9+/]{43}=$/),
+    ENCRYPTION_PREVIOUS_MASTER_KEYS: z.string().optional(),
   },
 
   client: {
@@ -87,6 +97,9 @@ export const env = createEnv({
     STRIPE_WEBHOOK_SECRET: process.env.STRIPE_WEBHOOK_SECRET,
     STORAGE_DRIVER: process.env.STORAGE_DRIVER,
     BLOB_READ_WRITE_TOKEN: process.env.BLOB_READ_WRITE_TOKEN,
+    ENCRYPTION_MASTER_KEY: process.env.ENCRYPTION_MASTER_KEY,
+    ENCRYPTION_PREVIOUS_MASTER_KEYS:
+      process.env.ENCRYPTION_PREVIOUS_MASTER_KEYS,
 
     NEXT_PUBLIC_ENV: process.env.NEXT_PUBLIC_ENV,
     NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY:
@@ -102,17 +115,7 @@ export const env = createEnv({
 
   createFinalSchema: (shape, isServer) =>
     z.object(shape).superRefine((env, ctx) => {
-      if (
-        isServer &&
-        env.NEXT_PUBLIC_ENV === "preview" &&
-        !env.REDIS_KEY_PREFIX
-      ) {
-        ctx.addIssue({
-          code: "custom",
-          path: ["REDIS_KEY_PREFIX"],
-          message: "REDIS_KEY_PREFIX is required when NEXT_PUBLIC_ENV=preview",
-        });
-      }
+      if (isServer) refineServerEnv(env, ctx);
     }),
 
   skipValidation: !!process.env.SKIP_ENV_VALIDATION,

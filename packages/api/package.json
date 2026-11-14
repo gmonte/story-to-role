@@ -11,7 +11,7 @@
   },
   "scripts": {
     "db:up": "pnpm db:generate && pnpm db:migrate",
-    "db:generate": "SKIP_ENV_VALIDATION=1 drizzle-kit generate",
+    "db:generate": "drizzle-kit generate",
     "db:migrate": "DB_MIGRATING=true drizzle-kit migrate",
     "db:push": "DB_MIGRATING=true drizzle-kit push",
     "db:studio": "drizzle-kit studio",

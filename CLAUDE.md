@@ -4,14 +4,35 @@ This is a pnpm workspace monorepo (lerna + nx).
 
 **Important**: This monorepo uses pnpm named catalogs for dependency management. When installing a new dependency:
 1. Get the latest version: `pnpm view <package-name> version`
-2. Add the version to the chosen named catalog in `pnpm-workspace.yaml` and reference it as `"catalog:<name>"` in the target package's `package.json`
-3. Run `pnpm install` from the workspace root to update the lockfile
+2. Ask the user which named catalog it should be added to (check `pnpm-workspace.yaml` for existing catalogs)
+3. Add the version to the chosen named catalog in `pnpm-workspace.yaml` and reference it as `"catalog:<name>"` in the target package's `package.json`
+4. Run `pnpm install` from the workspace root to update the lockfile
 
-**Important**: This repo uses husky git hooks that run on commit. Commits must follow Conventional Commits format (enforced by commitlint via `.commitlintrc.json` and commitizen via `.czrc`).
+**Important**: This repo uses husky git hooks that run on commit. Commits must follow Conventional Commits format (enforced by commitlint via `.commitlintrc.json` and commitizen via `.czrc`). Wait for hooks to finish before proceeding.
 
-**Important**: For UI formatting and i18n, get `t` from `@repo/intl`: use `useTranslation` in client components and `getTranslation` in server components.
+**Important**: Commit message body lines must be ≤ 100 characters (commitlint `body-max-line-length`), so wrap long paragraphs. The pre-commit hook runs `eslint --max-warnings=0` on staged files, so warnings block commits.
 
-**Important**: Never hand-write database migrations. Edit the drizzle schema (`packages/api/src/domains/*/db/*-tables.ts`), then run `pnpm --filter @repo/api db:generate --name <migration-name>` to generate the SQL. Create a unique migration name each time you generate a migration that reflects the changes made to the schema (e.g., `add_column_name`). If a migration with the same name already exists, it will be overwritten, so be careful! After it's created, edit the generated `.sql` file to add `IF NOT EXISTS` (or `IF EXISTS` for drops) to every statement so the migration can be re-run without errors.
+**Important**: Run package scripts from the monorepo root through lerna, scoped to the package, because nx loads the root `.env.local` for every task: `pnpm exec lerna run <script> --scope=<package>` (for example `pnpm exec lerna run db:migrate --scope=@repo/api`). Running them with `pnpm --filter` or inside the package does **not** load `.env.local`.
+
+**Important**: Never hand-write database migrations. Edit the drizzle schema (`packages/api/src/domains/*/db/*-tables.ts`), then run `pnpm exec lerna run db:generate --scope=@repo/api -- --name <migration-name>` to generate the SQL. Create a unique migration name each time you generate a migration that reflects the changes made to the schema (e.g., `add_column_name`). If a migration with the same name already exists, it will be overwritten, so be careful! After it's created, edit the generated `.sql` file to add `IF NOT EXISTS` (or `IF EXISTS` for drops) to every statement so the migration can be re-run without errors. Apply it with `pnpm exec lerna run db:migrate --scope=@repo/api`.
+
+**Important**: API domains follow router → service → repository → schemas/db under `packages/api/src/domains/<domain>/`. Routers validate I/O with Zod and delegate; services enforce permissions and open transactions; repositories build the queries. The frontend mirrors this under `apps/web/src/domains/<domain>/{components,hooks,utils}`.
+
+**Important**: Never name a parameter just `id`. Every input that identifies a resource is `<domain>Id` (`positionId`, `openingId`, `applicationId`) — in the tRPC input schema, in the service and repository signatures, and in the REST path, which addresses a specific resource as `/<domain>/by-id/{<domain>Id}`. This applies to parameters, not to an entity's own `id` field inside a payload or output schema, and not to a database column.
+
+**Important**: Never import `radix-ui` directly in `apps/`. Radix primitives must only be used inside `packages/web/`, which wraps them as components. Apps should import these wrappers from `@repo/web/components/ui`. To add a shadcn component, run from the workspace root: `nvm use && cd apps/web && pnpm dlx shadcn@canary add [COMPONENT]`.
+
+**Important**: For UI formatting and i18n, get `t` from `@repo/intl`: use `useTranslation` in client components and `getTranslation` in server components. Use `t.formatMessage` for strings, `t.formatNumber` for numbers and percentages, and `t.formatDate` for dates.
+
+**Important**: In any translated string (`defaultMessage` / i18n message), never use straight double quotes (`"`) to quote text *inside* the message — use typographic quotes `“` (U+201C) and `”` (U+201D) instead. The generator emits every message as a double-quoted TypeScript string literal in `packages/intl/intl-message-types.ts`, so a straight `"` inside a message closes that literal and breaks type generation. Straight single quotes/apostrophes (`'`) are fine.
+
+**Important**: A procedure with `openapi` meta is rendered into an OpenAPI document by `trpc-to-openapi`, which accepts far less than Zod does. It only runs when someone opens `/api/docs`, so a schema it rejects throws in the browser at request time rather than failing the build. The rules:
+
+- **The root of `.input()` must be a `ZodObject`.** Never a `z.union` or `z.discriminatedUnion`. A path parameter is resolved against the root object's *keys*, so `{positionId}` in the path needs `positionId` at the top level, non-optional. To branch on a discriminant, keep the identifiers at the root and nest the union under one key.
+- **Every root key of a GET/DELETE input must be a primitive** (string, number, boolean, bigint, date), or an array or enum of one — they become query parameters.
+- **`z.void()` has no OpenAPI representation** for outputs of mutations; return an object instead.
+
+**Important**: API integration tests run against real Postgres via PGlite (`packages/api/src/test/pglite.ts`). Tests never call real AI providers, Stripe or Trigger.dev: mock them at the adapter boundary.
 
 Commands:
 
@@ -29,12 +50,12 @@ Read before implementing: `docs/plan.md` (slice order and acceptance criteria), 
 
 ## Local development
 
-Secrets live in `.env.local` (git-ignored); `.env.example` lists every variable.
+Secrets live in `.env.local` (git-ignored); `.env.example` lists every variable. `vercel env pull` restores `.env.local` from Vercel's Development environment, which holds the local values.
 
-- **Postgres:** Postgres.app (PostgreSQL 18 with pgvector available), database `story_to_role`. drizzle-kit does not read `.env.local` on its own: `nvm use && set -a && . ./.env.local && set +a && pnpm --filter @repo/api db:migrate`.
-- **Redis / rate limiting:** Homebrew Redis on the host plus serverless-redis-http in Docker (OrbStack): `docker compose up -d`. The app talks to it as Upstash at `http://localhost:8079`.
-- **Trigger.dev:** org "Story To Role", project "Story To Role Preview" (`TRIGGER_PROJECT_REF`), CLI profile `storytorole`. Run tasks locally with `npx trigger.dev@4.8.5 dev --profile storytorole` (inside `packages/api` once `trigger.config.ts` exists).
+- **Postgres:** Postgres.app (PostgreSQL 18 with pgvector available), database `story_to_role`. Migrate with `nvm use && pnpm exec lerna run db:migrate --scope=@repo/api`.
+- **Redis / rate limiting:** Homebrew Redis on the host plus serverless-redis-http in Docker (OrbStack): `docker compose up -d`. The app talks to it as Upstash at `http://localhost:8079` (`UPSTASH_REDIS_REST_URL`, `UPSTASH_REDIS_REST_TOKEN`).
+- **Trigger.dev:** org "Story To Role", project "Story To Role Preview" (`TRIGGER_PROJECT_REF`), CLI profile `storytorole`. Run tasks locally with `nvm use && pnpm exec lerna run trigger:dev --scope=@repo/api` once `trigger.config.ts` exists.
 - **Clerk webhooks:** `ngrok http --url=greatly-central-ladybird.ngrok-free.app 3000`; the dev endpoint is `https://greatly-central-ladybird.ngrok-free.app/api/clerk/webhooks` (`user.created`, `user.updated`, `user.deleted`).
 - **Stripe (sandbox):** `stripe listen --forward-to localhost:3000/api/webhooks/stripe` prints the local `STRIPE_WEBHOOK_SECRET`.
 - **Storage:** `STORAGE_DRIVER=local` writes to `.storage/`.
-- **AI:** `ANTHROPIC_API_KEY` is StoryToRole's own key (the default provider package, and the topic gate for credit-funded users). Tests must mock providers, Stripe and Trigger.dev.
+- **AI:** `ANTHROPIC_API_KEY` is StoryToRole's own key (the default provider package, and the topic gate for credit-funded users).

@@ -97,7 +97,10 @@ jobs:
           DB_BRANCH="preview/pr-${{ github.event.pull_request.number }}"
 
           NEW_MIGRATIONS=$(git diff --diff-filter=A --name-only "origin/${{ github.base_ref }}...HEAD" -- 'packages/api/drizzle/*.sql')
-          BRANCH_EXISTS=$(npx -y neonctl@9 branches list --project-id "$NEON_PROJECT_ID" --output json | grep -c "\"$DB_BRANCH\"" || true)
+          # Listing must succeed on its own: a failure (a bad key) must stop
+          # the job, not read as "no branch".
+          BRANCHES=$(npx -y neonctl@9 branches list --project-id "$NEON_PROJECT_ID" --output json)
+          BRANCH_EXISTS=$(echo "$BRANCHES" | grep -c "\"$DB_BRANCH\"" || true)
 
           if [ -z "$NEW_MIGRATIONS" ] && [ "$BRANCH_EXISTS" = "0" ]; then
             echo "No new migrations: the preview uses the staging database"

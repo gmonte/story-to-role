@@ -33,7 +33,7 @@ Secrets live in `.env.local` (git-ignored); `.env.example` lists every variable.
 
 - **Postgres:** Postgres.app (PostgreSQL 18 with pgvector available), database `story_to_role`. drizzle-kit does not read `.env.local` on its own: `nvm use && set -a && . ./.env.local && set +a && pnpm --filter @repo/api db:migrate`.
 - **Redis / rate limiting:** Homebrew Redis on the host plus serverless-redis-http in Docker (OrbStack): `docker compose up -d`. The app talks to it as Upstash at `http://localhost:8079`.
-- **Trigger.dev:** org "Story To Role", project "Story To Role Preview" (`TRIGGER_PROJECT_REF`), CLI profile `storytorole`. Run tasks locally with `npx trigger.dev@4.7.3 dev --profile storytorole` (inside `packages/api` once `trigger.config.ts` exists).
+- **Trigger.dev:** org "Story To Role", project "Story To Role Preview" (`TRIGGER_PROJECT_REF`), CLI profile `storytorole`. Run tasks locally with `npx trigger.dev@4.8.5 dev --profile storytorole` (inside `packages/api` once `trigger.config.ts` exists).
 - **Clerk webhooks:** `ngrok http --url=greatly-central-ladybird.ngrok-free.app 3000`; the dev endpoint is `https://greatly-central-ladybird.ngrok-free.app/api/clerk/webhooks` (`user.created`, `user.updated`, `user.deleted`).
 - **Stripe (sandbox):** `stripe listen --forward-to localhost:3000/api/webhooks/stripe` prints the local `STRIPE_WEBHOOK_SECRET`.
 - **Storage:** `STORAGE_DRIVER=local` writes to `.storage/`.

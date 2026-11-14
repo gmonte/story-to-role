@@ -21,7 +21,7 @@ Goal: the plumbing every later slice relies on.
 - A script that loads `.env.local` before drizzle-kit commands.
 - Storage interface (put, get, delete) with `local` (git-ignored `.storage/`) and `vercel-blob` drivers.
 - Per-user envelope encryption utilities (AES-256-GCM, master key in its own env var with a version) for career content and bring-your-own keys.
-- Trigger.dev 4.7.3 (`trigger.dev`, `@trigger.dev/sdk`, `@trigger.dev/build` in the `api` catalog; `@trigger.dev/react-hooks` in `web`), `packages/api/trigger.config.ts` modeled on the adc-monorepo setup, `trigger:dev` script, a `tasks` table storing run ids, and Realtime subscription in the web app.
+- Trigger.dev 4.8.5, the latest at planning time; confirm with `pnpm view trigger.dev version` before installing (`trigger.dev`, `@trigger.dev/sdk`, `@trigger.dev/build` in the `api` catalog; `@trigger.dev/react-hooks` in `web`), `packages/api/trigger.config.ts` modeled on the adc-monorepo setup, `trigger:dev` script, a `tasks` table storing run ids, and Realtime subscription in the web app.
 - Provider package abstraction with the Anthropic package (Haiku 5.5 classification, Sonnet 5.5 writing, Opus 5.5 maximum level); every call records token usage.
 - Topic gate that follows the AI funding (user's key with key funding, StoryToRole's key with credits) and fails closed, and rate limits with `@upstash/ratelimit` (local SRH via `docker compose up -d`).
 - Workspace shell (workspace spec): sidebar with My career, Library, New opening and openings by status; chat center; side panel; interface language via `@repo/intl`.

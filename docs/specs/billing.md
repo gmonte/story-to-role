@@ -12,6 +12,17 @@ Users pay for what they use plus a margin that keeps the project running. The st
 - Plans grant **credits**.
 - Every AI action consumes credits: fit checks, generations and adjustments (adaptation to another language, language sync, cover letter update). Credits replace separate counters for evaluation and generation; actions still differ in how many credits they cost.
 
+## Subscription
+
+One subscription size at launch, monthly or annual. A larger tier comes only when usage data shows a group of subscribers buying packs every month.
+
+## Credit expiry
+
+- Monthly credits expire at the end of each billing month; they do not roll over, as with the monthly allowances of AI subscriptions such as Claude Max.
+- Credits bought in packs are valid for 12 months.
+- Welcome credits never expire.
+- Each debit consumes the credits that expire first.
+
 ## Free plan
 
 The Free plan lets the user record their recent history and build one resume in each output language and one cover letter. The full career interview is part of the paid plans.

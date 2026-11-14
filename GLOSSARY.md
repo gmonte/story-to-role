@@ -142,6 +142,10 @@ _Avoid_: Token, point, coin
 Credits held back for the step the user came for, so that earlier steps cannot consume them.
 _Avoid_: Hold, buffer
 
-**Usage allowance**:
-The monthly amount of AI usage a plan includes; it limits only usage paid by StoryToRole and is shown as information when the user brings their own key.
-_Avoid_: Budget, quota, credits
+**Monthly credits**:
+The credits a subscription grants each billing month, which expire at the end of that month.
+_Avoid_: Usage allowance, quota, budget
+
+**Welcome credits**:
+Credits granted once to every new account, which never expire.
+_Avoid_: Trial credits, bonus

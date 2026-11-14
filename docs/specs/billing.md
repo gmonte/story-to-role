@@ -8,7 +8,8 @@ Users pay for what they use plus a margin that keeps the project running. The st
 
 ## Credits
 
-- Plans are monthly subscriptions (Free, BYOK, Essencial, Intensivo) that grant **credits**. Never priced per opening.
+- The offer is: **Free** (welcome credits), **credit packs** (no subscription), a **subscription** (monthly or annual, with monthly credits) and **BYOK** (monthly or annual, platform only, AI paid by the user's own key). There is no lifetime plan. Nothing is ever priced per opening or per document.
+- Plans grant **credits**.
 - Every AI action consumes credits: fit checks, generations and adjustments (adaptation to another language, language sync, cover letter update). Credits replace separate counters for evaluation and generation; actions still differ in how many credits they cost.
 
 ## Free plan

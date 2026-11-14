@@ -26,7 +26,8 @@ export default async function HomePage() {
           </CardTitle>
           <CardDescription>
             {t.formatMessage({
-              defaultMessage: "Track your company finances with ease.",
+              defaultMessage:
+                "Turn your career story into tailored resumes and cover letters.",
             })}
           </CardDescription>
         </CardHeader>

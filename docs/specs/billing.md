@@ -50,6 +50,29 @@ Packs also serve bring-your-own-key users: when their key runs out of credit, th
 - The user always sees the credits consumed, the balance and the cost of the next action before taking it.
 - A **credit reserve** keeps enough credits for the step the user came for: in the Free plan, the resume generation. When the balance approaches the reserve, the interviewer is told to wrap up the current position with what was said, and the user sees an alert, so the interview never consumes the credits the resume needs.
 
+## Payments
+
+Stripe directly, through an account opened in Brazil under the owner's CNPJ; Clerk handles sign-in only and stores the link to the Stripe customer. Clerk Billing was ruled out because it charges in USD only and has no credits, metered billing or one-time packs.
+
+- **Stripe Checkout** (Stripe-hosted page) for both the subscription and credit packs.
+- The subscription is a flat-rate price, monthly and annual, with one price in BRL and one in USD. Each paid invoice triggers a webhook that grants that month's credits in a credit ledger in Postgres; packs grant theirs when the one-time payment succeeds. Stripe's Metronome credit burndown is not used: credits live in StoryToRole's ledger.
+- **Stripe Customer Portal** for changing card, switching between monthly and annual, and cancelling.
+- No trial: the Free plan plays that role.
+
+Stripe Brazil standard fees (stripe.com/br/pricing, read 2026-11-14):
+
+| Item | Fee |
+| --- | --- |
+| Domestic card | 3.99% + R$0.39 per successful transaction |
+| International card | +2% on top, computed after conversion to BRL |
+| Pix | 1.19% per paid Pix; by invitation only |
+| Boleto | R$3.45 per paid boleto |
+| Stripe Billing | +0.7% of subscription billing volume; not charged on one-time payments |
+| Checkout, Payment Links, 3D Secure | Included |
+| Dispute | R$55 received, plus R$55 if countered (returned when won) |
+
+Examples: a R$49 subscription on a Brazilian card keeps R$46.31 (5.5% in fees); a R$29 pack keeps R$27.45 (5.3%); a US$12 subscription on a foreign card keeps about US$11.13 (7.3%). Still to confirm with Stripe: the currency conversion fee and whether a Brazilian account can charge USD and settle in BRL. Brazilian taxes on revenue are outside Stripe and need an accountant.
+
 ## Cost model (estimate)
 
 Prices from the Claude API reference, cached 2026-10-06, in USD per million tokens: Haiku 5.5 $0.10 input / $0.50 output; Sonnet 5.5 $2 / $10 (cache reads $0.20); Opus 5.5 $4 / $20 (cache reads $0.20). Cache writes cost 1.25x input.
@@ -79,3 +102,4 @@ Thinking tokens are billed as output and are the largest uncertainty; the estima
 - Whether the career interview consumes credits.
 - Fixed credits per action or metering by actual usage.
 - Credits granted per plan and plan prices.
+- Requesting Pix (invitation only) for one-time packs.

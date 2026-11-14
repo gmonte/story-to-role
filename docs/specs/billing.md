@@ -21,6 +21,8 @@ The Free plan lets the user record their recent history and build one resume in 
 
 Free is limited by credits only: 200 welcome credits, granted once, spent however the user wants (interview, truth file import, fit checks, documents, gap questions), plus 10 credits a month for fit checks so users keep coming back. The pricing page says what 200 credits are enough for ("tell your recent story and get your resume in Portuguese and English plus a cover letter"), and the product makes clear at every limit that subscribing unlocks more: the credit meter, the reserve alert and the end of the welcome credits all point to the subscription. Maximum AI cost per signup is about US$2.
 
+Every generation option is available in Free, limited only by credits: Quick or Thorough review rounds, standard or maximum writing level. Each option shows its credit estimate before the user confirms. Free preselects Quick with the standard level and says why: it leaves enough credits for the second language and the cover letter.
+
 ## Credit packs
 
 Credit packs are sold without a subscription, for users who want to pay only when they use. They are priced so that a credit bought in a pack clearly costs more than a credit in the subscription, which makes the subscription the obvious choice for anyone applying regularly, while still covering AI cost plus margin. Pricing is never per opening or per document.

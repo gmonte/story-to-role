@@ -32,7 +32,7 @@ It replaces two manual steps of the meu-emprego-novo CLI: writing `profile_truth
 Five rules shape every decision below; when a design choice conflicts with one, the rule wins.
 
 1. **One position at a time.** A position is closed and approved before the next one opens. Mentions of other positions are noted, not discussed.
-2. **Nothing invented.** The AI only records what the user said or uploaded. Every saved fact keeps a link to its source turn or document.
+2. **The AI invents nothing.** The AI only records what the user said or uploaded. Every saved fact keeps a link to its source turn or document. StoryToRole does not judge whether what the user states is true: the user is responsible for how they use the tool.
 3. **The user approves what is saved.** Extraction is a proposal; nothing reaches the evidence base without explicit approval, and every item stays editable.
 4. **Code enforces, the AI suggests.** Sensitive-data choices, locked facts (employers, titles, dates) and forbidden terms are applied in code before and after each AI call, never left to a prompt.
 5. **Bounded context.** No AI call carries the whole career. Each call gets only the slice it needs, so cost per turn does not grow with career length.

@@ -15,8 +15,20 @@ A job vacancy at a company, described by the text the user pastes; it is open or
 _Avoid_: Job, vacancy, role, posting
 
 **Application**:
-The user's pursuit of one opening, which starts when a resume is first generated for it and ends hired, rejected or withdrawn.
+The user's pursuit of one opening, which ends hired, rejected or withdrawn.
 _Avoid_: Candidacy, job, tracker entry
+
+**Fit check**:
+A quick analysis, before any document is generated, of whether an opening makes sense for the user's skills.
+_Avoid_: Fit score, match, assessment
+
+**Application instructions**:
+Free-text statements the user adds for one application's generation only; each point may be promoted to the global evidence base.
+_Avoid_: Extra prompt, custom prompt, notes
+
+**Outdated**:
+The state of a document whose source changed after it was produced: a language version behind another language version, or a cover letter whose resume got a new snapshot.
+_Avoid_: Stale, out of sync, dirty
 
 **Output language**:
 The language a generated resume or cover letter is written in, chosen by the user for each generation.

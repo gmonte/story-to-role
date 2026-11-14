@@ -4,9 +4,28 @@ Draft. Decisions are recorded here as they close; open points are listed at the 
 
 ## Goal and scope
 
-For one opening, StoryToRole generates a tailored resume and cover letter using only the approved evidence base (see [guided-interview.md](./guided-interview.md)). Generating the first resume for an opening starts an application.
+For one opening, StoryToRole generates a tailored resume and cover letter from the approved evidence base (see [guided-interview.md](./guided-interview.md)) plus any application instructions the user adds. The AI invents nothing; what the user states is the user's responsibility.
 
 Hiring interview prep is out of the MVP.
+
+## Flow
+
+1. The user adds an opening by pasting its description.
+2. StoryToRole runs a **fit check**: a quick, cheap analysis of whether the opening makes sense for the user's skills. It is lighter than the review that follows resume generation; its contents belong to the fit assessment spec. Its purpose is to avoid generating documents for openings that do not fit.
+3. Whatever the fit check says, the user may generate a resume, a cover letter or both. Each document is generated only on demand.
+
+## Application instructions
+
+- Before generating, the user can add free-text instructions that apply to this application only: a detail they just remembered, a different framing of an old position, or experience that is not in the evidence base.
+- StoryToRole does not verify whether these statements are true.
+- The system splits the instructions into points and asks, point by point, whether each one should also be added to the user's global evidence base. Points added go through the same approval as interview evidence; the others stay in this application only.
+- Lines generated from an instruction trace back to that instruction, as interview evidence traces back to its turn.
+
+## Cover letter and its resume
+
+- A cover letter can be generated without a resume, but it is more accurate when generated from one.
+- A cover letter generated from a resume records the resume snapshot it used. When that resume later gets a new snapshot, the cover letter is marked **outdated**, with a notice that the resume changed after the letter was generated.
+- The user then chooses to produce a new snapshot of the cover letter or keep the current one.
 
 ## Output language
 

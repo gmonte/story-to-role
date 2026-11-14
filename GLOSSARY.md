@@ -4,6 +4,10 @@ StoryToRole helps job seekers produce tailored resumes and cover letters from a 
 
 ## Career
 
+**Locked fact**:
+An employer, title or date of a position that code prevents the AI from altering in any generated text.
+_Avoid_: Fixed field, protected field
+
 **Position**:
 A role the user holds or has held at one employer, with a title and a period; the unit the guided interview works through one at a time.
 _Avoid_: Job, experience, role
@@ -15,11 +19,11 @@ A job vacancy at a company, described by the text the user pastes; it is open or
 _Avoid_: Job, vacancy, role, posting
 
 **Application**:
-The user's pursuit of one opening, which ends hired, rejected or withdrawn.
+The user's pursuit of one opening, which starts when the first document is generated for it and ends hired, rejected or withdrawn.
 _Avoid_: Candidacy, job, tracker entry
 
 **Fit check**:
-A quick analysis, before any document is generated, of whether an opening makes sense for the user's skills.
+A quick analysis, run automatically when an opening is added and shown as a hint, of whether the opening makes sense for the user's skills.
 _Avoid_: Fit score, match, assessment
 
 **Application instructions**:
@@ -49,6 +53,14 @@ _Avoid_: Commit, version, revision, draft; the interface calls it a change
 **Submission freeze**:
 The point at which an application is marked as applied and all of its documents become read-only.
 _Avoid_: Lock, finalization
+
+**Language sync**:
+Carrying the changes of one language version into another language version of the same document, preserving the target's own edits.
+_Avoid_: Translation update, merge
+
+**Locked-fact override**:
+A different employer, title or dates for one position that the user declares for a single application, which code then enforces there.
+_Avoid_: Exception, custom title
 
 **Adaptation**:
 A snapshot that rewrites a generated document in another output language from the latest snapshot of another language version, keeping its evidence and adding no new fact.

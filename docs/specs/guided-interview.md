@@ -105,12 +105,11 @@ StoryToRole starts from a clone of the private `gmonte/company-balance` repo, wh
 
 The adapter reports token usage per call so the app can show cost estimates before a run and actual usage after.
 
-**Voice input.** Speech to text only, like the Claude app's dictation: the user speaks, the transcript appears in the input box, and nothing is sent until they confirm. The transcription language follows the interview language. Audio is not stored; only the confirmed text becomes an interview turn. Options to compare:
+**Voice input.** Speech to text only, like the Claude app's dictation: the user speaks, the transcript appears in the input box, and nothing is sent until they confirm. The transcription language follows the interview language. Audio is not stored; only the confirmed text becomes an interview turn.
 
-- **Browser Web Speech API:** free and quick to ship, but support varies by browser and some browsers send audio to their vendor's servers.
-- **A transcription API** (for example OpenAI's speech-to-text models or Deepgram): consistent quality in both languages, at a per-minute cost. Anthropic offers no transcription API, so users with an Anthropic key would need it included in StoryToRole's plan.
+Recognition runs on the user's device only. The microphone button uses the browser's Web Speech API with on-device processing requested (`processLocally`); the browser downloads the language pack once and audio never leaves the device. Where on-device recognition is unavailable (checked at runtime with `SpeechRecognition.available()`; for example Firefox, ChromeOS or a language pack that failed to download), the button is replaced by a hint on using the operating system's own dictation (Fn Fn on macOS, Win+H on Windows, the keyboard microphone on iOS and Android), which types into the input box like any keyboard. StoryToRole never sends audio to a server, its own or a third party's, so voice input costs nothing and is part of every plan. A paid transcription API is reconsidered only if on-device quality in Brazilian Portuguese disappoints in testing.
 
-The privacy notice also covers audio: who transcribes it and that it is discarded after transcription.
+The privacy notice says audio never leaves the user's device.
 
 ## Interview script per position
 
@@ -272,7 +271,7 @@ Thresholds (message length, turns, budgets, cooldown) are settings to tune with 
 
 **Open questions**
 
-- Final product name. Transcription provider for voice input, and whether it is included in every plan.
+- Final product name.
 
 **Acceptance criteria**
 

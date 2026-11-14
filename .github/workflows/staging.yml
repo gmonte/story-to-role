@@ -11,7 +11,7 @@ concurrency:
 
 env:
   PNPM_VERSION: 10.33.0
-  NODE_VERSION: 24.14.1
+  NODE_VERSION: 24.22.3
   SKIP_ENV_VALIDATION: "true"
   NODE_DISABLE_COMPILE_CACHE: "1"
   NODE_OPTIONS: --no-node-snapshot
@@ -108,8 +108,10 @@ jobs:
           OLD_DEPLOY_URL=$(vercel inspect "$STAGING_URL" --token $VERCEL_TOKEN 2>&1 | grep -o 'https://[^ ]*\.vercel\.app' | head -1 || true)
 
           # APP_URL is the alias the deployment is served from, which Vercel
-          # doesn't expose on its own (getBaseUrl reads it).
-          DEPLOY_URL=$(vercel deploy --token $VERCEL_TOKEN --target preview -b "APP_URL=$STAGING_URL" -e "APP_URL=$STAGING_URL")
+          # doesn't expose on its own (getBaseUrl reads it). Previews share one
+          # Upstash database, so each gets its own REDIS_KEY_PREFIX.
+          REDIS_KEY_PREFIX="stg:"
+          DEPLOY_URL=$(vercel deploy --token $VERCEL_TOKEN --target preview -b "APP_URL=$STAGING_URL" -e "APP_URL=$STAGING_URL" -b "REDIS_KEY_PREFIX=$REDIS_KEY_PREFIX" -e "REDIS_KEY_PREFIX=$REDIS_KEY_PREFIX")
           vercel alias --token $VERCEL_TOKEN set "$DEPLOY_URL" "$STAGING_URL"
 
           # Remove the previous staging deployment to stay within free plan limits

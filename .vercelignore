@@ -1,0 +1,37 @@
+# Vercel CLI does not read .gitignore; keep this in sync with it.
+
+# Dependencies (installed on Vercel)
+node_modules
+.pnpm-store
+
+# Build output and caches
+.next
+out
+dist
+build
+.nx/cache
+.nx/workspace-data
+.turbo
+.cache
+.eslintcache
+*.tsbuildinfo
+coverage
+.trigger
+
+# Secrets and local state (env vars come from the Vercel project)
+.env
+.env.*
+!.env.example
+.vercel
+.clerk
+.storage
+
+# Generated intl files
+packages/intl/intl-message-types.ts
+packages/intl/extracted
+packages/intl/compiled
+
+# Misc
+.git
+.DS_Store
+*.log

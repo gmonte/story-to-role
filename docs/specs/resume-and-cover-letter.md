@@ -30,7 +30,7 @@ Documents are versioned like a git history, stored as rows in Postgres rather th
 - An application has one **language branch** per output language the user chose to create; the user decides which languages exist. Each branch holds that language's resume and cover letter.
 - Every change to a document creates an immutable **version**: a full snapshot of the structured content, its parent version, its origin (generated, adapted, edited), its author (user or AI) and its time. Diffs between any two versions are computed when shown.
 - The **latest version of each branch is the official one**. There is no manual "current" marker; the history exists so actions can be undone. Restoring an old version creates a new latest version with that content; history is never rewritten.
-- An adaptation starts a new branch from a version of another branch and records that version as its base.
+- An adaptation takes the latest version of one branch as its base and writes the result either into a new branch or into an existing one. Into an existing branch it **recreates** that branch: the result becomes the branch's new latest version, replacing its content (edits made only in that branch are not carried over). Earlier versions stay in history, so recreating can be undone. Example: after many edits in English, the user recreates the Portuguese branch from the English one.
 
 ## Submission freeze
 

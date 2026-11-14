@@ -67,9 +67,6 @@ jobs:
     # "true" (Settings > Secrets and variables > Actions > Variables).
     if: vars.DEPLOY_ENABLED == 'true'
     runs-on: ubuntu-latest
-    env:
-      # Builds never come from the Nx cache (see docs/adr/0005).
-      NX_NO_CLOUD: "true"
     permissions:
       contents: read
       pull-requests: write
@@ -104,16 +101,10 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Pull Vercel preview env
-        run: npx vercel pull --yes --environment=preview --token=${{ secrets.VERCEL_TOKEN }}
-
-      - name: Build for Vercel
-        run: npx vercel build --token=${{ secrets.VERCEL_TOKEN }}
-
       - name: Deploy to Vercel
         id: deploy
         run: |
-          url=$(npx vercel deploy --prebuilt \
+          url=$(npx vercel deploy \
             --meta prNumber="${{ github.event.pull_request.number }}" \
             --meta branch="${{ github.head_ref }}" \
             --token=${{ secrets.VERCEL_TOKEN }})

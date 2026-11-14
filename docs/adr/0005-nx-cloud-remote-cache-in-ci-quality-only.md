@@ -4,6 +4,6 @@ Quality (typecheck, lint, tests) runs on every pull request and before every sta
 
 ## Consequences
 
-- **Builds and `predeploy` never use the cache.** `predeploy` has side effects (`db:migrate`, `trigger:deploy`) that a cache hit would silently skip, and Next.js builds bake `NEXT_PUBLIC_*` values that Nx does not hash, so a cached build could cross environments. Because the workspace id is committed, deploy jobs set `NX_NO_CLOUD=true`, and the Vercel project must set `NX_NO_CLOUD=true` in every environment; the token is never given to Vercel.
+- **Builds and `predeploy` never use the cache.** `predeploy` has side effects (`db:migrate`, `trigger:deploy`) that a cache hit would silently skip, and Next.js builds bake `NEXT_PUBLIC_*` values that Nx does not hash, so a cached build could cross environments. Deploy jobs only call the Vercel CLI and Vercel builds remotely, so Nx never runs in them; because the workspace id is committed, the Vercel project sets `NX_NO_CLOUD=true` in every environment (`.env.example` defaults it to false), and the token is never given to Vercel.
 - A read-write token on pull requests is safe only while every contributor is trusted (solo today). With outside contributors, pull requests should switch to a read-only token.
 - When the monthly credits run out, runs fall back to uncached: slower, still correct.

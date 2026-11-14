@@ -2,6 +2,10 @@
 
 Draft. Decisions are recorded here as they close; open points are listed at the end.
 
+## Principle
+
+Users pay for what they use plus a margin that keeps the project running. The stack is chosen for free tiers that scale by upgrading a plan (Vercel, Neon, Clerk, Trigger.dev, Upstash), so fixed costs stay near zero until there is usage.
+
 ## Credits
 
 - Plans are monthly subscriptions (Free, BYOK, Essencial, Intensivo) that grant **credits**. Never priced per opening.

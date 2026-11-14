@@ -100,6 +100,7 @@ StoryToRole starts from a clone of the private `gmonte/company-balance` repo, wh
 | i18n | `@repo/intl`, locale from a cookie, `useTranslation` and `getTranslation` | English and Brazilian Portuguese messages; a separate interview-language setting per user |
 | Tests | Vitest, PGlite for database tests | Tests for context building, sensitive-data filtering and extraction approval |
 | AI processing | None | Every AI call (interview turns, extraction, generation, fit checks, embeddings) runs as a Trigger.dev task; progress and tokens are streamed to the client through Trigger.dev Realtime, and results are saved to Postgres |
+| Rate limiting | None | Upstash Redis (free tier: 256 MB, 500K commands a month; then pay as you go) for rate limits and the misuse cooldown, through `@upstash/ratelimit`. Credit balances and every result stay in Postgres |
 
 **Interface language** uses the existing `@repo/intl` setup. **Interview language** is stored on the user and passed to every prompt; prompts are written in English with an instruction to converse in the chosen language.
 

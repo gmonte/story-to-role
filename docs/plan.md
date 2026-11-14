@@ -78,7 +78,7 @@ Acceptance:
 ## Slice 6: Credits and billing
 
 - Credit ledger (reservations, settlement, funding order, expiry), reconciliation job, welcome and monthly credits, packs, courtesy grants from an admin page, credit meter, capped estimates.
-- Stripe (sandbox): Checkout for subscription and packs, Customer Portal, webhooks granting credits, products and prices created by a versioned script.
+- Stripe (sandbox): Checkout for subscription and packs, Customer Portal, webhooks granting credits, grant on return from Checkout (retrieving the session), periodic reconciliation task, products and prices created by a versioned script.
 - Bring-your-own keys stored encrypted, validated on save; "Finish with credits" when a key runs out.
 
 Acceptance:

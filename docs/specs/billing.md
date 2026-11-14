@@ -89,6 +89,12 @@ Stripe directly, through an account opened in Brazil under the owner's CNPJ; Cle
 
 **Environments.** Local development, merge request previews and staging point to a Stripe sandbox (test mode); only production points to the live Stripe account, configured later. Development starts locally, where `stripe listen --forward-to localhost:3000/api/webhooks/stripe` delivers webhooks and generates the local webhook secret; products and prices are created by a versioned script so every environment matches.
 
+**Webhooks are a shortcut; reconciliation is the guarantee.** Staging and production register a Stripe webhook endpoint (sandbox for staging, live for production) with their own signing secrets; locally, `stripe listen` forwards events. Merge request previews have changing URLs and no webhook at all, and still work:
+
+- On return from Checkout, the success page reads the `session_id`, retrieves the session from Stripe and grants the credits right away, with the same idempotency key a webhook would use, so a later webhook never duplicates the grant.
+- A periodic Trigger.dev job reconciles renewals, cancellations and refunds from Stripe, looking only at the Stripe customers that exist in that environment's database; the sandbox is shared by all previews, but each sees only its own customers.
+- The same retrieval and reconciliation also cover a webhook lost in production.
+
 Stripe Brazil standard fees (stripe.com/br/pricing, read 2026-11-14):
 
 | Item | Fee |
@@ -141,6 +147,5 @@ Brazilian taxes on revenue (Simples Nacional, ISS, service invoices; possible ex
 
 ## Open points
 
-- Stripe webhooks for merge request previews, whose URLs change per preview (staging has a stable URL; local uses `stripe listen`).
 - Final credits per plan and prices, after the beta.
 

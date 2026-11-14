@@ -8,6 +8,10 @@ This is a pnpm workspace monorepo (lerna + nx).
 3. Add the version to the chosen named catalog in `pnpm-workspace.yaml` and reference it as `"catalog:<name>"` in the target package's `package.json`
 4. Run `pnpm install` from the workspace root to update the lockfile
 
+**Important**: Never commit or push directly to `main`, and never to `staging` except documentation-only changes (Markdown docs such as `docs/`, `GLOSSARY.md`, `CLAUDE.md`, `readme.md`). Every other change goes on its own branch (from `origin/staging`) and reaches `staging` through a pull request, where the quality gate runs; releases are pull requests from `staging` into `main`. Pushes to `staging` and `main` only deploy (staging and production), so a direct code commit would skip quality.
+
+**Important**: Never merge a pull request (nor enable auto-merge on it) before every check on it has finished and passed: confirm with `gh pr checks <number>`, and if any check is pending or failing, wait or fix it. GitHub can't enforce this on this private free-plan repository, so the merge button stays enabled while checks run; this rule is the only guard. Merge only when the user asks.
+
 **Important**: This repo uses husky git hooks that run on commit. Commits must follow Conventional Commits format (enforced by commitlint via `.commitlintrc.json` and commitizen via `.czrc`). Wait for hooks to finish before proceeding.
 
 **Important**: Commit message body lines must be ≤ 100 characters (commitlint `body-max-line-length`), so wrap long paragraphs. The pre-commit hook runs `eslint --max-warnings=0` on staged files, so warnings block commits.

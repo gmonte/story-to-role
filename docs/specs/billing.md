@@ -101,6 +101,12 @@ Stripe Brazil standard fees (stripe.com/br/pricing, read 2026-11-14):
 
 Examples: a R$49 subscription on a Brazilian card keeps R$46.31 (5.5% in fees); a R$29 pack keeps R$27.45 (5.3%); a US$12 subscription on a foreign card keeps about US$11.13 (7.3%). Still to confirm with Stripe: the currency conversion fee for USD charges settled in BRL. Neither Stripe's localize-prices page (manual currency prices: "0% fee paid by Stripe users", while conversion in general "is subject to fees as detailed on our pricing page") nor a third-party fee table from November 2025 (Brazil row: 3.99% + R$0.39, +2% for international cards; most other countries add "+2% if currency conversion is required") states one for Brazil. Until a test charge's balance transaction or Stripe support confirms it, USD prices assume the worst case of an extra 2%: about 8.7% + US$0.07 on a US$12 subscription paid with a foreign card. Brazilian taxes on revenue are outside Stripe and need an accountant.
 
+## Credit value and pricing of actions
+
+- **One credit is about US$0.01 of expected AI cost** on the default provider package, including a 1.5x safety margin for retries, variance and longer thinking. Sale prices per plan cover AI cost, Stripe fees (about 5% to 9%, worst case with a foreign card) and the margin. If the default package changes, credits per action are recalculated; the money value of a credit stays the same.
+- With the Anthropic package, actions cost about: fit check 1, gap question 1, interview turn 2, adjustment 7, cover letter 14, truth file import about 20 (for about 12,000 words), resume 37 to 55 (Quick, standard level) or 72 to 108 (Quick, maximum level), depending mostly on career length.
+- **Estimate with a cap.** Before an action, the user sees "up to N credits", computed from their career size, the chosen review depth and writing level. The ledger reserves the cap, settles to the actual cost when the task ends and never charges above the cap. When Thorough stops early, the user pays only the rounds that ran. The per-action table is recalibrated from measured usage.
+
 ## Cost model (estimate)
 
 Prices from the Claude API reference, cached 2026-10-06, in USD per million tokens: Haiku 5.5 $0.10 input / $0.50 output; Sonnet 5.5 $2 / $10 (cache reads $0.20); Opus 5.5 $4 / $20 (cache reads $0.20). Cache writes cost 1.25x input.
@@ -125,9 +131,6 @@ Thinking tokens are billed as output and are the largest uncertainty; the estima
 
 ## Open points
 
-- The value of one credit and the credits each action costs.
-- Which models platform plans use for each action.
 - Whether the career interview consumes credits.
-- Fixed credits per action or metering by actual usage.
 - Credits granted per plan and plan prices.
 

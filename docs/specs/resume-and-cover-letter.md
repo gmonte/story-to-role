@@ -117,7 +117,7 @@ The interface calls snapshots "changes" ("alterações" in Brazilian Portuguese)
 
 ## Rendering
 
-Documents are downloaded as PDF only, in every plan, with no watermark. There is no DOCX export: edits stay inside StoryToRole, where every change is a snapshot and every line keeps its evidence trace, instead of drifting into a file edited elsewhere. PDFs are rendered on demand from a snapshot's structured content. Since snapshots are immutable, a rendered file never goes stale: it may be cached in private Vercel Blob storage keyed by snapshot and template, and the cache can be purged at any time without losing anything. Resume and cover letter layout are specified separately.
+Documents are downloaded as PDF only, in every plan, with no watermark. There is no DOCX export: edits stay inside StoryToRole, where every change is a snapshot and every line keeps its evidence trace, instead of drifting into a file edited elsewhere. PDFs are rendered on demand from a snapshot's structured content. Since snapshots are immutable, a rendered file never goes stale: it may be cached in private Vercel Blob storage keyed by snapshot and template, and the cache can be purged at any time without losing anything. Each section of a document (summary, each position, the whole cover letter) also has a **Copy text** action, for application forms that ask for pasted text; no editable file leaves the platform. Markdown and DOCX exports are not offered; DOCX may come back only for a concrete case of an opening that requires it. Resume and cover letter layout are specified separately.
 
 ## Open points
 

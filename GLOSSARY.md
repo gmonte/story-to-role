@@ -62,10 +62,6 @@ _Avoid_: General document, generic resume, master resume, template
 An immutable copy of a generated document's content at one point in its version's history.
 _Avoid_: Commit, revision, draft; the interface calls it a change
 
-**Submission freeze**:
-The point at which an application is marked as applied and all of its documents become read-only.
-_Avoid_: Lock, finalization
-
 **Language sync**:
 Carrying the changes of one version into another version of the same document, preserving the target's own edits.
 _Avoid_: Translation update, merge

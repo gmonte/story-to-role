@@ -18,7 +18,7 @@ Hiring interview prep is out of the MVP.
 
 1. The user adds an opening by pasting its description. Code first checks that the text looks like a job posting.
 2. StoryToRole runs a **fit check** automatically and shows it as a hint, never as a gate. A small AI call extracts the opening's keywords (hard skills, tools, certifications, languages) and requirements (seniority, years of experience, location, work model). Each keyword and requirement retrieves the closest evidence by vector similarity; a cheap AI call then judges each one, seeing only the requirements and the retrieved evidence, never the whole evidence base, as met, partial or a gap. Vector similarity alone does not decide, since it misses seniority ("8+ years" against a junior history reads as similar) and hard requirements such as location or language. The hint shows a band (high, medium or low fit), each requirement linked to its evidence, and the main gaps; there is no percentage score, which would claim a precision the analysis does not have. It counts as an evaluation in the plan, separate from generation.
-3. Next to the fit check, StoryToRole suggests existing documents similar to this opening, ranked by vector similarity between the opening and each document: library documents and documents from other applications, frozen ones included.
+3. Next to the fit check, StoryToRole suggests existing documents similar to this opening, ranked by vector similarity between the opening and each document: library documents and documents from other applications, including ones already sent.
 4. Whatever the fit check says, the user may get a resume, a cover letter or both, each only on demand, in one of three ways:
    - **Use as is:** the latest snapshot of the chosen document's version is copied as the first snapshot of this application's document. No AI call is made. If the chosen document is in another language than the output language, it is copied and adapted instead, following the adaptation rules; this makes an AI call and counts as a generation, which the user is told before confirming. The source document does not change.
    - **Use as reference:** a new document is generated for this opening with the chosen document as a reference, keeping what still fits and tailoring the rest. The user reviews the result. The source document does not change.
@@ -124,10 +124,12 @@ When one version of a document has changes that another version of the same docu
 - The result is a proposal: the user reviews the diff and accepts or discards it. Accepting creates a new latest snapshot in the target, which records the source snapshot as its new base.
 - It works in any direction, always within one document (resume to resume, cover letter to cover letter). Recreating from another version remains the alternative when the user wants to replace everything.
 
-## Submission freeze
+## Submission record
 
-- When the user marks an application as applied, they say which versions of each document were sent (for example, the English resume and the English cover letter).
-- From then on every document of the application, in every version, is read-only: no new snapshots, no syncs, no undo, no deletion of snapshots or versions.
+- When the user marks an application as applied, they say which versions of each document were sent; the application records the exact snapshot of each, which shows as "sent" in the change history.
+- Documents are never frozen: the user keeps editing, syncing and undoing as before, and since snapshots are immutable the sent content stays intact. Marking applied by mistake is undone by changing the status back.
+- Deleting a version that holds a sent snapshot asks for confirmation; afterwards the tracker shows "sent version deleted". Deleting an application or the account always deletes everything, sent snapshots and cached PDFs included.
+- Reusing a document from another application as a starting point works the same whether or not that application was sent.
 
 ## Interface wording
 
@@ -153,6 +155,5 @@ Resume and cover letter layout are specified separately.
 
 ## Open points
 
-- Undoing a submission marked by mistake; reusing a frozen application as a starting point; deletion rights over frozen documents.
 - Which output languages are offered.
 - How locked facts such as job titles appear in another language.

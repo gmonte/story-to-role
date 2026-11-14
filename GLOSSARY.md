@@ -78,6 +78,18 @@ _Avoid_: Exception, custom title
 A snapshot that rewrites a generated document in another output language from the latest snapshot of another version, keeping its evidence and adding no new fact.
 _Avoid_: Translation, localization
 
+**Company fact**:
+A fact about a company found by web research for one application, kept with its source and used only once the user approves it.
+_Avoid_: Company data, insight
+
+**Career goal**:
+What the user wants from their next role, stated in a motivation interview and approved into the evidence base.
+_Avoid_: Preference, objective, wish
+
+**Motivation interview**:
+The short conversation, within an application, about why the user wants that opening.
+_Avoid_: Cover letter interview, questionnaire
+
 ## Guided interview
 
 **Truth file**:

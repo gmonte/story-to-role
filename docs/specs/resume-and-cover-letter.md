@@ -66,8 +66,9 @@ The ATS check applies to generated resumes only; it plays no part in suggesting 
 
 A cover letter follows its own methodology and draws on two inputs a resume does not have:
 
-- **Company research:** facts about the company, each with its source, approved by the user before use.
-- **Motivation interview:** a short conversation with the user, within the application, about why they want this opening.
+- **Company research:** on request ("Research company"), a separate task searches the web with the provider's web search tool, within a limit of searches, and returns a short list of **company facts**, each with its source link. The user selects which facts to use; only those enter the cover letter's context, like approved evidence. Page text is third-party data, never instructions. The model that writes the letter still has no web access. Facts and their approval are stored with the application; there is no shared cross-user cache of company research, since caching the web is not viable. It costs credits, estimated before running.
+- **Motivation interview:** three to five short questions, one at a time, by voice or text, about why the user wants this opening (what drew them to the company, how the role fits the moment of their career, any personal link to the product or mission). Answers are split into points like application instructions: points about this company stay in the application; points about the user ("I want to work on financial products", "I look for small teams") can be promoted to the global evidence base as **career goals**, so later letters ask less. Each answer costs about 2 credits. The user can skip it; the letter is then marked "could improve with your motivation".
+- **Story choice:** StoryToRole ranks the user's approved stories by similarity to the opening's requirements and shows the top three, each with a line on why it fits; the user picks one. When the chosen story lacks a turning point or detail, the motivation interview adds one or two questions about it ("when did you have to decide?"), and the answers can be promoted to enrich that story in the evidence base.
 
 **Methodology: storytelling.** Based on Braven's "The power of storytelling in your cover letter" (braven.org, 2019). The letter is built around one convincing story, not a list of skills:
 

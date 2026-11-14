@@ -27,6 +27,10 @@ The tracker follows every application the user pursues, from the first document 
 
 Details live in **events**, dated entries on the application's timeline ("HR interview on Nov 20", "technical test delivered"), instead of becoming statuses. Few statuses keep the funnel readable.
 
+## Reminders
+
+In-app only in the MVP, configurable and dismissible: a nudge to record a follow-up after some days without response ("You applied to Company X 10 days ago with no reply"), a reminder of a dated event ("Your interview is tomorrow"), and a warning before an application turns "No response". Email reminders come later; they need a transactional email service, which is one more subprocessor.
+
 ## Open points
 
-- Reminders and next steps.
+None at the moment.

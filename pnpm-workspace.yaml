@@ -11,11 +11,22 @@ allowBuilds:
   sharp: true
 
 catalogs:
+  ai:
+    "@anthropic-ai/sdk": 1.8.0
+
   api:
+    "@trigger.dev/build": 4.8.5
+    "@trigger.dev/sdk": 4.8.5
+    # 2.1+ sends Lua scripts with an Upstash-only flag (allow-key-locking)
+    # that the local Redis behind SRH rejects; stay on 2.0.x.
+    "@upstash/ratelimit": 2.0.8
+    "@upstash/redis": 1.41.0
+    "@vercel/blob": 2.9.0
     drizzle-kit: 0.31.10
     drizzle-orm: 0.45.2
     drizzle-zod: 0.8.3
     postgres: 3.4.8
+    trigger.dev: 4.8.5
 
   common:
     "@hookform/resolvers": 5.2.2
@@ -76,6 +87,7 @@ catalogs:
     "@clerk/localizations": 4.3.0
     "@clerk/nextjs": 7.3.3
     "@t3-oss/env-nextjs": 0.13.11
+    "@trigger.dev/react-hooks": 4.8.5
     "@tailwindcss/postcss": 4.2.2
     "@types/react": 19.2.14
     "@types/react-dom": 19.2.3

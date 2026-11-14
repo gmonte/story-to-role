@@ -1,6 +1,9 @@
 import { createEnv } from "@t3-oss/env-nextjs";
 import { z } from "zod";
 
+import { refineServerEnv } from "./refine-server-env";
+import { webEnvRuntime } from "./web-env-runtime";
+
 export const env = createEnv({
   server: {
     NODE_ENV: z
@@ -48,6 +51,14 @@ export const env = createEnv({
     STORAGE_DRIVER: z.enum(["local", "vercel-blob"]).default("vercel-blob"),
     // Required when STORAGE_DRIVER=vercel-blob.
     BLOB_READ_WRITE_TOKEN: z.string().optional(),
+
+    // Wraps every user's data key (envelope encryption of career content and
+    // bring-your-own keys): `v<version>:<base64 of 32 random bytes>`. Generate
+    // one with `echo "v1:$(openssl rand -base64 32)"`. When rotating, move the
+    // old value to ENCRYPTION_PREVIOUS_MASTER_KEYS (comma-separated) so data
+    // keys wrapped by it stay readable.
+    ENCRYPTION_MASTER_KEY: z.string().regex(/^v\d+:[A-Za-z0-9+/]{43}=$/),
+    ENCRYPTION_PREVIOUS_MASTER_KEYS: z.string().optional(),
   },
 
   client: {
@@ -67,52 +78,11 @@ export const env = createEnv({
       .transform((val) => val === "true"),
   },
 
-  runtimeEnv: {
-    NODE_ENV: process.env.NODE_ENV,
-    PORT: process.env.PORT,
-    VERCEL_URL: process.env.VERCEL_URL,
-    APP_URL: process.env.APP_URL,
-    DATABASE_URL: process.env.DATABASE_URL,
-    DATABASE_DB_PREFIX: process.env.DATABASE_DB_PREFIX,
-    DB_MIGRATING: process.env.DB_MIGRATING,
-    CLERK_SECRET_KEY: process.env.CLERK_SECRET_KEY,
-    CLERK_WEBHOOK_SIGNING_SECRET: process.env.CLERK_WEBHOOK_SIGNING_SECRET,
-    UPSTASH_REDIS_REST_URL: process.env.UPSTASH_REDIS_REST_URL,
-    UPSTASH_REDIS_REST_TOKEN: process.env.UPSTASH_REDIS_REST_TOKEN,
-    REDIS_KEY_PREFIX: process.env.REDIS_KEY_PREFIX,
-    TRIGGER_PROJECT_REF: process.env.TRIGGER_PROJECT_REF,
-    TRIGGER_SECRET_KEY: process.env.TRIGGER_SECRET_KEY,
-    ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY,
-    STRIPE_SECRET_KEY: process.env.STRIPE_SECRET_KEY,
-    STRIPE_WEBHOOK_SECRET: process.env.STRIPE_WEBHOOK_SECRET,
-    STORAGE_DRIVER: process.env.STORAGE_DRIVER,
-    BLOB_READ_WRITE_TOKEN: process.env.BLOB_READ_WRITE_TOKEN,
-
-    NEXT_PUBLIC_ENV: process.env.NEXT_PUBLIC_ENV,
-    NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY:
-      process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY,
-    NEXT_PUBLIC_CLERK_SIGN_IN_URL: process.env.NEXT_PUBLIC_CLERK_SIGN_IN_URL,
-    NEXT_PUBLIC_CLERK_SIGN_IN_FALLBACK_REDIRECT_URL:
-      process.env.NEXT_PUBLIC_CLERK_SIGN_IN_FALLBACK_REDIRECT_URL,
-    NEXT_PUBLIC_CLERK_SIGN_UP_FALLBACK_REDIRECT_URL:
-      process.env.NEXT_PUBLIC_CLERK_SIGN_UP_FALLBACK_REDIRECT_URL,
-    NEXT_PUBLIC_LOGGER_LEVEL: process.env.NEXT_PUBLIC_LOGGER_LEVEL,
-    NEXT_PUBLIC_LOGGER_TRACE: process.env.NEXT_PUBLIC_LOGGER_TRACE,
-  },
+  runtimeEnv: webEnvRuntime,
 
   createFinalSchema: (shape, isServer) =>
     z.object(shape).superRefine((env, ctx) => {
-      if (
-        isServer &&
-        env.NEXT_PUBLIC_ENV === "preview" &&
-        !env.REDIS_KEY_PREFIX
-      ) {
-        ctx.addIssue({
-          code: "custom",
-          path: ["REDIS_KEY_PREFIX"],
-          message: "REDIS_KEY_PREFIX is required when NEXT_PUBLIC_ENV=preview",
-        });
-      }
+      if (isServer) refineServerEnv(env, ctx);
     }),
 
   skipValidation: !!process.env.SKIP_ENV_VALIDATION,

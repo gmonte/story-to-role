@@ -17,15 +17,22 @@
     "db:studio": "drizzle-kit studio",
     "lint": "eslint . --max-warnings=0 --no-warn-ignored",
     "lint:fix": "eslint . --fix",
-    "predeploy": "pnpm db:migrate",
+    "predeploy": "pnpm db:migrate && case \"$REDIS_KEY_PREFIX\" in pr-*) echo 'PR preview: tasks come from staging, skipping trigger:deploy' ;; *) pnpm trigger:deploy ;; esac",
     "test": "vitest run --passWithNoTests",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "trigger:dev": "trigger dev --profile storytorole",
+    "trigger:deploy": "trigger deploy"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "catalog:ai",
     "@clerk/nextjs": "catalog:web",
     "@repo/common": "workspace:*",
     "@repo/intl": "workspace:*",
+    "@trigger.dev/sdk": "catalog:api",
     "@trpc/server": "catalog:common",
+    "@upstash/ratelimit": "catalog:api",
+    "@upstash/redis": "catalog:api",
+    "@vercel/blob": "catalog:api",
     "drizzle-orm": "catalog:api",
     "drizzle-zod": "catalog:api",
     "postgres": "catalog:api",
@@ -38,9 +45,11 @@
     "@electric-sql/pglite": "catalog:testing",
     "@repo/eslint-config": "workspace:*",
     "@repo/typescript-config": "workspace:*",
+    "@trigger.dev/build": "catalog:api",
     "@types/node": "catalog:common",
     "@vitest/coverage-v8": "catalog:testing",
     "drizzle-kit": "catalog:api",
+    "trigger.dev": "catalog:api",
     "type-fest": "catalog:common",
     "vitest": "catalog:testing"
   }

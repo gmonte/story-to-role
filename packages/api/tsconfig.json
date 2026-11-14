@@ -11,5 +11,11 @@
       "@repo/intl/*": ["../intl/src/*"]
     }
   },
-  "include": ["src", "drizzle.config.ts", "@types/*.d.ts", "vitest.*.ts"]
+  "include": [
+    "src",
+    "drizzle.config.ts",
+    "@types/*.d.ts",
+    "vitest.*.ts",
+    "trigger.config.ts"
+  ]
 }

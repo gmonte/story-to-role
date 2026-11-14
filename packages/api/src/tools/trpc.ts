@@ -8,7 +8,14 @@ import { logger } from "@repo/common/tools/logger";
 import { getTranslation } from "@repo/intl/get-translation";
 import { parseHeaderCookie } from "@repo/common/tools/cookies/common";
 
+import { UsersRepository } from "../domains/users/users-repository";
+import { db } from "./db";
 import { getLocaleForContext } from "./intl/get-locale-for-context";
+import {
+  upstashRateLimiter,
+  type RateLimiter,
+  type RateLimitName,
+} from "./rate-limit";
 
 export type TRPCContext = Awaited<ReturnType<typeof createTRPCContext>>;
 
@@ -84,3 +91,47 @@ export const protectedProcedure = t.procedure
       },
     });
   });
+
+/**
+ * A signed-in user whose local record exists (the Clerk webhook creates it),
+ * with our own `userId`: what every service acts for.
+ */
+export const userProcedure = protectedProcedure.use(async ({ ctx, next }) => {
+  const user = await new UsersRepository(db).findActiveByClerkUserId(
+    ctx.session.userId
+  );
+
+  if (!user) {
+    throw new TRPCError({
+      code: "NOT_FOUND",
+      message: ctx.t.formatMessage({ defaultMessage: "User not found" }),
+    });
+  }
+
+  return next({ ctx: { user, userId: user.id } });
+});
+
+/**
+ * Rejects the call with TOO_MANY_REQUESTS once the user exceeds `name`'s
+ * limit. Use it on every procedure that starts a task.
+ */
+export function rateLimited(
+  name: RateLimitName,
+  limiter: RateLimiter = upstashRateLimiter
+) {
+  return t.middleware(async ({ ctx, next }) => {
+    const userId = (ctx as { userId?: string }).userId;
+    if (!userId) throw new TRPCError({ code: "UNAUTHORIZED" });
+
+    if (!(await limiter.allow(name, userId))) {
+      throw new TRPCError({
+        code: "TOO_MANY_REQUESTS",
+        message: ctx.t.formatMessage({
+          defaultMessage: "Too many requests. Wait a moment and try again.",
+        }),
+      });
+    }
+
+    return next();
+  });
+}

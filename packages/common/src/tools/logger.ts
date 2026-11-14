@@ -19,7 +19,13 @@ const loggerLevelHierarchy = [
 ];
 
 const loggerLevelSchema = z.enum(LoggerLevel).catch(LoggerLevel.error);
-const loggerTraceSchema = z.boolean().default(false);
+// With SKIP_ENV_VALIDATION (tests, CI) the env holds the raw "true"/"false".
+const loggerTraceSchema = z
+  .union([
+    z.boolean(),
+    z.enum(["true", "false"]).transform((v) => v === "true"),
+  ])
+  .default(false);
 
 class Logger {
   private loggerLevel: LoggerLevel;

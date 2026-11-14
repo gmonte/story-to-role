@@ -31,7 +31,8 @@ export async function generateMetadata(): Promise<Metadata> {
   return {
     title: t.formatMessage({ defaultMessage: "StoryToRole" }),
     description: t.formatMessage({
-      defaultMessage: "Hello, world!",
+      defaultMessage:
+        "Tailored resumes and cover letters from a career story you approved. Nothing is invented.",
     }),
   };
 }

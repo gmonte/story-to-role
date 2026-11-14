@@ -1,9 +1,13 @@
 import type { inferRouterInputs, inferRouterOutputs } from "@trpc/server";
 
 import { createTRPCRouter } from "./tools/trpc";
+import { chatRouter } from "./domains/chat/chat-router";
+import { tasksRouter } from "./domains/tasks/tasks-router";
 import { usersRouter } from "./domains/users/users-router";
 
 export const appRouter = createTRPCRouter({
+  chat: chatRouter,
+  tasks: tasksRouter,
   users: usersRouter,
 });
 

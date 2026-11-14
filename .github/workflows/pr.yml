@@ -69,6 +69,9 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          # The database branch check diffs the migrations against staging.
+          fetch-depth: 0
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -79,6 +82,44 @@ jobs:
         uses: pnpm/action-setup@v4
         with:
           version: ${{ env.PNPM_VERSION }}
+
+      # The Vercel build runs `db:migrate` (predeploy), so a PR that adds a
+      # migration gets its own Neon branch, cloned from staging's, and never
+      # migrates the shared staging database before it is merged. A branch,
+      # once created, is reused by every later push until the PR closes.
+      - name: Database branch
+        id: db-branch
+        env:
+          NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
+          NEON_PROJECT_ID: ${{ vars.NEON_PROJECT_ID }}
+          NEON_PARENT_BRANCH: ${{ vars.NEON_PARENT_BRANCH }}
+        run: |
+          DB_BRANCH="preview/pr-${{ github.event.pull_request.number }}"
+
+          NEW_MIGRATIONS=$(git diff --diff-filter=A --name-only "origin/${{ github.base_ref }}...HEAD" -- 'packages/api/drizzle/*.sql')
+          # Listing must succeed on its own: a failure (a bad key) must stop
+          # the job, not read as "no branch".
+          BRANCHES=$(npx -y neonctl@9 branches list --project-id "$NEON_PROJECT_ID" --output json)
+          BRANCH_EXISTS=$(echo "$BRANCHES" | grep -c "\"$DB_BRANCH\"" || true)
+
+          if [ -z "$NEW_MIGRATIONS" ] && [ "$BRANCH_EXISTS" = "0" ]; then
+            echo "No new migrations: the preview uses the staging database"
+            exit 0
+          fi
+
+          # No `|| true`: a failed create stops the job before any deploy, so
+          # the migration can never fall back to the staging database.
+          if [ "$BRANCH_EXISTS" = "0" ]; then
+            echo "Creating Neon branch $DB_BRANCH from $NEON_PARENT_BRANCH"
+            npx -y neonctl@9 branches create --name "$DB_BRANCH" --parent "$NEON_PARENT_BRANCH" --project-id "$NEON_PROJECT_ID" > /dev/null
+          else
+            echo "Reusing Neon branch $DB_BRANCH"
+          fi
+
+          # The connection string carries the password: mask it in the log.
+          DB_URL=$(npx -y neonctl@9 connection-string "$DB_BRANCH" --pooled --project-id "$NEON_PROJECT_ID")
+          echo "::add-mask::$DB_URL"
+          echo "database-url=$DB_URL" >> "$GITHUB_OUTPUT"
 
       - name: Cache dependencies
         id: cache-deps
@@ -104,6 +145,7 @@ jobs:
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
           VERCEL_PROJECT_NAME: ${{ vars.VERCEL_PROJECT_NAME }}
+          DATABASE_URL: ${{ steps.db-branch.outputs.database-url }}
         run: |
           vercel link --token $VERCEL_TOKEN --project $VERCEL_PROJECT_NAME --yes
 
@@ -114,7 +156,16 @@ jobs:
           # doesn't expose on its own (getBaseUrl reads it). Previews share one
           # Upstash database, so each gets its own REDIS_KEY_PREFIX.
           REDIS_KEY_PREFIX="pr-${{ github.event.pull_request.number }}:"
-          DEPLOY_URL=$(vercel deploy --token $VERCEL_TOKEN --target preview -b "APP_URL=$PREVIEW_URL" -e "APP_URL=$PREVIEW_URL" -b "REDIS_KEY_PREFIX=$REDIS_KEY_PREFIX" -e "REDIS_KEY_PREFIX=$REDIS_KEY_PREFIX")
+          # Deploy flags are collected in the positional params so each value
+          # stays one quoted argument.
+          set -- -b "APP_URL=$PREVIEW_URL" -e "APP_URL=$PREVIEW_URL" -b "REDIS_KEY_PREFIX=$REDIS_KEY_PREFIX" -e "REDIS_KEY_PREFIX=$REDIS_KEY_PREFIX"
+
+          if [ -n "$DATABASE_URL" ]; then
+            echo "Deploying against the PR's own Neon branch"
+            set -- "$@" -b "DATABASE_URL=$DATABASE_URL" -e "DATABASE_URL=$DATABASE_URL"
+          fi
+
+          DEPLOY_URL=$(vercel deploy --token $VERCEL_TOKEN --target preview "$@")
           vercel alias --token $VERCEL_TOKEN set "$DEPLOY_URL" "$PREVIEW_URL"
 
           # Remove the previous deployment of this PR to stay within free plan limits

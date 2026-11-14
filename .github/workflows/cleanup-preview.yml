@@ -31,3 +31,12 @@ jobs:
             echo "Removing PR deployment: $OLD_DEPLOY_URL"
             vercel rm "$OLD_DEPLOY_URL" --token $VERCEL_TOKEN --yes || true
           fi
+
+      - name: Delete the PR's Neon branch
+        env:
+          NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
+          NEON_PROJECT_ID: ${{ vars.NEON_PROJECT_ID }}
+        run: |
+          DB_BRANCH="preview/pr-${{ github.event.pull_request.number }}"
+          # Most PRs have no branch (no new migration): nothing to delete.
+          npx -y neonctl@9 branches delete "$DB_BRANCH" --project-id "$NEON_PROJECT_ID" || echo "No Neon branch $DB_BRANCH"

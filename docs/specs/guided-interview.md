@@ -282,7 +282,7 @@ Each user message passes these layers in order; the first one that fails answers
 4. **Content checks on inputs that trigger generation.** An upload must look like a resume and a pasted opening description must look like a job posting; anything else is refused before generation, so the generation flow cannot be used as a free writing tool.
 5. **Scoped prompts and tools.** The main model's instructions limit it to the interview, and it has no tools beyond those in this spec: no web access, no code execution. Links the user attaches are read by code, not by the model (see the workspace spec).
 6. **Output limits.** A maximum number of output tokens per call, set per call type.
-7. **Budgets and rate limits.** Session size (see session checkpoints), sessions per day, and a monthly usage allowance per plan, enforced before each call. The user sees a usage meter; at the limit the app stops calling the AI and offers an upgrade or an extra pack.
+7. **Budgets and rate limits.** Session size (see session checkpoints), sessions per day, and the user's credit balance, enforced before each call. The user sees the credit meter (see the billing spec); when credits run out the app stops calling the AI and offers the subscription or a credit pack.
 8. **Repeated misuse.** Off-topic and override attempts are counted; after a set number in a short window the chat pauses for a cooldown.
 9. **Monitoring.** Cost per user per day is tracked, with an alert for outliers.
 

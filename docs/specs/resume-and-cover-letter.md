@@ -24,6 +24,15 @@ Hiring interview prep is out of the MVP.
    - **Generate from scratch** from the evidence base.
 5. The application starts when the first document is generated or copied for the opening. Openings that were analyzed but never generated for stay in a list of analyzed openings, outside the tracker.
 
+## ATS check
+
+After a resume is generated for an opening, StoryToRole compares it against the opening's keywords (hard skills, tools, certifications, languages) the way an applicant tracking system reads it: literally, as the opening spells each term. The result is factual ("14 of 18 keywords"), and the missing keywords are split in two:
+
+- **You have it, use the opening's term:** the evidence base holds it under another spelling ("Postgres" for "PostgreSQL"); the user is advised to use the opening's term. A term is only suggested when evidence backs it.
+- **Real gap:** no evidence for it.
+
+The ATS check applies to generated resumes only; it plays no part in suggesting similar documents.
+
 ## Application instructions
 
 - On the generation screen, the user can add free-text instructions that apply to this application only: a detail they just remembered, a different framing of an old position, or experience that is not in the evidence base. They are saved with the application when its first document is generated.

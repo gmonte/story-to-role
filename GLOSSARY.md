@@ -26,6 +26,10 @@ _Avoid_: Candidacy, job, tracker entry
 A quick analysis, run automatically when an opening is added and shown as a hint, of whether the opening makes sense for the user's skills.
 _Avoid_: Fit score, match, assessment
 
+**ATS check**:
+A literal comparison of a generated resume against an opening's keywords, as an applicant tracking system would read it.
+_Avoid_: ATS score, keyword score, match rate
+
 **Application instructions**:
 Free-text statements the user adds for one application's generation only; each point may be promoted to the global evidence base.
 _Avoid_: Extra prompt, custom prompt, notes

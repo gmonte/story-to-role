@@ -1,6 +1,14 @@
-# story-to-role
+# StoryToRole
 
-Hello-world monorepo built with the same architecture as the production repo it was copied from.
+Turn your career story into tailored resumes and cover letters.
+
+| Environment | URL |
+| --- | --- |
+| Production | https://storytorole.vercel.app |
+| Staging | https://stg-storytorole.vercel.app |
+| Pull requests | `https://pr-<number>-storytorole.vercel.app` |
+
+Before changing anything, read `CLAUDE.md`, `docs/plan.md`, `docs/specs/`, `GLOSSARY.md` and `docs/adr/`.
 
 Stack:
 
@@ -35,8 +43,10 @@ $ pnpm test
 
 ## Database
 
+Run package scripts from the root through lerna, which loads `.env.local`:
+
 ```bash
-$ pnpm --filter @repo/api db:generate
-$ pnpm --filter @repo/api db:migrate
-$ pnpm --filter @repo/api db:studio
+$ pnpm exec lerna run db:generate --scope=@repo/api -- --name <migration-name>
+$ pnpm exec lerna run db:migrate --scope=@repo/api
+$ pnpm exec lerna run db:studio --scope=@repo/api
 ```

@@ -166,7 +166,23 @@ Each user has a global template that defines which sections their resume has. A 
 - on the output language or market ("Personal details only in German resumes");
 - on the opening's extracted keywords or the library document's focus ("Publications only when the opening mentions research").
 
-Conditions are checked by code, so the result is predictable. In any application, the user can force a section in or out, like other per-application overrides. AI-suggested sections ("include Publications for this opening?") may come later if fixed rules are not enough. Order, visual style and fonts belong to the layout specification.
+Conditions are checked by code, so the result is predictable. In any application, the user can force a section in or out, like other per-application overrides. AI-suggested sections ("include Publications for this opening?") may come later if fixed rules are not enough. Sections come from a catalog. On by default: Summary, Skills, Experience, Education, Languages. Optional, off by default: Certifications, Projects, Publications, Awards, Volunteering, Courses. Resumes should preferably fit in two pages, which is why optional sections start off; users who want one enable it, globally or per application.
+
+## Layout
+
+One layout in the MVP, modeled on the resumes of the meu-emprego-novo CLI (generated with ReportLab and already used in a real job search):
+
+- A4, single column, Helvetica (regular, bold, italic), friendly to applicant tracking systems: no tables, columns, icons or images.
+- Header: the name, large, bold, dark blue; a line with the target title and main technologies ("Senior React Native Engineer | React Native, Expo, TypeScript"); contacts separated by `|` (email, phone, LinkedIn, GitHub); the city.
+- Section titles in uppercase dark blue with a thin rule below, named in the output language ("Professional experience", "Experiência profissional").
+- Summary: one justified paragraph.
+- Skills: one line per group with a bold label ("Core:", "Frontend:", "Testing:"), since applicant tracking systems scramble columns.
+- Experience: company in bold on the left, period in grey aligned right, title in italics below with optional context in parentheses ("parallel project"), and bullets with a hanging indent, each following action, result and "Built with ...". Dates follow the output language ("Nov/2024 – Jul/2026", "nov/2024 – jul/2026").
+- Education and languages: compact lines with the institution in bold.
+- The cover letter uses the same header (name, title line, contacts), then the letter body, on A4 in Helvetica.
+- Length: at most two pages for a resume and one for a cover letter; the user is warned when content goes over, with a suggestion of what to trim.
+- PDFs are rendered from structured content in a task with a JavaScript renderer (for example `@react-pdf/renderer`) reproducing this look, since ReportLab is Python.
+
 
 Resume and cover letter layout are specified separately.
 

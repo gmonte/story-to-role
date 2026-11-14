@@ -122,7 +122,15 @@ Documents are downloaded as PDF only, in every plan, with no watermark. There is
 
 - Resume: `<FirstName>_<LastName>_<Title>_Resume.pdf` (Portuguese: `..._Curriculo.pdf`).
 - Cover letter: `<FirstName>_<LastName>_<Title>_Cover_Letter.pdf` (Portuguese: `..._Carta_de_Apresentacao.pdf`).
-- The company name never appears in file names.
+- The company name never appears in PDF file names.
+- `<Title>` comes from the opening's title, shortened by the AI during keyword extraction and editable by the user; for a library document it is the focus. The name is the one printed on the resume, not the Clerk account name.
+- File names use ASCII only: accents, cedillas and symbols are removed and spaces become `_`, since some applicant tracking systems and portals break on accented file names. Example: `Guilherme_Monte_Engenheiro_de_Software_Senior_Frontend_Curriculo.pdf`.
+- The pattern is a suggestion: the user can edit the file name before downloading.
+- An application can also be downloaded as one ZIP named `<Company>_<Title>.zip`, so that unzipping creates a folder named after the opening, which helps the user organize uploads across many applications. It holds the PDF of the official snapshot of every version of the application's documents, named as above (without the company). When two versions would get the same file name, the version's label is appended (`..._Curriculo_copia.pdf`).
+- `<Title>` comes from the opening's title, shortened by the AI during keyword extraction and editable by the user; for a library document it is the focus. The name is the one printed on the resume, not the Clerk account name.
+- File names use ASCII only: accents, cedillas and symbols are removed and spaces become `_`, since some applicant tracking systems and portals break on accented file names. Example: `Guilherme_Monte_Engenheiro_de_Software_Senior_Frontend_Curriculo.pdf`.
+- The pattern is a suggestion: the user can edit the file name before downloading.
+- An application can also be downloaded as one ZIP (`<FirstName>_<LastName>_<Title>.zip`) holding the PDF of the official snapshot of every version of its documents. When two versions would get the same file name, the version's label is appended (`..._Curriculo_copia.pdf`).
 
 Resume and cover letter layout are specified separately.
 

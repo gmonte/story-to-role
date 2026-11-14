@@ -8,6 +8,8 @@ This is a pnpm workspace monorepo (lerna + nx).
 3. Add the version to the chosen named catalog in `pnpm-workspace.yaml` and reference it as `"catalog:<name>"` in the target package's `package.json`
 4. Run `pnpm install` from the workspace root to update the lockfile
 
+**Important**: Never commit or push directly to `staging` or `main`. Every change goes on its own branch (from `origin/staging`) and reaches `staging` through a pull request, where the quality gate runs; releases are pull requests from `staging` into `main`. Pushes to `staging` and `main` only deploy (staging and production), so a direct commit would skip quality.
+
 **Important**: This repo uses husky git hooks that run on commit. Commits must follow Conventional Commits format (enforced by commitlint via `.commitlintrc.json` and commitizen via `.czrc`). Wait for hooks to finish before proceeding.
 
 **Important**: Commit message body lines must be ≤ 100 characters (commitlint `body-max-line-length`), so wrap long paragraphs. The pre-commit hook runs `eslint --max-warnings=0` on staged files, so warnings block commits.

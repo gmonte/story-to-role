@@ -100,7 +100,7 @@ StoryToRole starts from a clone of the private `gmonte/company-balance` repo, wh
 
 **AI providers.** Two modes share one adapter interface:
 
-- **Bring your own key:** the user picks a provider and a model from a tested list and enters an API key. Keys are encrypted at rest, never logged, and revocable in one click.
+- **Bring your own key:** the user picks a provider and a model from a tested list and enters an API key. Keys live on the server only, since calls must pass the guardrails and generation runs in the background. Each key is encrypted with AES-256-GCM before it reaches the database, under a master key held in its own environment variable (separate from the database URL, marked sensitive in the deploy). Every encrypted key records the master-key version, and a script re-encrypts all keys when the master key rotates. A saved key is never shown again (only its last characters), is decrypted in memory only for the call, is masked by the logger, is validated with a minimal provider call when saved, and is deleted on revoke. A managed key vault (KMS) is deferred until paying users or compliance require it.
 - **AI included:** StoryToRole's own key, with monthly limits per plan.
 
 The adapter reports token usage per call so the app can show cost estimates before a run and actual usage after.
@@ -272,7 +272,6 @@ Thresholds (message length, turns, budgets, cooldown) are settings to tune with 
 
 **Open questions**
 
-- Whether the key stays in the browser (calls from the client) or on the server (encrypted).
 - Final product name. Transcription provider for voice input, and whether it is included in every plan.
 
 **Acceptance criteria**

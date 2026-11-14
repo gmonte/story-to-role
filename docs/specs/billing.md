@@ -27,6 +27,8 @@ One subscription size at launch, monthly or annual. A larger tier comes only whe
 
 Two independent price tables: BRL for Brazil and USD for everyone else, chosen by billing country, not by converting at the day's exchange rate. BRL prices follow local purchasing power and always stay above AI cost plus margin. A credit buys the same AI work in both currencies.
 
+Stripe's presentment-currency list for Brazil-based accounts (docs.stripe.com/currencies, checked 2026-11-14) includes USD, with these exceptions: Brazilian cards can only be charged in BRL; American Express is not accepted in any currency; the list applies to cards, while local methods (Pix, boleto) take only their own currency. Brazilian accounts settle only in BRL, so USD charges are converted to BRL; the conversion fee is still to be confirmed with Stripe and goes into the USD price margin. Adaptive Pricing (BRL prices shown in the customer's currency, conversion paid by the customer) remains the fallback.
+
 ## Free plan
 
 The Free plan lets the user record their recent history and build one resume in each output language and one cover letter. The full career interview is part of the paid plans.
@@ -71,7 +73,7 @@ Stripe Brazil standard fees (stripe.com/br/pricing, read 2026-11-14):
 | Checkout, Payment Links, 3D Secure | Included |
 | Dispute | R$55 received, plus R$55 if countered (returned when won) |
 
-Examples: a R$49 subscription on a Brazilian card keeps R$46.31 (5.5% in fees); a R$29 pack keeps R$27.45 (5.3%); a US$12 subscription on a foreign card keeps about US$11.13 (7.3%). Still to confirm with Stripe: the currency conversion fee and whether a Brazilian account can charge USD and settle in BRL. Brazilian taxes on revenue are outside Stripe and need an accountant.
+Examples: a R$49 subscription on a Brazilian card keeps R$46.31 (5.5% in fees); a R$29 pack keeps R$27.45 (5.3%); a US$12 subscription on a foreign card keeps about US$11.13 (7.3%). Still to confirm with Stripe: the currency conversion fee for USD charges settled in BRL. Brazilian taxes on revenue are outside Stripe and need an accountant.
 
 ## Cost model (estimate)
 

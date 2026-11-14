@@ -23,19 +23,19 @@ The language a generated resume or cover letter is written in, chosen by the use
 _Avoid_: Target language, resume language
 
 **Language version**:
-The line of commits of an application's documents in one output language; its latest commit is the official one.
+The line of snapshots of an application's documents in one output language; its latest snapshot is the official one.
 _Avoid_: Branch, translation, variant
 
-**Commit**:
-An immutable snapshot of a generated document at one point in its language version's history.
-_Avoid_: Version, revision, draft
+**Snapshot**:
+An immutable copy of a generated document's content at one point in its language version's history.
+_Avoid_: Commit, version, revision, draft
 
 **Submission freeze**:
 The point at which an application is marked as applied and all of its documents become read-only.
 _Avoid_: Lock, finalization
 
 **Adaptation**:
-A commit that rewrites a generated document in another output language from the latest commit of another language version, keeping its evidence and adding no new fact.
+A snapshot that rewrites a generated document in another output language from the latest snapshot of another language version, keeping its evidence and adding no new fact.
 _Avoid_: Translation, localization
 
 ## Guided interview

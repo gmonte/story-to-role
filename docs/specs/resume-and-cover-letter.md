@@ -188,7 +188,7 @@ One layout in the MVP, modeled on the resumes of the meu-emprego-novo CLI (gener
 - PDFs are rendered from structured content in a task with a JavaScript renderer (for example `@react-pdf/renderer`) reproducing this look, since ReportLab is Python.
 
 
-Resume and cover letter layout are specified separately.
 
 ## Open points
 
+None at the moment.

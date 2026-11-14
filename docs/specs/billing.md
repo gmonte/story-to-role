@@ -83,6 +83,7 @@ Stripe directly, through an account opened in Brazil under the owner's CNPJ; Cle
 
 - **Stripe Checkout** (Stripe-hosted page) for both the subscription and credit packs.
 - The subscription is a flat-rate price, monthly and annual, with one price in BRL and one in USD. Each paid invoice triggers a webhook that grants that month's credits in a credit ledger in Postgres; packs grant theirs when the one-time payment succeeds. Stripe's Metronome credit burndown is not used: credits live in StoryToRole's ledger.
+- **Pix** for credit packs, requested from Stripe when the account is opened (Pix is invitation-only in Brazil); the subscription stays on cards. If the invitation is slow, launch with cards only. A Brazilian gateway (Asaas, Mercado Pago) would bring Pix without invitation and Pix Automático for recurring charges, at the cost of a second payment system; it is reconsidered only if data shows people abandoning the subscription for lack of Pix.
 - **Stripe Customer Portal** for changing card, switching between monthly and annual, and cancelling.
 - No trial: the Free plan plays that role.
 
@@ -129,4 +130,4 @@ Thinking tokens are billed as output and are the largest uncertainty; the estima
 - Whether the career interview consumes credits.
 - Fixed credits per action or metering by actual usage.
 - Credits granted per plan and plan prices.
-- Requesting Pix (invitation only) for one-time packs.
+

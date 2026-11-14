@@ -117,7 +117,7 @@ The interface calls snapshots "changes" ("alterações" in Brazilian Portuguese)
 
 ## Rendering
 
-PDF and DOCX files are rendered on demand from a snapshot's structured content. Since snapshots are immutable, a rendered file never goes stale: it may be cached in private Vercel Blob storage keyed by snapshot and template, and the cache can be purged at any time without losing anything.
+Documents are downloaded as PDF only, in every plan, with no watermark. There is no DOCX export: edits stay inside StoryToRole, where every change is a snapshot and every line keeps its evidence trace, instead of drifting into a file edited elsewhere. PDFs are rendered on demand from a snapshot's structured content. Since snapshots are immutable, a rendered file never goes stale: it may be cached in private Vercel Blob storage keyed by snapshot and template, and the cache can be purged at any time without losing anything. Resume and cover letter layout are specified separately.
 
 ## Open points
 

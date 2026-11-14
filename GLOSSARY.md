@@ -4,6 +4,10 @@ StoryToRole helps job seekers produce tailored resumes and cover letters from a 
 
 ## Career
 
+**Credential**:
+An education, certification, language, course, publication, award or volunteering entry; a short locked fact that can also own evidence and stories.
+_Avoid_: Qualification, certificate, diploma
+
 **Locked fact**:
 An employer, title or date of a position that code prevents the AI from altering in any generated text.
 _Avoid_: Fixed field, protected field

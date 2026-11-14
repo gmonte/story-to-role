@@ -159,6 +159,10 @@ Documents are downloaded as PDF only, in every plan, with no watermark. There is
 - **Style profile:** the user provides one to three samples of their own writing (an old cover letter, a post, a resume they like); when they provide none, their interview answers serve as the sample. A cheap call extracts a style profile (sentence length, formality, preferred vocabulary, words to avoid, use of first person), which the user reviews and approves. It enters every generation as a style instruction and never copies sentences or facts from the samples.
 - **Suggested tones**, chosen per document on top of the style profile: **Your style** (default), **Formal** (banks, government, traditional consultancies), **Direct** (startups, technical roles: short sentences, strong verbs, no adjectives), **Warm** (mission-driven organizations) and **Technical** (highly specialized roles: more domain vocabulary and numbers). When an opening is added, the AI suggests a tone from its description ("this is a traditional bank; we suggest Formal") and the user accepts or changes it. The choice is saved with the application. A tone changes form, never facts.
 
+## Evidence trace in the editor
+
+Hovering or tapping a line in the document editor shows where it came from: the exact quote of the user's words or of the source document, the position or credential and the approval date, or "from this application's instructions". Lines the user typed in the editor are marked "written by you". A **trace mode** toggle colors every line by origin: approved evidence, application instruction, manual edit. The trace appears only in the editor, never in the PDF.
+
 ## Global template
 
 Each user has a global template that defines which sections their resume has. A section can be conditional:

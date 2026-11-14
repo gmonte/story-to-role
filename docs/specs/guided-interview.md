@@ -161,6 +161,8 @@ A position handled with the short script is considered done at "With stories"; t
 
 **Short script.** For positions older than about ten years, outside the target area, or in the Free plan, the interviewer uses a short script that covers only the highlights: confirmation, one or two projects and their results. The user can always ask for the full script.
 
+**Credentials.** Education, certifications, languages (with level), courses, publications, awards and volunteering are credentials: short facts pre-filled from imported resumes and truth files, editable by hand and approved item by item. Institution, title and dates become locked facts; each has a status (completed, in progress, or do not use). A credential can also own evidence and stories, exactly like a position (a thesis, a capstone project, a hackathon won): a "tell the story of this one" action opens a short session with the short script, counted in depth like positions. Resume sections read credential facts; their stories join evidence selection and can be the cover letter's story. The interview asks only for what is missing, such as a language without a level.
+
 **No positions yet.** When the user has no position (a first job or a career change), the interview asks what they want to work with and which notable experiences they have in that area, such as projects, studies, volunteering or freelance work, and records them as evidence the same way.
 
 **Behaviour rules**
@@ -211,8 +213,9 @@ The evidence base is relational and owned by one user. Transcripts are temporary
 | `projects` | position id, name, period, status | Subsessions of long positions |
 | `interview_sessions` | position id, project id (optional), status, token usage | One per conversation slice; closed sessions are never reloaded |
 | `interview_turns` | session id, role, content (encrypted per user), language, created at | Temporary: deleted 7 days after the session's extraction is approved |
-| `evidence` | position id, project id, kind (achievement, responsibility, metric, tool, award), text, language, source quote (encrypted per user), source document id, approved at | The only facts generation may use |
-| `stories` | position id, problem, action, partners, result, evidence ids | Problem, action, result stories that feed resume bullets and cover letters |
+| `evidence` | position id or credential id, project id, kind (achievement, responsibility, metric, tool, award), text, language, source quote (encrypted per user), source document id, approved at | The only facts generation may use |
+| `stories` | position id or credential id, problem, action, partners, result, evidence ids | Problem, action, result stories that feed resume bullets and cover letters |
+| `credentials` | profile id, kind (education, certification, language, course, publication, award, volunteering), institution, title, level (languages), start, end, status (completed, in progress, do not use), source document ids, approved at | Institution, title and dates are locked facts once approved; a credential can own evidence and stories like a position |
 | `skills` | profile id, name, evidence ids | A skill without linked evidence is not usable |
 | `sensitive_items` | position id, kind (client, codename, figure, person), original text, choice (use, generalize, exclude), generalized text | Default choice: generalize for clients and figures |
 | `application_overrides` | sensitive item id, application id, choice, generalized text | Per-application exceptions to the item's general choice |

@@ -69,6 +69,14 @@ A cover letter follows its own methodology and draws on two inputs a resume does
 - **Company research:** facts about the company, each with its source, approved by the user before use.
 - **Motivation interview:** a short conversation with the user, within the application, about why they want this opening.
 
+**Methodology: storytelling.** Based on Braven's "The power of storytelling in your cover letter" (braven.org, 2019). The letter is built around one convincing story, not a list of skills:
+
+1. **Opening:** an attention-getter tied to the letter's topic (a concrete fact about the company, a tagline, a short quote) that leads smoothly into the story. No stock greeting such as "I am writing to apply for".
+2. **Story:** one past experience that exemplifies the skills and attributes the opening asks for, told as a plot: the setup, the build-up, the turning point and the final result. It must be clear about "the challenge, the choice you made, and the outcome", add something the resume does not already say, and show how the user would fit the company's culture. "Pick one story and stick with the highlights."
+3. **Conclusion:** amplify the impression, connect the story to the role, express interest in talking (interview, follow-up, contact) without sounding needy or arrogant, and close formally.
+
+Rules: about one page; personal, honest and enthusiastic; every sentence earns its place; no template phrasing ("hiring managers can sniff a template from a mile away"); no embellishment. The story comes only from approved evidence and the user's own words, and company facts only from approved research, so the letter invents nothing. Tone and length follow the output language's conventions in the tested language list.
+
 ## Cover letter and its resume
 
 - A cover letter can be generated without a resume, but it is more accurate when generated from one.

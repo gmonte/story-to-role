@@ -62,6 +62,13 @@ The ATS check applies to generated resumes only; it plays no part in suggesting 
 - An instruction that changes a locked fact (employer, title or dates of a position) creates a **locked-fact override** for this application only. The system shows it explicitly ("In this application, your title at Company X will be 'Engineering Manager' instead of 'Tech Lead'") and asks for confirmation; code then enforces the new value in this application. Locked facts guard against the AI, not against the user: the AI still may not change any of them on its own.
 - Lines generated from an instruction trace back to that instruction, as interview evidence traces back to its turn.
 
+## Cover letter inputs
+
+A cover letter follows its own methodology and draws on two inputs a resume does not have:
+
+- **Company research:** facts about the company, each with its source, approved by the user before use.
+- **Motivation interview:** a short conversation with the user, within the application, about why they want this opening.
+
 ## Cover letter and its resume
 
 - A cover letter can be generated without a resume, but it is more accurate when generated from one.

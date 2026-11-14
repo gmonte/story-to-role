@@ -19,6 +19,12 @@ The Free plan lets the user record their recent history and build one resume in 
 2. The interview is limited only by credits: the user decides where to spend them, going deep on a few positions or telling a little about each, with the short script suggested by default. The two most recent positions are proposed first. When the user has no position yet (a first job or a career change), the interview asks what they want to work with and which notable experiences they have in that area: projects, studies, volunteering, freelance work.
 3. StoryToRole generates a new resume tailored to the opening.
 
+Free is limited by credits only: 200 welcome credits, granted once, spent however the user wants (interview, truth file import, fit checks, documents, gap questions), plus 10 credits a month for fit checks so users keep coming back. The pricing page says what 200 credits are enough for ("tell your recent story and get your resume in Portuguese and English plus a cover letter"), and the product makes clear at every limit that subscribing unlocks more: the credit meter, the reserve alert and the end of the welcome credits all point to the subscription. Maximum AI cost per signup is about US$2.
+
+## Credit packs
+
+Credit packs are sold without a subscription, for users who want to pay only when they use. They are priced so that a credit bought in a pack clearly costs more than a credit in the subscription, which makes the subscription the obvious choice for anyone applying regularly, while still covering AI cost plus margin. Pricing is never per opening or per document.
+
 ## Credit meter
 
 - The user always sees the credits consumed, the balance and the cost of the next action before taking it.

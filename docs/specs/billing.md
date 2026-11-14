@@ -27,6 +27,8 @@ Every generation option is available in Free, limited only by credits: Quick or 
 
 Credit packs are sold without a subscription, for users who want to pay only when they use. They are priced so that a credit bought in a pack clearly costs more than a credit in the subscription, which makes the subscription the obvious choice for anyone applying regularly, while still covering AI cost plus margin. Pricing is never per opening or per document.
 
+Packs also serve bring-your-own-key users: when their key runs out of credit, they can finish a task with StoryToRole credits after confirming (see the guided interview spec). Claude Max and Team subscribers receive monthly API credits on a linked Console organization; a key from that organization works as a bring-your-own key, which makes the BYOK plan attractive to them.
+
 ## Credit meter
 
 - The user always sees the credits consumed, the balance and the cost of the next action before taking it.

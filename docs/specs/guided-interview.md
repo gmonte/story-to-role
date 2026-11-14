@@ -130,6 +130,10 @@ The interviewer follows six stages per position, asks one question at a time, an
 | 5. Evidence | Numbers (before and after, scale, time, money, people), tools and technologies actually used, awards | Every claim has a number, a scope or an explicit "no number" |
 | 6. Boundaries | What must never appear, client names, confidential figures, internal codenames | Sensitive items are flagged for review |
 
+**Short script.** For positions older than about ten years, outside the target area, or in the Free plan, the interviewer uses a short script that covers only the highlights: confirmation, one or two projects and their results. The user can always ask for the full script.
+
+**No positions yet.** When the user has no position (a first job or a career change), the interview asks what they want to work with and which notable experiences they have in that area, such as projects, studies, volunteering or freelance work, and records them as evidence the same way.
+
 **Behaviour rules**
 
 - The user is the subject of every story; partners are credited at the end ("in partnership with the data team").

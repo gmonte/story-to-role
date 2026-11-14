@@ -11,6 +11,19 @@ Users pay for what they use plus a margin that keeps the project running. The st
 - Plans are monthly subscriptions (Free, BYOK, Essencial, Intensivo) that grant **credits**. Never priced per opening.
 - Every AI action consumes credits: fit checks, generations and adjustments (adaptation to another language, language sync, cover letter update). Credits replace separate counters for evaluation and generation; actions still differ in how many credits they cost.
 
+## Free plan
+
+The Free plan shows the product's value on one real opening:
+
+1. The user uploads their current resume and an opening. The resume pre-fills the career timeline and the opening gets a fit check.
+2. A short interview covers the two most recent positions (or the only one, when there is just one), using the short script. When the user has no position yet (a first job or a career change), the interview asks what they want to work with and which notable experiences they have in that area: projects, studies, volunteering, freelance work.
+3. StoryToRole generates a new resume tailored to the opening.
+
+## Credit meter
+
+- The user always sees the credits consumed, the balance and the cost of the next action before taking it.
+- A **credit reserve** keeps enough credits for the step the user came for: in the Free plan, the resume generation. When the balance approaches the reserve, the interviewer is told to wrap up the current position with what was said, and the user sees an alert, so the interview never consumes the credits the resume needs.
+
 ## Cost model (estimate)
 
 Prices from the Claude API reference, cached 2026-10-06, in USD per million tokens: Haiku 5.5 $0.10 input / $0.50 output; Sonnet 5.5 $2 / $10 (cache reads $0.20); Opus 5.5 $4 / $20 (cache reads $0.20). Cache writes cost 1.25x input.

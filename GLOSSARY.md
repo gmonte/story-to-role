@@ -88,6 +88,10 @@ _Avoid_: Locale, app language
 The language the user and the interviewer converse in; each evidence item keeps the interview language it was told in.
 _Avoid_: Chat language, AI language
 
+**Short script**:
+A reduced interview script that covers only a position's highlights, used for old or off-target positions and in the Free plan.
+_Avoid_: Quick interview, light mode
+
 **Session**:
 One slice of the guided interview about a single position (or one project of it), whose turns are never loaded again once it closes.
 _Avoid_: Conversation, chat, thread
@@ -111,6 +115,14 @@ An exception to a sensitivity choice that applies to a single application only.
 _Avoid_: Per-job override, exception rule
 
 ## Plans and usage
+
+**Credit**:
+The unit every AI action is paid in; plans and packs grant credits, and each action costs a known number of them.
+_Avoid_: Token, point, coin
+
+**Credit reserve**:
+Credits held back for the step the user came for, so that earlier steps cannot consume them.
+_Avoid_: Hold, buffer
 
 **Usage allowance**:
 The monthly amount of AI usage a plan includes; it limits only usage paid by StoryToRole and is shown as information when the user brings their own key.

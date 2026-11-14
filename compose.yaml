@@ -1,0 +1,14 @@
+# Local development services.
+# Requires a Redis running on the host (`brew services start redis`).
+services:
+  # Upstash-compatible REST API on top of the local Redis, so @upstash/redis
+  # and @upstash/ratelimit work locally with the same code as production.
+  srh:
+    image: hiett/serverless-redis-http@sha256:5b0bb9239fce53abf87b2018a7a0deb9ec7bd900c5360738fe5fbeeb426f9150
+    ports:
+      - "8079:80"
+    environment:
+      SRH_MODE: env
+      SRH_TOKEN: ${UPSTASH_REDIS_REST_TOKEN:-local-dev-token}
+      SRH_CONNECTION_STRING: redis://host.docker.internal:6379
+    restart: unless-stopped

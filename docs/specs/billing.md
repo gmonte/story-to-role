@@ -17,7 +17,7 @@ Users pay for what they use plus a margin that keeps the project running. The st
 A user's **plan** (what they can use) is separate from their **AI funding** (who pays for each AI call: StoryToRole credits or the user's own key).
 
 - **Bring your own key is a funding mode, not a separate plan.** A subscriber who adds a key from a certified provider switches to key funding; removing the key switches back to credits.
-- **Courtesy plan:** the owner can grant the paid plan to selected users without a subscription. It works without a key, funded by StoryToRole credits; the user may add their own key so the owner does not carry the whole AI cost, and then the key funds the AI calls.
+- **Courtesy plan:** the owner grants the paid plan to selected users without a subscription, from an admin page restricted to the Clerk admin role, with an optional end date and a monthly quota of courtesy credits set per grant (zero allowed). It lives in StoryToRole's database, not in Stripe. Since the owner pays for courtesy credits, the funding order differs: the user's own key first when there is one, then courtesy credits, then the user's stored credits after confirmation. When the grant ends, the user returns to Free. The owner's own account uses a courtesy grant with their Claude key.
 
 **Funding order.** Each AI call is funded in this order, so a user is never charged twice for the same month:
 
@@ -61,6 +61,15 @@ Every generation option is available in Free, limited only by credits: Quick or 
 Credit packs are sold without a subscription, for users who want to pay only when they use. They are priced so that a credit bought in a pack clearly costs more than a credit in the subscription, which makes the subscription the obvious choice for anyone applying regularly, while still covering AI cost plus margin. Pricing is never per opening or per document.
 
 Packs also serve bring-your-own-key users: when their key runs out of credit, they can finish a task with StoryToRole credits after confirming (see the guided interview spec). Claude Max and Team subscribers receive monthly API credits on a linked Console organization; a key from that organization works as a bring-your-own key, which makes the BYOK plan attractive to them.
+
+## Credit ledger
+
+Credits live in an append-only ledger in Postgres: grants, debits, reservations, expiries and refunds; the balance is their sum. Checking and debiting happen in the same database transaction as starting the AI task, following the funding order, so a balance can never be overspent and two concurrent tasks cannot spend the same credits. A task reserves its estimated cap when it starts and settles to the actual cost when it ends; a failed task releases its reservation.
+
+- **Every grant points to its origin:** a Stripe event (paid invoice, completed checkout) for purchases, the Clerk sign-up for welcome credits, the admin grant for courtesy credits. Stripe is the source of truth for money paid.
+- **A reconciliation job** can rebuild all grants from Stripe, Clerk and the admin grants at any time, idempotently: it never duplicates a grant and restores any that is missing.
+- **Backups never cost users paid credits.** Restores go to a separate Neon branch, never over production. If an older state is ever restored, reconciliation brings back every grant made since; debits lost in the restore only return credits to users, so any loss falls on StoryToRole, never on them.
+- Stripe billing credits and Metronome were ruled out: Stripe's credits apply only when an invoice is finalized (postpaid), do not stop usage in real time, do not apply to one-time packs and are monetary amounts; Metronome adds 0.8% of billing volume plus per-event fees.
 
 ## Credit meter
 

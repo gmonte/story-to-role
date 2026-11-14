@@ -72,6 +72,10 @@ _Avoid_: Translation, localization
 
 ## Guided interview
 
+**Truth file**:
+A document the user already keeps with their own career facts, imported as a source document and validated like any extraction.
+_Avoid_: Profile file, about me, bio
+
 **Interview**:
 The guided conversation in which StoryToRole discovers the user's career story, position by position, and turns it into approved evidence.
 _Avoid_: Onboarding chat, questionnaire; never use it for an employer's interview (see Hiring interview)

@@ -4,7 +4,7 @@ Nov 13, 2026 · @Guilherme
 
 ## Goal and scope
 
-The career interview turns a user's working life into a structured, user-approved evidence base. Every resume, cover letter and interview prep in StoryToRole (temporary name) is generated from it, and nothing outside it.
+The career interview turns a user's working life into a structured, user-approved evidence base. Every resume and cover letter in StoryToRole is generated from it, and nothing outside it.
 
 It replaces two manual steps of the meu-emprego-novo CLI: writing `profile_truth.md` by hand and pasting an AI interview transcript into `about_me.md`. It also fixes their cost problem: today the whole profile is resent on every agent call.
 
@@ -21,7 +21,11 @@ It replaces two manual steps of the meu-emprego-novo CLI: writing `profile_truth
 
 - Job search and auto-apply (never planned).
 - LinkedIn optimization, spoken AI replies (text to speech), team or recruiter accounts.
-- Resume generation, fit scoring, cover letters and the tracker. Each gets its own spec; this one defines the data they consume.
+- Hiring interview prep (practice questions and talking points for an employer's interview). In StoryToRole, "interview" always means this career interview.
+
+**In the MVP, out of this spec**
+
+- Fit assessment, resume and cover letter generation, and the tracker. Each gets its own spec; this one defines the data they consume.
 
 ## Principles
 
@@ -173,7 +177,7 @@ The evidence base is relational and owned by one user; transcripts are kept for 
 | `interview_sessions` | position id, project id (optional), status, token usage | One per conversation slice; closed sessions are never reloaded |
 | `interview_turns` | session id, role, content, language, created at | Audit trail and source links |
 | `evidence` | position id, project id, kind (achievement, responsibility, metric, tool, award), text, language, source turn ids, approved at | The only facts generation may use |
-| `stories` | position id, problem, action, partners, result, evidence ids | STAR stories for interview prep |
+| `stories` | position id, problem, action, partners, result, evidence ids | Problem, action, result stories that feed resume bullets and cover letters |
 | `skills` | profile id, name, evidence ids | A skill without linked evidence is not usable |
 | `sensitive_items` | position id, kind (client, codename, figure, person), original text, choice (use, generalize, exclude), generalized text | Default choice: generalize for clients and figures |
 | `application_overrides` | sensitive item id, application id, choice, generalized text | Per-application exceptions to the item's general choice |
@@ -213,7 +217,7 @@ Approved extraction is the compaction: context is cut at checkpoints the user co
 | Position agent | Instructions, timeline skeleton, summaries of the previous and next positions, known facts for this position, notes from other positions, and the current session's turns |
 | Subsession (project) | The same, plus summaries of already closed projects of this position instead of their turns |
 | Narrative agent | Approved position summaries and the career timeline |
-| Generation (resume, letter, prep) | Only the evidence relevant to the opening, after sensitive-data filtering |
+| Generation (resume, cover letter) | Only the evidence relevant to the opening, after sensitive-data filtering |
 
 **Rules**
 
@@ -232,7 +236,6 @@ Every later feature reads the evidence base through one function that selects, f
 | Fit assessment | Opening description, skills, evidence kinds, timeline | New (gap identified against Rolevera) |
 | Tailored resume | Locked facts, relevant evidence, narrative | Strategist, hiring manager and editor loop; best-rated version kept; locked facts and length rules from `policy.py` |
 | Cover letter | Narrative, top stories for the opening | New |
-| Interview prep | Stories, skills, gaps from the fit assessment | Interview coach agent |
 | Evidence trace | Source turn ids on each evidence item | New: each generated line links back to what the user said |
 
 Generated text is written in the job's language (English or Brazilian Portuguese), translating evidence stored in the other language. Forbidden terms from the sensitive-data control are checked on every output.
@@ -271,7 +274,7 @@ Thresholds (message length, turns, budgets, cooldown) are settings to tune with 
 
 **Open questions**
 
-- Final product name.
+None at the moment.
 
 **Acceptance criteria**
 

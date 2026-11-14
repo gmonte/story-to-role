@@ -1,6 +1,6 @@
 # StoryToRole
 
-StoryToRole helps job seekers produce tailored resumes, cover letters and interview prep from a career evidence base the user has approved. Nothing is invented.
+StoryToRole helps job seekers produce tailored resumes and cover letters from a career evidence base the user has approved. Nothing is invented.
 
 ## Career
 
@@ -19,6 +19,14 @@ The user's pursuit of one opening, which starts when a resume is first generated
 _Avoid_: Candidacy, job, tracker entry
 
 ## Guided interview
+
+**Interview**:
+The guided conversation in which StoryToRole discovers the user's career story, position by position, and turns it into approved evidence.
+_Avoid_: Onboarding chat, questionnaire; never use it for an employer's interview (see Hiring interview)
+
+**Hiring interview**:
+An interview an employer holds with the user during an application; StoryToRole does not prepare users for it in the MVP.
+_Avoid_: Interview (unqualified), interview prep
 
 **Interface language**:
 The language the app's screens are shown in, set independently of every other language.

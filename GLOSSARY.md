@@ -22,13 +22,17 @@ _Avoid_: Candidacy, job, tracker entry
 The language a generated resume or cover letter is written in, chosen by the user for each generation.
 _Avoid_: Target language, resume language
 
+**Document**:
+A resume or a cover letter belonging to one application; an application has at most one of each.
+_Avoid_: Artifact, file, output
+
 **Language version**:
-The line of snapshots of an application's documents in one output language; its latest snapshot is the official one.
+The line of snapshots of one document in one output language; a document has at most one per language, and its latest snapshot is the official one.
 _Avoid_: Branch, translation, variant
 
 **Snapshot**:
 An immutable copy of a generated document's content at one point in its language version's history.
-_Avoid_: Commit, version, revision, draft
+_Avoid_: Commit, version, revision, draft; the interface calls it a change
 
 **Submission freeze**:
 The point at which an application is marked as applied and all of its documents become read-only.

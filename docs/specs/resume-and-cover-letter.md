@@ -11,7 +11,7 @@ Hiring interview prep is out of the MVP.
 ## Output language
 
 - The user picks the output language before generating. It is preselected from the language detected in the opening description.
-- After generating, the user can ask for the documents in another output language at any time, which creates a new language version. Every snapshot is kept.
+- After generating, the user can ask for a document in another output language at any time, which creates a new language version of that document. Every snapshot is kept.
 
 ## Adaptations
 
@@ -27,15 +27,20 @@ A snapshot in another output language is an **adaptation** of an existing snapsh
 
 Documents are versioned like a git history, stored as rows in Postgres rather than in a git repository. In git terms, a language version is a branch and a snapshot is a commit.
 
-- An application has one **language version** per output language the user chose to create; the user decides which languages exist. Each language version holds that language's resume and cover letter.
+- An application has up to two **documents**: a resume and a cover letter.
+- Each document has at most one **language version** per output language, created only when the user asks for it. For example, an application may hold one resume in Portuguese, one resume in English and one cover letter in English. Language versions are independent of each other, and the resume and the cover letter are independent of each other.
 - Every change to a document creates an immutable **snapshot**: a full copy of the structured content, its parent snapshot, its origin (generated, adapted, edited), its author (user or AI) and its time. Diffs between any two snapshots are computed when shown.
 - The **latest snapshot of each language version is the official one**. There is no manual "current" marker; the history exists so actions can be undone. Restoring an old snapshot creates a new latest snapshot with that content; history is never rewritten.
 - An adaptation takes the latest snapshot of one language version as its base and writes the result either into a new language version or into an existing one. Into an existing language version it **recreates** it: the result becomes its new latest snapshot, replacing its content (edits made only in that language version are not carried over). Earlier snapshots stay in history, so recreating can be undone. Example: after many edits in English, the user recreates the Portuguese language version from the English one.
 
 ## Submission freeze
 
-- When the user marks an application as applied, they say which language versions were sent; more than one can be sent.
+- When the user marks an application as applied, they say which language versions of each document were sent (for example, the English resume and the English cover letter).
 - From then on every document of the application, in every language version, is read-only: no new snapshots, no syncs, no archiving or deleting of snapshots.
+
+## Interface wording
+
+The interface calls snapshots "changes" ("alterações" in Brazilian Portuguese): "Change history", "Restore this change". A language version is shown by its language name only, as a tab per language.
 
 ## Rendering
 
@@ -45,7 +50,6 @@ PDF and DOCX files are rendered on demand from a snapshot's structured content. 
 
 - Language sync between language versions (merging changes from one language into another) and how granular it is.
 - Archiving and deleting snapshots and language versions.
-- Whether an application may hold two language versions in the same language.
 - Undoing a submission marked by mistake; reusing a frozen application as a starting point; deletion rights over frozen documents.
 - Which output languages are offered.
 - How locked facts such as job titles appear in another language.

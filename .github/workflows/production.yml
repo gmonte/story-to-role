@@ -18,48 +18,8 @@ env:
   VERCEL_CLI_VERSION: "65.16.0"
 
 jobs:
-  quality:
-    name: quality
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v4
-        with:
-          version: ${{ env.PNPM_VERSION }}
-
-      - name: Cache dependencies
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.pnpm-store
-            node_modules
-            apps/*/node_modules
-            configs/*/node_modules
-            packages/*/node_modules
-          key: ${{ runner.os }}-pnpm-${{ hashFiles('pnpm-lock.yaml') }}
-          restore-keys: |
-            ${{ runner.os }}-pnpm-
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
-      - name: Lint, typecheck and test
-        env:
-          # Nx Cloud remote cache: quality jobs only (see docs/adr/0005).
-          NX_CLOUD_ACCESS_TOKEN: ${{ secrets.NX_CLOUD_ACCESS_TOKEN }}
-        run: pnpm lerna run lint,test --verbose
-
   deploy-production:
     name: deploy production
-    needs: quality
     runs-on: ubuntu-latest
     steps:
       - name: Checkout

@@ -62,3 +62,6 @@ packages/intl/compiled/
 # clerk
 /.clerk/
 .env*
+
+# trigger.dev (local build output and MCP profile)
+.trigger

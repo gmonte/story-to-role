@@ -25,37 +25,18 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Detect changed files
-        id: changes
-        run: |
-          git fetch origin "${{ github.base_ref }}" --depth=1
-          git diff --name-only "origin/${{ github.base_ref }}"...HEAD > changed.txt
-          if grep -E '\.(ts|tsx|js|jsx)$|configs/|package\.json$|eslint\.config\.|tsconfig.*\.json$' changed.txt > lint_files.txt; then
-            echo "has_relevant_changes=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "has_relevant_changes=false" >> "$GITHUB_OUTPUT"
-          fi
-          echo "Files to lint:"
-          cat lint_files.txt || true
 
       - name: Setup Node.js
-        if: steps.changes.outputs.has_relevant_changes == 'true'
         uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
 
       - name: Setup pnpm
-        if: steps.changes.outputs.has_relevant_changes == 'true'
         uses: pnpm/action-setup@v4
         with:
           version: ${{ env.PNPM_VERSION }}
 
       - name: Cache dependencies
-        if: steps.changes.outputs.has_relevant_changes == 'true'
-        id: cache-deps
         uses: actions/cache@v4
         with:
           path: |
@@ -69,11 +50,14 @@ jobs:
             ${{ runner.os }}-pnpm-
 
       - name: Install dependencies
-        if: steps.changes.outputs.has_relevant_changes == 'true'
         run: pnpm install --frozen-lockfile
 
+      # Always the full check: the Nx Cloud cache skips whatever did not
+      # change, and file-based filters skipped quality on .sql-only PRs.
       - name: Lint, typecheck and test
-        if: steps.changes.outputs.has_relevant_changes == 'true'
+        env:
+          # Nx Cloud remote cache: quality jobs only (see docs/adr/0005).
+          NX_CLOUD_ACCESS_TOKEN: ${{ secrets.NX_CLOUD_ACCESS_TOKEN }}
         run: pnpm lerna run lint,test --verbose
 
   preview:
@@ -83,6 +67,9 @@ jobs:
     # "true" (Settings > Secrets and variables > Actions > Variables).
     if: vars.DEPLOY_ENABLED == 'true'
     runs-on: ubuntu-latest
+    env:
+      # Builds never come from the Nx cache (see docs/adr/0005).
+      NX_NO_CLOUD: "true"
     permissions:
       contents: read
       pull-requests: write

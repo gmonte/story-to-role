@@ -1,8 +1,26 @@
 {
+  "namedInputs": {
+    "sharedGlobals": [
+      "{workspaceRoot}/configs/**/*",
+      "{workspaceRoot}/nx.json",
+      "{workspaceRoot}/pnpm-lock.yaml",
+      "{workspaceRoot}/pnpm-workspace.yaml",
+      "{workspaceRoot}/tsconfig*.json"
+    ],
+    "default": ["{projectRoot}/**/*", "sharedGlobals"],
+    "production": [
+      "default",
+      "!{projectRoot}/**/*.test.{ts,tsx}",
+      "!{projectRoot}/**/*.md",
+      "!{projectRoot}/vitest.*.ts",
+      "!{projectRoot}/src/test/**/*"
+    ]
+  },
   "targetDefaults": {
     "build": {
       "cache": true,
       "dependsOn": ["^build"],
+      "inputs": ["production", "^production"],
       "outputs": [
         "{projectRoot}/.next",
         "!{projectRoot}/.next/cache",
@@ -17,19 +35,25 @@
     },
     "lint": {
       "cache": true,
-      "dependsOn": ["typecheck", "^lint"]
+      "dependsOn": ["typecheck", "^lint"],
+      "inputs": ["default", "^production"]
     },
     "lint:fix": {
       "cache": true,
-      "dependsOn": ["typecheck", "^lint:fix"]
+      "dependsOn": ["typecheck", "^lint:fix"],
+      "inputs": ["default", "^production"]
     },
     "test": {
       "cache": true,
-      "dependsOn": ["typecheck"]
+      "dependsOn": ["typecheck"],
+      "inputs": ["default", "^production"]
     },
     "typecheck": {
       "cache": true,
-      "dependsOn": ["^typecheck"]
+      "dependsOn": ["^typecheck"],
+      "inputs": ["default", "^production"]
     }
-  }
+  },
+  "analytics": false,
+  "nxCloudId": "6af853f1af7ceb84ecb53afe"
 }

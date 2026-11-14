@@ -11,13 +11,19 @@ How to build the MVP described in `docs/specs/`, in vertical slices. Each slice 
 - Code enforces, the AI suggests: locked facts, sensitive-item choices, forbidden terms and the credit ledger are code, never prompt-only.
 - When a spec is ambiguous, pick the option closest to the spec's principles, note the assumption in the commit body, and keep going. Do not change specs or ADRs without saying why in the commit.
 
+## Environments
+
+- Production runs on `storytorole.vercel.app` (a Vercel project domain; `APP_URL` is a Vercel Production env var), staging on `stg-storytorole.vercel.app` and each PR on `pr-<number>-storytorole.vercel.app` (aliases set by the workflows, which pass `APP_URL`).
+- With no custom domain, Clerk's production instance runs through its auto-proxy at `/__clerk`, which the Next.js proxy matcher routes. Custom email templates, email links and invitations need a custom domain.
+- Moving to a custom domain later: add it to the Vercel project, create the DNS records Clerk asks for, update the production `APP_URL`, and point the production Stripe and Clerk webhooks at it.
+
 ## Slice 1: Foundation
 
 Goal: the plumbing every later slice relies on.
 
 - Remove the inherited Clerk Organizations sync: `organizations` and `organization_memberships` tables (generated migration), their webhook handlers, domain code and router entries. Keep `user.created`, `user.updated`, `user.deleted`.
 - Webhook logging records only the event type and user id.
-- Environment schema (`packages/common/src/env/web.env.ts`): add `STORAGE_DRIVER`, `UPSTASH_REDIS_REST_URL`, `UPSTASH_REDIS_REST_TOKEN` (standard Upstash names, set by hand on Vercel; `Redis.fromEnv()` reads them), `REDIS_KEY_PREFIX` (environment prefix for every Redis key; the staging and PR workflows pass it with `-e` like `APP_URL`), `TRIGGER_PROJECT_REF`, `TRIGGER_SECRET_KEY`, `ANTHROPIC_API_KEY`, `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET` (Stripe optional until slice 6). App refuses to start with `STORAGE_DRIVER=local` unless `NEXT_PUBLIC_ENV=development`.
+- Environment schema (`packages/common/src/env/web.env.ts`) already declares `UPSTASH_REDIS_REST_URL`, `UPSTASH_REDIS_REST_TOKEN` (standard Upstash names, set by hand on Vercel; `Redis.fromEnv()` reads them), `REDIS_KEY_PREFIX` (environment prefix for every Redis key), `TRIGGER_PROJECT_REF`, `TRIGGER_SECRET_KEY`, `ANTHROPIC_API_KEY`, `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `STORAGE_DRIVER` (default `vercel-blob`) and `BLOB_READ_WRITE_TOKEN`. Still to do: the staging and PR workflows pass `REDIS_KEY_PREFIX` with `-e` like `APP_URL`; the app refuses to start with `STORAGE_DRIVER=local` unless `NEXT_PUBLIC_ENV=development`, or with `vercel-blob` and no `BLOB_READ_WRITE_TOKEN`.
 - Storage interface (put, get, delete) with `local` (git-ignored `.storage/`) and `vercel-blob` drivers.
 - Per-user envelope encryption utilities (AES-256-GCM, master key in its own env var with a version) for career content and bring-your-own keys.
 - Trigger.dev 4.8.5, the latest at planning time; confirm with `pnpm view trigger.dev version` before installing (`trigger.dev`, `@trigger.dev/sdk`, `@trigger.dev/build` in the `api` catalog; `@trigger.dev/react-hooks` in `web`), `packages/api/trigger.config.ts` modeled on the adc-monorepo setup, `trigger:dev` script, a `tasks` table storing run ids, and Realtime subscription in the web app.

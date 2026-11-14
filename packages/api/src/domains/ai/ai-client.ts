@@ -1,7 +1,7 @@
 import type { DbClient } from "@repo/api/tools/db-client";
 
 import type { AiFunding } from "./ai-funding";
-import { aiUsageTable } from "./db/ai-tables";
+import { AiUsageRepository } from "./ai-usage-repository";
 import type {
   AiObjectRequest,
   AiRole,
@@ -37,7 +37,7 @@ export function createAiClient({
   providerPackage: ProviderPackage;
 }): AiClient {
   async function recordUsage(purpose: string, role: AiRole, usage: AiUsage) {
-    await db.insert(aiUsageTable).values({
+    await new AiUsageRepository(db).record({
       userId,
       taskId,
       purpose,

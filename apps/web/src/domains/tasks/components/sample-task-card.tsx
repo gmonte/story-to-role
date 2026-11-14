@@ -5,14 +5,16 @@ import { useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { useRealtimeRun } from "@trigger.dev/react-hooks";
 
+import {
+  taskProgressSchema,
+  type RealtimeSubscription,
+} from "@repo/api/domains/tasks/schemas/task";
 import { useTranslation } from "@repo/intl/use-translation";
 import { Button } from "@repo/web/components/ui/button";
 import { Progress } from "@repo/web/components/ui/progress";
 import { toast } from "@repo/web/components/ui/sonner";
 
 import { useTRPC } from "~/tools/trpc/client";
-
-type Subscription = { runId: string; accessToken: string };
 
 /**
  * Starts the sample task and follows its run live through Trigger.dev
@@ -21,7 +23,7 @@ type Subscription = { runId: string; accessToken: string };
 export function SampleTaskCard() {
   const t = useTranslation();
   const trpc = useTRPC();
-  const [subscription, setSubscription] = useState<Subscription>();
+  const [subscription, setSubscription] = useState<RealtimeSubscription>();
 
   const startSample = useMutation(
     trpc.tasks.startSample.mutationOptions({
@@ -58,13 +60,11 @@ export function SampleTaskCard() {
   );
 }
 
-function SampleTaskProgress({ runId, accessToken }: Subscription) {
+function SampleTaskProgress({ runId, accessToken }: RealtimeSubscription) {
   const t = useTranslation();
   const { run, error } = useRealtimeRun(runId, { accessToken });
 
-  const progress = run?.metadata?.progress as
-    | { step: number; totalSteps: number }
-    | undefined;
+  const progress = taskProgressSchema.safeParse(run?.metadata?.progress).data;
   const percent = progress ? (progress.step / progress.totalSteps) * 100 : 0;
 
   if (error) {

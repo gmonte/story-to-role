@@ -28,6 +28,9 @@ export const tasksTable = createTable(
       .notNull()
       .references(() => usersTable.id, { onDelete: "cascade" }),
     type: d.text().$type<TaskType>().notNull(),
+    // The row the task works on (a chat message, an import…), so the run
+    // can load it from the task id alone.
+    subjectId: d.uuid(),
     status: d.text().$type<TaskStatus>().notNull().default("pending"),
     runId: d.text(),
     progress: d.jsonb().$type<TaskProgress>(),

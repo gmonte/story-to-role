@@ -1,9 +1,8 @@
 import { z } from "zod";
 
-import type { AiClient } from "./ai-client";
+import type { ChatContext } from "@repo/api/domains/chat/schemas/chat-message";
 
-/** Every chat belongs to one of these (workspace spec: no general chat). */
-export type ChatContext = "career_interview" | "opening" | "document";
+import type { AiClient } from "./ai-client";
 
 const contextDescriptions: Record<ChatContext, string> = {
   career_interview:

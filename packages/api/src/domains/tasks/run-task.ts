@@ -1,6 +1,5 @@
-import { metadata } from "@trigger.dev/sdk";
-
 import type { DbClient } from "@repo/api/tools/db-client";
+import { triggerClient } from "@repo/api/tools/trigger/trigger-client";
 
 import { TasksRepository } from "./tasks-repository";
 import type { TaskProgress, TaskType } from "./schemas/task";
@@ -9,6 +8,8 @@ export type TaskContext = {
   taskId: string;
   /** The user the task acts for: whoever created it. */
   userId: string;
+  /** The row the task works on, when it has one. */
+  subjectId: string | null;
   db: DbClient;
   /** Live to the browser through Realtime, durable in the task row. */
   reportProgress: (progress: TaskProgress) => Promise<void>;
@@ -36,9 +37,10 @@ export async function runTask(
     await handler({
       taskId,
       userId: owner.userId,
+      subjectId: owner.subjectId,
       db,
       reportProgress: async (progress) => {
-        metadata.set("progress", progress);
+        triggerClient.reportProgress(progress);
         await repository.updateProgress({ taskId, progress });
       },
     });

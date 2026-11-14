@@ -99,14 +99,14 @@ const syncVercelEnvForCurrentTarget = syncEnvVars(
 );
 
 /**
- * Trigger.dev config. Tasks live in `./src/domains/tasks/tasks` and run on
+ * Trigger.dev config. Tasks live in each domain's `tasks/` folder and run on
  * Trigger.dev's managed infra (no Vercel duration cap). `TRIGGER_PROJECT_REF` is
  * read from `process.env` (set per Vercel environment) so it routes to the right
  * project, and so the config doesn't require the full `web.env` schema at build.
  */
 export default defineConfig({
   project: process.env.TRIGGER_PROJECT_REF!,
-  dirs: ["./src/domains/tasks/tasks"],
+  dirs: ["./src/domains/tasks/tasks", "./src/domains/chat/tasks"],
   build: {
     extensions: [syncVercelEnvForCurrentTarget],
   },

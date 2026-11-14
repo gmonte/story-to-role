@@ -7,7 +7,7 @@ import {
   userProcedure,
 } from "@repo/api/tools/trpc";
 
-import { taskSchema } from "./schemas/task";
+import { realtimeSubscriptionSchema, taskSchema } from "./schemas/task";
 import { TasksService } from "./tasks-service";
 
 export const tasksRouter = createTRPCRouter({
@@ -24,50 +24,9 @@ export const tasksRouter = createTRPCRouter({
     })
     .input(z.object({}))
     .output(
-      z.object({
-        task: taskSchema,
-        realtime: z.object({ runId: z.string(), accessToken: z.string() }),
-      })
+      z.object({ task: taskSchema, realtime: realtimeSubscriptionSchema })
     )
     .mutation(({ ctx }) =>
       new TasksService(db).start({ userId: ctx.userId, type: "sample" })
-    ),
-
-  byId: userProcedure
-    .meta({
-      openapi: {
-        method: "GET",
-        path: "/tasks/by-id/{taskId}",
-        tags: ["tasks"],
-        summary: "Returns one of the current user's tasks",
-        protect: true,
-      },
-    })
-    .input(z.object({ taskId: z.uuid() }))
-    .output(taskSchema)
-    .query(({ ctx, input }) =>
-      new TasksService(db).getForUser({
-        taskId: input.taskId,
-        userId: ctx.userId,
-      })
-    ),
-
-  realtimeToken: userProcedure
-    .meta({
-      openapi: {
-        method: "POST",
-        path: "/tasks/by-id/{taskId}/realtime-token",
-        tags: ["tasks"],
-        summary: "Returns a read-only token to follow the task's run live",
-        protect: true,
-      },
-    })
-    .input(z.object({ taskId: z.uuid() }))
-    .output(z.object({ runId: z.string(), accessToken: z.string() }))
-    .mutation(({ ctx, input }) =>
-      new TasksService(db).createRealtimeToken({
-        taskId: input.taskId,
-        userId: ctx.userId,
-      })
     ),
 });

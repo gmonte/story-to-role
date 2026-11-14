@@ -1,4 +1,6 @@
-import { auth, tasks } from "@trigger.dev/sdk";
+import { metadata, tasks } from "@trigger.dev/sdk";
+
+import type { TaskProgress } from "@repo/api/domains/tasks/schemas/task";
 
 /**
  * The only door to Trigger.dev from the app, so tests mock this module
@@ -12,14 +14,8 @@ export const triggerClient = {
     return { runId: handle.id, accessToken: handle.publicAccessToken };
   },
 
-  /**
-   * A read-only token for one run, to follow it again later (after a page
-   * reload). Needs an API key with Runs: Read.
-   */
-  createRunReadToken(runId: string) {
-    return auth.createPublicToken({
-      scopes: { read: { runs: [runId] } },
-      expirationTime: "2h",
-    });
+  /** Inside a run: mirrors progress to the browser through Realtime. */
+  reportProgress(progress: TaskProgress) {
+    metadata.set("progress", progress);
   },
 };

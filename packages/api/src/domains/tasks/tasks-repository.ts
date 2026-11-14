@@ -1,4 +1,4 @@
-import { and, eq } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 
 import type { DbClient } from "@repo/api/tools/db-client";
 
@@ -19,7 +19,11 @@ const taskColumns = {
 export class TasksRepository {
   constructor(private readonly tx: DbClient) {}
 
-  async create(input: { userId: string; type: TaskType }): Promise<Task> {
+  async create(input: {
+    userId: string;
+    type: TaskType;
+    subjectId?: string;
+  }): Promise<Task> {
     const [task] = await this.tx
       .insert(tasksTable)
       .values(input)
@@ -27,26 +31,14 @@ export class TasksRepository {
     return task;
   }
 
-  async findForUser(input: {
-    taskId: string;
-    userId: string;
-  }): Promise<Task | undefined> {
-    const [task] = await this.tx
-      .select(taskColumns)
-      .from(tasksTable)
-      .where(
-        and(
-          eq(tasksTable.id, input.taskId),
-          eq(tasksTable.userId, input.userId)
-        )
-      );
-    return task;
-  }
-
   /** For the worker, which acts for whoever created the task. */
   async findOwner(taskId: string) {
     const [row] = await this.tx
-      .select({ userId: tasksTable.userId, type: tasksTable.type })
+      .select({
+        userId: tasksTable.userId,
+        type: tasksTable.type,
+        subjectId: tasksTable.subjectId,
+      })
       .from(tasksTable)
       .where(eq(tasksTable.id, taskId));
     return row;

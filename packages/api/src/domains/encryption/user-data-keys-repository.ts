@@ -27,10 +27,4 @@ export class UserDataKeysRepository {
       .values({ userId, ...key })
       .onConflictDoNothing({ target: userDataKeysTable.userId });
   }
-
-  async deleteByUserId(userId: string) {
-    await this.tx
-      .delete(userDataKeysTable)
-      .where(eq(userDataKeysTable.userId, userId));
-  }
 }

@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-export const taskTypes = ["sample"] as const;
+export const taskTypes = ["sample", "chat_turn"] as const;
 export const taskTypeSchema = z.enum(taskTypes);
 export type TaskType = z.infer<typeof taskTypeSchema>;
 
@@ -20,6 +20,13 @@ export const taskProgressSchema = z.object({
   label: z.string().optional(),
 });
 export type TaskProgress = z.infer<typeof taskProgressSchema>;
+
+/** What the browser needs to follow one run live, and nothing more. */
+export const realtimeSubscriptionSchema = z.object({
+  runId: z.string(),
+  accessToken: z.string(),
+});
+export type RealtimeSubscription = z.infer<typeof realtimeSubscriptionSchema>;
 
 export const taskSchema = z.object({
   id: z.uuid(),

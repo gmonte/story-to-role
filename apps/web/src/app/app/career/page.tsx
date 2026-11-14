@@ -2,7 +2,7 @@ import { env } from "@repo/common/env/web.env";
 import { getTranslation } from "@repo/intl/get-translation";
 
 import { SampleTaskCard } from "~/domains/tasks/components/sample-task-card";
-import { ChatPlaceholder } from "~/domains/workspace/components/chat-placeholder";
+import { ChatPanel } from "~/domains/chat/components/chat-panel";
 import { WorkspacePage } from "~/domains/workspace/components/workspace-page";
 import { getLocaleFromNextCookies } from "~/tools/intl/utils/get-locale-from-next-cookies";
 
@@ -13,9 +13,12 @@ export default async function CareerPage() {
     <WorkspacePage
       title={t.formatMessage({ defaultMessage: "My career" })}
       chat={
-        <ChatPlaceholder
-          heading={t.formatMessage({ defaultMessage: "Your career story" })}
-          description={t.formatMessage({
+        <ChatPanel
+          context="career_interview"
+          emptyHeading={t.formatMessage({
+            defaultMessage: "Your career story",
+          })}
+          emptyDescription={t.formatMessage({
             defaultMessage:
               "The guided interview will go through your positions one at a time and turn what you tell it into evidence you approve.",
           })}

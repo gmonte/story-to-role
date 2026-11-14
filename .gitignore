@@ -65,3 +65,6 @@ packages/intl/compiled/
 
 # trigger.dev (local build output and MCP profile)
 .trigger
+
+# local file storage (STORAGE_DRIVER=local)
+.storage

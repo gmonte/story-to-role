@@ -13,7 +13,7 @@ It replaces two manual steps of the meu-emprego-novo CLI: writing `profile_truth
 - Import of one or more resumes (PDF or DOCX) to pre-fill the career timeline; positions can also be added by hand or proposed by the interview.
 - Guided interview, one position at a time, in what feels like a single conversation; resumable at any point.
 - Extraction of evidence, stories, skills and sensitive items, approved by the user before saving.
-- Sensitive-data choices per item (use, generalize, exclude), with per-job overrides.
+- Sensitive-data choices per item (use, generalize, exclude), with per-application overrides.
 - A career narrative that links positions together.
 - Interface and AI conversation in English or Brazilian Portuguese, typed or spoken (speech to text).
 
@@ -177,7 +177,7 @@ The evidence base is relational and owned by one user; transcripts are kept for 
 | `stories` | position id, problem, action, partners, result, evidence ids | STAR stories for interview prep |
 | `skills` | profile id, name, evidence ids | A skill without linked evidence is not usable |
 | `sensitive_items` | position id, kind (client, codename, figure, person), original text, choice (use, generalize, exclude), generalized text | Default choice: generalize for clients and figures |
-| `job_overrides` | sensitive item id, job id, choice, generalized text | Per-job exceptions |
+| `application_overrides` | sensitive item id, application id, choice, generalized text | Per-application exceptions to the item's general choice |
 | `position_summaries` | position id, summary, version | 150 to 300 words; what the orchestrator and neighbours see |
 | `cross_notes` | from position id, to position id, text, resolved | Mentions of other positions |
 | `career_narrative` | profile id, text, themes, version, approved at | Links between positions |
@@ -198,7 +198,7 @@ Example: "Banco X" becomes "the largest private bank in the country, headquarter
 
 **Scope.** The control covers names and explicit figures only. A public description that lets a reader infer the company is acceptable, and there is no re-identification check.
 
-**Per-job overrides.** On a given job, the user can hide an item that is normally used (applying to a competitor of a client) or reveal one that is normally generalized.
+**Per-application overrides.** Each sensitive item's choice is the general rule and applies to every application, so the user sets it once. On a given application, the user can hide an item that is normally used (applying to a competitor of a client) or reveal one that is normally generalized.
 
 **What it does not cover.** During the interview itself, what the user types goes to the AI provider; the privacy notice says so before the first question.
 

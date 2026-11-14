@@ -36,6 +36,20 @@ _Avoid_: Conversation, chat, thread
 The moment a session that has grown too long is closed: what was said so far is extracted, the user approves it, and the interview continues in a fresh session.
 _Avoid_: Compaction, summary, context reset
 
+## Sensitive data
+
+**Sensitive item**:
+A client name, project codename, explicit figure or person mentioned in the evidence base that the user may not want in generated text.
+_Avoid_: Secret, PII, confidential data
+
+**Sensitivity choice**:
+The user's general rule for one sensitive item (use, generalize or exclude), applied to every application unless overridden.
+_Avoid_: Privacy setting, visibility
+
+**Application override**:
+An exception to a sensitivity choice that applies to a single application only.
+_Avoid_: Per-job override, exception rule
+
 ## Plans and usage
 
 **Usage allowance**:

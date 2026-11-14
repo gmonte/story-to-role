@@ -237,7 +237,7 @@ Example: "Banco X" becomes "the largest private bank in the country, headquarter
 
 **Scope.** The control covers names and explicit figures only. A public description that lets a reader infer the company is acceptable, and there is no re-identification check.
 
-**Per-application overrides.** Each sensitive item's choice is the general rule and applies to every application, so the user sets it once. On a given application, the user can hide an item that is normally used (applying to a competitor of a client) or reveal one that is normally generalized.
+**Per-application overrides.** Each sensitive item's choice is the general rule and applies to every application, so the user sets it once. Before each generation, a reminder lists the sensitive items set to use and lets the user pick, for this application only, among the same three choices: keep it, camouflage it (generalize, e.g. "the largest private bank in the country" instead of "Banco X") or exclude it so it does not appear at all. There are no automatic rules by sector or competitor in the MVP; keyword conditions like those of the global template could become an optional rule later. On a given application, the user can hide an item that is normally used (applying to a competitor of a client) or reveal one that is normally generalized.
 
 **What it does not cover.** During the interview itself, what the user types goes to the AI provider; the privacy notice says so before the first question.
 

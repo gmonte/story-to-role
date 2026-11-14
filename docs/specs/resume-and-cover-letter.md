@@ -154,6 +154,15 @@ Documents are downloaded as PDF only, in every plan, with no watermark. There is
 - The pattern is a suggestion: the user can edit the file name before downloading.
 - An application can also be downloaded as one ZIP (`<FirstName>_<LastName>_<Title>.zip`) holding the PDF of the official snapshot of every version of its documents. When two versions would get the same file name, the version's label is appended (`..._Curriculo_copia.pdf`).
 
+## Global template
+
+Each user has a global template that defines which sections their resume has. A section can be conditional:
+
+- on the output language or market ("Personal details only in German resumes");
+- on the opening's extracted keywords or the library document's focus ("Publications only when the opening mentions research").
+
+Conditions are checked by code, so the result is predictable. In any application, the user can force a section in or out, like other per-application overrides. AI-suggested sections ("include Publications for this opening?") may come later if fixed rules are not enough. Order, visual style and fonts belong to the layout specification.
+
 Resume and cover letter layout are specified separately.
 
 ## Open points

@@ -11,6 +11,9 @@ env:
 jobs:
   cleanup:
     name: cleanup pr preview
+    # Deploys stay off until the repository variable DEPLOY_ENABLED is set to
+    # "true" (Settings > Secrets and variables > Actions > Variables).
+    if: vars.DEPLOY_ENABLED == 'true'
     runs-on: ubuntu-latest
     steps:
       - name: Remove pr-${{ github.event.pull_request.number }} alias

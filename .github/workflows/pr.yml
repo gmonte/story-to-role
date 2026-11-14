@@ -79,6 +79,9 @@ jobs:
   preview:
     name: preview
     needs: quality
+    # Deploys stay off until the repository variable DEPLOY_ENABLED is set to
+    # "true" (Settings > Secrets and variables > Actions > Variables).
+    if: vars.DEPLOY_ENABLED == 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: read

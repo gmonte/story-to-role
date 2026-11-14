@@ -87,6 +87,8 @@ Stripe directly, through an account opened in Brazil under the owner's CNPJ; Cle
 - **Stripe Customer Portal** for changing card, switching between monthly and annual, and cancelling.
 - No trial: the Free plan plays that role.
 
+**Environments.** Local development, merge request previews and staging point to a Stripe sandbox (test mode); only production points to the live Stripe account, configured later. Development starts locally, where `stripe listen --forward-to localhost:3000/api/webhooks/stripe` delivers webhooks and generates the local webhook secret; products and prices are created by a versioned script so every environment matches.
+
 Stripe Brazil standard fees (stripe.com/br/pricing, read 2026-11-14):
 
 | Item | Fee |
@@ -139,5 +141,6 @@ Brazilian taxes on revenue (Simples Nacional, ISS, service invoices; possible ex
 
 ## Open points
 
+- Stripe webhooks for merge request previews, whose URLs change per preview (staging has a stable URL; local uses `stripe listen`).
 - Final credits per plan and prices, after the beta.
 

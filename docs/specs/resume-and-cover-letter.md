@@ -71,7 +71,7 @@ The ATS check applies to generated resumes only; it plays no part in suggesting 
 ## Output language
 
 - The user picks the output language before generating. It is preselected from the language detected in the opening description.
-- After generating, the user can ask for a document in another output language at any time, which creates a new language version of that document. Every snapshot is kept.
+- After generating, the user can ask for a document in another output language at any time, which creates a new language version of that document. Every snapshot is kept. Two choices are offered, kept few on purpose so they stay clear to non-technical users: **Adapt from** an existing language version (the default; same content rewritten for the new language, priced as an adjustment) or **Generate from scratch** from the evidence (priced as a generation). Only adaptation (and recreating, which is an adaptation) links the two language versions for language sync; a version generated from scratch is independent.
 
 ## Adaptations
 

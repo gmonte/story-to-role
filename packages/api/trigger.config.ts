@@ -121,9 +121,12 @@ export default defineConfig({
     "./src/domains/chat/tasks",
     "./src/domains/interview/tasks",
     "./src/domains/career/tasks",
+    "./src/domains/openings/tasks",
   ],
   build: {
     extensions: [syncVercelEnvForCurrentTarget],
+    // Native runtime of the local embedding model: installed, not bundled.
+    external: ["@huggingface/transformers", "onnxruntime-node", "sharp"],
   },
   // Generous ceiling: resume generation with review rounds takes minutes.
   maxDuration: 3600,

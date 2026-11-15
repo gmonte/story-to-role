@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
 import { PGlite } from "@electric-sql/pglite";
+import { vector } from "@electric-sql/pglite/vector";
 import { drizzle } from "drizzle-orm/pglite";
 
 import * as schema from "../db";
@@ -10,7 +11,7 @@ let pglite: PGlite | undefined;
 
 export async function getTestDatabase() {
   if (!pglite) {
-    pglite = await PGlite.create();
+    pglite = await PGlite.create({ extensions: { vector } });
     await pglite.waitReady;
 
     const migrationsPath = resolve(process.cwd(), "drizzle");

@@ -3,6 +3,7 @@ import { and, eq, inArray } from "drizzle-orm";
 import type { DbClient } from "@repo/api/tools/db-client";
 
 import {
+  careerGoalsTable,
   evidenceTable,
   sensitiveItemsTable,
   skillsTable,
@@ -43,6 +44,26 @@ export class EvidenceRepository {
   async insertStories(rows: Array<Insert<typeof storiesTable>>) {
     if (rows.length === 0) return [];
     return this.tx.insert(storiesTable).values(rows).returning();
+  }
+
+  async updateStoryEvidence(input: { storyId: string; evidenceIds: string[] }) {
+    await this.tx
+      .update(storiesTable)
+      .set({ evidenceIds: input.evidenceIds })
+      .where(eq(storiesTable.id, input.storyId));
+  }
+
+  listCareerGoals(profileId: string) {
+    return this.tx
+      .select()
+      .from(careerGoalsTable)
+      .where(eq(careerGoalsTable.profileId, profileId))
+      .orderBy(careerGoalsTable.createdAt);
+  }
+
+  async insertCareerGoals(rows: Array<Insert<typeof careerGoalsTable>>) {
+    if (rows.length === 0) return;
+    await this.tx.insert(careerGoalsTable).values(rows);
   }
 
   listSkills(profileId: string) {

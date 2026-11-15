@@ -14,6 +14,7 @@ import { toast } from "@repo/web/components/ui/sonner";
 import { Tabs, TabsList, TabsTrigger } from "@repo/web/components/ui/tabs";
 import { Textarea } from "@repo/web/components/ui/textarea";
 
+import { CoverLetterPrep } from "~/domains/applications/components/cover-letter-prep";
 import { GenerateResumeDialog } from "~/domains/documents/components/generate-resume-dialog";
 import { ResumeEditor } from "~/domains/documents/components/resume-editor";
 import { useOpeningDocuments } from "~/domains/documents/hooks/use-opening-documents";
@@ -34,7 +35,9 @@ export function OpeningView({ openingId }: { openingId: string }) {
   const searchParams = useSearchParams();
   const router = useRouter();
   const pathname = usePathname();
-  const view = searchParams.get("view") === "resume" ? "resume" : "opening";
+  const requested = searchParams.get("view");
+  const view =
+    requested === "resume" || requested === "letter" ? requested : "opening";
   const setView = (next: string) => {
     const params = new URLSearchParams(searchParams);
     params.set("view", next);
@@ -130,20 +133,27 @@ export function OpeningView({ openingId }: { openingId: string }) {
           </div>
         )}
 
-        {resumeVersions.length > 0 && (
+        {data.status === "analyzed" && (
           <Tabs value={view} onValueChange={setView}>
             <TabsList>
               <TabsTrigger value="opening">
                 {t.formatMessage({ defaultMessage: "Opening" })}
               </TabsTrigger>
-              <TabsTrigger value="resume">
-                {t.formatMessage({ defaultMessage: "Resume" })}
+              {resumeVersions.length > 0 && (
+                <TabsTrigger value="resume">
+                  {t.formatMessage({ defaultMessage: "Resume" })}
+                </TabsTrigger>
+              )}
+              <TabsTrigger value="letter">
+                {t.formatMessage({ defaultMessage: "Cover letter" })}
               </TabsTrigger>
             </TabsList>
           </Tabs>
         )}
 
-        {view === "resume" && resumeVersions.length > 0 ? (
+        {view === "letter" && data.status === "analyzed" ? (
+          <CoverLetterPrep openingId={openingId} />
+        ) : view === "resume" && resumeVersions.length > 0 ? (
           <ResumeEditor
             versions={resumeVersions}
             generateAgain={(version, trigger) => (

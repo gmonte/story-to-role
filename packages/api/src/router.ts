@@ -2,6 +2,7 @@ import type { inferRouterInputs, inferRouterOutputs } from "@trpc/server";
 
 import { createTRPCRouter } from "./tools/trpc";
 import { instructionsRouter } from "./domains/applications/instructions-router";
+import { motivationRouter } from "./domains/applications/motivation/motivation-router";
 import { researchRouter } from "./domains/applications/research/research-router";
 import { careerRouter } from "./domains/career/career-router";
 import { adaptationRouter } from "./domains/documents/adaptation/adaptation-router";
@@ -22,6 +23,7 @@ export const appRouter = createTRPCRouter({
   instructions: instructionsRouter,
   interview: interviewRouter,
   library: libraryRouter,
+  motivation: motivationRouter,
   openings: openingsRouter,
   research: researchRouter,
   tasks: tasksRouter,

@@ -11,6 +11,7 @@ import {
   lt,
   ne,
   or,
+  sql,
 } from "drizzle-orm";
 
 import { applicationsTable } from "@repo/api/domains/applications/db/applications-tables";
@@ -451,16 +452,44 @@ export class DocumentsRepository {
     return rows.map((row) => row.storageKey);
   }
 
-  /** Every version of the profile's documents, with its document. */
-  listProfileVersions(profileId: string) {
+  /**
+   * The profile's versions whose latest snapshot has no vector yet, with
+   * that snapshot: what the similarity refresh has to embed.
+   */
+  async staleVersionVectors(profileId: string) {
+    const latest = this.tx
+      .selectDistinctOn([documentSnapshotsTable.versionId], {
+        versionId: documentSnapshotsTable.versionId,
+        snapshotId: sql<string>`${documentSnapshotsTable.id}`.as("snapshot_id"),
+        encryptedContent: documentSnapshotsTable.encryptedContent,
+      })
+      .from(documentSnapshotsTable)
+      .orderBy(
+        documentSnapshotsTable.versionId,
+        desc(documentSnapshotsTable.sequence)
+      )
+      .as("latest");
     return this.tx
-      .select({ version: documentVersionsTable, document: documentsTable })
+      .select({
+        versionId: documentVersionsTable.id,
+        snapshotId: latest.snapshotId,
+        encryptedContent: latest.encryptedContent,
+      })
       .from(documentVersionsTable)
       .innerJoin(
         documentsTable,
         eq(documentsTable.id, documentVersionsTable.documentId)
       )
-      .where(eq(documentsTable.profileId, profileId));
+      .innerJoin(latest, eq(latest.versionId, documentVersionsTable.id))
+      .where(
+        and(
+          eq(documentsTable.profileId, profileId),
+          or(
+            isNull(documentVersionsTable.embeddedSnapshotId),
+            ne(documentVersionsTable.embeddedSnapshotId, latest.snapshotId)
+          )
+        )
+      );
   }
 
   /** The profile's library documents (no application), newest first. */

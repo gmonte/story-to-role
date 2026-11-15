@@ -1,11 +1,12 @@
 import { CareerRepository } from "@repo/api/domains/career/career-repository";
 import type { UserCipher } from "@repo/api/domains/encryption/user-cipher";
+import { logger } from "@repo/common/tools/logger";
 import type { DbClient } from "@repo/api/tools/db-client";
 import type { Embedder } from "@repo/api/tools/embeddings/embedder";
 
-import { decryptSnapshot } from "../adaptation/adaptation-service";
 import { DocumentsRepository } from "../documents-repository";
 import { resumeText } from "../generation/resume-checks";
+import { decryptSnapshot } from "../snapshot-content";
 
 /**
  * Vectors of the user's document versions, for suggesting similar ones to
@@ -23,24 +24,30 @@ export async function embedStaleVersions(input: {
   );
   if (!profile) return;
   const repository = new DocumentsRepository(input.db);
-  const stale = [];
-  for (const { version } of await repository.listProfileVersions(profile.id)) {
-    const latest = await repository.latestSnapshot(version.id);
-    if (latest && latest.id !== version.embeddedSnapshotId) {
-      stale.push({ version, latest });
-    }
-  }
+  const stale = await repository.staleVersionVectors(profile.id);
   if (stale.length === 0) return;
   const vectors = await input.embedder.embed(
-    stale.map(({ latest }) =>
-      resumeText(decryptSnapshot(input.cipher, latest))
-    ),
+    stale.map((row) => resumeText(decryptSnapshot(input.cipher, row))),
     "passage"
   );
-  for (const [index, { version, latest }] of stale.entries()) {
-    await repository.updateVersion(version.id, {
+  for (const [index, row] of stale.entries()) {
+    await repository.updateVersion(row.versionId, {
       embedding: vectors[index],
-      embeddedSnapshotId: latest.id,
+      embeddedSnapshotId: row.snapshotId,
     });
+  }
+}
+
+/**
+ * The same, after a task's own work is done: suggestions are a hint, so a
+ * failure here never fails the document that was just produced.
+ */
+export async function refreshVersionVectors(
+  input: Parameters<typeof embedStaleVersions>[0]
+) {
+  try {
+    await embedStaleVersions(input);
+  } catch (error) {
+    logger.warn(["documents"], "Document vectors not refreshed", { error });
   }
 }

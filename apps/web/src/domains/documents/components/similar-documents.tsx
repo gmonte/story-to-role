@@ -81,16 +81,23 @@ function SimilarRow({
       onSuccess: async () => {
         await refresh();
         toast.success(
-          t.formatMessage({
-            defaultMessage:
-              "Copied into this opening's resume as a new version.",
-          })
+          other
+            ? t.formatMessage({
+                defaultMessage:
+                  "Adapting it into this opening's resume as a new version.",
+              })
+            : t.formatMessage({
+                defaultMessage:
+                  "Copied into this opening's resume as a new version.",
+              })
         );
       },
       onError: (error) => toast.error(error.message),
     })
   );
   const { source } = document;
+  // In another language than the output language it is adapted instead.
+  const other = document.language !== defaultLanguage;
 
   return (
     <li className="bg-background flex flex-col gap-1.5 rounded-lg border p-2.5 text-xs">
@@ -109,16 +116,33 @@ function SimilarRow({
             )}
       </span>
       <span className="text-muted-foreground">{labels.version(document)}</span>
+      {other && (
+        <span className="text-muted-foreground">
+          {t.formatMessage(
+            {
+              defaultMessage:
+                "Using it as is adapts it into {language}, which counts as a generation.",
+            },
+            { language: labels.language(defaultLanguage) }
+          )}
+        </span>
+      )}
       <div className="flex gap-1">
         <Button
           size="sm"
           variant="secondary"
           disabled={copy.isPending}
           onClick={() =>
-            copy.mutate({ openingId, versionId: document.versionId })
+            copy.mutate({
+              openingId,
+              versionId: document.versionId,
+              language: defaultLanguage,
+            })
           }
         >
-          {t.formatMessage({ defaultMessage: "Use as is" })}
+          {other
+            ? t.formatMessage({ defaultMessage: "Adapt and use" })
+            : t.formatMessage({ defaultMessage: "Use as is" })}
         </Button>
         <GenerateResumeDialog
           openingId={openingId}

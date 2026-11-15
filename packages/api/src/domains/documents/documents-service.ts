@@ -132,17 +132,14 @@ export class DocumentsService {
         const version = await repository.findVersion(input.versionId);
         if (version?.documentId !== document.id) throw notFound();
       }
-      const reference = input.referenceVersionId
-        ? await repository.latestSnapshot(
-            (
-              await requireUserVersion(
-                tx,
-                input.userId,
-                input.referenceVersionId
-              )
-            ).version.id
-          )
+      const referenced = input.referenceVersionId
+        ? await requireUserVersion(tx, input.userId, input.referenceVersionId)
         : null;
+      if (referenced && referenced.document.kind !== "resume") {
+        throw new TRPCError({ code: "BAD_REQUEST" });
+      }
+      const reference =
+        referenced && (await repository.latestSnapshot(referenced.version.id));
       return repository.insertGeneration({
         profileId: profile.id,
         documentId: document.id,
@@ -289,6 +286,7 @@ export class DocumentsService {
             language: generation.language,
             reviewDepth: generation.reviewDepth,
             writingLevel: generation.writingLevel,
+            tone: generation.tone,
             progress: await repository.generationProgress(generation.id),
             createdAt: generation.createdAt,
           }

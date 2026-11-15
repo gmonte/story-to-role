@@ -2,7 +2,7 @@ import type { UserCipher } from "@repo/api/domains/encryption/user-cipher";
 
 import type { DocumentsRepository } from "../documents-repository";
 import type { OutputLanguage } from "../schemas/document";
-import { decryptSnapshot } from "./adaptation-service";
+import { decryptSnapshot } from "../snapshot-content";
 import { areLinked, syncBases } from "./sync-link";
 import { syncChanges } from "./three-way-merge";
 

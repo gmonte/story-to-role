@@ -10,7 +10,7 @@ import type { TaskProgress } from "@repo/api/domains/tasks/schemas/task";
 import type { DbClient } from "@repo/api/tools/db-client";
 import type { Storage } from "@repo/api/tools/storage/storage";
 
-import { decryptSnapshot } from "../adaptation/adaptation-service";
+import { decryptSnapshot } from "../snapshot-content";
 import { DocumentsRepository } from "../documents-repository";
 import { fitToPages } from "../rendering/fit-to-pages";
 import { storeRenderedPdf } from "../rendering/store-rendered-pdf";

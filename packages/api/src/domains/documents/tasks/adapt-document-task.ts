@@ -7,7 +7,7 @@ import { db } from "@repo/api/tools/db";
 import { localEmbedder } from "@repo/api/tools/embeddings/embedder";
 import { getStorage } from "@repo/api/tools/storage/storage";
 
-import { embedStaleVersions } from "../similar/embed-versions";
+import { refreshVersionVectors } from "../similar/embed-versions";
 import { runAdaptDocument } from "../adaptation/run-adapt-document";
 
 export const adaptDocumentTask = task({
@@ -35,7 +35,7 @@ export const adaptDocumentTask = task({
           storage: getStorage(),
         });
         // The new snapshot's vector, for similar-document suggestions.
-        await embedStaleVersions({
+        await refreshVersionVectors({
           db,
           cipher,
           embedder: localEmbedder,

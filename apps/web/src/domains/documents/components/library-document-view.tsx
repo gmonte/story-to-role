@@ -41,7 +41,11 @@ export function LibraryDocumentView({ documentId }: { documentId: string }) {
         <ResumeEditor
           versions={versions}
           generateAgain={(version, trigger) => (
-            <LibraryResumeDialog versionId={version.id} trigger={trigger} />
+            <LibraryResumeDialog
+              versionId={version.id}
+              defaultTone={generation?.tone}
+              trigger={trigger}
+            />
           )}
         />
       )}

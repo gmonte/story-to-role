@@ -107,11 +107,24 @@ export const libraryRouter = createTRPCRouter({
         "library",
         "POST",
         "/openings/by-id/{openingId}/copies",
-        "Uses a similar document as is: a new version of this opening's resume"
+        "Uses a similar document as is, adapting it when in another language"
       )
     )
-    .input(z.object({ openingId: z.uuid(), versionId: z.uuid() }))
-    .output(z.object({ versionId: z.uuid() }))
+    .input(
+      z.object({
+        openingId: z.uuid(),
+        versionId: z.uuid(),
+        // The opening's output language: another one means an adaptation.
+        language: outputLanguageSchema,
+      })
+    )
+    .output(
+      z.object({
+        versionId: z.uuid().nullable(),
+        generationId: z.uuid().nullable(),
+        realtime: realtimeSubscriptionSchema.nullable(),
+      })
+    )
     .mutation(({ ctx, input }) =>
       new LibraryService(db).copyIntoApplication({
         userId: ctx.userId,

@@ -1295,6 +1295,7 @@ describe("resume generation and snapshots", () => {
       userId: ctx.user.id,
       openingId: ctx.opening.id,
       versionId: similar.versionId,
+      language: "en-US",
     });
     const opening = await ctx.documents.forOpening({
       userId: ctx.user.id,
@@ -1305,6 +1306,19 @@ describe("resume generation and snapshots", () => {
       snapshot: { origin: "copied", author: "user" },
       content: { sections: libraryVersion.content.sections },
     });
+
+    // In another language than the output language, it is adapted instead.
+    const adapting = await library.copyIntoApplication({
+      userId: ctx.user.id,
+      openingId: ctx.opening.id,
+      versionId: similar.versionId,
+      language: "pt-BR",
+    });
+    expect(adapting).toMatchObject({ versionId: null });
+    expect(ctx.trigger.trigger).toHaveBeenLastCalledWith(
+      "adapt_document",
+      expect.anything()
+    );
 
     // Use as reference: the document guides the next draft.
     const { generationId } = await ctx.documents.generateResume({

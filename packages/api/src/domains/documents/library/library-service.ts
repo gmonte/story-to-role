@@ -7,8 +7,12 @@ import type { Tone } from "@repo/api/domains/openings/schemas/opening";
 import type { RealtimeSubscription } from "@repo/api/domains/tasks/schemas/task";
 import { TasksService } from "@repo/api/domains/tasks/tasks-service";
 import type { DbClient } from "@repo/api/tools/db-client";
+import { loadSensitiveFilter } from "@repo/api/domains/evidence/sensitive/load-sensitive-filter";
 
 import { DocumentsRepository } from "../documents-repository";
+import { loadCareerContext } from "../generation/load-career-context";
+import { relockFacts } from "../generation/resume-checks";
+import { decryptSnapshot } from "../snapshot-content";
 import { requireUserVersion } from "../require-version";
 import type {
   OutputLanguage,
@@ -145,39 +149,53 @@ export class LibraryService {
       if (!opening) throw notFound();
       if (!opening.embedding) return [];
       const repository = new DocumentsRepository(tx);
-      const own = await repository.findApplicationByOpening(opening.id);
+      const ownApplication = await repository.findApplicationByOpening(
+        opening.id
+      );
       const cipher = await getUserCipher(tx, input.userId);
-      const open = (value: string | null) =>
+      const decrypt = (value: string | null) =>
         value ? cipher.decrypt(value) : null;
-      const rows = await repository.similarVersions({
-        profileId: profile.id,
-        embedding: opening.embedding,
-        excludeApplicationId: own?.id ?? null,
-        limit: similarLimit,
-      });
+      // Ranked by document: its closest version stands for it.
+      const rows = (
+        await repository.similarVersions({
+          profileId: profile.id,
+          embedding: opening.embedding,
+          excludeApplicationId: ownApplication?.id ?? null,
+          limit: similarLimit * 4,
+        })
+      )
+        .filter(
+          (row, index, all) =>
+            all.findIndex((other) => other.document.id === row.document.id) ===
+            index
+        )
+        .slice(0, similarLimit);
       const similar: SimilarDocument[] = [];
       for (const { version, document } of rows) {
         const application = document.applicationId
           ? await repository.findApplication(document.applicationId)
           : null;
-        const other =
+        const otherOpening =
           application &&
           (await openings.findOpeningById(application.openingId));
         similar.push({
           versionId: version.id,
           documentId: document.id,
           language: version.language,
-          label: open(version.encryptedLabel),
+          label: decrypt(version.encryptedLabel),
           source:
-            application && other
+            application && otherOpening
               ? {
                   kind: "application",
-                  openingId: other.id,
-                  title: open(other.encryptedTitle),
-                  company: open(other.encryptedCompany),
+                  openingId: otherOpening.id,
+                  title: decrypt(otherOpening.encryptedTitle),
+                  company: decrypt(otherOpening.encryptedCompany),
                   status: application.status,
                 }
-              : { kind: "library", focus: open(document.encryptedFocus) ?? "" },
+              : {
+                  kind: "library",
+                  focus: decrypt(document.encryptedFocus) ?? "",
+                },
         });
       }
       return similar;
@@ -185,17 +203,24 @@ export class LibraryService {
   }
 
   /**
-   * "Use as is": the version's latest snapshot becomes a new version of
-   * this opening's resume, which starts its application (resume spec,
-   * "Flow": applications start with the first generated or copied document).
+   * "Use as is" (resume spec, "Flow"): the version's latest snapshot
+   * becomes a new version of this opening's resume, which starts its
+   * application. Its locked facts become this application's (another
+   * application's overrides stay there). In another language than the
+   * output language it is adapted instead, which counts as a generation.
    */
   async copyIntoApplication(input: {
     userId: string;
     openingId: string;
     versionId: string;
-  }): Promise<{ versionId: string }> {
+    language: OutputLanguage;
+  }): Promise<{
+    versionId: string | null;
+    generationId: string | null;
+    realtime: RealtimeSubscription | null;
+  }> {
     const profile = await this.requireProfile(input.userId);
-    return this.db.transaction(async (tx) => {
+    const result = await this.db.transaction(async (tx) => {
       const repository = new DocumentsRepository(tx);
       const opening = await new OpeningsRepository(tx).findOpening({
         profileId: profile.id,
@@ -219,6 +244,35 @@ export class LibraryService {
         applicationId: application.id,
         kind: "resume",
       });
+      if (source.language !== input.language) {
+        const generation = await repository.insertGeneration({
+          profileId: profile.id,
+          documentId: document.id,
+          kind: "adapt",
+          language: input.language,
+          sourceVersionId: source.id,
+          sourceSnapshotId: latest.id,
+          sourceSnapshotSequence: latest.sequence,
+          reviewDepth: "quick",
+          writingLevel: "standard",
+          tone: application.tone,
+        });
+        return { versionId: null, generationId: generation.id };
+      }
+      const cipher = await getUserCipher(tx, input.userId);
+      const filter = await loadSensitiveFilter({
+        db: tx,
+        cipher,
+        profileId: profile.id,
+      });
+      const context = await loadCareerContext({
+        db: tx,
+        cipher,
+        profileId: profile.id,
+        filter,
+        openingId: opening.id,
+        language: source.language,
+      });
       const version = await repository.insertVersion({
         documentId: document.id,
         language: source.language,
@@ -229,9 +283,20 @@ export class LibraryService {
         parentSnapshotId: null,
         origin: "copied",
         author: "user",
-        encryptedContent: latest.encryptedContent,
+        encryptedContent: cipher.encrypt(
+          JSON.stringify(
+            relockFacts(decryptSnapshot(cipher, latest), context.positions)
+          )
+        ),
       });
-      return { versionId: version.id };
+      return { versionId: version.id, generationId: null };
     });
+    if (!result.generationId) return { ...result, realtime: null };
+    const { realtime } = await this.tasks.start({
+      userId: input.userId,
+      type: "adapt_document",
+      subjectId: result.generationId,
+    });
+    return { ...result, realtime };
   }
 }

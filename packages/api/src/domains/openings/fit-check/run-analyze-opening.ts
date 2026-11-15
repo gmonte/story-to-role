@@ -112,6 +112,7 @@ export async function runAnalyzeOpening(deps: Deps) {
       .join("\n");
     const [embedding] = await embedder.embed([text], "query");
     await openings.updateOpening(opening.id, { embedding, status: "analyzed" });
+    await embedStaleVersions({ db, cipher, embedder, userId: deps.userId });
     return;
   }
   if (!description) return reject("empty");

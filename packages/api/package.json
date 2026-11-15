@@ -26,6 +26,7 @@
   "dependencies": {
     "@anthropic-ai/sdk": "catalog:ai",
     "@clerk/nextjs": "catalog:web",
+    "@huggingface/transformers": "catalog:api",
     "@repo/common": "workspace:*",
     "@repo/intl": "workspace:*",
     "@trigger.dev/sdk": "catalog:api",

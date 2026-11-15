@@ -48,7 +48,12 @@ export const lineOriginSchema = z.discriminatedUnion("kind", [
     kind: z.literal("evidence"),
     evidenceIds: z.array(z.uuid()).min(1),
   }),
-  z.object({ kind: z.literal("instruction"), instructionId: z.uuid() }),
+  // Rests on the application's instructions, and maybe on evidence too.
+  z.object({
+    kind: z.literal("instruction"),
+    instructionIds: z.array(z.uuid()).min(1),
+    evidenceIds: z.array(z.uuid()),
+  }),
   z.object({ kind: z.literal("manual") }),
   z.object({ kind: z.literal("credential"), credentialId: z.uuid() }),
   z.object({ kind: z.literal("skill"), evidenceIds: z.array(z.uuid()) }),

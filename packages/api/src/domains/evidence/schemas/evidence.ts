@@ -22,3 +22,9 @@ export type SensitiveItemKind = z.infer<typeof sensitiveItemKindSchema>;
 /** The user's general rule for a sensitive item, applied by code. */
 export const sensitivityChoiceSchema = z.enum(["use", "generalize", "exclude"]);
 export type SensitivityChoice = z.infer<typeof sensitivityChoiceSchema>;
+
+/** Default choice (guided-interview spec): generalize clients and figures. */
+export const defaultSensitivityChoice = (
+  kind: SensitiveItemKind
+): SensitivityChoice | null =>
+  kind === "client" || kind === "figure" ? "generalize" : null;

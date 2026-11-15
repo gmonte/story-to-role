@@ -66,10 +66,10 @@ function figuresBackedBy(text: string, evidenceTexts: string[]) {
 /**
  * Turns a draft into a snapshot's content, enforcing in code what the AI
  * may not decide (guided-interview spec, principle 4): locked facts come
- * from the positions; each line must cite evidence it was given, and every
- * figure in it must appear in that evidence; a skill must be an approved
- * skill or be spelled out in the evidence cited. Refused lines are dropped
- * and reported.
+ * from the positions (with this application's overrides); each line must
+ * cite evidence or instructions it was given, and every figure in it must
+ * appear in them; a skill must be an approved skill or be spelled out in
+ * what the group cites. Refused lines are dropped and reported.
  */
 export function assembleResume(input: {
   draft: ResumeDraft;
@@ -81,27 +81,53 @@ export function assembleResume(input: {
   const { draft, context } = input;
   const newLineId = input.newLineId ?? (() => randomUUID().slice(0, 8));
   const evidenceById = new Map(context.evidence.map((row) => [row.id, row]));
+  const instructionById = new Map(
+    context.instructions.map((row) => [row.id, row])
+  );
   const dropped: DroppedLine[] = [];
 
+  /**
+   * An instruction backs a line when it is about the same position, or
+   * about none in particular; `allowed` judges evidence.
+   */
   function toLine(
     line: z.infer<typeof draftLine>,
-    allowed: (evidenceId: string) => boolean
+    allowed: (evidenceId: string) => boolean,
+    positionId: string | null = null
   ): Line | null {
-    const evidenceIds = [...new Set(line.evidence_ids)].filter(
+    const cited = [...new Set(line.evidence_ids)];
+    const evidenceIds = cited.filter(
       (id) => evidenceById.has(id) && allowed(id)
     );
+    const instructionIds = cited.filter((id) => {
+      const instruction = instructionById.get(id);
+      return (
+        !!instruction &&
+        (!instruction.positionId || instruction.positionId === positionId)
+      );
+    });
     const text = line.text.trim();
     if (!text) return null;
-    if (evidenceIds.length === 0) {
+    if (evidenceIds.length === 0 && instructionIds.length === 0) {
       dropped.push({ text, reason: "no_evidence" });
       return null;
     }
-    const texts = evidenceIds.map((id) => evidenceById.get(id)!.text);
+    const texts = [
+      ...evidenceIds.map((id) => evidenceById.get(id)!.text),
+      ...instructionIds.map((id) => instructionById.get(id)!.text),
+    ];
     if (!figuresBackedBy(text, texts)) {
       dropped.push({ text, reason: "unsupported_figure" });
       return null;
     }
-    return { id: newLineId(), text, origin: { kind: "evidence", evidenceIds } };
+    return {
+      id: newLineId(),
+      text,
+      origin:
+        instructionIds.length > 0
+          ? { kind: "instruction", instructionIds, evidenceIds }
+          : { kind: "evidence", evidenceIds },
+    };
   }
 
   const build: Record<ResumeSectionKind, () => ResumeSection | null> = {
@@ -115,7 +141,12 @@ export function assembleResume(input: {
         const citedText = normalize(
           cited.map((id) => evidenceById.get(id)!.text).join(" ")
         );
+        const citedInstructions = group.evidence_ids.filter((id) =>
+          instructionById.has(id)
+        );
         const evidenceIds = new Set(cited);
+        // Instructions that spell out a skill the evidence does not show.
+        const instructionIds = new Set<string>();
         const items = group.items.filter((item) => {
           const skill = context.skills.find(
             (row) => normalize(row.name) === normalize(item)
@@ -125,6 +156,13 @@ export function assembleResume(input: {
             return true;
           }
           if (citedText.includes(normalize(item))) return true;
+          const instruction = citedInstructions.find((id) =>
+            normalize(instructionById.get(id)!.text).includes(normalize(item))
+          );
+          if (instruction) {
+            instructionIds.add(instruction);
+            return true;
+          }
           dropped.push({ text: item, reason: "unknown_skill" });
           return false;
         });
@@ -134,10 +172,17 @@ export function assembleResume(input: {
                 id: newLineId(),
                 label: group.label.trim(),
                 text: items.join(", "),
-                origin: {
-                  kind: "skill" as const,
-                  evidenceIds: [...evidenceIds],
-                },
+                origin:
+                  instructionIds.size > 0
+                    ? {
+                        kind: "instruction" as const,
+                        instructionIds: [...instructionIds],
+                        evidenceIds: [...evidenceIds],
+                      }
+                    : {
+                        kind: "skill" as const,
+                        evidenceIds: [...evidenceIds],
+                      },
               },
             ]
           : [];
@@ -160,7 +205,8 @@ export function assembleResume(input: {
             (bullet) =>
               toLine(
                 bullet,
-                (id) => evidenceById.get(id)!.positionId === position.id
+                (id) => evidenceById.get(id)!.positionId === position.id,
+                position.id
               ) ?? []
           ),
         };
@@ -217,7 +263,9 @@ export function assembleResume(input: {
   function checkedTitleLine() {
     const [title, ...rest] = draft.title_line.split("|");
     const evidenceText = normalize(
-      context.evidence.map((row) => row.text).join(" ")
+      [...context.evidence, ...context.instructions]
+        .map((row) => row.text)
+        .join(" ")
     );
     const technologies = rest
       .join("|")

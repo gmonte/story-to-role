@@ -24,6 +24,10 @@ import {
   closeTestDatabase,
   getTestDatabase,
 } from "@repo/api/test/pglite";
+import { InstructionsRepository } from "@repo/api/domains/applications/instructions-repository";
+import { InstructionsService } from "@repo/api/domains/applications/instructions-service";
+import type { InstructionDecision } from "@repo/api/domains/applications/schemas/instructions";
+import { runSplitInstructions } from "@repo/api/domains/applications/run-split-instructions";
 
 import { DocumentsRepository } from "./documents-repository";
 import { DocumentsService } from "./documents-service";
@@ -125,6 +129,7 @@ async function setup() {
         verdict: "gap",
         evidenceIds: [],
         encryptedExplanation: cipher.encrypt("No Go"),
+        encryptedGapQuestion: cipher.encrypt("Have you used Go?"),
       },
     ],
   });
@@ -201,6 +206,9 @@ async function setup() {
     positionId,
     evidence,
     opening,
+    openings,
+    cipher,
+    trigger,
     documents,
     draft,
     generate,
@@ -561,5 +569,289 @@ describe("resume generation and snapshots", () => {
         openingId: ctx.opening.id,
       })
     ).rejects.toMatchObject({ code: "NOT_FOUND" });
+  });
+
+  it("splits instructions into points: promoted ones become evidence, overrides apply", async () => {
+    const ctx = await setup();
+    const instructions = new InstructionsService(
+      ctx.db,
+      new TasksService(ctx.db, ctx.trigger)
+    );
+    const [gapItem] = (
+      await ctx.openings.listFitCheckItems(
+        (await ctx.openings.latestFitChecks([ctx.opening.id]))[0].id
+      )
+    ).filter((item) => item.verdict === "gap");
+    await ctx.openings.answerFitCheckItem({
+      fitCheckItemId: gapItem.id,
+      encryptedGapAnswer: ctx.cipher.encrypt("I built a CLI in Go at Globex"),
+    });
+    expect(
+      await instructions.get({ userId: ctx.user.id, openingId: ctx.opening.id })
+    ).toMatchObject({ points: [], pendingGapAnswers: 1 });
+
+    await instructions.split({
+      userId: ctx.user.id,
+      openingId: ctx.opening.id,
+      text: "I led the Kubernetes migration in 2021 at Initrode. Emphasize people management. In this application my title at Globex is Engineering Manager.",
+    });
+    expect(ctx.trigger.trigger).toHaveBeenLastCalledWith(
+      "split_instructions",
+      expect.anything()
+    );
+    const submitted = await new InstructionsRepository(
+      ctx.db
+    ).latestInstructions(ctx.opening.id);
+    const point = {
+      gap_ref: null,
+      looks_like_career_fact: false,
+      position_id: null,
+      credential_id: null,
+      evidence_kind: null,
+      sensitive_items: [],
+      locked_fact_change: null,
+    };
+    const fake = fakeProviderPackage({
+      object: () => ({
+        points: [
+          {
+            ...point,
+            text: "I led the Kubernetes migration in 2021 at Initrode",
+            looks_like_career_fact: true,
+            position_id: ctx.positionId,
+            evidence_kind: "achievement",
+            sensitive_items: [
+              {
+                kind: "client",
+                original: "Initrode",
+                suggested_generalization: "a logistics company",
+              },
+              // Not in the point: never flagged.
+              {
+                kind: "person",
+                original: "Bob",
+                suggested_generalization: null,
+              },
+            ],
+          },
+          { ...point, text: "Emphasize people management" },
+          // Rephrased, not the user's words: dropped.
+          { ...point, text: "Prioritize leadership" },
+          {
+            ...point,
+            text: "In this application my title at Globex is Engineering Manager",
+            locked_fact_change: {
+              position_id: ctx.positionId,
+              field: "title",
+              value: "Engineering Manager",
+            },
+          },
+          {
+            ...point,
+            gap_ref: "gap-1",
+            text: "ignored: the answer is kept as written",
+            looks_like_career_fact: true,
+            position_id: "not-a-position",
+          },
+        ],
+      }),
+    });
+    await runSplitInstructions({
+      db: ctx.db,
+      ai: createAiClient({
+        db: ctx.db,
+        userId: ctx.user.id,
+        funding: "credits",
+        providerPackage: fake.providerPackage,
+        sensitiveFilter: await loadSensitiveFilter({
+          db: ctx.db,
+          cipher: ctx.cipher,
+          profileId: ctx.profile.id,
+        }),
+      }),
+      cipher: ctx.cipher,
+      userId: ctx.user.id,
+      applicationInstructionsId: submitted.id,
+    });
+
+    const review = await instructions.get({
+      userId: ctx.user.id,
+      openingId: ctx.opening.id,
+    });
+    expect(review.pendingGapAnswers).toBe(0);
+    expect(
+      review.points.map((row) => [
+        row.text,
+        row.source,
+        row.suggestedPromotion,
+        row.sensitiveItems.map((item) => item.original),
+      ])
+    ).toEqual([
+      [
+        "I led the Kubernetes migration in 2021 at Initrode",
+        "written",
+        true,
+        ["Initrode"],
+      ],
+      ["Emphasize people management", "written", false, []],
+      [
+        "In this application my title at Globex is Engineering Manager",
+        "written",
+        false,
+        [],
+      ],
+      // A target that is not one of the user's positions is no suggestion.
+      ["I built a CLI in Go at Globex", "gap_answer", false, []],
+    ]);
+    expect(review.overrides).toMatchObject([
+      {
+        employer: "Globex",
+        field: "title",
+        original: "Tech Lead",
+        value: "Engineering Manager",
+        confirmed: false,
+      },
+    ]);
+
+    // Drafts must be reviewed before generating.
+    await expect(
+      ctx.documents.generateResume({
+        userId: ctx.user.id,
+        openingId: ctx.opening.id,
+        language: "en-US",
+        reviewDepth: "quick",
+        writingLevel: "standard",
+        tone: "direct",
+      })
+    ).rejects.toMatchObject({ code: "PRECONDITION_FAILED" });
+
+    const [migration, emphasis, titleChange, gap] = review.points;
+    const decide = (
+      instructionPointId: string,
+      changes: Partial<InstructionDecision> = {}
+    ): InstructionDecision => ({
+      instructionPointId,
+      promote: false,
+      text: null,
+      positionId: null,
+      credentialId: null,
+      evidenceKind: null,
+      ...changes,
+    });
+    // A locked-fact change stays in this application: never promoted.
+    await expect(
+      instructions.confirm({
+        userId: ctx.user.id,
+        openingId: ctx.opening.id,
+        decisions: [
+          decide(titleChange.id, { promote: true, positionId: ctx.positionId }),
+        ],
+        confirmedLockedFactOverrideIds: [],
+      })
+    ).rejects.toMatchObject({ code: "BAD_REQUEST" });
+    await instructions.confirm({
+      userId: ctx.user.id,
+      openingId: ctx.opening.id,
+      decisions: [
+        decide(migration.id, {
+          promote: true,
+          // Edited on the approval screen; the quote keeps the original.
+          text: "Led the Kubernetes migration in 2021 at Initrode",
+          positionId: ctx.positionId,
+          evidenceKind: "achievement",
+        }),
+        decide(gap.id),
+      ],
+      confirmedLockedFactOverrideIds: review.overrides.map((row) => row.id),
+    });
+    await instructions.removePoint({
+      userId: ctx.user.id,
+      openingId: ctx.opening.id,
+      instructionPointId: emphasis.id,
+    });
+
+    const promoted = (
+      await ctx.db
+        .select()
+        .from(evidenceTable)
+        .where(eq(evidenceTable.positionId, ctx.positionId))
+    ).find(
+      (row) =>
+        ctx.cipher.decrypt(row.encryptedText) ===
+        "Led the Kubernetes migration in 2021 at Initrode"
+    );
+    expect(promoted).toBeDefined();
+    expect(ctx.cipher.decrypt(promoted!.encryptedSourceQuote)).toBe(
+      "I led the Kubernetes migration in 2021 at Initrode"
+    );
+    const sensitive = await ctx.db.select().from(sensitiveItemsTable);
+    expect(
+      sensitive.map((row) => [
+        ctx.cipher.decrypt(row.encryptedOriginal),
+        row.choice,
+      ])
+    ).toEqual([["Initrode", "generalize"]]);
+
+    const after = await instructions.get({
+      userId: ctx.user.id,
+      openingId: ctx.opening.id,
+    });
+    expect(after.points.map((row) => row.status)).toEqual([
+      "promoted",
+      "kept",
+      "kept",
+    ]);
+    expect(after.overrides).toMatchObject([{ confirmed: true }]);
+
+    // Kept points back lines that trace to them; the override is printed.
+    await ctx.generate("quick", {
+      drafts: [
+        ctx.draft([
+          { text: "Built a CLI in Go.", evidence_ids: [gap.id] },
+          {
+            text: "Led the Kubernetes migration in 2021.",
+            evidence_ids: [promoted!.id],
+          },
+        ]),
+        ctx.draft([{ text: "Built a CLI in Go.", evidence_ids: [gap.id] }]),
+      ],
+      ratings: [8, 5],
+    });
+    const [version] = (
+      await ctx.documents.forOpening({
+        userId: ctx.user.id,
+        openingId: ctx.opening.id,
+      })
+    ).documents[0].versions;
+    const entry = experienceOf(version.content);
+    expect(entry).toMatchObject({
+      title: "Engineering Manager",
+      employer: "Globex",
+    });
+    expect(entry.lines.map((line) => [line.text, line.origin.kind])).toEqual([
+      ["Built a CLI in Go.", "instruction"],
+      ["Led the Kubernetes migration in 2021.", "evidence"],
+    ]);
+    expect(version.instructionTrace).toEqual([
+      { instructionId: gap.id, text: "I built a CLI in Go at Globex" },
+    ]);
+
+    // Removing the point that asked for an override removes the override;
+    // a promoted point is evidence now and stays.
+    await instructions.removePoint({
+      userId: ctx.user.id,
+      openingId: ctx.opening.id,
+      instructionPointId: titleChange.id,
+    });
+    await expect(
+      instructions.removePoint({
+        userId: ctx.user.id,
+        openingId: ctx.opening.id,
+        instructionPointId: migration.id,
+      })
+    ).rejects.toMatchObject({ code: "BAD_REQUEST" });
+    expect(
+      await instructions.get({ userId: ctx.user.id, openingId: ctx.opening.id })
+    ).toMatchObject({ overrides: [] });
   });
 });

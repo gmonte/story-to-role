@@ -1,0 +1,40 @@
+"use client";
+
+import { useTranslation } from "@repo/intl/use-translation";
+
+import { useApplicationInstructions } from "../hooks/use-application-instructions";
+import { ConfirmedInstructions } from "./instructions-review";
+
+/**
+ * The side panel's Context block (workspace spec): what the AI uses for
+ * this application besides the evidence base, that is, the instructions
+ * and the locked-fact overrides.
+ */
+export function ApplicationContext({ openingId }: { openingId: string }) {
+  const t = useTranslation();
+  const instructions = useApplicationInstructions(openingId);
+  if (!instructions.data) return null;
+
+  return (
+    <section className="flex flex-col gap-2">
+      <h3 className="text-sm font-medium">
+        {t.formatMessage({ defaultMessage: "Context" })}
+      </h3>
+      <ConfirmedInstructions
+        openingId={openingId}
+        instructions={instructions.data}
+      />
+      {!instructions.data.points.some(
+        (point) => point.status === "kept" || point.status === "promoted"
+      ) &&
+        !instructions.data.overrides.some((row) => row.confirmed) && (
+          <p className="text-muted-foreground text-xs">
+            {t.formatMessage({
+              defaultMessage:
+                "Only your evidence base. Instructions you add when generating show here.",
+            })}
+          </p>
+        )}
+    </section>
+  );
+}

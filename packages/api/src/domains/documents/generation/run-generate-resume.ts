@@ -109,6 +109,7 @@ export async function runGenerateResume(deps: {
       cipher,
       profileId: generation.profileId,
       filter,
+      openingId: application.openingId,
     });
     const sections = resolveSections({
       template: setup.templateSections,

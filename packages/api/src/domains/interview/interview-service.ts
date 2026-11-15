@@ -4,9 +4,10 @@ import { CareerRepository } from "@repo/api/domains/career/career-repository";
 import type { ScriptKind } from "@repo/api/domains/career/schemas/career";
 import { getUserCipher } from "@repo/api/domains/encryption/user-cipher";
 import { EvidenceRepository } from "@repo/api/domains/evidence/evidence-repository";
-import type {
-  EvidenceKind,
-  SensitivityChoice,
+import {
+  defaultSensitivityChoice,
+  type EvidenceKind,
+  type SensitivityChoice,
 } from "@repo/api/domains/evidence/schemas/evidence";
 import type { RealtimeSubscription } from "@repo/api/domains/tasks/schemas/task";
 import { TasksService } from "@repo/api/domains/tasks/tasks-service";
@@ -427,11 +428,7 @@ export class InterviewService {
           positionId: session.positionId,
           kind: item.kind,
           encryptedOriginal: item.encryptedOriginal,
-          // Default choice (spec): generalize clients and figures.
-          choice:
-            item.kind === "client" || item.kind === "figure"
-              ? "generalize"
-              : null,
+          choice: defaultSensitivityChoice(item.kind),
           encryptedGeneralized: item.encryptedSuggestedGeneralization,
         }))
       );

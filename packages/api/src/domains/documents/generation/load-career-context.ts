@@ -1,3 +1,8 @@
+import { InstructionsRepository } from "@repo/api/domains/applications/instructions-repository";
+import {
+  type LockedField,
+  positionFieldOf,
+} from "@repo/api/domains/applications/schemas/instructions";
 import { CareerRepository } from "@repo/api/domains/career/career-repository";
 import type { CredentialKind } from "@repo/api/domains/career/schemas/career";
 import type { UserCipher } from "@repo/api/domains/encryption/user-cipher";
@@ -35,25 +40,65 @@ export type ContextCredential = {
   inProgress: boolean;
 };
 
+/** A point the user kept for this application: their statement, unverified. */
+export type ContextInstruction = {
+  id: string;
+  positionId: string | null;
+  credentialId: string | null;
+  text: string;
+};
+
+export type LockedFactOverride = {
+  positionId: string;
+  field: LockedField;
+  value: string;
+};
+
 export type CareerContext = {
   positions: ContextPosition[];
   evidence: ContextEvidence[];
   credentials: ContextCredential[];
   skills: Array<{ id: string; name: string; evidenceIds: string[] }>;
   projects: Array<{ id: string; positionId: string; name: string }>;
+  instructions: ContextInstruction[];
 };
+
+/**
+ * Locked-fact overrides (resume spec, "Application instructions"): in this
+ * application, code prints the user's declared value instead of the
+ * position's, and the locked-fact check expects it there.
+ */
+export function applyLockedFactOverrides(
+  positions: ContextPosition[],
+  overrides: LockedFactOverride[]
+): ContextPosition[] {
+  return positions.map((position) =>
+    overrides
+      .filter((row) => row.positionId === position.id)
+      .reduce(
+        (changed, row) => ({
+          ...changed,
+          [positionFieldOf[row.field]]: row.value,
+        }),
+        position
+      )
+  );
+}
 
 /**
  * The approved evidence base as generation may see it: approved positions
  * (most recent first) and credentials, and evidence with the user's
  * sensitivity choices applied by code; facts resting on an excluded item
- * are left out (guided-interview spec, "Sensitive-data control").
+ * are left out (guided-interview spec, "Sensitive-data control"). For an
+ * opening, it adds the instructions the user kept for its application and
+ * applies their confirmed locked-fact overrides.
  */
 export async function loadCareerContext(input: {
   db: DbClient;
   cipher: UserCipher;
   profileId: string;
   filter: SensitiveFilter;
+  openingId?: string;
 }): Promise<CareerContext> {
   const { db, cipher, profileId, filter } = input;
   const career = new CareerRepository(db);
@@ -131,5 +176,45 @@ export async function loadCareerContext(input: {
       name: filter.apply(cipher.decrypt(project.encryptedName)),
     }));
 
-  return { positions, evidence, credentials, skills, projects };
+  const instructionsRepository = new InstructionsRepository(db);
+  const instructions = input.openingId
+    ? (await instructionsRepository.listPoints(input.openingId))
+        .filter((point) => point.status === "kept")
+        .map((point) => ({
+          id: point.id,
+          positionId:
+            point.positionId && positionIds.has(point.positionId)
+              ? point.positionId
+              : null,
+          credentialId:
+            point.credentialId && credentialIds.has(point.credentialId)
+              ? point.credentialId
+              : null,
+          text: filter.apply(cipher.decrypt(point.encryptedText)),
+        }))
+    : [];
+  const overrides = input.openingId
+    ? (await instructionsRepository.listOverrides(input.openingId))
+        .filter((row) => row.confirmedAt)
+        .map((row) => {
+          const value = cipher.decrypt(row.encryptedValue);
+          return {
+            positionId: row.positionId,
+            field: row.field,
+            value:
+              row.field === "employer" || row.field === "title"
+                ? filter.apply(value)
+                : value,
+          };
+        })
+    : [];
+
+  return {
+    positions: applyLockedFactOverrides(positions, overrides),
+    evidence,
+    credentials,
+    skills,
+    projects,
+    instructions,
+  };
 }

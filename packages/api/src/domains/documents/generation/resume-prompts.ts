@@ -80,6 +80,16 @@ export function resumeMaterial(input: {
       (row) =>
         `- evidence ${row.id} [${row.kind}]${row.positionId ? ` (position ${row.positionId})` : ""}${row.projectId ? ` (project ${row.projectId})` : ""}: ${row.text}`
     ),
+    ...(context.instructions.length
+      ? [
+          "",
+          "Application instructions (the user's own statements for this application; follow them, and cite their ids like evidence when a line rests on them):",
+          ...context.instructions.map(
+            (row) =>
+              `- instruction ${row.id}${row.positionId ? ` (position ${row.positionId})` : ""}: ${row.text}`
+          ),
+        ]
+      : []),
     "",
     "Approved skills:",
     context.skills.map((skill) => skill.name).join(", ") || "none",
@@ -104,8 +114,8 @@ export function resumeMaterial(input: {
 
 const writingRules = [
   "Rules, enforced by code after you answer:",
-  "- Every line cites the evidence ids it rests on; a line without valid evidence, or with a figure not present in its evidence, is deleted.",
-  "- A bullet cites only evidence of its own position (or project).",
+  "- Every line cites, in evidence_ids, the evidence or instruction ids it rests on; a line without any, or with a figure not present in what it cites, is deleted.",
+  "- A bullet cites only evidence of its own position (or project), and only instructions about that position or about none in particular.",
   "- A skill is listed only if it is an approved skill or spelled out in the evidence the group cites.",
   "- Never write employers, titles or dates: code prints them. The context field is for a short note like “parallel project”, or null.",
   "- Invent nothing: no new facts, tools, figures or outcomes. Do not claim requirements the fit check marks as gaps.",

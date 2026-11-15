@@ -8,6 +8,7 @@ import { useTranslation } from "@repo/intl/use-translation";
 import { Badge } from "@repo/web/components/ui/badge";
 import { cn } from "@repo/web/lib/utils";
 
+import { ApplicationContext } from "~/domains/applications/components/application-context";
 import { DocumentsPanel } from "~/domains/documents/components/documents-panel";
 
 import { useOpening } from "../hooks/use-opening";
@@ -87,12 +88,15 @@ export function FitCheckPanel({ openingId }: { openingId: string }) {
       </section>
 
       {opening.data.status === "analyzed" && (
-        <DocumentsPanel
-          openingId={openingId}
-          defaultLanguage={opening.data.language ?? "en-US"}
-          defaultTone={opening.data.suggestedTone ?? "your_style"}
-          pendingGaps={pendingGaps(opening.data)}
-        />
+        <>
+          <DocumentsPanel
+            openingId={openingId}
+            defaultLanguage={opening.data.language ?? "en-US"}
+            defaultTone={opening.data.suggestedTone ?? "your_style"}
+            pendingGaps={pendingGaps(opening.data)}
+          />
+          <ApplicationContext openingId={openingId} />
+        </>
       )}
     </div>
   );

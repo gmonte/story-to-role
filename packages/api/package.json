@@ -17,10 +17,10 @@
     "db:studio": "drizzle-kit studio",
     "lint": "eslint . --max-warnings=0 --no-warn-ignored",
     "lint:fix": "eslint . --fix",
-    "predeploy": "pnpm db:migrate && case \"$REDIS_KEY_PREFIX\" in pr-*) echo 'PR preview: tasks come from staging, skipping trigger:deploy' ;; *) pnpm trigger:deploy ;; esac",
+    "predeploy": "pnpm db:migrate",
     "test": "vitest run --passWithNoTests",
     "typecheck": "tsc --noEmit",
-    "trigger:dev": "trigger dev --profile storytorole",
+    "trigger:dev": "trigger dev",
     "trigger:deploy": "trigger deploy"
   },
   "dependencies": {

@@ -4,6 +4,7 @@ import {
   count,
   desc,
   eq,
+  gt,
   inArray,
   isNull,
   lt,
@@ -12,6 +13,7 @@ import {
 
 import { applicationsTable } from "@repo/api/domains/applications/db/applications-tables";
 import { tasksTable } from "@repo/api/domains/tasks/db/tasks-tables";
+import type { TaskType } from "@repo/api/domains/tasks/schemas/task";
 import type { DbClient } from "@repo/api/tools/db-client";
 
 import {
@@ -20,6 +22,7 @@ import {
   documentVersionsTable,
   generationsTable,
   positionTitleEquivalentsTable,
+  renderedFilesTable,
   reviewRoundsTable,
 } from "./db/documents-tables";
 import { resumeTemplatesTable, styleProfilesTable } from "./db/writing-tables";
@@ -401,6 +404,66 @@ export class DocumentsRepository {
         ],
         set: { encryptedTitle: row.encryptedTitle, approvedAt: row.approvedAt },
       });
+  }
+
+  async findRenderedFile(snapshotId: string, template: string) {
+    const [row] = await this.tx
+      .select()
+      .from(renderedFilesTable)
+      .where(
+        and(
+          eq(renderedFilesTable.snapshotId, snapshotId),
+          eq(renderedFilesTable.template, template)
+        )
+      );
+    return row ?? null;
+  }
+
+  async insertRenderedFile(row: Insert<typeof renderedFilesTable>) {
+    await this.tx
+      .insert(renderedFilesTable)
+      .values(row)
+      .onConflictDoNothing({
+        target: [renderedFilesTable.snapshotId, renderedFilesTable.template],
+      });
+  }
+
+  /** Storage keys of the files rendered from a version's snapshots. */
+  async renderedKeys(input: { versionId?: string; snapshotId?: string }) {
+    const rows = await this.tx
+      .select({ storageKey: renderedFilesTable.storageKey })
+      .from(renderedFilesTable)
+      .innerJoin(
+        documentSnapshotsTable,
+        eq(documentSnapshotsTable.id, renderedFilesTable.snapshotId)
+      )
+      .where(
+        input.snapshotId
+          ? eq(renderedFilesTable.snapshotId, input.snapshotId)
+          : eq(documentSnapshotsTable.versionId, input.versionId!)
+      );
+    return rows.map((row) => row.storageKey);
+  }
+
+  /**
+   * A task of this type still pending or running for a subject. One older
+   * than `staleAfterMs` counts as dead (a worker that crashed never marks
+   * its task), so a new one may start.
+   */
+  async activeTask(subjectId: string, type: TaskType, staleAfterMs = 300_000) {
+    const [row] = await this.tx
+      .select({ id: tasksTable.id })
+      .from(tasksTable)
+      .where(
+        and(
+          eq(tasksTable.subjectId, subjectId),
+          eq(tasksTable.type, type),
+          inArray(tasksTable.status, ["pending", "processing"]),
+          gt(tasksTable.createdAt, new Date(Date.now() - staleAfterMs))
+        )
+      )
+      .limit(1);
+    return row ?? null;
   }
 
   async findTemplate(profileId: string) {

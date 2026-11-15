@@ -16,6 +16,7 @@ catalogs:
 
   api:
     "@huggingface/transformers": 4.3.2
+    "@react-pdf/renderer": 4.9.0
     "@trigger.dev/build": 4.8.5
     "@trigger.dev/sdk": 4.8.5
     # 2.1+ sends Lua scripts with an Upstash-only flag (allow-key-locking)
@@ -26,6 +27,7 @@ catalogs:
     drizzle-kit: 0.31.10
     drizzle-orm: 0.45.2
     drizzle-zod: 0.8.3
+    fflate: 0.8.3
     mammoth: 1.13.0
     postgres: 3.4.8
     trigger.dev: 4.8.5

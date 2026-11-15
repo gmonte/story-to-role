@@ -18,6 +18,7 @@ import { useDocumentLabels } from "../hooks/use-document-labels";
 import { useOpeningDocuments } from "../hooks/use-opening-documents";
 import { useSelectedVersion } from "../hooks/use-selected-version";
 import { AdaptVersionDialog } from "./adapt-version-dialog";
+import { DownloadZipButton } from "./download-pdf-dialog";
 import { GenerateResumeDialog } from "./generate-resume-dialog";
 import { OutdatedNotice, SyncProposal } from "./language-sync";
 
@@ -153,6 +154,9 @@ export function DocumentsPanel({
         </ul>
       )}
 
+      {versions.length > 0 && (
+        <DownloadZipButton openingId={openingId} versions={versions} />
+      )}
       {resume && <SyncProposal document={resume} versions={versions} />}
       {selected && <OutdatedNotice version={selected} versions={versions} />}
       {selected && <VersionChecks version={selected} />}
@@ -197,13 +201,21 @@ function VersionChecks({ version }: { version: VersionView }) {
     <div className="flex flex-col gap-2">
       {version.pages > 2 && (
         <p className="rounded-lg border border-amber-500/40 bg-amber-500/10 p-2.5 text-xs">
-          {t.formatMessage(
-            {
-              defaultMessage:
-                "About {pages} pages: over the two-page limit. Trim old positions' bullets or turn off an optional section.",
-            },
-            { pages: t.formatNumber(version.pages) }
-          )}
+          {version.pdf.ready
+            ? t.formatMessage(
+                {
+                  defaultMessage:
+                    "{pages} pages in the PDF: over the two-page limit. Trim old positions' bullets or turn off an optional section.",
+                },
+                { pages: t.formatNumber(version.pages) }
+              )
+            : t.formatMessage(
+                {
+                  defaultMessage:
+                    "About {pages} pages: over the two-page limit. Trim old positions' bullets or turn off an optional section.",
+                },
+                { pages: t.formatNumber(version.pages) }
+              )}
         </p>
       )}
       {ats && (

@@ -12,6 +12,7 @@ export const taskTypes = [
   "extract_style_profile",
   "split_instructions",
   "adapt_document",
+  "render_pdf",
 ] as const;
 export const taskTypeSchema = z.enum(taskTypes);
 export type TaskType = z.infer<typeof taskTypeSchema>;

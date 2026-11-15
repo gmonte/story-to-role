@@ -13,7 +13,8 @@ export function useOpeningDocuments(openingId: string) {
       query.state.data?.documents.some(
         (document) =>
           document.generation?.status === "pending" ||
-          document.generation?.status === "running"
+          document.generation?.status === "running" ||
+          document.versions.some((version) => version.pdf.rendering)
       )
         ? 2500
         : false,

@@ -5,6 +5,7 @@
     "declarationMap": false,
     "emitDeclarationOnly": false,
     "noEmit": true,
+    "jsx": "react-jsx",
     "paths": {
       "@repo/api/*": ["./src/*"],
       "@repo/common/*": ["../common/src/*"],

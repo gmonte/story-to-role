@@ -231,6 +231,11 @@ export class InterviewService {
     if (!message || message.length > interviewSettings.maxMessageCharacters) {
       throw new TRPCError({ code: "BAD_REQUEST" });
     }
+    // Before the turn is stored: none is left without a reply.
+    await this.tasks.assertAffordable({
+      userId: input.userId,
+      type: "interview_turn",
+    });
     const { profile, session } = await this.requireOpenSession(
       input.userId,
       input.sessionId

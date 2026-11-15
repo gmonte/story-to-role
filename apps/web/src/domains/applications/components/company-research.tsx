@@ -11,6 +11,8 @@ import { Button } from "@repo/web/components/ui/button";
 import { Checkbox } from "@repo/web/components/ui/checkbox";
 import { toast } from "@repo/web/components/ui/sonner";
 
+import { CreditCost } from "~/domains/credits/components/credit-cost";
+import { useCredits } from "~/domains/credits/hooks/use-credits";
 import { useTRPC } from "~/tools/trpc/client";
 
 /**
@@ -41,6 +43,7 @@ export function CompanyResearch({
       onError: (error) => toast.error(error.message),
     })
   );
+  const credits = useCredits();
   const data = research.data;
   if (!data) return null;
   const researching = data.status === "researching";
@@ -51,6 +54,10 @@ export function CompanyResearch({
         <h3 className="text-sm font-medium">
           {t.formatMessage({ defaultMessage: "Company research" })}
         </h3>
+        <CreditCost
+          className="ml-auto"
+          credits={credits.data?.estimates.research}
+        />
         <Button
           size="sm"
           variant="ghost"

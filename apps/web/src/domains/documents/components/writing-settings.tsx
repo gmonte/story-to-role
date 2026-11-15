@@ -18,6 +18,8 @@ import { Label } from "@repo/web/components/ui/label";
 import { toast } from "@repo/web/components/ui/sonner";
 import { Textarea } from "@repo/web/components/ui/textarea";
 
+import { CreditCost } from "~/domains/credits/components/credit-cost";
+import { useCredits } from "~/domains/credits/hooks/use-credits";
 import { useTRPC } from "~/tools/trpc/client";
 
 import { useDocumentLabels } from "../hooks/use-document-labels";
@@ -236,6 +238,7 @@ function StyleForm({
 }) {
   const t = useTranslation();
   const trpc = useTRPC();
+  const credits = useCredits();
   const [samples, setSamples] = useState(["", "", ""]);
   const [profile, setProfile] = useState(draft);
   const extract = useMutation(
@@ -298,6 +301,7 @@ function StyleForm({
         {status === "extracting" && <Loader2 className="animate-spin" />}
         {t.formatMessage({ defaultMessage: "Extract my style" })}
       </Button>
+      <CreditCost credits={credits.data?.estimates.styleProfile} />
 
       {profile && status !== "extracting" && (
         <div className="flex flex-col gap-3 rounded-lg border p-4">

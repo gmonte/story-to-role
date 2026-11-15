@@ -6,6 +6,7 @@ import { TasksService } from "@repo/api/domains/tasks/tasks-service";
 import type { DbClient } from "@repo/api/tools/db-client";
 
 import { DocumentsRepository } from "../documents-repository";
+import { failGeneration } from "../documents-service";
 import { requireUserVersion } from "../require-version";
 import { decryptDocument, decryptResume } from "../snapshot-content";
 import type { OutputLanguage } from "../schemas/document";
@@ -32,12 +33,12 @@ export class AdaptationService {
     userId: string,
     insert: (tx: DbClient) => Promise<{ id: string }>
   ): Promise<{ generationId: string; realtime: RealtimeSubscription }> {
+    await this.tasks.assertAffordable({ userId, type: "adapt_document" });
     const generation = await this.db.transaction(insert);
-    const { realtime } = await this.tasks.start({
-      userId,
-      type: "adapt_document",
-      subjectId: generation.id,
-    });
+    const { realtime } = await this.tasks.startOrUndo(
+      { userId, type: "adapt_document", subjectId: generation.id },
+      () => failGeneration(this.db, generation.id)
+    );
     return { generationId: generation.id, realtime };
   }
 

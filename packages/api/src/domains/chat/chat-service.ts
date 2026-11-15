@@ -21,6 +21,10 @@ export class ChatService {
     context: ChatContext;
     message: string;
   }): Promise<{ message: ChatMessage; realtime: RealtimeSubscription }> {
+    await this.tasks.assertAffordable({
+      userId: input.userId,
+      type: "chat_turn",
+    });
     const row = await this.db.transaction(async (tx) => {
       const cipher = await getUserCipher(tx, input.userId);
       return new ChatRepository(tx).insert({

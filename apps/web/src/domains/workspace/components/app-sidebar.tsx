@@ -1,6 +1,7 @@
 "use client";
 
-import { BriefcaseBusiness, Library, Plus } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
+import { BriefcaseBusiness, Library, Plus, ShieldCheck } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
@@ -20,7 +21,9 @@ import {
 
 import { BrandLockup } from "~/domains/brand/components/brand-lockup";
 import { BrandMark } from "~/domains/brand/components/brand-mark";
+import { CreditMeter } from "~/domains/credits/components/credit-meter";
 import { UserButton } from "~/domains/user/components/user-button";
+import { useTRPC } from "~/tools/trpc/client";
 
 import { LanguageSwitcher } from "./language-switcher";
 import { OpeningsByStatus } from "./openings-by-status";
@@ -28,6 +31,8 @@ import { OpeningsByStatus } from "./openings-by-status";
 export function AppSidebar() {
   const t = useTranslation();
   const pathname = usePathname();
+  const trpc = useTRPC();
+  const { data: isAdmin } = useQuery(trpc.credits.isAdmin.queryOptions({}));
 
   const items = [
     {
@@ -45,7 +50,16 @@ export function AppSidebar() {
       label: t.formatMessage({ defaultMessage: "New opening" }),
       icon: Plus,
     },
-  ] as const;
+    ...(isAdmin
+      ? [
+          {
+            href: "/app/admin",
+            label: t.formatMessage({ defaultMessage: "Admin" }),
+            icon: ShieldCheck,
+          },
+        ]
+      : []),
+  ];
 
   return (
     <Sidebar collapsible="icon">
@@ -90,6 +104,9 @@ export function AppSidebar() {
 
       <SidebarFooter>
         <SidebarMenu>
+          <SidebarMenuItem>
+            <CreditMeter />
+          </SidebarMenuItem>
           <SidebarMenuItem>
             <LanguageSwitcher />
           </SidebarMenuItem>

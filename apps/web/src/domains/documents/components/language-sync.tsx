@@ -23,6 +23,8 @@ import {
 } from "@repo/web/components/ui/dialog";
 import { toast } from "@repo/web/components/ui/sonner";
 
+import { CreditCost } from "~/domains/credits/components/credit-cost";
+import { useCredits } from "~/domains/credits/hooks/use-credits";
 import { useTRPC } from "~/tools/trpc/client";
 
 import { useDocumentLabels } from "../hooks/use-document-labels";
@@ -99,6 +101,7 @@ function SyncDialog({
   const t = useTranslation();
   const labels = useDocumentLabels();
   const trpc = useTRPC();
+  const credits = useCredits();
   const refresh = useRefreshDocuments();
   const [open, setOpen] = useState(false);
   const [unselected, setUnselected] = useState<string[]>([]);
@@ -200,7 +203,8 @@ function SyncDialog({
             {t.formatMessage({ defaultMessage: "Nothing left to bring." })}
           </p>
         )}
-        <DialogFooter>
+        <DialogFooter className="items-center">
+          <CreditCost credits={credits.data?.estimates.adaptation} />
           <Button
             disabled={
               start.isPending || !sourceSnapshotId || selected.length === 0

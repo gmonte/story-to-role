@@ -10,6 +10,7 @@ import { MotivationRepository } from "@repo/api/domains/applications/motivation/
 import { EvidenceRepository } from "@repo/api/domains/evidence/evidence-repository";
 
 import { DocumentsRepository } from "../documents-repository";
+import { failGeneration } from "../documents-service";
 import { letterResumeState } from "./letter-resume";
 import { requireUserVersion } from "../require-version";
 import type { OutputLanguage, WritingLevel } from "../schemas/document";
@@ -28,12 +29,16 @@ export class LetterService {
     private readonly tasks = new TasksService(db)
   ) {}
 
-  private async start(userId: string, generationId: string) {
-    const { realtime } = await this.tasks.start({
-      userId,
-      type: "generate_document",
-      subjectId: generationId,
-    });
+  private async start(userId: string, generationId: string, maximum: boolean) {
+    const { realtime } = await this.tasks.startOrUndo(
+      {
+        userId,
+        type: "generate_document",
+        subjectId: generationId,
+        hints: { documentKind: "cover_letter", maximum },
+      },
+      () => failGeneration(this.db, generationId)
+    );
     return { generationId, realtime };
   }
 
@@ -47,6 +52,14 @@ export class LetterService {
     resumeVersionId: string | null;
     versionId?: string;
   }): Promise<{ generationId: string; realtime: RealtimeSubscription }> {
+    await this.tasks.assertAffordable({
+      userId: input.userId,
+      type: "generate_document",
+      hints: {
+        documentKind: "cover_letter",
+        maximum: input.writingLevel === "maximum",
+      },
+    });
     const generation = await this.db.transaction(async (tx) => {
       const repository = new DocumentsRepository(tx);
       const profile = await new CareerRepository(tx).findProfileByUserId(
@@ -109,7 +122,11 @@ export class LetterService {
         resumeSnapshotId: resumeSnapshot?.id ?? null,
       });
     });
-    return this.start(input.userId, generation.id);
+    return this.start(
+      input.userId,
+      generation.id,
+      input.writingLevel === "maximum"
+    );
   }
 
   /** The letter version, its latest snapshot and the resume that changed. */
@@ -151,6 +168,11 @@ export class LetterService {
     userId: string;
     versionId: string;
   }): Promise<{ generationId: string; realtime: RealtimeSubscription }> {
+    await this.tasks.assertAffordable({
+      userId: input.userId,
+      type: "generate_document",
+      hints: { documentKind: "cover_letter" },
+    });
     const generation = await this.db.transaction(async (tx) => {
       const repository = new DocumentsRepository(tx);
       const { version, document, profile, latest, state, resumeLatest } =
@@ -180,7 +202,7 @@ export class LetterService {
         tone: application?.tone ?? "your_style",
       });
     });
-    return this.start(input.userId, generation.id);
+    return this.start(input.userId, generation.id, false);
   }
 
   /** Keeps the letter as it is: no notice until the resume changes again. */

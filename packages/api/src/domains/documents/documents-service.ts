@@ -96,6 +96,19 @@ export class DocumentsService {
     referenceVersionId?: string;
   }): Promise<{ generationId: string; realtime: RealtimeSubscription }> {
     const profile = await this.requireProfile(input.userId);
+    // What it may cost depends on career length, depth and level.
+    const hints = {
+      positions: (
+        await new CareerRepository(this.db).listPositions(profile.id)
+      ).filter((position) => position.status === "approved").length,
+      thorough: input.reviewDepth === "thorough",
+      maximum: input.writingLevel === "maximum",
+    };
+    await this.tasks.assertAffordable({
+      userId: input.userId,
+      type: "generate_document",
+      hints,
+    });
     const generation = await this.db.transaction(async (tx) => {
       const opening = await new OpeningsRepository(tx).findOpening({
         profileId: profile.id,
@@ -158,11 +171,15 @@ export class DocumentsService {
         tone: input.tone,
       });
     });
-    const { realtime } = await this.tasks.start({
-      userId: input.userId,
-      type: "generate_document",
-      subjectId: generation.id,
-    });
+    const { realtime } = await this.tasks.startOrUndo(
+      {
+        userId: input.userId,
+        type: "generate_document",
+        subjectId: generation.id,
+        hints,
+      },
+      () => failGeneration(this.db, generation.id)
+    );
     return { generationId: generation.id, realtime };
   }
 
@@ -736,3 +753,10 @@ function summary(snapshot: {
     createdAt: snapshot.createdAt,
   };
 }
+
+/** A generation whose task never started: it failed, nothing waits on it. */
+export const failGeneration = (db: DbClient, generationId: string) =>
+  new DocumentsRepository(db).updateGeneration(generationId, {
+    status: "failed",
+    finishedAt: new Date(),
+  });

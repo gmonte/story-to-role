@@ -49,6 +49,9 @@ import { toast } from "@repo/web/components/ui/sonner";
 
 import { InstructionsReview } from "~/domains/applications/components/instructions-review";
 import { useApplicationInstructions } from "~/domains/applications/hooks/use-application-instructions";
+import { CreditCost } from "~/domains/credits/components/credit-cost";
+import { useCredits } from "~/domains/credits/hooks/use-credits";
+import { resumeCredits } from "~/domains/credits/utils/credit-costs";
 import { useOpeningLabels } from "~/domains/openings/hooks/use-opening-labels";
 import { useTRPC } from "~/tools/trpc/client";
 
@@ -96,6 +99,7 @@ export function GenerateResumeDialog({
   const trpc = useTRPC();
   const refresh = useRefreshDocuments();
   const [open, setOpen] = useState(false);
+  const credits = useCredits();
   const [language, setLanguage] = useState(defaultLanguage);
   const [reviewDepth, setReviewDepth] = useState<ReviewDepth>("quick");
   const [writingLevel, setWritingLevel] = useState<WritingLevel>("standard");
@@ -234,6 +238,14 @@ export function GenerateResumeDialog({
                 </label>
               ))}
             </RadioGroup>
+            {credits.data?.plan === "free" && (
+              <p className="text-muted-foreground text-xs">
+                {t.formatMessage({
+                  defaultMessage:
+                    "Quick with the standard level comes chosen on Free: it leaves enough credits for the second language and the cover letter.",
+                })}
+              </p>
+            )}
           </div>
 
           <div className="grid gap-1.5">
@@ -334,6 +346,12 @@ export function GenerateResumeDialog({
           >
             {t.formatMessage({ defaultMessage: "Template, header and style" })}
           </Link>
+          <CreditCost
+            credits={resumeCredits(credits.data?.estimates, {
+              reviewDepth,
+              writingLevel,
+            })}
+          />
           <Button
             disabled={generate.isPending || instructionsPending || unreviewed}
             onClick={() =>

@@ -4,6 +4,7 @@ import { eq, or } from "drizzle-orm";
 
 import { usersTable } from "@repo/api/domains/users/db/users-tables";
 import { db } from "@repo/api/tools/db";
+import { grantWelcomeCredits } from "@repo/api/domains/credits/welcome-credits";
 import { logger } from "@repo/common/tools/logger";
 
 import { prepareClerkUserData } from "../utils/prepare-clerk-user-data";
@@ -52,6 +53,8 @@ export const userCreatedWebhook = async (
       .returning();
     userInternalId = createdUser.id;
   }
+
+  await grantWelcomeCredits(db, userInternalId);
 
   // Mirror our internal id back to Clerk public metadata so it can be embedded
   // in the JWT via the dashboard session-token template.

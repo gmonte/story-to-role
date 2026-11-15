@@ -31,6 +31,9 @@ import {
 } from "@repo/web/components/ui/select";
 import { toast } from "@repo/web/components/ui/sonner";
 
+import { CreditCost } from "~/domains/credits/components/credit-cost";
+import { useCredits } from "~/domains/credits/hooks/use-credits";
+import { letterCredits } from "~/domains/credits/utils/credit-costs";
 import { useOpeningLabels } from "~/domains/openings/hooks/use-opening-labels";
 import { useTRPC } from "~/tools/trpc/client";
 
@@ -109,6 +112,7 @@ function LetterForm({
   const openingLabels = useOpeningLabels();
   const trpc = useTRPC();
   const refresh = useRefreshDocuments();
+  const credits = useCredits();
   const [language, setLanguage] = useState(defaultLanguage);
   const [chosenResume, setChosenResume] = useState<string | null>(null);
   const [tone, setTone] = useState(defaultTone);
@@ -223,7 +227,10 @@ function LetterForm({
           </Select>
         </div>
       </div>
-      <DialogFooter>
+      <DialogFooter className="items-center">
+        <CreditCost
+          credits={letterCredits(credits.data?.estimates, writingLevel)}
+        />
         <Button
           disabled={generate.isPending}
           onClick={() =>

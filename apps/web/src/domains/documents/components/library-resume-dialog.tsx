@@ -33,6 +33,9 @@ import {
 } from "@repo/web/components/ui/select";
 import { toast } from "@repo/web/components/ui/sonner";
 
+import { CreditCost } from "~/domains/credits/components/credit-cost";
+import { useCredits } from "~/domains/credits/hooks/use-credits";
+import { resumeCredits } from "~/domains/credits/utils/credit-costs";
 import { useOpeningLabels } from "~/domains/openings/hooks/use-opening-labels";
 import { useTRPC } from "~/tools/trpc/client";
 
@@ -88,6 +91,7 @@ function LibraryResumeForm({
   const trpc = useTRPC();
   const router = useRouter();
   const refresh = useRefreshDocuments();
+  const credits = useCredits();
   const [focus, setFocus] = useState("");
   const [language, setLanguage] = useState<OutputLanguage>("en-US");
   const [reviewDepth, setReviewDepth] = useState<ReviewDepth>("quick");
@@ -206,7 +210,13 @@ function LibraryResumeForm({
           </Select>
         </div>
       </div>
-      <DialogFooter>
+      <DialogFooter className="items-center">
+        <CreditCost
+          credits={resumeCredits(credits.data?.estimates, {
+            reviewDepth,
+            writingLevel,
+          })}
+        />
         <Button
           disabled={generate.isPending || (!versionId && !focus.trim())}
           onClick={() =>

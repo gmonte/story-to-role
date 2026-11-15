@@ -1,5 +1,5 @@
 {
-  "id": "cbbf367e-2dab-4180-b05f-06e1e4c73d32",
+  "id": "61334c21-8b92-4686-a857-89a904852ce3",
   "prevId": "8f604956-8158-4781-bb83-de9633cb4d40",
   "version": "7",
   "dialect": "postgresql",
@@ -3304,8 +3304,8 @@
           "primaryKey": false,
           "notNull": true
         },
-        "depth": {
-          "name": "depth",
+        "reviewDepth": {
+          "name": "reviewDepth",
           "type": "text",
           "primaryKey": false,
           "notNull": true

@@ -102,24 +102,26 @@ async function setup() {
       encryptedText: cipher.encrypt(text),
     }))
   );
+  const term = (text: string) =>
+    terms.find((row) => cipher.decrypt(row.encryptedText) === text)!.id;
   await openings.insertFitCheck({
     openingId: opening.id,
     band: "medium",
     items: [
       {
-        termId: terms[0].id,
+        termId: term("Kubernetes"),
         verdict: "met",
         evidenceIds: [evidence[0].id],
         encryptedExplanation: cipher.encrypt("Runs Kubernetes"),
       },
       {
-        termId: terms[1].id,
-        verdict: "partial",
+        termId: term("K8s operators"),
+        verdict: "met",
         evidenceIds: [evidence[0].id],
-        encryptedExplanation: cipher.encrypt("Adjacent"),
+        encryptedExplanation: cipher.encrypt("Same thing, other words"),
       },
       {
-        termId: terms[2].id,
+        termId: term("Go"),
         verdict: "gap",
         evidenceIds: [],
         encryptedExplanation: cipher.encrypt("No Go"),
@@ -146,7 +148,7 @@ async function setup() {
   });
 
   async function generate(
-    depth: "quick" | "thorough",
+    reviewDepth: "quick" | "thorough",
     script: {
       drafts: ResumeDraft[];
       ratings: number[];
@@ -156,7 +158,7 @@ async function setup() {
       userId: user.id,
       openingId: opening.id,
       language: "en-US",
-      depth,
+      reviewDepth,
       writingLevel: "standard",
       tone: "direct",
     });
@@ -287,7 +289,7 @@ describe("resume generation and snapshots", () => {
       expect.objectContaining({
         evidenceId: team.id,
         quote: "I said: Led a team of 5 engineers",
-        source: "Tech Lead · Globex",
+        source: { kind: "position", title: "Tech Lead", employer: "Globex" },
       })
     );
     expect(version.atsCheck).toEqual({
@@ -322,6 +324,72 @@ describe("resume generation and snapshots", () => {
     expect(rounds.map((r) => r.rating)).toEqual([5, 9]);
     // Strategist, one editor, two reviews.
     expect(fake.generateObject).toHaveBeenCalledTimes(4);
+  });
+
+  it("skips review rounds when the first draft already reaches the target", async () => {
+    const ctx = await setup();
+    const line = {
+      text: "Led a team of 5 engineers.",
+      evidence_ids: [ctx.evidence[1].id],
+    };
+    const { fake } = await ctx.generate("thorough", {
+      drafts: [ctx.draft([line])],
+      ratings: [9],
+    });
+    // Strategist and one review; no editor round was paid for.
+    expect(fake.generateObject).toHaveBeenCalledTimes(2);
+  });
+
+  it("prints generalized employers, leaves out unusable credentials and locks credentials", async () => {
+    const ctx = await setup();
+    const cipher = await getUserCipher(ctx.db, ctx.user.id);
+    await ctx.db.insert(sensitiveItemsTable).values({
+      profileId: ctx.profile.id,
+      positionId: ctx.positionId,
+      kind: "client",
+      encryptedOriginal: cipher.encrypt("Globex"),
+      choice: "generalize",
+      encryptedGeneralized: cipher.encrypt("a global tech company"),
+    });
+    await ctx.db.insert(credentialsTable).values({
+      profileId: ctx.profile.id,
+      kind: "language",
+      encryptedTitle: cipher.encrypt("Klingon"),
+      status: "do_not_use",
+      approvedAt: new Date(),
+    });
+    const line = {
+      text: "Led a team of 5 engineers.",
+      evidence_ids: [ctx.evidence[1].id],
+    };
+    await ctx.generate("quick", {
+      drafts: [ctx.draft([line]), ctx.draft([line])],
+      ratings: [7, 6],
+    });
+    const [version] = (
+      await ctx.documents.forOpening({
+        userId: ctx.user.id,
+        openingId: ctx.opening.id,
+      })
+    ).documents[0].versions;
+    expect(experienceOf(version.content).employer).toBe(
+      "a global tech company"
+    );
+    expect(JSON.stringify(version.content)).not.toMatch(/Globex|Klingon/);
+
+    const tampered = structuredClone(version.content);
+    const languages = tampered.sections.find((s) => s.kind === "languages");
+    if (languages && "entries" in languages && languages.kind === "languages") {
+      languages.entries[0].level = "Native";
+    }
+    await expect(
+      ctx.documents.saveEdit({
+        userId: ctx.user.id,
+        versionId: version.id,
+        baseSnapshotId: version.snapshot.id,
+        content: tampered,
+      })
+    ).rejects.toMatchObject({ code: "BAD_REQUEST" });
   });
 
   it("never lets an excluded name through, even in the best draft", async () => {

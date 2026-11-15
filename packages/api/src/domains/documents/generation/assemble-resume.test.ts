@@ -15,6 +15,7 @@ import {
   findForbiddenLines,
   lockedFactViolations,
   resumeText,
+  trimToPages,
 } from "./resume-checks";
 
 const P1 = "00000000-0000-4000-8000-000000000001";
@@ -210,6 +211,41 @@ describe("assembling a resume", () => {
       { original: "Kubernetes", choice: "exclude" },
     ]);
     expect(findForbiddenLines(content, filter)).toContain("title_line");
+  });
+});
+
+describe("trimming to two pages", () => {
+  it("drops the oldest positions' last bullets first, rewriting nothing", () => {
+    const { content } = assembleResume({ draft, context, sections, header });
+    const experience = content.sections.find((s) => s.kind === "experience");
+    if (experience?.kind !== "experience") throw new Error("no experience");
+    const long = (n: number) =>
+      Array.from({ length: n }, (_, i) => ({
+        id: `x${i}`,
+        text: "A long bullet ".repeat(12),
+        origin: { kind: "evidence" as const, evidenceIds: [E1] },
+      }));
+    experience.entries[0].lines = long(30);
+    experience.entries[1].lines = long(30);
+    expect(estimatePages(content)).toBeGreaterThan(2);
+    const trimmed = trimToPages(content, 2);
+    const entries = trimmed.sections.find(
+      (s) => s.kind === "experience"
+    )!.entries;
+    expect(estimatePages(trimmed)).toBeLessThanOrEqual(2);
+    expect(entries[0].lines.length).toBeGreaterThan(entries[1].lines.length);
+    expect(entries[0].lines[0].text).toBe("A long bullet ".repeat(12));
+  });
+
+  it("keeps only technologies in the title line that the evidence backs", () => {
+    const { content, dropped } = assembleResume({
+      draft: { ...draft, title_line: "Platform Engineer | Kubernetes, Elixir" },
+      context,
+      sections,
+      header,
+    });
+    expect(content.header.titleLine).toBe("Platform Engineer | Kubernetes");
+    expect(dropped).toContainEqual({ text: "Elixir", reason: "unknown_skill" });
   });
 });
 

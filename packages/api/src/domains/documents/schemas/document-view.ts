@@ -2,6 +2,7 @@ import { z } from "zod";
 
 import { applicationStatusSchema } from "@repo/api/domains/applications/schemas/application";
 import { toneSchema } from "@repo/api/domains/openings/schemas/opening";
+import { taskProgressSchema } from "@repo/api/domains/tasks/schemas/task";
 
 import {
   documentKindSchema,
@@ -19,7 +20,16 @@ export const evidenceTraceSchema = z.object({
   evidenceId: z.uuid(),
   text: z.string(),
   quote: z.string(),
-  source: z.string().nullable(),
+  source: z
+    .discriminatedUnion("kind", [
+      z.object({
+        kind: z.literal("position"),
+        title: z.string(),
+        employer: z.string(),
+      }),
+      z.object({ kind: z.literal("credential"), title: z.string() }),
+    ])
+    .nullable(),
   approvedAt: z.date(),
 });
 export type EvidenceTrace = z.infer<typeof evidenceTraceSchema>;
@@ -50,6 +60,9 @@ export const versionViewSchema = z.object({
   pages: z.number(),
   atsCheck: atsCheckSchema.nullable(),
   trace: z.array(evidenceTraceSchema),
+  credentialApprovals: z.array(
+    z.object({ credentialId: z.uuid(), approvedAt: z.date() })
+  ),
 });
 export type VersionView = z.infer<typeof versionViewSchema>;
 
@@ -57,8 +70,9 @@ export const generationViewSchema = z.object({
   id: z.uuid(),
   status: generationStatusSchema,
   language: outputLanguageSchema,
-  depth: reviewDepthSchema,
+  reviewDepth: reviewDepthSchema,
   writingLevel: writingLevelSchema,
+  progress: taskProgressSchema.nullable(),
   createdAt: z.date(),
 });
 

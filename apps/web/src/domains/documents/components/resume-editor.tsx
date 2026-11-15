@@ -7,6 +7,7 @@ import {
   Copy,
   CopyPlus,
   Highlighter,
+  Pencil,
   Plus,
   RotateCcw,
   Sparkles,
@@ -42,6 +43,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@repo/web/components/ui/dialog";
+import { Input } from "@repo/web/components/ui/input";
 import { toast } from "@repo/web/components/ui/sonner";
 import { Tabs, TabsList, TabsTrigger } from "@repo/web/components/ui/tabs";
 import { Textarea } from "@repo/web/components/ui/textarea";
@@ -150,11 +152,10 @@ export function ResumeEditor({
   const content = draft ?? version.content;
   const language = version.language;
   const traceById = new Map(version.trace.map((row) => [row.evidenceId, row]));
+  const approvals = new Map(
+    version.credentialApprovals.map((row) => [row.credentialId, row.approvedAt])
+  );
   const edit = (next: ResumeContent) => setDraft(next);
-  const copy = async (text: string) => {
-    await navigator.clipboard.writeText(text);
-    toast.success(t.formatMessage({ defaultMessage: "Copied." }));
-  };
 
   return (
     <div className="flex flex-col gap-4">
@@ -186,6 +187,11 @@ export function ResumeEditor({
             <RotateCcw />
             {t.formatMessage({ defaultMessage: "Undo" })}
           </Button>
+          <RenameVersionDialog
+            versionId={version.id}
+            label={version.label}
+            onRenamed={refresh}
+          />
           <VersionHistorySheet versionId={version.id} />
           <Button
             size="sm"
@@ -290,11 +296,19 @@ export function ResumeEditor({
           <h2 className="text-2xl font-bold text-[#1f3a68] dark:text-sky-300">
             {content.header.name}
           </h2>
-          <EditableText
-            value={content.header.titleLine}
-            onChange={(value) => edit(updateTitleLine(content, value))}
-            className="font-medium"
-          />
+          <NotedLine
+            trace={trace}
+            note={t.formatMessage({
+              defaultMessage:
+                "The opening's title and technologies from your approved skills and evidence",
+            })}
+          >
+            <EditableText
+              value={content.header.titleLine}
+              onChange={(value) => edit(updateTitleLine(content, value))}
+              className="font-medium"
+            />
+          </NotedLine>
           <p className="text-muted-foreground text-xs">
             {[...content.header.contacts, content.header.city]
               .filter(Boolean)
@@ -308,15 +322,7 @@ export function ResumeEditor({
               <h3 className="text-xs font-semibold tracking-wide text-[#1f3a68] uppercase dark:text-sky-300">
                 {sectionTitles[language][section.kind]}
               </h3>
-              <Button
-                size="icon"
-                variant="ghost"
-                className="size-6"
-                title={t.formatMessage({ defaultMessage: "Copy text" })}
-                onClick={() => copy(sectionText(section, language))}
-              >
-                <Copy className="size-3.5" />
-              </Button>
+              <CopyButton text={sectionText(section, language)} />
             </div>
             <SectionBody
               section={section}
@@ -324,6 +330,7 @@ export function ResumeEditor({
               language={language}
               trace={trace}
               traceById={traceById}
+              approvals={approvals}
               onEdit={edit}
             />
           </section>
@@ -354,6 +361,7 @@ function SectionBody({
   language,
   trace,
   traceById,
+  approvals,
   onEdit,
 }: {
   section: ResumeSection;
@@ -361,6 +369,7 @@ function SectionBody({
   language: VersionView["language"];
   trace: boolean;
   traceById: Map<string, EvidenceTrace>;
+  approvals: Map<string, Date>;
   onEdit: (content: ResumeContent) => void;
 }) {
   const t = useTranslation();
@@ -407,15 +416,29 @@ function SectionBody({
             return (
               <div key={ownerId} className="flex flex-col gap-1">
                 {"positionId" in entry ? (
-                  <>
+                  <NotedLine
+                    trace={trace}
+                    note={t.formatMessage({
+                      defaultMessage:
+                        "Employer, title and dates: locked facts from your approved position",
+                    })}
+                  >
                     <div className="flex items-baseline justify-between gap-2">
-                      <span className="font-semibold">{entry.employer}</span>
+                      <span className="flex items-center gap-1 font-semibold">
+                        {entry.employer}
+                        <CopyButton
+                          text={sectionText(
+                            { kind: "experience", entries: [entry] },
+                            language
+                          )}
+                        />
+                      </span>
                       <span className="text-muted-foreground text-xs">
                         {formatPeriod(entry.startDate, entry.endDate, language)}
                       </span>
                     </div>
                     <span className="italic">{positionTitleLine(entry)}</span>
-                  </>
+                  </NotedLine>
                 ) : (
                   <span className="font-semibold">{entry.name}</span>
                 )}
@@ -458,7 +481,26 @@ function SectionBody({
       return (
         <ul className="flex flex-col gap-1">
           {section.entries.map((entry) => (
-            <li key={entry.credentialId}>{credentialLine(entry, language)}</li>
+            <li key={entry.credentialId}>
+              <NotedLine
+                trace={trace}
+                note={
+                  approvals.has(entry.credentialId)
+                    ? t.formatMessage(
+                        {
+                          defaultMessage:
+                            "Approved credential · approved {date}",
+                        },
+                        {
+                          date: t.formatDate(approvals.get(entry.credentialId)),
+                        }
+                      )
+                    : t.formatMessage({ defaultMessage: "Approved credential" })
+                }
+              >
+                {credentialLine(entry, language)}
+              </NotedLine>
+            </li>
           ))}
         </ul>
       );
@@ -513,15 +555,30 @@ function TracedLine({
                   )}
                 </span>
                 <span className="opacity-70">
-                  {[
-                    source.source,
-                    t.formatMessage(
-                      { defaultMessage: "approved {date}" },
-                      { date: t.formatDate(source.approvedAt) }
-                    ),
-                  ]
-                    .filter(Boolean)
-                    .join(" · ")}
+                  {source.source?.kind === "position"
+                    ? t.formatMessage(
+                        {
+                          defaultMessage:
+                            "{title} · {employer} · approved {date}",
+                        },
+                        {
+                          title: source.source.title,
+                          employer: source.source.employer,
+                          date: t.formatDate(source.approvedAt),
+                        }
+                      )
+                    : source.source?.kind === "credential"
+                      ? t.formatMessage(
+                          { defaultMessage: "{title} · approved {date}" },
+                          {
+                            title: source.source.title,
+                            date: t.formatDate(source.approvedAt),
+                          }
+                        )
+                      : t.formatMessage(
+                          { defaultMessage: "approved {date}" },
+                          { date: t.formatDate(source.approvedAt) }
+                        )}
                 </span>
               </div>
             ))}
@@ -531,6 +588,117 @@ function TracedLine({
         )}
       </TooltipContent>
     </Tooltip>
+  );
+}
+
+/** Renames the version's tab ("Portuguese · copy" becomes anything). */
+function RenameVersionDialog({
+  versionId,
+  label,
+  onRenamed,
+}: {
+  versionId: string;
+  label: string | null;
+  onRenamed: () => Promise<void>;
+}) {
+  const t = useTranslation();
+  const trpc = useTRPC();
+  const [open, setOpen] = useState(false);
+  const [value, setValue] = useState(label ?? "");
+  const rename = useMutation(
+    trpc.documents.renameVersion.mutationOptions({
+      onSuccess: async () => {
+        await onRenamed();
+        setOpen(false);
+      },
+      onError: (error) => toast.error(error.message),
+    })
+  );
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <Button
+          size="sm"
+          variant="ghost"
+          title={t.formatMessage({ defaultMessage: "Rename tab" })}
+        >
+          <Pencil />
+        </Button>
+      </DialogTrigger>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>
+            {t.formatMessage({ defaultMessage: "Rename tab" })}
+          </DialogTitle>
+          <DialogDescription>
+            {t.formatMessage({
+              defaultMessage:
+                "A short label shown next to the language. Leave it empty to show only the language.",
+            })}
+          </DialogDescription>
+        </DialogHeader>
+        <Input
+          value={value}
+          maxLength={60}
+          onChange={(event) => setValue(event.target.value)}
+        />
+        <DialogFooter>
+          <Button
+            disabled={rename.isPending}
+            onClick={() => rename.mutate({ versionId, label: value })}
+          >
+            {t.formatMessage({ defaultMessage: "Save" })}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+/** A line printed from a record (a locked fact, a credential). */
+function NotedLine({
+  note,
+  trace,
+  children,
+}: {
+  note: string;
+  trace: boolean;
+  children: React.ReactNode;
+}) {
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <div
+          className={cn(
+            "rounded-sm border-l-2 border-transparent pl-1.5",
+            trace && originTone.credential
+          )}
+        >
+          {children}
+        </div>
+      </TooltipTrigger>
+      <TooltipContent side="left" className="max-w-sm">
+        {note}
+      </TooltipContent>
+    </Tooltip>
+  );
+}
+
+function CopyButton({ text }: { text: string }) {
+  const t = useTranslation();
+  return (
+    <Button
+      size="icon"
+      variant="ghost"
+      className="size-6"
+      title={t.formatMessage({ defaultMessage: "Copy text" })}
+      onClick={async () => {
+        await navigator.clipboard.writeText(text);
+        toast.success(t.formatMessage({ defaultMessage: "Copied." }));
+      }}
+    >
+      <Copy className="size-3.5" />
+    </Button>
   );
 }
 

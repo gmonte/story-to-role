@@ -1,7 +1,7 @@
 import type { ReviewDepth } from "../schemas/document";
 
 /**
- * Review rounds (resume spec, "Review rounds"): the number behind each depth
+ * Review rounds (resume spec, "Review rounds"): the number behind each review depth
  * is a setting, tuned with the ratings stored per round.
  */
 export const generationSettings = {

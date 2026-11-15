@@ -40,6 +40,8 @@ import {
 
 const notFound = () => new TRPCError({ code: "NOT_FOUND" });
 
+type TraceSource = Awaited<ReturnType<DocumentsService["traceSource"]>>;
+
 /**
  * Documents from the user's side (resume spec, "Versions and snapshots"):
  * generation starts the application, every change is an immutable
@@ -62,7 +64,8 @@ export class DocumentsService {
   private async requireVersion(
     tx: DbClient,
     userId: string,
-    versionId: string
+    versionId: string,
+    { lock = false } = {}
   ) {
     const repository = new DocumentsRepository(tx);
     const profile = await this.requireProfile(userId, tx);
@@ -71,6 +74,7 @@ export class DocumentsService {
       ? await repository.findDocument(version.documentId)
       : null;
     if (!version || document?.profileId !== profile.id) throw notFound();
+    if (lock) await repository.lockVersion(version.id);
     return { version, document, profile };
   }
 
@@ -83,10 +87,13 @@ export class DocumentsService {
     userId: string;
     openingId: string;
     language: OutputLanguage;
-    depth: ReviewDepth;
+    reviewDepth: ReviewDepth;
     writingLevel: WritingLevel;
     tone: Tone;
     versionId?: string;
+    /** Sections forced in or out for this application only. */
+    sectionsForcedIn?: ResumeSectionKind[];
+    sectionsForcedOut?: ResumeSectionKind[];
   }): Promise<{ generationId: string; realtime: RealtimeSubscription }> {
     const profile = await this.requireProfile(input.userId);
     const generation = await this.db.transaction(async (tx) => {
@@ -99,24 +106,23 @@ export class DocumentsService {
         throw new TRPCError({ code: "PRECONDITION_FAILED" });
       }
       const repository = new DocumentsRepository(tx);
-      const application =
-        (await repository.findApplicationByOpening(opening.id)) ??
-        (await repository.insertApplication({
-          profileId: profile.id,
-          openingId: opening.id,
-          tone: input.tone,
-        }));
-      await repository.updateApplication(application.id, { tone: input.tone });
-      const document =
-        (await repository.findApplicationDocument({
-          applicationId: application.id,
-          kind: "resume",
-        })) ??
-        (await repository.insertDocument({
-          profileId: profile.id,
-          applicationId: application.id,
-          kind: "resume",
-        }));
+      const application = await repository.findOrInsertApplication({
+        profileId: profile.id,
+        openingId: opening.id,
+      });
+      const forcedIn = input.sectionsForcedIn ?? application.sectionsForcedIn;
+      await repository.updateApplication(application.id, {
+        tone: input.tone,
+        sectionsForcedIn: forcedIn,
+        sectionsForcedOut: (
+          input.sectionsForcedOut ?? application.sectionsForcedOut
+        ).filter((kind) => !forcedIn.includes(kind)),
+      });
+      const document = await repository.findOrInsertApplicationDocument({
+        profileId: profile.id,
+        applicationId: application.id,
+        kind: "resume",
+      });
       if (input.versionId) {
         const version = await repository.findVersion(input.versionId);
         if (version?.documentId !== document.id) throw notFound();
@@ -126,7 +132,7 @@ export class DocumentsService {
         documentId: document.id,
         versionId: input.versionId ?? null,
         language: input.language,
-        depth: input.depth,
+        reviewDepth: input.reviewDepth,
         writingLevel: input.writingLevel,
         tone: input.tone,
       });
@@ -156,6 +162,7 @@ export class DocumentsService {
       if (!application) return { application: null, documents: [] };
       const cipher = await getUserCipher(tx, input.userId);
       const keywords = await this.keywordsWithEvidence(tx, cipher, opening.id);
+      const trace = await this.traceSource(tx, cipher, profile.id);
       const documents = await repository.listApplicationDocuments(
         application.id
       );
@@ -169,7 +176,7 @@ export class DocumentsService {
         },
         documents: await Promise.all(
           documents.map((document) =>
-            this.documentView(tx, cipher, profile.id, document, keywords)
+            this.documentView(tx, cipher, document, keywords, trace)
           )
         ),
       };
@@ -179,17 +186,16 @@ export class DocumentsService {
   private async documentView(
     tx: DbClient,
     cipher: UserCipher,
-    profileId: string,
     document: { id: string; kind: "resume" | "cover_letter" },
-    keywords: Array<{ term: string; backedByEvidence: boolean }> | null
+    keywords: Array<{ term: string; backedByEvidence: boolean }> | null,
+    trace: TraceSource
   ): Promise<DocumentView> {
     const repository = new DocumentsRepository(tx);
     const versions = await repository.listVersions([document.id]);
     const generation = await repository.latestGeneration(document.id);
     const views: VersionView[] = [];
     for (const version of versions) {
-      const snapshots = await repository.listSnapshots(version.id);
-      const latest = snapshots[0];
+      const latest = await repository.latestSnapshot(version.id);
       if (!latest) continue;
       const content = this.decryptContent(cipher, latest.encryptedContent);
       views.push({
@@ -199,13 +205,14 @@ export class DocumentsService {
           ? cipher.decrypt(version.encryptedLabel)
           : null,
         snapshot: summary(latest),
-        snapshotCount: snapshots.length,
+        snapshotCount: await repository.countSnapshots(version.id),
         content,
         pages: estimatePages(content),
         atsCheck: keywords
           ? atsCheck({ text: resumeText(content), keywords })
           : null,
-        trace: await this.trace(tx, cipher, profileId, content),
+        trace: trace.evidenceFor(content),
+        credentialApprovals: trace.credentialApprovals,
       });
     }
     return {
@@ -217,8 +224,9 @@ export class DocumentsService {
             id: generation.id,
             status: generation.status,
             language: generation.language,
-            depth: generation.depth,
+            reviewDepth: generation.reviewDepth,
             writingLevel: generation.writingLevel,
+            progress: await repository.generationProgress(generation.id),
             createdAt: generation.createdAt,
           }
         : null,
@@ -243,47 +251,69 @@ export class DocumentsService {
       return {
         term: cipher.decrypt(term.encryptedText),
         backedByEvidence:
-          !!item && item.verdict !== "gap" && item.evidenceIds.length > 0,
+          !!item && item.verdict === "met" && item.evidenceIds.length > 0,
       };
     });
   }
 
-  /** Where each evidence line came from: quote, position and approval. */
-  private async trace(
+  /**
+   * Where lines come from, loaded once per view: each evidence item's quote,
+   * position or credential and approval date, and each credential's
+   * approval date.
+   */
+  private async traceSource(
     tx: DbClient,
     cipher: UserCipher,
-    profileId: string,
-    content: ResumeContent
-  ): Promise<EvidenceTrace[]> {
-    const ids = new Set(
-      resumeLines(content).flatMap((line) =>
-        line.origin.kind === "evidence" || line.origin.kind === "skill"
-          ? line.origin.evidenceIds
-          : []
-      )
-    );
-    if (ids.size === 0) return [];
-    const evidence = (
-      await new EvidenceRepository(tx).listEvidence(profileId)
-    ).filter((row) => ids.has(row.id));
+    profileId: string
+  ) {
     const career = new CareerRepository(tx);
     const positions = await career.listPositions(profileId);
     const credentials = await career.listCredentials(profileId);
-    return evidence.map((row) => {
-      const position = positions.find((p) => p.id === row.positionId);
-      const credential = credentials.find((c) => c.id === row.credentialId);
-      return {
-        evidenceId: row.id,
-        text: cipher.decrypt(row.encryptedText),
-        quote: cipher.decrypt(row.encryptedSourceQuote),
-        source: position
-          ? `${cipher.decrypt(position.encryptedTitle)} · ${cipher.decrypt(position.encryptedEmployer)}`
-          : credential
-            ? cipher.decrypt(credential.encryptedTitle)
-            : null,
-        approvedAt: row.approvedAt,
-      };
-    });
+    const evidence = await new EvidenceRepository(tx).listEvidence(profileId);
+    const byId = new Map(
+      evidence.map((row): [string, EvidenceTrace] => {
+        const position = positions.find((p) => p.id === row.positionId);
+        const credential = credentials.find((c) => c.id === row.credentialId);
+        return [
+          row.id,
+          {
+            evidenceId: row.id,
+            text: cipher.decrypt(row.encryptedText),
+            quote: cipher.decrypt(row.encryptedSourceQuote),
+            source: position
+              ? {
+                  kind: "position",
+                  title: cipher.decrypt(position.encryptedTitle),
+                  employer: cipher.decrypt(position.encryptedEmployer),
+                }
+              : credential
+                ? {
+                    kind: "credential",
+                    title: cipher.decrypt(credential.encryptedTitle),
+                  }
+                : null,
+            approvedAt: row.approvedAt,
+          },
+        ];
+      })
+    );
+    return {
+      evidenceFor(content: ResumeContent) {
+        const ids = new Set(
+          resumeLines(content).flatMap((line) =>
+            line.origin.kind === "evidence" || line.origin.kind === "skill"
+              ? line.origin.evidenceIds
+              : []
+          )
+        );
+        return [...ids].flatMap((id) => byId.get(id) ?? []);
+      },
+      credentialApprovals: credentials.flatMap((row) =>
+        row.approvedAt
+          ? [{ credentialId: row.id, approvedAt: row.approvedAt }]
+          : []
+      ),
+    };
   }
 
   private decryptContent(cipher: UserCipher, encrypted: string) {
@@ -305,7 +335,8 @@ export class DocumentsService {
       const { version } = await this.requireVersion(
         tx,
         input.userId,
-        input.versionId
+        input.versionId,
+        { lock: true }
       );
       const latest = await repository.latestSnapshot(version.id);
       if (latest?.id !== input.baseSnapshotId) {
@@ -347,11 +378,10 @@ export class DocumentsService {
       const { version } = await this.requireVersion(
         tx,
         input.userId,
-        input.versionId
+        input.versionId,
+        { lock: true }
       );
-      const [latest, previous] = await repository
-        .listSnapshots(version.id)
-        .limit(2);
+      const { latest, previous } = await repository.topTwoSnapshots(version.id);
       if (!latest || !previous) {
         throw new TRPCError({ code: "PRECONDITION_FAILED" });
       }
@@ -396,7 +426,8 @@ export class DocumentsService {
       const { version } = await this.requireVersion(
         tx,
         input.userId,
-        old.versionId
+        old.versionId,
+        { lock: true }
       );
       const latest = await repository.latestSnapshot(version.id);
       const snapshot = await repository.insertSnapshot({
@@ -475,25 +506,6 @@ export class DocumentsService {
         input.versionId
       );
       await repository.deleteVersion(version.id);
-    });
-  }
-
-  /** Forces resume sections in or out for one application only. */
-  async setApplicationSections(input: {
-    userId: string;
-    applicationId: string;
-    forcedIn: ResumeSectionKind[];
-    forcedOut: ResumeSectionKind[];
-  }) {
-    const profile = await this.requireProfile(input.userId);
-    const repository = new DocumentsRepository(this.db);
-    const application = await repository.findApplication(input.applicationId);
-    if (application?.profileId !== profile.id) throw notFound();
-    await repository.updateApplication(application.id, {
-      sectionsForcedIn: input.forcedIn,
-      sectionsForcedOut: input.forcedOut.filter(
-        (kind) => !input.forcedIn.includes(kind)
-      ),
     });
   }
 }

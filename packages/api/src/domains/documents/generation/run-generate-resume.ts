@@ -31,7 +31,10 @@ import {
 import {
   estimatePages,
   findForbiddenLines,
+  lockedFactViolations,
+  maxResumePages,
   resumeLines,
+  trimToPages,
 } from "./resume-checks";
 
 const reviewSchema = z.object({
@@ -123,7 +126,7 @@ export async function runGenerateResume(deps: {
       style: setup.style,
     });
     const role = generation.writingLevel === "maximum" ? "maximum" : "writing";
-    const totalRounds = generationSettings.reviewRounds[generation.depth];
+    const totalRounds = generationSettings.reviewRounds[generation.reviewDepth];
     const progress = (step: number, label: string) =>
       deps.reportProgress?.({ step, totalSteps: totalRounds + 2, label });
 
@@ -150,7 +153,7 @@ export async function runGenerateResume(deps: {
     ): Promise<Candidate> => {
       const { object, usage } = await ai.generateObject({
         purpose: "resume_review",
-        role: "classification",
+        role: "writing",
         maxTokens: generationSettings.reviewMaxTokens,
         schema: reviewSchema,
         system: reviewerPrompt({
@@ -185,12 +188,11 @@ export async function runGenerateResume(deps: {
     const candidates = [await review(evaluate(first.object), 0, [first.usage])];
     for (let round = 1; round <= totalRounds; round++) {
       const previous = candidates.at(-1)!;
-      if (round > 1) {
-        const before = candidates.at(-2)!;
-        if (previous.rating >= generationSettings.targetRating) break;
-        if (previous.rating <= before.rating) break;
-      }
-      await progress(round + 1, `review_round:${round}:${totalRounds}`);
+      const fits = previous.pages <= maxResumePages;
+      if (fits && previous.rating >= generationSettings.targetRating) break;
+      if (round > 1 && previous.rating <= candidates.at(-2)!.rating) break;
+      // Step 2 is review round 1; the steps around it draft and save.
+      await progress(round + 1, "review_round");
       const forbiddenTexts = resumeLines(previous.content)
         .filter((line) => previous.forbidden.includes(line.id))
         .map((line) => line.text);
@@ -215,11 +217,22 @@ export async function runGenerateResume(deps: {
       );
     }
 
-    const best = candidates.reduce((top, candidate) =>
-      candidate.rating > top.rating ? candidate : top
+    // A draft within two pages beats a longer one; then the rating decides.
+    const fits = (candidate: Candidate) => candidate.pages <= maxResumePages;
+    const best = candidates.reduce((top, candidate) => {
+      if (fits(candidate) !== fits(top))
+        return fits(candidate) ? candidate : top;
+      return candidate.rating > top.rating ? candidate : top;
+    });
+    // Code has the last word: lines with a forbidden term go, and a resume
+    // still over two pages loses the last bullets of its oldest positions.
+    const content = trimToPages(
+      withoutLines(best.content, best.forbidden),
+      maxResumePages
     );
-    // Code has the last word: any line still carrying a forbidden term goes.
-    const content = withoutLines(best.content, best.forbidden);
+    if (lockedFactViolations(content, context.positions).length > 0) {
+      throw new Error(`Generation ${generation.id} altered a locked fact`);
+    }
 
     await progress(totalRounds + 2, "saving");
     await db.transaction(async (tx) => {
@@ -233,6 +246,8 @@ export async function runGenerateResume(deps: {
           documentId: document.id,
           language: generation.language,
         }));
+      // A user edit saved meanwhile stays below: the generation lands on top.
+      await repository.lockVersion(version.id);
       const latest = await repository.latestSnapshot(version.id);
       const snapshot = await repository.insertSnapshot({
         versionId: version.id,

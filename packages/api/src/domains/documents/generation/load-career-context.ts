@@ -64,8 +64,9 @@ export async function loadCareerContext(input: {
     .filter((position) => position.status === "approved")
     .map((position) => ({
       id: position.id,
-      employer: cipher.decrypt(position.encryptedEmployer),
-      title: cipher.decrypt(position.encryptedTitle),
+      // Locked facts are printed by code, so code applies the choices too.
+      employer: filter.apply(cipher.decrypt(position.encryptedEmployer)),
+      title: filter.apply(cipher.decrypt(position.encryptedTitle)),
       startDate: position.startDate,
       endDate: position.endDate,
     }))
@@ -77,16 +78,21 @@ export async function loadCareerContext(input: {
   const positionIds = new Set(positions.map((position) => position.id));
 
   const credentials = (await career.listCredentials(profileId))
-    .filter((credential) => credential.approvedAt)
+    .filter(
+      (credential) =>
+        credential.approvedAt && credential.status !== "do_not_use"
+    )
     .map((credential) => ({
       id: credential.id,
       kind: credential.kind,
-      title: cipher.decrypt(credential.encryptedTitle),
-      institution: open(credential.encryptedInstitution),
+      title: filter.apply(cipher.decrypt(credential.encryptedTitle)),
+      institution: open(credential.encryptedInstitution)
+        ? filter.apply(open(credential.encryptedInstitution)!)
+        : null,
       level: credential.level,
       startDate: credential.startDate,
       endDate: credential.endDate,
-      inProgress: credential.status !== "completed",
+      inProgress: credential.status === "in_progress",
     }));
   const credentialIds = new Set(credentials.map((row) => row.id));
 

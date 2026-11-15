@@ -3,6 +3,7 @@
 import { useState, type ReactNode } from "react";
 
 import { useMutation } from "@tanstack/react-query";
+import { ChevronDown } from "lucide-react";
 import Link from "next/link";
 
 import type {
@@ -11,9 +12,18 @@ import type {
   WritingLevel,
 } from "@repo/api/domains/documents/schemas/document";
 import { generationSettings } from "@repo/api/domains/documents/generation/generation-settings";
+import {
+  resumeSectionKinds,
+  type ResumeSectionKind,
+} from "@repo/api/domains/documents/schemas/resume-content";
 import type { Tone } from "@repo/api/domains/openings/schemas/opening";
 import { useTranslation } from "@repo/intl/use-translation";
 import { Button } from "@repo/web/components/ui/button";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@repo/web/components/ui/collapsible";
 import {
   Dialog,
   DialogContent,
@@ -58,6 +68,8 @@ export function GenerateResumeDialog({
   defaultTone,
   versionId,
   pendingGaps,
+  existingLanguages = [],
+  application,
   trigger,
 }: {
   openingId: string;
@@ -65,6 +77,12 @@ export function GenerateResumeDialog({
   defaultTone: Tone;
   versionId?: string;
   pendingGaps: number;
+  /** Languages the resume already has: another one asks first. */
+  existingLanguages?: OutputLanguage[];
+  application?: {
+    sectionsForcedIn: ResumeSectionKind[];
+    sectionsForcedOut: ResumeSectionKind[];
+  } | null;
   trigger: ReactNode;
 }) {
   const t = useTranslation();
@@ -74,9 +92,20 @@ export function GenerateResumeDialog({
   const refresh = useRefreshDocuments();
   const [open, setOpen] = useState(false);
   const [language, setLanguage] = useState(defaultLanguage);
-  const [depth, setDepth] = useState<ReviewDepth>("quick");
+  const [reviewDepth, setReviewDepth] = useState<ReviewDepth>("quick");
   const [writingLevel, setWritingLevel] = useState<WritingLevel>("standard");
   const [tone, setTone] = useState(defaultTone);
+  const [forced, setForced] = useState<
+    Partial<Record<ResumeSectionKind, "in" | "out">>
+  >(() => ({
+    ...Object.fromEntries(
+      (application?.sectionsForcedIn ?? []).map((kind) => [kind, "in"])
+    ),
+    ...Object.fromEntries(
+      (application?.sectionsForcedOut ?? []).map((kind) => [kind, "out"])
+    ),
+  }));
+  const repeatsLanguage = !versionId && existingLanguages.includes(language);
   const generate = useMutation(
     trpc.documents.generateResume.mutationOptions({
       onSuccess: async () => {
@@ -144,8 +173,8 @@ export function GenerateResumeDialog({
           <div className="grid gap-1.5">
             <Label>{t.formatMessage({ defaultMessage: "Review" })}</Label>
             <RadioGroup
-              value={depth}
-              onValueChange={(value) => setDepth(value as ReviewDepth)}
+              value={reviewDepth}
+              onValueChange={(value) => setReviewDepth(value as ReviewDepth)}
               className="grid gap-2"
             >
               {(["quick", "thorough"] as const).map((option) => (
@@ -155,7 +184,9 @@ export function GenerateResumeDialog({
                 >
                   <RadioGroupItem value={option} className="mt-0.5" />
                   <span>
-                    <span className="font-medium">{labels.depth(option)}</span>
+                    <span className="font-medium">
+                      {labels.reviewDepth(option)}
+                    </span>
                     <span className="text-muted-foreground block text-xs">
                       {option === "quick"
                         ? t.formatMessage({
@@ -213,6 +244,63 @@ export function GenerateResumeDialog({
           </div>
         </div>
 
+        {repeatsLanguage && (
+          <p className="rounded-md border border-amber-500/40 bg-amber-500/10 p-2.5 text-xs">
+            {t.formatMessage(
+              {
+                defaultMessage:
+                  "This resume already has a version in {language}. Do you really want another one?",
+              },
+              { language: labels.language(language) }
+            )}
+          </p>
+        )}
+
+        <Collapsible>
+          <CollapsibleTrigger className="text-muted-foreground flex items-center gap-1 text-xs hover:underline">
+            <ChevronDown className="size-3.5" />
+            {t.formatMessage({
+              defaultMessage: "Sections for this application",
+            })}
+          </CollapsibleTrigger>
+          <CollapsibleContent className="mt-2 grid gap-1.5">
+            {resumeSectionKinds.map((kind) => (
+              <div
+                key={kind}
+                className="flex items-center justify-between gap-2 text-sm"
+              >
+                <span>{labels.section(kind)}</span>
+                <Select
+                  value={forced[kind] ?? "template"}
+                  onValueChange={(value) =>
+                    setForced({
+                      ...forced,
+                      [kind]: value === "template" ? undefined : value,
+                    })
+                  }
+                >
+                  <SelectTrigger className="h-7 w-40 text-xs">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="template">
+                      {t.formatMessage({
+                        defaultMessage: "As in the template",
+                      })}
+                    </SelectItem>
+                    <SelectItem value="in">
+                      {t.formatMessage({ defaultMessage: "Always include" })}
+                    </SelectItem>
+                    <SelectItem value="out">
+                      {t.formatMessage({ defaultMessage: "Leave out" })}
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            ))}
+          </CollapsibleContent>
+        </Collapsible>
+
         <DialogFooter className="items-center sm:justify-between">
           <Link
             href="/app/writing"
@@ -226,14 +314,22 @@ export function GenerateResumeDialog({
               generate.mutate({
                 openingId,
                 language,
-                depth,
+                reviewDepth,
                 writingLevel,
                 tone,
                 versionId,
+                sectionsForcedIn: resumeSectionKinds.filter(
+                  (kind) => forced[kind] === "in"
+                ),
+                sectionsForcedOut: resumeSectionKinds.filter(
+                  (kind) => forced[kind] === "out"
+                ),
               })
             }
           >
-            {t.formatMessage({ defaultMessage: "Generate" })}
+            {repeatsLanguage
+              ? t.formatMessage({ defaultMessage: "Create another version" })
+              : t.formatMessage({ defaultMessage: "Generate" })}
           </Button>
         </DialogFooter>
       </DialogContent>

@@ -51,7 +51,7 @@ CREATE TABLE IF NOT EXISTS "generations" (
 	"documentId" uuid NOT NULL,
 	"versionId" uuid,
 	"language" text NOT NULL,
-	"depth" text NOT NULL,
+	"reviewDepth" text NOT NULL,
 	"writingLevel" text NOT NULL,
 	"tone" text NOT NULL,
 	"status" text DEFAULT 'pending' NOT NULL,

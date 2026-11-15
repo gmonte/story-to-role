@@ -28,7 +28,7 @@ export function useDocumentLabels() {
           )
         : language(version.language);
     },
-    depth(depth: ReviewDepth) {
+    reviewDepth(depth: ReviewDepth) {
       switch (depth) {
         case "quick":
           return t.formatMessage({ defaultMessage: "Quick" });

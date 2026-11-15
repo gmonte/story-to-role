@@ -1,6 +1,7 @@
-import { and, asc, desc, eq, inArray } from "drizzle-orm";
+import { and, asc, count, desc, eq, inArray } from "drizzle-orm";
 
 import { applicationsTable } from "@repo/api/domains/applications/db/applications-tables";
+import { tasksTable } from "@repo/api/domains/tasks/db/tasks-tables";
 import type { DbClient } from "@repo/api/tools/db-client";
 
 import {
@@ -33,12 +34,16 @@ export class DocumentsRepository {
     return row ?? null;
   }
 
-  async insertApplication(application: Insert<typeof applicationsTable>) {
-    const [row] = await this.tx
+  /**
+   * The opening's application, created if missing; two requests at once
+   * share one row instead of colliding on the unique opening.
+   */
+  async findOrInsertApplication(application: Insert<typeof applicationsTable>) {
+    await this.tx
       .insert(applicationsTable)
       .values(application)
-      .returning();
-    return row;
+      .onConflictDoNothing({ target: applicationsTable.openingId });
+    return await this.findApplicationByOpening(application.openingId);
   }
 
   async updateApplication(
@@ -66,10 +71,18 @@ export class DocumentsRepository {
     return row ?? null;
   }
 
-  async findApplicationDocument(input: {
+  /** The application's document of a kind, created if missing. */
+  async findOrInsertApplicationDocument(input: {
+    profileId: string;
     applicationId: string;
     kind: "resume" | "cover_letter";
   }) {
+    await this.tx
+      .insert(documentsTable)
+      .values(input)
+      .onConflictDoNothing({
+        target: [documentsTable.applicationId, documentsTable.kind],
+      });
     const [row] = await this.tx
       .select()
       .from(documentsTable)
@@ -79,7 +92,7 @@ export class DocumentsRepository {
           eq(documentsTable.kind, input.kind)
         )
       );
-    return row ?? null;
+    return row;
   }
 
   listApplicationDocuments(applicationId: string) {
@@ -132,6 +145,19 @@ export class DocumentsRepository {
       .where(eq(documentVersionsTable.id, versionId));
   }
 
+  /**
+   * Locks the version until the transaction ends, so snapshots pushed or
+   * popped at the same time line up instead of colliding on a sequence.
+   */
+  async lockVersion(versionId: string) {
+    const [row] = await this.tx
+      .select({ id: documentVersionsTable.id })
+      .from(documentVersionsTable)
+      .where(eq(documentVersionsTable.id, versionId))
+      .for("update");
+    return row ?? null;
+  }
+
   async deleteVersion(versionId: string) {
     await this.tx
       .delete(documentVersionsTable)
@@ -145,6 +171,20 @@ export class DocumentsRepository {
       .from(documentSnapshotsTable)
       .where(eq(documentSnapshotsTable.versionId, versionId))
       .orderBy(desc(documentSnapshotsTable.sequence));
+  }
+
+  /** The official snapshot and the one below it, if any. */
+  async topTwoSnapshots(versionId: string) {
+    const [latest, previous] = await this.listSnapshots(versionId).limit(2);
+    return { latest: latest ?? null, previous: previous ?? null };
+  }
+
+  async countSnapshots(versionId: string) {
+    const [row] = await this.tx
+      .select({ count: count() })
+      .from(documentSnapshotsTable)
+      .where(eq(documentSnapshotsTable.versionId, versionId));
+    return row?.count ?? 0;
   }
 
   async latestSnapshot(versionId: string) {
@@ -208,6 +248,17 @@ export class DocumentsRepository {
       .orderBy(desc(generationsTable.createdAt))
       .limit(1);
     return row ?? null;
+  }
+
+  /** What the generation's task last reported, for "review round 2 of 3". */
+  async generationProgress(generationId: string) {
+    const [row] = await this.tx
+      .select({ progress: tasksTable.progress })
+      .from(tasksTable)
+      .where(eq(tasksTable.subjectId, generationId))
+      .orderBy(desc(tasksTable.createdAt))
+      .limit(1);
+    return row?.progress ?? null;
   }
 
   async insertReviewRounds(rows: Array<Insert<typeof reviewRoundsTable>>) {

@@ -115,7 +115,7 @@ export const generationsTable = createTable(
       .uuid()
       .references(() => documentVersionsTable.id, { onDelete: "set null" }),
     language: d.text().$type<OutputLanguage>().notNull(),
-    depth: d.text().$type<ReviewDepth>().notNull(),
+    reviewDepth: d.text().$type<ReviewDepth>().notNull(),
     writingLevel: d.text().$type<WritingLevel>().notNull(),
     tone: d.text().$type<Tone>().notNull(),
     status: d.text().$type<GenerationStatus>().notNull().default("pending"),

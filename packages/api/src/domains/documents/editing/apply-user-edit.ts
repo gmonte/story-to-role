@@ -64,8 +64,24 @@ export function applyUserEdit(
               lines: entry.lines.map(mark),
             })),
           };
-        default:
+        default: {
+          // Credentials are locked facts too: entries may go, not change.
+          const before = previous.sections.find(
+            (row) => row.kind === section.kind
+          );
+          for (const entry of section.entries) {
+            const old =
+              before && "entries" in before
+                ? (before.entries as Array<{ credentialId?: string }>).find(
+                    (row) => row.credentialId === entry.credentialId
+                  )
+                : undefined;
+            if (!old || JSON.stringify(old) !== JSON.stringify(entry)) {
+              throw new LockedFactEditError(entry.credentialId);
+            }
+          }
           return section;
+        }
       }
     }),
   };

@@ -5,6 +5,7 @@ import { FileText, Loader2, Plus } from "lucide-react";
 import type { OutputLanguage } from "@repo/api/domains/documents/schemas/document";
 import type { VersionView } from "@repo/api/domains/documents/schemas/document-view";
 import type { Tone } from "@repo/api/domains/openings/schemas/opening";
+import type { TaskProgress } from "@repo/api/domains/tasks/schemas/task";
 import { useTranslation } from "@repo/intl/use-translation";
 import { Badge } from "@repo/web/components/ui/badge";
 import { Button } from "@repo/web/components/ui/button";
@@ -53,6 +54,8 @@ export function DocumentsPanel({
             defaultLanguage={defaultLanguage}
             defaultTone={documents.data?.application?.tone ?? defaultTone}
             pendingGaps={pendingGaps}
+            existingLanguages={versions.map((version) => version.language)}
+            application={documents.data?.application ?? null}
             trigger={
               <Button size="sm" variant="ghost" disabled={running}>
                 <Plus />
@@ -66,16 +69,13 @@ export function DocumentsPanel({
       {running && (
         <div className="bg-background flex items-center gap-2 rounded-lg border p-2.5 text-xs">
           <Loader2 className="size-3.5 animate-spin" />
-          {t.formatMessage({
-            defaultMessage: "Generating the resume: drafting and reviewing…",
-          })}
+          <GenerationProgressLabel progress={generation.progress} />
         </div>
       )}
       {generation?.status === "failed" && (
         <p className="rounded-lg border border-red-500/40 bg-red-500/10 p-2.5 text-xs">
           {t.formatMessage({
-            defaultMessage:
-              "The last generation failed. Nothing was charged; try again.",
+            defaultMessage: "The last generation failed. Try again.",
           })}
         </p>
       )}
@@ -93,6 +93,8 @@ export function DocumentsPanel({
             defaultLanguage={defaultLanguage}
             defaultTone={defaultTone}
             pendingGaps={pendingGaps}
+            existingLanguages={[]}
+            application={documents.data?.application ?? null}
             trigger={
               <Button size="sm" className="self-start">
                 <FileText />
@@ -139,6 +141,28 @@ export function DocumentsPanel({
       {selected && <VersionChecks version={selected} />}
     </section>
   );
+}
+
+function GenerationProgressLabel({
+  progress,
+}: {
+  progress: TaskProgress | null;
+}) {
+  const t = useTranslation();
+  switch (progress?.label) {
+    case "review_round":
+      // Step 1 drafts and the last step saves; the ones between are rounds.
+      return t.formatMessage(
+        {
+          defaultMessage: "Generating resume: review round {round} of {total}",
+        },
+        { round: progress.step - 1, total: progress.totalSteps - 2 }
+      );
+    case "saving":
+      return t.formatMessage({ defaultMessage: "Generating resume: saving" });
+    default:
+      return t.formatMessage({ defaultMessage: "Generating resume: drafting" });
+  }
 }
 
 function VersionChecks({ version }: { version: VersionView }) {

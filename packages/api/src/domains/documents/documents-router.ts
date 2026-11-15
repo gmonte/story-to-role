@@ -57,10 +57,12 @@ export const documentsRouter = createTRPCRouter({
       z.object({
         openingId: z.uuid(),
         language: outputLanguageSchema,
-        depth: reviewDepthSchema,
+        reviewDepth: reviewDepthSchema,
         writingLevel: writingLevelSchema,
         tone: toneSchema,
         versionId: z.uuid().optional(),
+        sectionsForcedIn: z.array(resumeSectionKindSchema).optional(),
+        sectionsForcedOut: z.array(resumeSectionKindSchema).optional(),
       })
     )
     .output(
@@ -198,31 +200,6 @@ export const documentsRouter = createTRPCRouter({
     .output(okSchema)
     .mutation(async ({ ctx, input }) => {
       await new DocumentsService(db).deleteVersion({
-        userId: ctx.userId,
-        ...input,
-      });
-      return ok;
-    }),
-
-  setApplicationSections: userProcedure
-    .meta(
-      openApiMeta(
-        "documents",
-        "PUT",
-        "/applications/by-id/{applicationId}/sections",
-        "Forces resume sections in or out for this application"
-      )
-    )
-    .input(
-      z.object({
-        applicationId: z.uuid(),
-        forcedIn: z.array(resumeSectionKindSchema),
-        forcedOut: z.array(resumeSectionKindSchema),
-      })
-    )
-    .output(okSchema)
-    .mutation(async ({ ctx, input }) => {
-      await new DocumentsService(db).setApplicationSections({
         userId: ctx.userId,
         ...input,
       });

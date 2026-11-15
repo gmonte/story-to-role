@@ -212,13 +212,36 @@ export function assembleResume(input: {
     ) as Record<CredentialSectionKind, () => ResumeSection | null>),
   };
 
+  // "Target title | technologies": the target title names the opening; each
+  // technology must be an approved skill or spelled out in the evidence.
+  function checkedTitleLine() {
+    const [title, ...rest] = draft.title_line.split("|");
+    const evidenceText = normalize(
+      context.evidence.map((row) => row.text).join(" ")
+    );
+    const technologies = rest
+      .join("|")
+      .split(",")
+      .map((item) => item.trim())
+      .filter(Boolean)
+      .filter((item) => {
+        const known =
+          context.skills.some(
+            (skill) => normalize(skill.name) === normalize(item)
+          ) || evidenceText.includes(normalize(item));
+        if (!known) dropped.push({ text: item, reason: "unknown_skill" });
+        return known;
+      });
+    return [title.trim(), technologies.join(", ")].filter(Boolean).join(" | ");
+  }
+
   const { header } = input;
   return {
     content: {
       kind: "resume",
       header: {
         name: header.name,
-        titleLine: draft.title_line.trim(),
+        titleLine: checkedTitleLine(),
         contacts: [header.email, header.phone, header.linkedin, header.github]
           .map((value) => value.trim())
           .filter(Boolean),

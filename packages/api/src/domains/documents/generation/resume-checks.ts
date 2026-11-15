@@ -144,3 +144,46 @@ export function estimatePages(content: ResumeContent) {
 }
 
 export const maxResumePages = 2;
+
+/**
+ * Removes bullets until the estimate fits: the last bullet of the oldest
+ * position (or project) that still has more than one goes first, then the
+ * single ones, oldest first. Nothing is rewritten, so every line kept
+ * still rests on its evidence.
+ */
+export function trimToPages(content: ResumeContent, pages: number) {
+  let current = content;
+  while (estimatePages(current) > pages) {
+    const entries = current.sections.flatMap((section, sectionIndex) =>
+      section.kind === "experience" || section.kind === "projects"
+        ? section.entries.map((entry, entryIndex) => ({
+            sectionIndex,
+            entryIndex,
+            count: entry.lines.length,
+          }))
+        : []
+    );
+    // Entries are most recent first, so the oldest come last.
+    const target =
+      [...entries].reverse().find((entry) => entry.count > 1) ??
+      [...entries].reverse().find((entry) => entry.count > 0);
+    if (!target) return current;
+    current = {
+      ...current,
+      sections: current.sections.map((section, sectionIndex) =>
+        sectionIndex === target.sectionIndex &&
+        (section.kind === "experience" || section.kind === "projects")
+          ? ({
+              ...section,
+              entries: section.entries.map((entry, entryIndex) =>
+                entryIndex === target.entryIndex
+                  ? { ...entry, lines: entry.lines.slice(0, -1) }
+                  : entry
+              ),
+            } as typeof section)
+          : section
+      ),
+    };
+  }
+  return current;
+}

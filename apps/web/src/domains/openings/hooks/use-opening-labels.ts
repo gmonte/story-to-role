@@ -1,0 +1,97 @@
+"use client";
+
+import type {
+  FitBand,
+  FitVerdict,
+  OpeningTermCategory,
+  Tone,
+} from "@repo/api/domains/openings/schemas/opening";
+import { useTranslation } from "@repo/intl/use-translation";
+
+export function useOpeningLabels() {
+  const t = useTranslation();
+
+  return {
+    band(band: FitBand) {
+      switch (band) {
+        case "high":
+          return t.formatMessage({ defaultMessage: "High fit" });
+        case "medium":
+          return t.formatMessage({ defaultMessage: "Medium fit" });
+        case "low":
+          return t.formatMessage({ defaultMessage: "Low fit" });
+      }
+    },
+    verdict(verdict: FitVerdict) {
+      switch (verdict) {
+        case "met":
+          return t.formatMessage({ defaultMessage: "Met" });
+        case "partial":
+          return t.formatMessage({ defaultMessage: "Partial" });
+        case "gap":
+          return t.formatMessage({ defaultMessage: "Gap" });
+      }
+    },
+    category(category: OpeningTermCategory) {
+      switch (category) {
+        case "hard_skill":
+          return t.formatMessage({ defaultMessage: "Skill" });
+        case "tool":
+          return t.formatMessage({ defaultMessage: "Tool" });
+        case "certification":
+          return t.formatMessage({ defaultMessage: "Certification" });
+        case "language":
+          return t.formatMessage({ defaultMessage: "Language" });
+        case "seniority":
+          return t.formatMessage({ defaultMessage: "Seniority" });
+        case "years_of_experience":
+          return t.formatMessage({ defaultMessage: "Experience" });
+        case "location":
+          return t.formatMessage({ defaultMessage: "Location" });
+        case "work_model":
+          return t.formatMessage({ defaultMessage: "Work model" });
+        case "other":
+          return t.formatMessage({ defaultMessage: "Requirement" });
+      }
+    },
+    tone(tone: Tone) {
+      switch (tone) {
+        case "your_style":
+          return t.formatMessage({ defaultMessage: "Your style" });
+        case "formal":
+          return t.formatMessage({ defaultMessage: "Formal" });
+        case "direct":
+          return t.formatMessage({ defaultMessage: "Direct" });
+        case "warm":
+          return t.formatMessage({ defaultMessage: "Warm" });
+        case "technical":
+          return t.formatMessage({ defaultMessage: "Technical" });
+      }
+    },
+    rejection(reason: string | null) {
+      switch (reason) {
+        case "not_a_job_posting":
+          return t.formatMessage({
+            defaultMessage: "This text doesn't look like a job posting.",
+          });
+        case "link_needs_paste":
+        case "link_unreachable":
+        case "link_unsupported_type":
+        case "link_too_large":
+          return t.formatMessage({
+            defaultMessage:
+              "We couldn't read that page. Paste the opening's text instead.",
+          });
+        case "link_blocked_address":
+        case "link_invalid_url":
+          return t.formatMessage({
+            defaultMessage: "That link can't be read.",
+          });
+        default:
+          return t.formatMessage({
+            defaultMessage: "This opening couldn't be analyzed.",
+          });
+      }
+    },
+  };
+}

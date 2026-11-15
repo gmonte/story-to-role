@@ -113,10 +113,14 @@ function LetterForm({
   const [chosenResume, setChosenResume] = useState<string | null>(null);
   const [tone, setTone] = useState(defaultTone);
   const [writingLevel, setWritingLevel] = useState<WritingLevel>("standard");
+  // A choice that no longer exists (deleted meanwhile) falls back.
+  const chosen =
+    chosenResume === withoutResume ||
+    resumeVersions.some((version) => version.id === chosenResume)
+      ? chosenResume
+      : null;
   const resumeId =
-    chosenResume ??
-    latestResumeIn(resumeVersions, language)?.id ??
-    withoutResume;
+    chosen ?? latestResumeIn(resumeVersions, language)?.id ?? withoutResume;
   const generate = useMutation(
     trpc.letters.generate.mutationOptions({
       onSuccess: async () => {

@@ -308,6 +308,7 @@ describe("motivation interview and story choice", () => {
     await ctx.motivation.skip({
       userId: ctx.user.id,
       openingId: ctx.opening.id,
+      storyId: ctx.stories[0].id,
     });
     expect(
       await ctx.motivation.get({

@@ -1,5 +1,5 @@
 {
-  "id": "40c64067-65f7-4e19-8f44-c3fab402dcfd",
+  "id": "683a31ee-0ce1-4f3f-97e6-97184c2e37b1",
   "prevId": "9bec8ba4-3f2e-47d2-bc7d-5905e6e28f9a",
   "version": "7",
   "dialect": "postgresql",
@@ -4006,6 +4006,24 @@
         "generationId": {
           "name": "generationId",
           "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "resumeVersionId": {
+          "name": "resumeVersionId",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "resumeSnapshotId": {
+          "name": "resumeSnapshotId",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "motivationSkipped": {
+          "name": "motivationSkipped",
+          "type": "boolean",
           "primaryKey": false,
           "notNull": false
         }

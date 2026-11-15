@@ -102,6 +102,13 @@ export const documentSnapshotsTable = createTable(
     author: d.text().$type<SnapshotAuthor>().notNull(),
     encryptedContent: d.text().notNull(),
     generationId: d.uuid(),
+    // A cover letter's resume (resume spec, "Cover letter and its resume"):
+    // the version and exact snapshot it was written from, carried by every
+    // snapshot of the letter (edits inherit it; copies keep it), and
+    // whether it was written without the motivation interview.
+    resumeVersionId: d.uuid(),
+    resumeSnapshotId: d.uuid(),
+    motivationSkipped: d.boolean(),
   }),
   (t) => [
     unique("document_snapshots_version_sequence_unique").on(

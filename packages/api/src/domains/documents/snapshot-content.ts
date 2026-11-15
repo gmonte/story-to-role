@@ -16,7 +16,7 @@ export const decryptDocument = (
   );
 
 /** A resume snapshot's content; code that handles resumes only uses it. */
-export const decryptSnapshot = (
+export const decryptResume = (
   cipher: UserCipher,
   snapshot: { encryptedContent: string }
 ): ResumeContent => {

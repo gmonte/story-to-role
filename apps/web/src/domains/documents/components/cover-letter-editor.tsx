@@ -31,7 +31,7 @@ import { useRefreshDocuments } from "../hooks/use-opening-documents";
 import { DownloadPdfDialog } from "./download-pdf-dialog";
 import { GenerateLetterDialog } from "./generate-letter-dialog";
 import { SyncProposal } from "./language-sync";
-import { EditableText, originTone } from "./resume-editor";
+import { EditableText, originTone } from "./editing";
 import { VersionHistorySheet } from "./version-history-sheet";
 
 /**
@@ -139,7 +139,11 @@ export function CoverLetterEditor({
             defaultTone={defaultTone}
             versionId={version.id}
             trigger={
-              <Button size="sm" variant="ghost" disabled={generating}>
+              <Button
+                size="sm"
+                variant="ghost"
+                disabled={generating || !!draft}
+              >
                 <Sparkles />
                 {t.formatMessage({ defaultMessage: "Generate again" })}
               </Button>
@@ -191,10 +195,13 @@ export function CoverLetterEditor({
       <SyncProposal document={document} versions={document.versions} />
       {version.pages > 1 && (
         <p className="rounded-lg border border-amber-500/40 bg-amber-500/10 p-2.5 text-xs">
-          {t.formatMessage({
-            defaultMessage:
-              "Over one page: a cover letter reads best short. Trim a paragraph.",
-          })}
+          {t.formatMessage(
+            {
+              defaultMessage:
+                "Over one page: a cover letter reads best short. Start with paragraph {position}, the longest.",
+            },
+            { position: longestParagraph(content) + 1 }
+          )}
         </p>
       )}
 
@@ -350,5 +357,14 @@ function SourcedParagraph({
         )}
       </TooltipContent>
     </Tooltip>
+  );
+}
+
+/** Where trimming helps most: the longest paragraph's index. */
+function longestParagraph(content: CoverLetterContent) {
+  return content.paragraphs.reduce(
+    (longest, line, index, all) =>
+      line.text.length > all[longest].text.length ? index : longest,
+    0
   );
 }

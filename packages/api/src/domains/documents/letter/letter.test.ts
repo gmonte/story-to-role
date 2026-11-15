@@ -79,6 +79,7 @@ describe("assembling a cover letter", () => {
       ]),
       sources,
       header,
+      language: "en-US",
     });
     expect(refused).toEqual([]);
     expect(content.paragraphs.map((line) => line.origin)).toEqual([
@@ -100,6 +101,14 @@ describe("assembling a cover letter", () => {
     expect(content.header).toEqual(header);
     // Signed with the name printed in the header.
     expect(content.closing).toBe("Sincerely,\nAna Souza");
+    // A placeholder never reaches the letter.
+    const placeholder = assembleLetter({
+      draft: { ...draft([]), closing: "Best regards,\n[Your Name]" },
+      sources,
+      header,
+      language: "en-US",
+    }).content;
+    expect(placeholder.closing).toBe("Best regards,\nAna Souza");
   });
 
   it("refuses paragraphs without sources, with unknown ids or unsupported figures", () => {
@@ -116,6 +125,7 @@ describe("assembling a cover letter", () => {
       ]),
       sources,
       header,
+      language: "en-US",
     });
     expect(refused.map((row) => row.reason)).toEqual([
       "no_source",
@@ -139,6 +149,7 @@ describe("assembling a cover letter", () => {
       ),
       sources,
       header,
+      language: "en-US",
     }).content;
     expect(estimateLetterPages(long)).toBeGreaterThan(1);
   });

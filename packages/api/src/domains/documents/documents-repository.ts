@@ -279,24 +279,6 @@ export class DocumentsRepository {
     return row ?? null;
   }
 
-  /**
-   * The generation behind a cover letter version's latest generated or
-   * updated snapshot: the resume it was written from.
-   */
-  async letterSource(versionId: string) {
-    const [row] = await this.tx
-      .select({ generation: generationsTable })
-      .from(documentSnapshotsTable)
-      .innerJoin(
-        generationsTable,
-        eq(generationsTable.id, documentSnapshotsTable.generationId)
-      )
-      .where(eq(documentSnapshotsTable.versionId, versionId))
-      .orderBy(desc(documentSnapshotsTable.sequence))
-      .limit(1);
-    return row?.generation ?? null;
-  }
-
   /** A document's sync proposal awaiting the user, if any. */
   async pendingProposal(documentId: string) {
     const [row] = await this.tx

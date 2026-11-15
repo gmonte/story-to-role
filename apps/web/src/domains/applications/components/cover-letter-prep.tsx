@@ -179,11 +179,11 @@ function StoryChoice({
   const choices = useQuery(
     trpc.motivation.storyChoices.queryOptions({ openingId })
   );
-  // The closest story comes chosen; the user may pick another or none.
+  // The closest story comes chosen; the user may pick another.
   const [picked, setPicked] = useState<string | null | undefined>(undefined);
   const storyId =
     picked === undefined ? (choices.data?.[0]?.storyId ?? null) : picked;
-  const setStoryId = (id: string | null) => setPicked(id);
+  const setStoryId = (id: string) => setPicked(id);
   const onError = (error: { message: string }) => toast.error(error.message);
   const start = useMutation(
     trpc.motivation.start.mutationOptions({ onSuccess: refresh, onError })
@@ -244,18 +244,6 @@ function StoryChoice({
             </span>
           </button>
         ))}
-        {!!choices.data?.length && (
-          <button
-            type="button"
-            onClick={() => setStoryId(null)}
-            className={cn(
-              "bg-background rounded-lg border p-3 text-left text-sm",
-              storyId === null && "border-primary"
-            )}
-          >
-            {t.formatMessage({ defaultMessage: "Without a story" })}
-          </button>
-        )}
         {choices.data?.length === 0 && (
           <p className="text-muted-foreground text-sm">
             {t.formatMessage({
@@ -277,7 +265,7 @@ function StoryChoice({
         <Button
           variant="ghost"
           disabled={skip.isPending}
-          onClick={() => skip.mutate({ openingId })}
+          onClick={() => skip.mutate({ openingId, storyId })}
         >
           {t.formatMessage({ defaultMessage: "Skip it" })}
         </Button>

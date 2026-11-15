@@ -9,7 +9,7 @@ import { DocumentsRepository } from "../documents-repository";
 import { generationSettings } from "../generation/generation-settings";
 import { outputLanguageNames } from "../generation/resume-prompts";
 import type { CoverLetterContent } from "../schemas/cover-letter-content";
-import { decryptDocument, decryptSnapshot } from "../snapshot-content";
+import { decryptDocument, decryptResume } from "../snapshot-content";
 import { assembleLetter, letterDraftSchema } from "./assemble-letter";
 import { loadLetterMaterial } from "./run-generate-letter";
 
@@ -58,18 +58,19 @@ export async function runUpdateLetter(deps: {
   try {
     const letter = decryptDocument(cipher, letterSnapshot);
     if (letter.kind !== "cover_letter") throw new Error("Not a letter");
-    const after = decryptSnapshot(cipher, newResume);
+    const after = decryptResume(cipher, newResume);
     // The resume snapshot the letter used; gone, the whole resume is new.
     const oldResume = generation.sourceSnapshotId
       ? await documents.findSnapshot(generation.sourceSnapshotId)
       : null;
     const changes = oldResume
-      ? proposalDiff(decryptSnapshot(cipher, oldResume), after)
+      ? proposalDiff(decryptResume(cipher, oldResume), after)
       : null;
     const material = await loadLetterMaterial({
       db,
       cipher,
       filter,
+      userId: deps.userId,
       profileId: profile.id,
       openingId: application.openingId,
       language: generation.language,
@@ -103,30 +104,45 @@ export async function runUpdateLetter(deps: {
     });
     if (!object) throw new Error("The writer returned no letter");
 
-    // Paragraphs copied word for word keep their line (and the user's
-    // authorship); only adjusted ones go through the source checks.
-    const kept = new Map(letter.paragraphs.map((line) => [line.text, line]));
+    // Paragraphs copied word for word keep their line (each once); only
+    // adjusted ones go through the source checks, and a refused one is
+    // left out. The user's own paragraphs are never lost: one the writer
+    // dropped or reworded goes back where it was.
+    const byText = new Map(letter.paragraphs.map((line) => [line.text, line]));
     const adjusted = assembleLetter({
       draft: {
         ...object,
         paragraphs: object.paragraphs.filter(
-          (paragraph) => !kept.has(paragraph.text.trim())
+          (paragraph) => !byText.has(paragraph.text.trim())
         ),
       },
       sources: material.sources,
       header: letter.header,
-    }).content.paragraphs.filter(
-      (line) => filter.findForbiddenTerms(line.text).length === 0
+      language: generation.language,
+      isForbidden: (text) => filter.findForbiddenTerms(text).length > 0,
+    }).content;
+    const adjustedByText = new Map(
+      adjusted.paragraphs.map((line) => [line.text, line])
     );
-    const adjustedByText = new Map(adjusted.map((line) => [line.text, line]));
+    const used = new Set<string>();
+    const paragraphs = object.paragraphs.flatMap((paragraph) => {
+      const line =
+        byText.get(paragraph.text.trim()) ??
+        adjustedByText.get(paragraph.text.trim());
+      if (!line || used.has(line.id)) return [];
+      used.add(line.id);
+      return [line];
+    });
+    letter.paragraphs.forEach((line, index) => {
+      if (line.origin.kind === "manual" && !used.has(line.id)) {
+        paragraphs.splice(Math.min(index, paragraphs.length), 0, line);
+      }
+    });
     const proposal: CoverLetterContent = {
       ...letter,
-      greeting: object.greeting.trim() || letter.greeting,
-      closing: object.closing.trim() || letter.closing,
-      paragraphs: object.paragraphs.flatMap((paragraph) => {
-        const text = paragraph.text.trim();
-        return kept.get(text) ?? adjustedByText.get(text) ?? [];
-      }),
+      greeting: adjusted.greeting,
+      closing: adjusted.closing,
+      paragraphs,
     };
     await documents.updateGeneration(generation.id, {
       status: "proposed",

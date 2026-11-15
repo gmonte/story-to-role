@@ -28,6 +28,11 @@ import { applyLetterEdit, estimateLetterPages } from "./letter/assemble-letter";
 import type { CoverLetterContent } from "./schemas/cover-letter-content";
 import type { DocumentContent } from "./schemas/document-content";
 import { documentLines } from "./document-text";
+import {
+  letterResumeState,
+  resumeLinkOf,
+  type ResumeLink,
+} from "./letter/letter-resume";
 import { applyUserEdit, LockedFactEditError } from "./editing/apply-user-edit";
 import { atsCheck } from "./generation/ats-check";
 import { estimatePages, resumeText } from "./generation/resume-checks";
@@ -275,9 +280,7 @@ export class DocumentsService {
           ? trace.titleProposalsFor(content, version.language)
           : [],
         letterTrace: isResume ? null : await trace.letterSources(),
-        letter: isResume
-          ? null
-          : await this.letterStatus(tx, version, document.applicationId),
+        letter: isResume ? null : await this.letterStatus(tx, version, latest),
       });
     }
     const pending = await repository.pendingProposal(document.id);
@@ -486,40 +489,21 @@ export class DocumentsService {
     };
   }
 
-  /**
-   * A cover letter's resume (resume spec, "Cover letter and its resume"):
-   * the resume version and snapshot its latest generated text came from.
-   * Outdated once that version has a newer snapshot, unless the user
-   * dismissed the notice for it; a deleted resume means none.
-   */
+  /** A letter's resume state and whether it was written without motivation. */
   private async letterStatus(
     tx: DbClient,
-    version: { id: string; dismissedResumeSnapshotId: string | null },
-    applicationId: string | null
+    version: { dismissedResumeSnapshotId: string | null },
+    latest: ResumeLink
   ) {
-    const repository = new DocumentsRepository(tx);
-    const source = await repository.letterSource(version.id);
-    const resumeVersion = source?.resumeVersionId
-      ? await repository.findVersion(source.resumeVersionId)
-      : null;
-    const resumeLatest = resumeVersion
-      ? await repository.latestSnapshot(resumeVersion.id)
-      : null;
-    const opening = applicationId
-      ? await repository.findApplication(applicationId)
-      : null;
-    const interview = opening
-      ? await new MotivationRepository(tx).findInterviewByOpening(
-          opening.openingId
-        )
-      : null;
+    const state = await letterResumeState(
+      new DocumentsRepository(tx),
+      latest,
+      version
+    );
     return {
-      resumeVersionId: resumeVersion?.id ?? null,
-      outdated:
-        !!resumeLatest &&
-        resumeLatest.id !== source?.resumeSnapshotId &&
-        resumeLatest.id !== version.dismissedResumeSnapshotId,
-      motivationSkipped: interview?.status !== "finished",
+      resumeVersionId: state.resumeVersionId,
+      outdated: state.outdated,
+      motivationSkipped: !!latest.motivationSkipped,
     };
   }
 
@@ -572,6 +556,7 @@ export class DocumentsService {
         origin: "edited",
         author: "user",
         encryptedContent: cipher.encrypt(JSON.stringify(content)),
+        ...resumeLinkOf(latest),
       });
       return { snapshotId: snapshot.id };
     });
@@ -657,6 +642,8 @@ export class DocumentsService {
         origin: "restored",
         author: "user",
         encryptedContent: old.encryptedContent,
+        // The restored text's own resume, not the newer one's.
+        ...resumeLinkOf(old),
       });
       return { snapshotId: snapshot.id };
     });
@@ -691,6 +678,7 @@ export class DocumentsService {
         origin: "copied",
         author: "user",
         encryptedContent: latest.encryptedContent,
+        ...resumeLinkOf(latest),
       });
       return { versionId: copy.id };
     });

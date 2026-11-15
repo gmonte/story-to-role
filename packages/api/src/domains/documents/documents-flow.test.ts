@@ -1640,8 +1640,16 @@ describe("resume generation and snapshots", () => {
     });
     expect((await letterDocument()).versions[0].letter?.outdated).toBe(false);
 
+    // A copy keeps the resume its text came from.
+    const { versionId: copyId } = await ctx.documents.duplicate({
+      userId: ctx.user.id,
+      versionId: letter.id,
+    });
+    const copy = (await letterDocument()).versions.find((v) => v.id === copyId);
+    expect(copy?.letter?.resumeVersionId).toBe(resumeVersion.id);
+
     // The user's edit makes a paragraph their own words.
-    [letter] = (await letterDocument()).versions;
+    letter = (await letterDocument()).versions.find((v) => v.id === letter.id)!;
     const edited = letter.content as CoverLetterContent;
     await ctx.documents.saveEdit({
       userId: ctx.user.id,
@@ -1654,7 +1662,9 @@ describe("resume generation and snapshots", () => {
         ),
       },
     });
-    const [after] = (await letterDocument()).versions;
+    const after = (await letterDocument()).versions.find(
+      (v) => v.id === letter.id
+    )!;
     expect((after.content as CoverLetterContent).paragraphs[2]).toMatchObject({
       text: "Let's talk soon.",
       origin: { kind: "manual" },

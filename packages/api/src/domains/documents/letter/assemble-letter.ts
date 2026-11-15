@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto";
 import { z } from "zod";
 
 import { LockedFactEditError } from "../editing/apply-user-edit";
-import type { Line } from "../schemas/document";
+import type { Line, OutputLanguage } from "../schemas/document";
 import type { CoverLetterContent } from "../schemas/cover-letter-content";
 import type { ResumeHeader } from "../schemas/resume-content";
 
@@ -57,6 +57,9 @@ export function assembleLetter(input: {
   draft: LetterDraft;
   sources: LetterSources;
   header: ResumeHeader;
+  language: OutputLanguage;
+  /** Names and figures the user doesn't allow (the sensitive filter). */
+  isForbidden?: (text: string) => boolean;
   newLineId?: () => string;
 }): { content: CoverLetterContent; refused: RefusedParagraph[] } {
   const { draft, sources } = input;
@@ -94,6 +97,10 @@ export function assembleLetter(input: {
       refused.push({ text, reason: "unsupported_figure" });
       return [];
     }
+    if (input.isForbidden?.(text)) {
+      refused.push({ text, reason: "forbidden_term" });
+      return [];
+    }
     return [{ id: newLineId(), text, origin }];
   });
 
@@ -101,12 +108,51 @@ export function assembleLetter(input: {
     content: {
       kind: "cover_letter",
       header: input.header,
-      greeting: draft.greeting.trim(),
+      greeting: plain(
+        draft.greeting,
+        conventions[input.language].greeting,
+        input.isForbidden
+      ),
       paragraphs,
-      closing: signed(draft.closing.trim(), input.header.name),
+      closing: signed(
+        plain(
+          draft.closing,
+          conventions[input.language].closing,
+          input.isForbidden
+        ),
+        input.header.name
+      ),
     },
     refused,
   };
+}
+
+/** A greeting or close in the letter's language, when the model's won't do. */
+const conventions: Record<
+  OutputLanguage,
+  { greeting: string; closing: string }
+> = {
+  "en-US": { greeting: "Dear Hiring Team,", closing: "Sincerely," },
+  "pt-BR": { greeting: "Prezada equipe,", closing: "Atenciosamente," },
+};
+
+/**
+ * A greeting or close holds no fact: one with a figure or a name the user
+ * doesn't allow is replaced by the language's plain one.
+ */
+function plain(
+  text: string,
+  fallback: string,
+  isForbidden?: (text: string) => boolean
+) {
+  // Template placeholders ("[Your Name]") never reach the letter.
+  const trimmed = text
+    .replace(/\[[^\]]*\]/g, "")
+    .replace(/\n{2,}/g, "\n")
+    .trim();
+  return !trimmed || /\d/.test(trimmed) || isForbidden?.(trimmed)
+    ? fallback
+    : trimmed;
 }
 
 /** A formal close ends with the user's name, as printed in the header. */

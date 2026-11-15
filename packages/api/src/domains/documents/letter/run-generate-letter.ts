@@ -22,7 +22,7 @@ import type { OutputLanguage } from "../schemas/document";
 import type { CoverLetterContent } from "../schemas/cover-letter-content";
 import type { ResumeContent } from "../schemas/resume-content";
 import type { StyleProfile } from "../schemas/template";
-import { decryptSnapshot } from "../snapshot-content";
+import { decryptResume } from "../snapshot-content";
 import { loadWritingSetup } from "../writing/load-writing-setup";
 import {
   assembleLetter,
@@ -30,7 +30,6 @@ import {
   type LetterDraft,
   letterDraftSchema,
   type LetterSources,
-  type RefusedParagraph,
 } from "./assemble-letter";
 
 /** At most one page (resume spec, "Layout"). */
@@ -54,6 +53,7 @@ const methodology = [
   "2. Story: one past experience that shows what the opening asks for, told as a plot: the setup, the build-up, the turning point and the final result. Be clear about the challenge, the choice made and the outcome; add something the resume does not already say; show how the user would fit the company's culture. Pick one story and stick with the highlights.",
   "3. Conclusion: amplify the impression, connect the story to the role, express interest in talking (an interview, a follow-up) without sounding needy or arrogant, and close formally.",
   "About one page (three to five paragraphs); personal, honest and enthusiastic; every sentence earns its place; no template phrasing; no embellishment.",
+  "greeting and closing: only the salutation and the formal close (“Sincerely,”); code adds the user's name below the close. Never write placeholders.",
   "Rules, enforced by code after you answer: every paragraph cites, in its id lists, the sources it rests on; a paragraph without a valid source, or with a figure that is not in what it cites, is deleted. The story comes only from the evidence and the user's own words; facts about the company come only from the approved company facts. Invent nothing.",
 ].join("\n");
 
@@ -69,6 +69,7 @@ export async function loadLetterMaterial(input: {
   db: DbClient;
   cipher: UserCipher;
   filter: SensitiveFilter;
+  userId: string;
   profileId: string;
   openingId: string;
   language: OutputLanguage;
@@ -114,7 +115,7 @@ export async function loadLetterMaterial(input: {
     .filter((fact) => fact.approvedAt)
     .map((fact) => ({
       id: fact.id,
-      text: cipher.decrypt(fact.encryptedText),
+      text: filter.apply(cipher.decrypt(fact.encryptedText)),
     }));
   // Points about the company, and goals or details the user kept or saved.
   const motivationPoints = interview
@@ -129,14 +130,12 @@ export async function loadLetterMaterial(input: {
     : [];
   const careerGoals = (
     await evidenceRepository.listCareerGoals(input.profileId)
-  ).map((goal) => ({ id: goal.id, text: cipher.decrypt(goal.encryptedText) }));
+  ).map((goal) => ({
+    id: goal.id,
+    text: filter.apply(cipher.decrypt(goal.encryptedText)),
+  }));
 
-  const setup = await loadWritingSetup({
-    db,
-    cipher,
-    userId: (await new CareerRepository(db).findProfileById(input.profileId))
-      .userId,
-  });
+  const setup = await loadWritingSetup({ db, cipher, userId: input.userId });
   const header = {
     name: setup.header.name,
     titleLine:
@@ -231,10 +230,11 @@ export async function runGenerateLetter(deps: {
       db,
       cipher,
       filter,
+      userId: deps.userId,
       profileId: profile.id,
       openingId: application.openingId,
       language: generation.language,
-      resume: resumeSnapshot && decryptSnapshot(cipher, resumeSnapshot),
+      resume: resumeSnapshot && decryptResume(cipher, resumeSnapshot),
     });
     const role = generation.writingLevel === "maximum" ? "maximum" : "writing";
     const system = [
@@ -255,34 +255,14 @@ export async function runGenerateLetter(deps: {
       if (!object) throw new Error("The writer returned no letter");
       return object;
     };
-    const check = (draft: LetterDraft) => {
-      const assembled = assembleLetter({
+    const check = (draft: LetterDraft) =>
+      assembleLetter({
         draft,
         sources: material.sources,
         header: material.header,
+        language: generation.language,
+        isForbidden: (text) => filter.findForbiddenTerms(text).length > 0,
       });
-      // Names the user doesn't allow count as refused paragraphs too.
-      const forbidden = assembled.content.paragraphs.filter(
-        (line) => filter.findForbiddenTerms(line.text).length > 0
-      );
-      return {
-        content: {
-          ...assembled.content,
-          paragraphs: assembled.content.paragraphs.filter(
-            (line) => !forbidden.includes(line)
-          ),
-        },
-        refused: [
-          ...assembled.refused,
-          ...forbidden.map(
-            (line): RefusedParagraph => ({
-              text: line.text,
-              reason: "forbidden_term",
-            })
-          ),
-        ],
-      };
-    };
 
     let draft = await write(null);
     let result = check(draft);
@@ -333,6 +313,9 @@ export async function runGenerateLetter(deps: {
         author: "ai",
         encryptedContent: cipher.encrypt(JSON.stringify(content)),
         generationId: generation.id,
+        resumeVersionId: generation.resumeVersionId,
+        resumeSnapshotId: generation.resumeSnapshotId,
+        motivationSkipped: material.motivationSkipped,
       });
       await repository.updateGeneration(generation.id, {
         status: "completed",

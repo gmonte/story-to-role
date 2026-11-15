@@ -7,7 +7,7 @@ import type { DbClient } from "@repo/api/tools/db-client";
 
 import { DocumentsRepository } from "../documents-repository";
 import { requireUserVersion } from "../require-version";
-import { decryptSnapshot } from "../snapshot-content";
+import { decryptDocument, decryptResume } from "../snapshot-content";
 import type { OutputLanguage } from "../schemas/document";
 import type { ResumeContent } from "../schemas/resume-content";
 import { syncBases } from "./sync-link";
@@ -145,10 +145,10 @@ export class AdaptationService {
     const changes =
       bases.base && bases.targetBase
         ? syncChanges({
-            base: decryptSnapshot(cipher, bases.base),
-            source: decryptSnapshot(cipher, source),
-            targetBase: decryptSnapshot(cipher, bases.targetBase),
-            target: decryptSnapshot(cipher, current),
+            base: decryptResume(cipher, bases.base),
+            source: decryptResume(cipher, source),
+            targetBase: decryptResume(cipher, bases.targetBase),
+            target: decryptResume(cipher, current),
           })
         : null;
     return {
@@ -251,14 +251,22 @@ export class AdaptationService {
       if (latest?.id !== generation.targetSnapshotId) {
         throw new TRPCError({ code: "CONFLICT" });
       }
+      const isLetter = generation.kind === "letter_update";
       const snapshot = await repository.insertSnapshot({
         versionId: version.id,
         sequence: latest.sequence + 1,
         parentSnapshotId: latest.id,
-        origin: "adapted",
+        // A letter update is a same-language revision, not an adaptation.
+        origin: isLetter ? "generated" : "adapted",
         author: "ai",
         encryptedContent: generation.encryptedProposal!,
         generationId: generation.id,
+        // The letter now follows the resume snapshot it was updated from.
+        ...(isLetter && {
+          resumeVersionId: generation.resumeVersionId,
+          resumeSnapshotId: generation.resumeSnapshotId,
+          motivationSkipped: latest.motivationSkipped,
+        }),
       });
       await repository.updateGeneration(generation.id, {
         status: "completed",
@@ -305,7 +313,10 @@ export class AdaptationService {
       const latest = await repository.latestSnapshot(version.id);
       if (!latest) throw notFound();
       const cipher = await getUserCipher(tx, input.userId);
-      const content = decryptSnapshot(cipher, latest);
+      const content = decryptDocument(cipher, latest);
+      // Titles are a resume's locked facts.
+      if (content.kind !== "resume")
+        throw new TRPCError({ code: "BAD_REQUEST" });
       const title = input.title.trim();
       const printed = content.sections.some(
         (section) =>

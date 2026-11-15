@@ -6,8 +6,11 @@ import type { Tone } from "@repo/api/domains/openings/schemas/opening";
 import type { RealtimeSubscription } from "@repo/api/domains/tasks/schemas/task";
 import { TasksService } from "@repo/api/domains/tasks/tasks-service";
 import type { DbClient } from "@repo/api/tools/db-client";
+import { MotivationRepository } from "@repo/api/domains/applications/motivation/motivation-repository";
+import { EvidenceRepository } from "@repo/api/domains/evidence/evidence-repository";
 
 import { DocumentsRepository } from "../documents-repository";
+import { letterResumeState } from "./letter-resume";
 import { requireUserVersion } from "../require-version";
 import type { OutputLanguage, WritingLevel } from "../schemas/document";
 
@@ -65,9 +68,20 @@ export class LetterService {
         applicationId: application.id,
         kind: "cover_letter",
       });
-      if (input.versionId) {
-        const version = await repository.findVersion(input.versionId);
-        if (version?.documentId !== document.id) throw notFound();
+      const existing = input.versionId
+        ? await repository.findVersion(input.versionId)
+        : null;
+      if (input.versionId && existing?.documentId !== document.id) {
+        throw notFound();
+      }
+      // A letter tells one story (resume spec): when the user has approved
+      // stories, the interview must have chosen one.
+      const interview = await new MotivationRepository(
+        tx
+      ).findInterviewByOpening(opening.id);
+      const stories = await new EvidenceRepository(tx).listStories(profile.id);
+      if (stories.length > 0 && !interview?.storyId) {
+        throw new TRPCError({ code: "PRECONDITION_FAILED" });
       }
       // The resume it accompanies: a version of this application's resume.
       const resume = input.resumeVersionId
@@ -85,8 +99,9 @@ export class LetterService {
       return repository.insertGeneration({
         profileId: profile.id,
         documentId: document.id,
-        versionId: input.versionId ?? null,
-        language: input.language,
+        versionId: existing?.id ?? null,
+        // Into a version, its language: a letter never changes language.
+        language: existing?.language ?? input.language,
         reviewDepth: "quick",
         writingLevel: input.writingLevel,
         tone: input.tone,
@@ -97,31 +112,35 @@ export class LetterService {
     return this.start(input.userId, generation.id);
   }
 
-  /** The letter version, its latest snapshot and the resume it came from. */
+  /** The letter version, its latest snapshot and the resume that changed. */
   private async requireOutdatedLetter(
     tx: DbClient,
     userId: string,
-    versionId: string
+    versionId: string,
+    { lock = false } = {}
   ) {
     const repository = new DocumentsRepository(tx);
     const { version, document, profile } = await requireUserVersion(
       tx,
       userId,
-      versionId
+      versionId,
+      { lock }
     );
     if (document.kind !== "cover_letter") throw notFound();
-    const source = await repository.letterSource(version.id);
-    const resumeLatest = source?.resumeVersionId
-      ? await repository.latestSnapshot(source.resumeVersionId)
-      : null;
-    if (
-      !source ||
-      !resumeLatest ||
-      resumeLatest.id === source.resumeSnapshotId
-    ) {
+    const latest = await repository.latestSnapshot(version.id);
+    if (!latest) throw notFound();
+    const state = await letterResumeState(repository, latest, version);
+    if (!state.resumeLatest || state.resumeLatest.id === state.usedSnapshotId) {
       throw new TRPCError({ code: "PRECONDITION_FAILED" });
     }
-    return { version, document, profile, source, resumeLatest };
+    return {
+      version,
+      document,
+      profile,
+      latest,
+      state,
+      resumeLatest: state.resumeLatest,
+    };
   }
 
   /**
@@ -134,10 +153,17 @@ export class LetterService {
   }): Promise<{ generationId: string; realtime: RealtimeSubscription }> {
     const generation = await this.db.transaction(async (tx) => {
       const repository = new DocumentsRepository(tx);
-      const { version, document, profile, source, resumeLatest } =
-        await this.requireOutdatedLetter(tx, input.userId, input.versionId);
-      const latest = await repository.latestSnapshot(version.id);
-      if (!latest) throw notFound();
+      const { version, document, profile, latest, state, resumeLatest } =
+        await this.requireOutdatedLetter(tx, input.userId, input.versionId, {
+          lock: true,
+        });
+      // One proposal at a time: a pending one is reviewed first.
+      if (await repository.pendingProposal(document.id)) {
+        throw new TRPCError({ code: "CONFLICT" });
+      }
+      const application = document.applicationId
+        ? await repository.findApplication(document.applicationId)
+        : null;
       return repository.insertGeneration({
         profileId: profile.id,
         documentId: document.id,
@@ -146,12 +172,12 @@ export class LetterService {
         language: version.language,
         targetSnapshotId: latest.id,
         // The resume snapshot the letter used, to diff against.
-        sourceSnapshotId: source.resumeSnapshotId,
-        resumeVersionId: source.resumeVersionId,
+        sourceSnapshotId: state.usedSnapshotId,
+        resumeVersionId: state.resumeVersionId,
         resumeSnapshotId: resumeLatest.id,
         reviewDepth: "quick",
         writingLevel: "standard",
-        tone: source.tone,
+        tone: application?.tone ?? "your_style",
       });
     });
     return this.start(input.userId, generation.id);
@@ -163,7 +189,8 @@ export class LetterService {
       const { version, resumeLatest } = await this.requireOutdatedLetter(
         tx,
         input.userId,
-        input.versionId
+        input.versionId,
+        { lock: true }
       );
       await new DocumentsRepository(tx).updateVersion(version.id, {
         dismissedResumeSnapshotId: resumeLatest.id,

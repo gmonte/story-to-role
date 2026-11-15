@@ -20,7 +20,7 @@
     "predeploy": "pnpm db:migrate && if [ -z \"$DATABASE_BRANCH\" ]; then pnpm trigger:deploy; else echo 'DATABASE_BRANCH is set (branched preview) — skipping trigger:deploy'; fi",
     "test": "vitest run --passWithNoTests",
     "typecheck": "tsc --noEmit",
-    "trigger:dev": "trigger dev --profile storytorole",
+    "trigger:dev": "trigger dev",
     "trigger:deploy": "trigger deploy"
   },
   "dependencies": {

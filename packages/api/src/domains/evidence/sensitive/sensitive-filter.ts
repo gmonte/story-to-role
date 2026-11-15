@@ -1,3 +1,5 @@
+import { foldAccents } from "@repo/api/utils/text/fold-accents";
+
 import type { SensitivityChoice } from "../schemas/evidence";
 
 export type SensitiveRule = {
@@ -11,10 +13,6 @@ const OMITTED = "[omitted]";
 
 function escapeRegExp(text: string) {
   return text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-}
-
-function foldAccents(text: string) {
-  return text.normalize("NFD").replace(/[̀-ͯ]/g, "");
 }
 
 /**

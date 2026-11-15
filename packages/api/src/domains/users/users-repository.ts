@@ -20,4 +20,12 @@ export class UsersRepository {
       );
     return user;
   }
+
+  async findById(userId: string) {
+    const [user] = await this.tx
+      .select()
+      .from(usersTable)
+      .where(eq(usersTable.id, userId));
+    return user ?? null;
+  }
 }

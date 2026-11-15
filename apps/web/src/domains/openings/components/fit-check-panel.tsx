@@ -1,14 +1,28 @@
 "use client";
 
-import type { FitCheckItemView } from "@repo/api/domains/openings/schemas/opening-view";
+import type {
+  FitCheckItemView,
+  OpeningDetail,
+} from "@repo/api/domains/openings/schemas/opening-view";
 import { useTranslation } from "@repo/intl/use-translation";
 import { Badge } from "@repo/web/components/ui/badge";
 import { cn } from "@repo/web/lib/utils";
+
+import { DocumentsPanel } from "~/domains/documents/components/documents-panel";
 
 import { useOpening } from "../hooks/use-opening";
 import { useOpeningLabels } from "../hooks/use-opening-labels";
 
 const verdictOrder = { gap: 0, partial: 1, met: 2 } as const;
+
+/** Gap questions the user hasn't answered yet. */
+export function pendingGaps(opening: OpeningDetail) {
+  return (
+    opening.fitCheck?.items.filter(
+      (item) => item.gapQuestion && !item.gapAnswer
+    ).length ?? 0
+  );
+}
 
 /**
  * The side panel's Analysis block: the fit check's band (never a
@@ -72,17 +86,14 @@ export function FitCheckPanel({ openingId }: { openingId: string }) {
         )}
       </section>
 
-      <section className="flex flex-col gap-1">
-        <h3 className="text-sm font-medium">
-          {t.formatMessage({ defaultMessage: "Documents" })}
-        </h3>
-        <p className="text-muted-foreground text-xs">
-          {t.formatMessage({
-            defaultMessage:
-              "Similar resumes and cover letters from your library and other applications will be suggested here.",
-          })}
-        </p>
-      </section>
+      {opening.data.status === "analyzed" && (
+        <DocumentsPanel
+          openingId={openingId}
+          defaultLanguage={opening.data.language ?? "en-US"}
+          defaultTone={opening.data.suggestedTone ?? "your_style"}
+          pendingGaps={pendingGaps(opening.data)}
+        />
+      )}
     </div>
   );
 }

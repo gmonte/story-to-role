@@ -16,6 +16,22 @@ export const openingStatusSchema = z.enum([
 ]);
 export type OpeningStatus = z.infer<typeof openingStatusSchema>;
 
+/** Why an opening was refused: no text, not an opening, or the link failed. */
+export const openingRejectionReasonSchema = z.enum([
+  "empty",
+  "not_an_opening",
+  "link_invalid_url",
+  "link_blocked_address",
+  "link_too_many_redirects",
+  "link_unsupported_type",
+  "link_too_large",
+  "link_unreachable",
+  "link_needs_paste",
+]);
+export type OpeningRejectionReason = z.infer<
+  typeof openingRejectionReasonSchema
+>;
+
 /** What the opening asks for: a literal keyword, or a requirement. */
 export const openingTermKindSchema = z.enum(["keyword", "requirement"]);
 export type OpeningTermKind = z.infer<typeof openingTermKindSchema>;

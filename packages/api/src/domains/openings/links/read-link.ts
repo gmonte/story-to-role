@@ -39,7 +39,7 @@ export type LinkResult =
 export function isPublicAddress(address: string): boolean {
   const version = isIP(address);
   if (version === 4) {
-    const [a, b] = address.split(".").map(Number);
+    const [a, b, c] = address.split(".").map(Number);
     return !(
       a === 0 ||
       a === 10 ||
@@ -48,6 +48,9 @@ export function isPublicAddress(address: string): boolean {
       (a === 169 && b === 254) ||
       (a === 172 && b >= 16 && b <= 31) ||
       (a === 192 && b === 168) ||
+      (a === 192 && b === 0 && (c === 0 || c === 2)) ||
+      (a === 198 && b === 51 && c === 100) ||
+      (a === 203 && b === 0 && c === 113) ||
       (a === 198 && (b === 18 || b === 19)) ||
       a >= 224
     );
@@ -56,15 +59,21 @@ export function isPublicAddress(address: string): boolean {
     const lower = address.toLowerCase();
     if (lower.startsWith("::ffff:")) return isPublicAddress(lower.slice(7));
     return !(
-      lower === "::" ||
-      lower === "::1" ||
-      lower.startsWith("fc") ||
-      lower.startsWith("fd") ||
-      lower.startsWith("fe8") ||
-      lower.startsWith("fe9") ||
-      lower.startsWith("fea") ||
-      lower.startsWith("feb") ||
-      lower.startsWith("ff")
+      // Unspecified, loopback and IPv4-compatible (::a.b.c.d) addresses.
+      (
+        lower.startsWith("::") ||
+        // NAT64, 6to4 and documentation prefixes reach IPv4 or nothing public.
+        lower.startsWith("64:ff9b:") ||
+        lower.startsWith("2002:") ||
+        lower.startsWith("2001:db8:") ||
+        lower.startsWith("fc") ||
+        lower.startsWith("fd") ||
+        lower.startsWith("fe8") ||
+        lower.startsWith("fe9") ||
+        lower.startsWith("fea") ||
+        lower.startsWith("feb") ||
+        lower.startsWith("ff")
+      )
     );
   }
   return false;
@@ -72,20 +81,32 @@ export function isPublicAddress(address: string): boolean {
 
 class BlockedAddressError extends Error {}
 
-/** DNS lookup that refuses non-public addresses, used for the connection. */
-const safeLookup: typeof dnsLookup = ((
+/**
+ * DNS lookup that refuses non-public addresses, used for the connection.
+ * Every resolved address must be public; the answer keeps the shape the
+ * caller asked for (Node's family autoselection asks for `all`).
+ */
+const safeLookup = ((
   hostname: string,
-  options: unknown,
-  callback: (error: Error | null, address: string, family: number) => void
+  options: { all?: boolean; family?: number },
+  callback: (...args: unknown[]) => void
 ) => {
-  dnsLookup(hostname, { all: false }, (error, address, family) => {
-    if (error) return callback(error, "", 0);
-    if (!isPublicAddress(address)) {
-      return callback(new BlockedAddressError(hostname), "", 0);
+  dnsLookup(
+    hostname,
+    { all: true, family: options?.family ?? 0 },
+    (error, addresses) => {
+      if (error) return callback(error);
+      if (
+        addresses.length === 0 ||
+        addresses.some(({ address }) => !isPublicAddress(address))
+      ) {
+        return callback(new BlockedAddressError(hostname));
+      }
+      if (options?.all) return callback(null, addresses);
+      callback(null, addresses[0].address, addresses[0].family);
     }
-    callback(null, address, family);
-  });
-}) as typeof dnsLookup;
+  );
+}) as unknown as typeof dnsLookup;
 
 type Response = {
   status: number;
@@ -138,6 +159,12 @@ function request(url: URL): Promise<Response> {
       }
     );
     req.on("timeout", () => req.destroy(new Error("timeout")));
+    // The socket timeout only catches idleness; a slow drip hits this.
+    const deadline = setTimeout(
+      () => req.destroy(new Error("timeout")),
+      linkLimits.timeoutMs
+    );
+    req.on("close", () => clearTimeout(deadline));
     req.on("error", reject);
   });
 }

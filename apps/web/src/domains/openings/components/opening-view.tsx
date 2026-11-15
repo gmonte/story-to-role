@@ -145,7 +145,7 @@ export function OpeningView({ openingId }: { openingId: string }) {
             className="text-muted-foreground inline-flex items-center gap-1 text-sm underline"
           >
             <ExternalLink className="size-3.5" />
-            {t.formatMessage({ defaultMessage: "Original posting" })}
+            {t.formatMessage({ defaultMessage: "Opening text" })}
           </a>
         )}
 

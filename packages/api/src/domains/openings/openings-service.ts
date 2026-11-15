@@ -10,6 +10,7 @@ import type { RealtimeSubscription } from "@repo/api/domains/tasks/schemas/task"
 import { TasksService } from "@repo/api/domains/tasks/tasks-service";
 import type { DbClient } from "@repo/api/tools/db-client";
 
+import type { openingsTable } from "./db/openings-tables";
 import { OpeningsRepository } from "./openings-repository";
 import type { OpeningDetail, OpeningSummary } from "./schemas/opening-view";
 
@@ -47,9 +48,7 @@ export class OpeningsService {
     userId: string,
     fields: (
       cipher: UserCipher
-    ) => Parameters<OpeningsRepository["insertOpening"]>[0] extends infer T
-      ? Omit<T, "profileId">
-      : never
+    ) => Omit<typeof openingsTable.$inferInsert, "profileId">
   ): Promise<{ openingId: string; realtime: RealtimeSubscription }> {
     const profile = await this.requireProfile(userId);
     const opening = await this.db.transaction(async (tx) => {

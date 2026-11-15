@@ -7,6 +7,7 @@ import {
   fitBandSchema,
   fitVerdictSchema,
   openingKindSchema,
+  openingRejectionReasonSchema,
   openingStatusSchema,
   openingTermCategorySchema,
   openingTermKindSchema,
@@ -43,7 +44,7 @@ export const openingDetailSchema = openingSummarySchema.extend({
   description: z.string().nullable(),
   notes: z.string().nullable(),
   sourceUrl: z.string().nullable(),
-  rejectionReason: z.string().nullable(),
+  rejectionReason: openingRejectionReasonSchema.nullable(),
   language: interviewLanguageSchema.nullable(),
   suggestedTone: toneSchema.nullable(),
   fitCheck: z

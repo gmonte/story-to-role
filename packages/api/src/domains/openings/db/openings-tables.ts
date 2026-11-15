@@ -10,6 +10,7 @@ import type {
   FitBand,
   FitVerdict,
   OpeningKind,
+  OpeningRejectionReason,
   OpeningStatus,
   OpeningTermCategory,
   OpeningTermKind,
@@ -43,7 +44,7 @@ export const openingsTable = createTable(
     encryptedNotes: d.text(),
     encryptedSourceUrl: d.text(),
     // Why it was refused (not a job posting, unreadable link…), no content.
-    rejectionReason: d.text(),
+    rejectionReason: d.text().$type<OpeningRejectionReason>(),
     // Detected from the description: preselects the output language.
     language: d.text().$type<InterviewLanguage>(),
     suggestedTone: d.text().$type<Tone>(),

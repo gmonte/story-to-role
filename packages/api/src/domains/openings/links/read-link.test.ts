@@ -40,11 +40,17 @@ describe("link reader", () => {
       "fe80::1",
       "::ffff:127.0.0.1",
       "0.0.0.0",
+      "192.0.2.1",
+      "::127.0.0.1",
+      "64:ff9b::7f00:1",
+      "2002:7f00:1::1",
     ]) {
       expect(isPublicAddress(address)).toBe(false);
     }
     expect(isPublicAddress("8.8.8.8")).toBe(true);
     expect(isPublicAddress("2606:4700::1111")).toBe(true);
+    expect(isPublicAddress("::ffff:8.8.8.8")).toBe(true);
+    expect(isPublicAddress("192.0.1.1")).toBe(true);
   });
 
   it("refuses non-http schemes and literal private hosts", async () => {

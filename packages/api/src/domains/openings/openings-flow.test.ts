@@ -1,13 +1,19 @@
 import { randomBytes } from "node:crypto";
 
+import { eq } from "drizzle-orm";
 import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { createAiClient } from "@repo/api/domains/ai/ai-client";
 import { CareerService } from "@repo/api/domains/career/career-service";
+import {
+  credentialsTable,
+  positionsTable,
+} from "@repo/api/domains/career/db/career-tables";
 import { getUserCipher } from "@repo/api/domains/encryption/user-cipher";
 import {
   evidenceTable,
   sensitiveItemsTable,
+  skillsTable,
 } from "@repo/api/domains/evidence/db/evidence-tables";
 import { loadSensitiveFilter } from "@repo/api/domains/evidence/sensitive/load-sensitive-filter";
 import { TasksService } from "@repo/api/domains/tasks/tasks-service";
@@ -210,6 +216,52 @@ describe("openings and fit check", () => {
     expect(JSON.stringify(detail)).not.toMatch(/percent|%/i);
   });
 
+  it("shows the judge the approved history, credentials and skills", async () => {
+    const ctx = await setup();
+    await ctx.db
+      .update(positionsTable)
+      .set({ status: "approved" })
+      .where(eq(positionsTable.profileId, ctx.profile.id));
+    await ctx.db.insert(credentialsTable).values([
+      {
+        profileId: ctx.profile.id,
+        kind: "language",
+        encryptedTitle: ctx.cipher.encrypt("English"),
+        level: "C1",
+        approvedAt: new Date(),
+      },
+      {
+        profileId: ctx.profile.id,
+        kind: "certification",
+        encryptedTitle: ctx.cipher.encrypt("Unapproved Cert"),
+      },
+    ]);
+    await ctx.db.insert(skillsTable).values({
+      profileId: ctx.profile.id,
+      encryptedName: ctx.cipher.encrypt("Terraform"),
+    });
+    const { openingId } = await ctx.openings.createFromText({
+      userId: ctx.user.id,
+      description: posting,
+    });
+    let prompt = "";
+
+    await ctx.analyze(
+      openingId,
+      fitScript((system) => {
+        prompt = system;
+        return { items: [] };
+      })
+    );
+
+    expect(prompt).toContain(
+      "- position: Junior Developer, 2023-01 to present"
+    );
+    expect(prompt).toContain("- language: English (C1)");
+    expect(prompt).toContain("- skill: Terraform");
+    expect(prompt).not.toContain("Unapproved Cert");
+  });
+
   it("keeps verdicts honest: unknown evidence ids are dropped", async () => {
     const ctx = await setup();
     const { openingId } = await ctx.openings.createFromText({
@@ -301,7 +353,7 @@ describe("openings and fit check", () => {
       await ctx.openings.get({ userId: ctx.user.id, openingId })
     ).toMatchObject({
       status: "rejected",
-      rejectionReason: "not_a_job_posting",
+      rejectionReason: "not_an_opening",
       fitCheck: null,
     });
   });

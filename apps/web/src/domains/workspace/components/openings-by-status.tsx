@@ -16,8 +16,8 @@ import { useTRPC } from "~/tools/trpc/client";
 
 /**
  * The openings grouped by status. Applications (slice 4) add "in
- * preparation", "applied" and "in process"; for now openings are analyzed
- * or closed.
+ * preparation", "applied" and "in process"; until then openings are being
+ * analyzed, analyzed, refused or closed.
  */
 export function OpeningsByStatus() {
   const t = useTranslation();
@@ -35,14 +35,24 @@ export function OpeningsByStatus() {
     );
   }
 
+  const byStatus = (status: OpeningSummary["status"]) =>
+    openings.data.filter((opening) => opening.status === status);
   const groups: Array<{ label: string; items: OpeningSummary[] }> = [
     {
+      label: t.formatMessage({ defaultMessage: "Being analyzed" }),
+      items: byStatus("processing"),
+    },
+    {
       label: t.formatMessage({ defaultMessage: "Analyzed" }),
-      items: openings.data.filter((opening) => opening.status !== "closed"),
+      items: byStatus("analyzed"),
+    },
+    {
+      label: t.formatMessage({ defaultMessage: "Couldn't be analyzed" }),
+      items: byStatus("rejected"),
     },
     {
       label: t.formatMessage({ defaultMessage: "Closed" }),
-      items: openings.data.filter((opening) => opening.status === "closed"),
+      items: byStatus("closed"),
     },
   ];
 
@@ -70,7 +80,11 @@ export function OpeningsByStatus() {
                           {[opening.company, opening.title]
                             .filter(Boolean)
                             .join(" · ") ||
-                            t.formatMessage({ defaultMessage: "Reading…" })}
+                            (opening.status === "processing"
+                              ? t.formatMessage({ defaultMessage: "Reading…" })
+                              : t.formatMessage({
+                                  defaultMessage: "Untitled opening",
+                                }))}
                         </span>
                       </Link>
                     </SidebarMenuButton>

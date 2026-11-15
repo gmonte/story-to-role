@@ -3,6 +3,7 @@
 import type {
   FitBand,
   FitVerdict,
+  OpeningRejectionReason,
   OpeningTermCategory,
   Tone,
 } from "@repo/api/domains/openings/schemas/opening";
@@ -68,11 +69,11 @@ export function useOpeningLabels() {
           return t.formatMessage({ defaultMessage: "Technical" });
       }
     },
-    rejection(reason: string | null) {
+    rejection(reason: OpeningRejectionReason | null) {
       switch (reason) {
-        case "not_a_job_posting":
+        case "not_an_opening":
           return t.formatMessage({
-            defaultMessage: "This text doesn't look like a job posting.",
+            defaultMessage: "This text doesn't look like an opening.",
           });
         case "link_needs_paste":
         case "link_unreachable":
@@ -84,6 +85,7 @@ export function useOpeningLabels() {
           });
         case "link_blocked_address":
         case "link_invalid_url":
+        case "link_too_many_redirects":
           return t.formatMessage({
             defaultMessage: "That link can't be read.",
           });

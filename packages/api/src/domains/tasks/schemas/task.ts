@@ -1,6 +1,13 @@
 import { z } from "zod";
 
-export const taskTypes = ["sample", "chat_turn"] as const;
+export const taskTypes = [
+  "sample",
+  "chat_turn",
+  "interview_turn",
+  "import_document",
+  "summarize_position",
+  "draft_narrative",
+] as const;
 export const taskTypeSchema = z.enum(taskTypes);
 export type TaskType = z.infer<typeof taskTypeSchema>;
 

@@ -1,11 +1,14 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
+import { z } from "zod";
 
-import type {
-  AiRole,
-  AiTextRequest,
-  AiUsage,
-  ProviderPackage,
+import {
+  ToolRefusal,
+  type AiRole,
+  type AiTextRequest,
+  type AiTool,
+  type AiUsage,
+  type ProviderPackage,
 } from "./provider-package";
 
 const models: Record<AiRole, string> = {
@@ -30,6 +33,40 @@ function toUsage(model: string, usage: Anthropic.Usage): AiUsage {
     cacheReadTokens: usage.cache_read_input_tokens ?? 0,
     cacheWriteTokens: usage.cache_creation_input_tokens ?? 0,
   };
+}
+
+function toAnthropicTool(tool: AiTool): Anthropic.Tool {
+  const { $schema: _ignored, ...inputSchema } = z.toJSONSchema(tool.schema) as {
+    $schema?: string;
+  } & Anthropic.Tool.InputSchema;
+  return {
+    name: tool.name,
+    description: tool.description,
+    input_schema: inputSchema,
+  };
+}
+
+async function runTool(
+  tool: AiTool | undefined,
+  input: unknown
+): Promise<{ content: string; isError: boolean }> {
+  if (!tool) return { content: "Unknown tool.", isError: true };
+
+  const parsed = tool.schema.safeParse(input);
+  if (!parsed.success) {
+    return {
+      content: `Invalid input: ${z.prettifyError(parsed.error)}`,
+      isError: true,
+    };
+  }
+  try {
+    return { content: await tool.handler(parsed.data), isError: false };
+  } catch (error) {
+    if (error instanceof ToolRefusal) {
+      return { content: error.message, isError: true };
+    }
+    throw error;
+  }
 }
 
 function toParams(request: AiTextRequest) {
@@ -64,6 +101,50 @@ export function createAnthropicPackage({
         .join("");
 
       return { text, usage: toUsage(response.model, response.usage) };
+    },
+
+    async runAgent(request) {
+      const tools = request.tools.map(toAnthropicTool);
+      const messages: Anthropic.MessageParam[] = [...request.messages];
+      const usages: AiUsage[] = [];
+
+      for (let iteration = 0; iteration < request.maxIterations; iteration++) {
+        const response = await client.messages.create({
+          ...toParams(request),
+          messages,
+          tools,
+        });
+        usages.push(toUsage(response.model, response.usage));
+
+        const toolUses = response.content.filter(
+          (block): block is Anthropic.ToolUseBlock => block.type === "tool_use"
+        );
+        if (response.stop_reason !== "tool_use" || toolUses.length === 0) {
+          const text = response.content
+            .flatMap((block) => (block.type === "text" ? [block.text] : []))
+            .join("");
+          return { text, usages };
+        }
+
+        // The whole assistant turn goes back unchanged (thinking included).
+        messages.push({ role: "assistant", content: response.content });
+        const results: Anthropic.ToolResultBlockParam[] = [];
+        for (const toolUse of toolUses) {
+          const result = await runTool(
+            request.tools.find((tool) => tool.name === toolUse.name),
+            toolUse.input
+          );
+          results.push({
+            type: "tool_result",
+            tool_use_id: toolUse.id,
+            content: result.content,
+            is_error: result.isError,
+          });
+        }
+        messages.push({ role: "user", content: results });
+      }
+
+      throw new Error("The agent did not finish within its iteration limit");
     },
 
     async generateObject(request) {

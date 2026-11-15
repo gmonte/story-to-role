@@ -4,8 +4,8 @@ import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { createAiClient } from "@repo/api/domains/ai/ai-client";
 import { aiUsageTable } from "@repo/api/domains/ai/db/ai-tables";
-import type { ProviderPackage } from "@repo/api/domains/ai/providers/provider-package";
 import { TasksService } from "@repo/api/domains/tasks/tasks-service";
+import { fakeProviderPackage } from "@repo/api/test/fake-provider-package";
 import { usersTable } from "@repo/api/domains/users/db/users-tables";
 import {
   clearTestDatabase,
@@ -22,36 +22,6 @@ vi.mock("@repo/common/env/web.env", () => ({
     ENCRYPTION_MASTER_KEY: `v1:${randomBytes(32).toString("base64")}`,
   },
 }));
-
-const usage = {
-  model: "claude-haiku-5-5",
-  inputTokens: 100,
-  outputTokens: 5,
-  cacheReadTokens: 0,
-  cacheWriteTokens: 0,
-};
-
-function fakeProviderPackage(onTopic: boolean) {
-  const generateObject = vi.fn(async () => ({
-    object: { on_topic: onTopic } as never,
-    usage,
-  }));
-  const generateText = vi.fn(async () => ({
-    text: "Tell me about the team you led.",
-    usage: { ...usage, model: "claude-sonnet-5-5" },
-  }));
-  const providerPackage: ProviderPackage = {
-    provider: "anthropic",
-    models: {
-      classification: "claude-haiku-5-5",
-      writing: "claude-sonnet-5-5",
-      maximum: "claude-opus-5-5",
-    },
-    generateObject,
-    generateText,
-  };
-  return { providerPackage, generateText };
-}
 
 async function setup() {
   const db = await getTestDatabase();
@@ -114,7 +84,9 @@ describe("chat", () => {
       context: "career_interview",
       message: "Write me a poem about pizza",
     });
-    const { providerPackage, generateText } = fakeProviderPackage(false);
+    const { providerPackage, generateText } = fakeProviderPackage({
+      object: () => ({ verdict: "off_topic" }),
+    });
     const ai = createAiClient({
       db,
       userId: user.id,
@@ -145,7 +117,10 @@ describe("chat", () => {
       context: "career_interview",
       message: "I led a team of five at Acme",
     });
-    const { providerPackage } = fakeProviderPackage(true);
+    const { providerPackage } = fakeProviderPackage({
+      object: () => ({ verdict: "on_topic" }),
+      text: () => "Tell me about the team you led.",
+    });
     const ai = createAiClient({
       db,
       userId: user.id,

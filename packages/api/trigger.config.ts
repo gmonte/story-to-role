@@ -116,7 +116,12 @@ const syncVercelEnvForCurrentTarget = syncEnvVars(
  */
 export default defineConfig({
   project: process.env.TRIGGER_PROJECT_REF!,
-  dirs: ["./src/domains/tasks/tasks", "./src/domains/chat/tasks"],
+  dirs: [
+    "./src/domains/tasks/tasks",
+    "./src/domains/chat/tasks",
+    "./src/domains/interview/tasks",
+    "./src/domains/career/tasks",
+  ],
   build: {
     extensions: [syncVercelEnvForCurrentTarget],
   },

@@ -12,6 +12,7 @@ import {
   courtesyGrantsTable,
   creditEntriesTable,
   creditLotsTable,
+  storedCreditConfirmationsTable,
 } from "./db/credits-tables";
 
 type Insert<T extends { $inferInsert: unknown }> = T["$inferInsert"];
@@ -102,6 +103,37 @@ export class CreditsRepository {
       )
       .limit(1)
       .then((rows) => rows[0] ?? null);
+  }
+
+  /** Whether the user confirmed spending stored credits, until when. */
+  async storedCreditsConfirmed(userId: string, now: Date) {
+    const [row] = await this.tx
+      .select({ id: storedCreditConfirmationsTable.id })
+      .from(storedCreditConfirmationsTable)
+      .where(
+        and(
+          eq(storedCreditConfirmationsTable.userId, userId),
+          gt(storedCreditConfirmationsTable.expiresAt, now)
+        )
+      );
+    return !!row;
+  }
+
+  async confirmStoredCredits(userId: string, now: Date, expiresAt: Date) {
+    await this.tx
+      .insert(storedCreditConfirmationsTable)
+      .values({ userId, confirmedAt: now, expiresAt })
+      .onConflictDoUpdate({
+        target: storedCreditConfirmationsTable.userId,
+        set: { expiresAt, confirmedAt: now },
+      });
+  }
+
+  /** A confirmation covers one task: once spent, the next task asks again. */
+  async consumeStoredCreditConfirmation(userId: string) {
+    await this.tx
+      .delete(storedCreditConfirmationsTable)
+      .where(eq(storedCreditConfirmationsTable.userId, userId));
   }
 
   /** Every courtesy grant, newest first, with whom it was granted to. */

@@ -14,8 +14,11 @@ import { Badge } from "@repo/web/components/ui/badge";
 import { Button } from "@repo/web/components/ui/button";
 import { toast } from "@repo/web/components/ui/sonner";
 
+import { FinishWithCredits } from "~/domains/credits/components/finish-with-credits";
 import { useCredits } from "~/domains/credits/hooks/use-credits";
 import { useTRPC } from "~/tools/trpc/client";
+
+import { OwnKeySection } from "./own-key-section";
 
 /**
  * Plan and credits (billing spec): the subscription and credit packs
@@ -115,6 +118,8 @@ export function BillingView() {
         )}
       </section>
 
+      <FinishWithCredits />
+
       {!subscribed && (
         <section className="flex flex-col gap-3">
           <h2 className="font-medium">
@@ -181,6 +186,10 @@ export function BillingView() {
           onClick={() => buy("pack")}
         />
       </section>
+
+      <OwnKeySection
+        paidPlan={!!credits.data && credits.data.plan !== "free"}
+      />
     </div>
   );
 }

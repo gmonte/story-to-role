@@ -1,7 +1,13 @@
 import { env } from "@repo/common/env/web.env";
+import type { DbClient } from "@repo/api/tools/db-client";
+import type { UserCipher } from "@repo/api/domains/encryption/user-cipher";
 
+import { AiKeysRepository } from "./ai-keys-repository";
 import { createAnthropicPackage } from "./providers/anthropic-package";
-import type { ProviderPackage } from "./providers/provider-package";
+import {
+  KeyUnusableError,
+  type ProviderPackage,
+} from "./providers/provider-package";
 
 /** Who pays for a user's AI calls. */
 export type AiFunding = "credits" | "key";
@@ -12,16 +18,35 @@ export type ResolvedAiFunding = {
 };
 
 /**
- * Picks the funding and the provider package a user's calls run on. Every
- * call of a user, the topic gate included, follows the same funding: a user
- * with their own key never spends StoryToRole's.
- *
- * Bring-your-own keys arrive with billing (slice 6); until then every user
- * is credit-funded on StoryToRole's Anthropic key.
+ * The provider package a task's calls run on, by the funding decided when
+ * it started. Every call of the task, the topic gate included, follows the
+ * same funding: a key-funded task never spends StoryToRole's key, and a
+ * credit-funded one never the user's.
  */
-export function resolveAiFunding(): ResolvedAiFunding {
+export async function resolveAiFunding(input: {
+  db: DbClient;
+  userId: string;
+  cipher: UserCipher;
+  funding: AiFunding;
+}): Promise<ResolvedAiFunding> {
+  if (input.funding === "credits") {
+    return {
+      funding: "credits",
+      providerPackage: createAnthropicPackage({
+        apiKey: env.ANTHROPIC_API_KEY,
+      }),
+    };
+  }
+  const key = await new AiKeysRepository(input.db).findByUserId(input.userId);
+  // Removed, or marked unusable by another task meanwhile: the task stops
+  // without calling the provider.
+  if (!key) throw new KeyUnusableError("refused");
+  if (key.status !== "active") throw new KeyUnusableError(key.status);
   return {
-    funding: "credits",
-    providerPackage: createAnthropicPackage({ apiKey: env.ANTHROPIC_API_KEY }),
+    funding: "key",
+    // Decrypted in memory for this task's calls only.
+    providerPackage: createAnthropicPackage({
+      apiKey: input.cipher.decrypt(key.encryptedKey),
+    }),
   };
 }

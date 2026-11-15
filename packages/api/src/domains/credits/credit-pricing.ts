@@ -28,9 +28,9 @@ export const creditSettings = {
   packValidityMonths: 12,
 };
 
-/** What a task's AI calls cost, in credits, rounded up. */
-export function creditsForUsage(usages: AiUsage[]) {
-  const usd = usages.reduce((total, usage) => {
+/** What AI calls cost the provider's customer, in US$ (no margin). */
+export function usdForUsage(usages: AiUsage[]) {
+  return usages.reduce((total, usage) => {
     const price = modelPrices[usage.model] ?? fallbackPrice;
     const uncachedInput =
       usage.inputTokens - usage.cacheReadTokens - usage.cacheWriteTokens;
@@ -43,7 +43,13 @@ export function creditsForUsage(usages: AiUsage[]) {
         1_000_000
     );
   }, 0);
-  return Math.ceil((usd * creditSettings.margin) / creditSettings.usdPerCredit);
+}
+
+/** What a task's AI calls cost, in credits, rounded up. */
+export function creditsForUsage(usages: AiUsage[]) {
+  return Math.ceil(
+    (usdForUsage(usages) * creditSettings.margin) / creditSettings.usdPerCredit
+  );
 }
 
 /** What an action may need to know to cap its cost. */

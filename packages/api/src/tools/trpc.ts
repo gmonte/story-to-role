@@ -8,6 +8,7 @@ import { logger } from "@repo/common/tools/logger";
 import { getTranslation } from "@repo/intl/get-translation";
 import { parseHeaderCookie } from "@repo/common/tools/cookies/common";
 
+import { KeyUnusableError } from "../domains/ai/providers/provider-package";
 import { InsufficientCreditsError } from "../domains/credits/credit-ledger";
 import { UsersRepository } from "../domains/users/users-repository";
 import { db } from "./db";
@@ -49,12 +50,20 @@ const t = initTRPC
         ...shape,
         message:
           shortfall && ctx ? creditsMessage(ctx.t, shortfall) : shape.message,
+        // What the interface needs to offer "Finish with credits".
         data: {
           ...shape.data,
           zodError:
             error.cause instanceof ZodError
               ? z.treeifyError(error.cause)
               : null,
+          aiKey:
+            error.cause instanceof KeyUnusableError ? error.cause.reason : null,
+          credits: shortfall && {
+            needed: shortfall.needed,
+            available: shortfall.available,
+            stored: shortfall.stored,
+          },
         },
       };
     },
@@ -67,6 +76,15 @@ function creditsMessage(
 ) {
   const needed = intl.formatNumber(error.needed);
   const available = intl.formatNumber(error.available);
+  if (error.available + error.stored >= error.needed) {
+    return intl.formatMessage(
+      {
+        defaultMessage:
+          "This needs up to {needed} credits and your plan has {available} left. Choose “Finish with credits” to use your {stored} stored credits.",
+      },
+      { needed, available, stored: intl.formatNumber(error.stored) }
+    );
+  }
   return error.kept > 0
     ? intl.formatMessage(
         {

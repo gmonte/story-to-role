@@ -4,6 +4,8 @@ import { z } from "zod";
 import { env } from "@repo/common/env/web.env";
 import { isServerRuntime } from "@repo/common/utils/is-server-runtime";
 
+import { maskSecrets } from "./mask-secrets";
+
 enum LoggerLevel {
   error = "error",
   warn = "warn",
@@ -62,9 +64,10 @@ class Logger {
   private log(loggerLevel: LoggerLevel, tags: string[], ...message: unknown[]) {
     if (!this.canLog(loggerLevel)) return;
 
+    const masked = message.map((item) => maskSecrets(item));
     const content = this.trace
-      ? [...message, "\n", this.formatStackTrace()]
-      : message;
+      ? [...masked, "\n", this.formatStackTrace()]
+      : masked;
 
     if (isServerRuntime()) {
       const colors = {

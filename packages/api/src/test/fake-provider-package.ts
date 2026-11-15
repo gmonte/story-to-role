@@ -54,6 +54,8 @@ export function fakeProviderPackage(script: {
     usages: [fakeUsage("claude-sonnet-5-5")],
   }));
 
+  const validateKey = vi.fn(() => Promise.resolve());
+
   const providerPackage: ProviderPackage = {
     provider: "anthropic",
     models: {
@@ -62,10 +64,18 @@ export function fakeProviderPackage(script: {
       maximum: "claude-opus-5-5",
       research: "claude-sonnet-5-5",
     },
+    validateKey,
     generateObject,
     generateText,
     runAgent,
     searchWeb,
   };
-  return { providerPackage, generateObject, generateText, runAgent, searchWeb };
+  return {
+    providerPackage,
+    validateKey,
+    generateObject,
+    generateText,
+    runAgent,
+    searchWeb,
+  };
 }

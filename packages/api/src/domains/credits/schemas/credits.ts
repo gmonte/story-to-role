@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+import { aiKeyStatusSchema } from "@repo/api/domains/ai/schemas/ai-keys";
+
 /**
  * Where a lot of credits comes from (billing spec, "Credit ledger"). Plan
  * lots (the month's free, courtesy or subscription credits) are spent
@@ -69,6 +71,19 @@ export const creditSummarySchema = z.object({
   courtesy: z
     .object({ monthlyCredits: z.number().int(), endsAt: z.date().nullable() })
     .nullable(),
+  // Key funding (billing spec, "Credit meter"): what the user's key spent
+  // this month, as an estimate; credits stand as a reserve.
+  key: z
+    .object({
+      status: aiKeyStatusSchema,
+      paysNext: z.boolean(),
+      spentThisMonthUsd: z.number(),
+      // What finishing the task the key stopped may cost in credits.
+      stoppedTaskEstimate: z.number().int().nullable(),
+    })
+    .nullable(),
+  // On a paid plan: stored credits waiting for "Finish with credits".
+  storedLocked: z.number().int(),
 });
 export type CreditSummary = z.infer<typeof creditSummarySchema>;
 

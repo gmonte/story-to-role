@@ -46,6 +46,17 @@ export type AiAgentRequest = AiTextRequest & {
 
 export class ToolRefusal extends Error {}
 
+/**
+ * The provider refused the key or its credit ran out (guided interview
+ * spec, "When a user's key runs out of credit or is refused"): the task
+ * stops, nothing is charged, and the user is told why.
+ */
+export class KeyUnusableError extends Error {
+  constructor(readonly reason: "out_of_credit" | "refused") {
+    super(`The provider key is unusable: ${reason}`);
+  }
+}
+
 /** A web search turn: the provider's own search tool, within a limit. */
 export type AiSearchRequest = AiTextRequest & { maxSearches: number };
 
@@ -56,6 +67,11 @@ export type AiSource = { url: string; title: string };
 export type ProviderPackage = {
   provider: "anthropic";
   models: Record<AiRole, string>;
+  /**
+   * A minimal call that proves the key works (a saved key is "validated
+   * with a minimal provider call"); throws KeyUnusableError when not.
+   */
+  validateKey(): Promise<void>;
   generateText(
     request: AiTextRequest
   ): Promise<{ text: string; usage: AiUsage }>;

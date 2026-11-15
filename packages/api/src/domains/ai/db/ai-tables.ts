@@ -1,11 +1,12 @@
 import { sql } from "drizzle-orm";
-import { index } from "drizzle-orm/pg-core";
+import { index, unique } from "drizzle-orm/pg-core";
 
 import { tasksTable } from "@repo/api/domains/tasks/db/tasks-tables";
 import { usersTable } from "@repo/api/domains/users/db/users-tables";
 import { createTable } from "@repo/api/utils/db/create-table";
 
 import type { AiFunding } from "../ai-funding";
+import type { AiKeyStatus } from "../schemas/ai-keys";
 import type { AiRole } from "../providers/provider-package";
 
 /**
@@ -41,4 +42,32 @@ export const aiUsageTable = createTable(
     index("ai_usage_user_id_idx").on(t.userId),
     index("ai_usage_task_id_idx").on(t.taskId),
   ]
+);
+
+/**
+ * A user's own provider key (guided interview spec, "AI providers"),
+ * encrypted with the user's data key, so it follows the same envelope and
+ * master-key rotation as their career content. Only its last characters
+ * are ever shown again.
+ */
+export const aiKeysTable = createTable(
+  "ai_keys",
+  (d) => ({
+    id: d.uuid().defaultRandom().primaryKey(),
+    createdAt: d
+      .timestamp({ withTimezone: true })
+      .default(sql`CURRENT_TIMESTAMP`)
+      .notNull(),
+    userId: d
+      .uuid()
+      .notNull()
+      .references(() => usersTable.id, { onDelete: "cascade" }),
+    provider: d.text().$type<"anthropic">().notNull(),
+    encryptedKey: d.text().notNull(),
+    lastCharacters: d.text().notNull(),
+    // Set when the provider refused the key or its credit ran out.
+    status: d.text().$type<AiKeyStatus>().notNull().default("active"),
+    statusChangedAt: d.timestamp({ withTimezone: true }),
+  }),
+  (t) => [unique("ai_keys_user_id_provider_unique").on(t.userId, t.provider)]
 );

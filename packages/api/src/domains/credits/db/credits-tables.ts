@@ -97,3 +97,22 @@ export const courtesyGrantsTable = createTable(
   }),
   (t) => [index("courtesy_grants_user_id_idx").on(t.userId)]
 );
+
+/**
+ * "Finish with credits" (billing spec, funding order): on a paid plan,
+ * stored credits are spent only after the user confirms, never silently.
+ * One confirmation lasts until the end of the month.
+ */
+export const storedCreditConfirmationsTable = createTable(
+  "stored_credit_confirmations",
+  (d) => ({
+    id: d.uuid().defaultRandom().primaryKey(),
+    confirmedAt: createdAt(d),
+    userId: d
+      .uuid()
+      .notNull()
+      .references(() => usersTable.id, { onDelete: "cascade" }),
+    expiresAt: d.timestamp({ withTimezone: true }).notNull(),
+  }),
+  (t) => [unique("stored_credit_confirmations_user_id_unique").on(t.userId)]
+);

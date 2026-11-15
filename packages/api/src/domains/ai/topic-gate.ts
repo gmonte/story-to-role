@@ -2,6 +2,7 @@ import { z } from "zod";
 
 import type { ChatContext } from "@repo/api/domains/chat/schemas/chat-message";
 
+import { KeyUnusableError } from "./providers/provider-package";
 import type { AiClient } from "./ai-client";
 
 const contextDescriptions: Record<ChatContext, string> = {
@@ -66,7 +67,10 @@ export async function checkTopic({
     });
 
     return object?.verdict ?? "off_topic";
-  } catch {
+  } catch (error) {
+    // An unusable key stops the task, so the user learns why; the message
+    // still never reaches the main model (the gate fails closed).
+    if (error instanceof KeyUnusableError) throw error;
     return "off_topic";
   }
 }

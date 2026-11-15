@@ -80,6 +80,22 @@ export const creditsRouter = createTRPCRouter({
       return ok;
     }),
 
+  confirmStoredCredits: userProcedure
+    .meta(
+      openApiMeta(
+        "credits",
+        "POST",
+        "/credits/confirm-stored",
+        "Finish with credits: agrees to spend stored credits this month"
+      )
+    )
+    .input(z.object({}))
+    .output(okSchema)
+    .mutation(async ({ ctx }) => {
+      await new CreditsService(db).confirmStoredCredits(ctx.userId);
+      return ok;
+    }),
+
   // Whether to show the admin page's link.
   isAdmin: userProcedure
     .input(z.object({}))

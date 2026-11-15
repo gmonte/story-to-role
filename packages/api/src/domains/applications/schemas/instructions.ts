@@ -41,6 +41,14 @@ export const lockedFieldSchema = z.enum([
 ]);
 export type LockedField = z.infer<typeof lockedFieldSchema>;
 
+/** The position field each locked field stands for. */
+export const positionFieldOf = {
+  employer: "employer",
+  title: "title",
+  start_date: "startDate",
+  end_date: "endDate",
+} as const satisfies Record<LockedField, string>;
+
 export const flaggedSensitiveItemSchema = z.object({
   kind: sensitiveItemKindSchema,
   original: z.string(),
@@ -98,7 +106,7 @@ export type InstructionPointView = z.infer<typeof instructionPointViewSchema>;
 export const lockedFactOverrideViewSchema = z.object({
   id: z.uuid(),
   // The point that asked for it: a request about this application only.
-  pointId: z.uuid().nullable(),
+  instructionPointId: z.uuid().nullable(),
   positionId: z.uuid(),
   employer: z.string(),
   field: lockedFieldSchema,
@@ -125,8 +133,10 @@ export type ApplicationInstructions = z.infer<
 
 /** The user's decision on one draft point. */
 export const instructionDecisionSchema = z.object({
-  pointId: z.uuid(),
+  instructionPointId: z.uuid(),
   promote: z.boolean(),
+  // The wording to keep as evidence, when the user edited it.
+  text: z.string().trim().min(1).max(1000).nullable(),
   positionId: z.uuid().nullable(),
   credentialId: z.uuid().nullable(),
   evidenceKind: evidenceKindSchema.nullable(),

@@ -109,6 +109,7 @@ export function GenerateResumeDialog({
   }));
   const repeatsLanguage = !versionId && existingLanguages.includes(language);
   const instructions = useApplicationInstructions(openingId);
+  const [unreviewed, setUnreviewed] = useState(false);
   // Points are reviewed before generating (resume spec).
   const instructionsPending =
     !!instructions.data?.splitting ||
@@ -264,7 +265,10 @@ export function GenerateResumeDialog({
           </p>
         )}
 
-        <InstructionsReview openingId={openingId} />
+        <InstructionsReview
+          openingId={openingId}
+          onUnreviewedChange={setUnreviewed}
+        />
 
         <Collapsible>
           <CollapsibleTrigger className="text-muted-foreground flex items-center gap-1 text-xs hover:underline">
@@ -311,6 +315,15 @@ export function GenerateResumeDialog({
           </CollapsibleContent>
         </Collapsible>
 
+        {(instructionsPending || unreviewed) && (
+          <p className="text-muted-foreground text-xs">
+            {t.formatMessage({
+              defaultMessage:
+                "Review your instructions before generating, or clear them.",
+            })}
+          </p>
+        )}
+
         <DialogFooter className="items-center sm:justify-between">
           <Link
             href="/app/writing"
@@ -319,7 +332,7 @@ export function GenerateResumeDialog({
             {t.formatMessage({ defaultMessage: "Template, header and style" })}
           </Link>
           <Button
-            disabled={generate.isPending || instructionsPending}
+            disabled={generate.isPending || instructionsPending || unreviewed}
             onClick={() =>
               generate.mutate({
                 openingId,

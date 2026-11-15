@@ -1,5 +1,5 @@
 {
-  "id": "83f6985b-ed74-4927-8ece-21250eb3add5",
+  "id": "ea0ccc31-313a-4981-aa17-d6ace740e734",
   "prevId": "61334c21-8b92-4686-a857-89a904852ce3",
   "version": "7",
   "dialect": "postgresql",
@@ -3119,8 +3119,8 @@
           "primaryKey": false,
           "notNull": true
         },
-        "instructionsId": {
-          "name": "instructionsId",
+        "applicationInstructionsId": {
+          "name": "applicationInstructionsId",
           "type": "uuid",
           "primaryKey": false,
           "notNull": false
@@ -3236,11 +3236,11 @@
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
-        "instruction_points_instructionsId_application_instructions_id_fk": {
-          "name": "instruction_points_instructionsId_application_instructions_id_fk",
+        "instruction_points_applicationInstructionsId_application_instructions_id_fk": {
+          "name": "instruction_points_applicationInstructionsId_application_instructions_id_fk",
           "tableFrom": "instruction_points",
           "tableTo": "application_instructions",
-          "columnsFrom": ["instructionsId"],
+          "columnsFrom": ["applicationInstructionsId"],
           "columnsTo": ["id"],
           "onDelete": "set null",
           "onUpdate": "no action"
@@ -3336,8 +3336,8 @@
           "primaryKey": false,
           "notNull": true
         },
-        "pointId": {
-          "name": "pointId",
+        "instructionPointId": {
+          "name": "instructionPointId",
           "type": "uuid",
           "primaryKey": false,
           "notNull": false
@@ -3378,11 +3378,11 @@
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
-        "locked_fact_overrides_pointId_instruction_points_id_fk": {
-          "name": "locked_fact_overrides_pointId_instruction_points_id_fk",
+        "locked_fact_overrides_instructionPointId_instruction_points_id_fk": {
+          "name": "locked_fact_overrides_instructionPointId_instruction_points_id_fk",
           "tableFrom": "locked_fact_overrides",
           "tableTo": "instruction_points",
-          "columnsFrom": ["pointId"],
+          "columnsFrom": ["instructionPointId"],
           "columnsTo": ["id"],
           "onDelete": "set null",
           "onUpdate": "no action"

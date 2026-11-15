@@ -1,5 +1,8 @@
 import { InstructionsRepository } from "@repo/api/domains/applications/instructions-repository";
-import type { LockedField } from "@repo/api/domains/applications/schemas/instructions";
+import {
+  type LockedField,
+  positionFieldOf,
+} from "@repo/api/domains/applications/schemas/instructions";
 import { CareerRepository } from "@repo/api/domains/career/career-repository";
 import type { CredentialKind } from "@repo/api/domains/career/schemas/career";
 import type { UserCipher } from "@repo/api/domains/encryption/user-cipher";
@@ -60,13 +63,6 @@ export type CareerContext = {
   instructions: ContextInstruction[];
 };
 
-const overriddenKey: Record<LockedField, keyof Omit<ContextPosition, "id">> = {
-  employer: "employer",
-  title: "title",
-  start_date: "startDate",
-  end_date: "endDate",
-};
-
 /**
  * Locked-fact overrides (resume spec, "Application instructions"): in this
  * application, code prints the user's declared value instead of the
@@ -82,7 +78,7 @@ export function applyLockedFactOverrides(
       .reduce(
         (changed, row) => ({
           ...changed,
-          [overriddenKey[row.field]]: row.value,
+          [positionFieldOf[row.field]]: row.value,
         }),
         position
       )
@@ -190,7 +186,10 @@ export async function loadCareerContext(input: {
             point.positionId && positionIds.has(point.positionId)
               ? point.positionId
               : null,
-          credentialId: point.credentialId,
+          credentialId:
+            point.credentialId && credentialIds.has(point.credentialId)
+              ? point.credentialId
+              : null,
           text: filter.apply(cipher.decrypt(point.encryptedText)),
         }))
     : [];

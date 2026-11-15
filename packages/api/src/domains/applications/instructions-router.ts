@@ -60,7 +60,7 @@ export const instructionsRouter = createTRPCRouter({
       z.object({
         openingId: z.uuid(),
         decisions: z.array(instructionDecisionSchema),
-        confirmedOverrideIds: z.array(z.uuid()),
+        confirmedLockedFactOverrideIds: z.array(z.uuid()),
       })
     )
     .output(okSchema)
@@ -77,11 +77,11 @@ export const instructionsRouter = createTRPCRouter({
       openApiMeta(
         "instructions",
         "DELETE",
-        "/openings/by-id/{openingId}/instruction-points/by-id/{pointId}",
+        "/openings/by-id/{openingId}/instruction-points/by-id/{instructionPointId}",
         "Removes a point from this application"
       )
     )
-    .input(z.object({ openingId: z.uuid(), pointId: z.uuid() }))
+    .input(z.object({ openingId: z.uuid(), instructionPointId: z.uuid() }))
     .output(okSchema)
     .mutation(async ({ ctx, input }) => {
       await new InstructionsService(db).removePoint({
@@ -96,11 +96,11 @@ export const instructionsRouter = createTRPCRouter({
       openApiMeta(
         "instructions",
         "DELETE",
-        "/openings/by-id/{openingId}/locked-fact-overrides/by-id/{overrideId}",
+        "/openings/by-id/{openingId}/locked-fact-overrides/by-id/{lockedFactOverrideId}",
         "Removes a locked-fact override from this application"
       )
     )
-    .input(z.object({ openingId: z.uuid(), overrideId: z.uuid() }))
+    .input(z.object({ openingId: z.uuid(), lockedFactOverrideId: z.uuid() }))
     .output(okSchema)
     .mutation(async ({ ctx, input }) => {
       await new InstructionsService(db).removeOverride({

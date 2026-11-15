@@ -10,7 +10,7 @@ import { loadPendingGapAnswers } from "./load-gap-answers";
 import {
   type FlaggedSensitiveItem,
   instructionSplitSchema,
-  type LockedField,
+  positionFieldOf,
 } from "./schemas/instructions";
 
 type SplitPoint = (typeof instructionSplitSchema)["_output"]["points"][number];
@@ -29,13 +29,15 @@ export async function runSplitInstructions(deps: {
   ai: AiClient;
   cipher: UserCipher;
   userId: string;
-  instructionsId: string;
+  applicationInstructionsId: string;
 }) {
   const { db, cipher } = deps;
   const repository = new InstructionsRepository(db);
-  const instructions = await repository.findInstructions(deps.instructionsId);
+  const instructions = await repository.findInstructions(
+    deps.applicationInstructionsId
+  );
   if (!instructions) {
-    throw new Error(`Instructions ${deps.instructionsId} not found`);
+    throw new Error(`Instructions ${deps.applicationInstructionsId} not found`);
   }
   const career = new CareerRepository(db);
   const profile = await career.findProfileById(instructions.profileId);
@@ -176,7 +178,7 @@ export async function runSplitInstructions(deps: {
     rows.map((row, index) => ({
       profileId: profile.id,
       openingId: instructions.openingId,
-      instructionsId: instructions.id,
+      applicationInstructionsId: instructions.id,
       source: row.source,
       fitCheckItemId: row.fitCheckItemId,
       sequence: firstSequence + index,
@@ -190,16 +192,10 @@ export async function runSplitInstructions(deps: {
     const position = positions.find((p) => p.id === change?.position_id);
     if (!change || !position) continue;
     const value = change.value.trim();
-    const current: Record<LockedField, string | null> = {
-      employer: position.employer,
-      title: position.title,
-      start_date: position.startDate,
-      end_date: position.endDate,
-    };
     const isDate = change.field === "start_date" || change.field === "end_date";
     if (
       !value ||
-      value === current[change.field] ||
+      value === position[positionFieldOf[change.field]] ||
       (isDate && !yearMonthSchema.safeParse(value).success)
     ) {
       continue;
@@ -210,7 +206,7 @@ export async function runSplitInstructions(deps: {
       positionId: position.id,
       field: change.field,
       encryptedValue: cipher.encrypt(value),
-      pointId: inserted[index].id,
+      instructionPointId: inserted[index].id,
     });
   }
 

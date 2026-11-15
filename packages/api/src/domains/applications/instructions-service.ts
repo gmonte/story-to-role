@@ -7,6 +7,7 @@ import {
   type UserCipher,
 } from "@repo/api/domains/encryption/user-cipher";
 import { EvidenceRepository } from "@repo/api/domains/evidence/evidence-repository";
+import { defaultSensitivityChoice } from "@repo/api/domains/evidence/schemas/evidence";
 import { OpeningsRepository } from "@repo/api/domains/openings/openings-repository";
 import type { RealtimeSubscription } from "@repo/api/domains/tasks/schemas/task";
 import { TasksService } from "@repo/api/domains/tasks/tasks-service";
@@ -18,7 +19,7 @@ import {
   type ApplicationInstructions,
   flaggedSensitiveItemSchema,
   type InstructionDecision,
-  type LockedField,
+  positionFieldOf,
 } from "./schemas/instructions";
 
 const notFound = () => new TRPCError({ code: "NOT_FOUND" });
@@ -70,22 +71,17 @@ export class InstructionsService {
       const latest = await repository.latestInstructions(opening.id);
       const positions = new Map(
         (await new CareerRepository(tx).listPositions(profile.id)).map(
-          (position) => [position.id, position]
+          (position) => [
+            position.id,
+            {
+              employer: cipher.decrypt(position.encryptedEmployer),
+              title: cipher.decrypt(position.encryptedTitle),
+              startDate: position.startDate,
+              endDate: position.endDate,
+            },
+          ]
         )
       );
-      const original = (positionId: string, field: LockedField) => {
-        const position = positions.get(positionId)!;
-        switch (field) {
-          case "employer":
-            return cipher.decrypt(position.encryptedEmployer);
-          case "title":
-            return cipher.decrypt(position.encryptedTitle);
-          case "start_date":
-            return position.startDate;
-          case "end_date":
-            return position.endDate;
-        }
-      };
 
       return {
         splitting: latest?.status === "splitting",
@@ -108,13 +104,11 @@ export class InstructionsService {
           })),
         overrides: (await repository.listOverrides(opening.id)).map((row) => ({
           id: row.id,
-          pointId: row.pointId,
+          instructionPointId: row.instructionPointId,
           positionId: row.positionId,
-          employer: cipher.decrypt(
-            positions.get(row.positionId)!.encryptedEmployer
-          ),
+          employer: positions.get(row.positionId)!.employer,
           field: row.field,
-          original: original(row.positionId, row.field),
+          original: positions.get(row.positionId)![positionFieldOf[row.field]],
           value: cipher.decrypt(row.encryptedValue),
           confirmed: !!row.confirmedAt,
         })),
@@ -195,7 +189,7 @@ export class InstructionsService {
     userId: string;
     openingId: string;
     decisions: InstructionDecision[];
-    confirmedOverrideIds: string[];
+    confirmedLockedFactOverrideIds: string[];
   }) {
     const { profile, opening } = await this.requireOpening(
       input.userId,
@@ -217,11 +211,15 @@ export class InstructionsService {
           .filter((credential) => credential.approvedAt)
           .map((credential) => credential.id)
       );
-      const decisions = new Map(input.decisions.map((d) => [d.pointId, d]));
-
-      const drafts = (await repository.listPoints(opening.id)).filter(
-        (point) => point.status === "draft"
+      const decisions = new Map(
+        input.decisions.map((d) => [d.instructionPointId, d])
       );
+      const pending = (await repository.listOverrides(opening.id)).filter(
+        (row) => !row.confirmedAt
+      );
+
+      // Locked: a second submit finds no drafts left, so nothing is promoted twice.
+      const drafts = await repository.lockDraftPoints(opening.id);
       for (const point of drafts) {
         const decision = decisions.get(point.id);
         const positionId =
@@ -241,7 +239,11 @@ export class InstructionsService {
           });
           continue;
         }
-        if (!positionId && !credentialId) {
+        // A locked-fact change belongs to this application, never the base.
+        const asksForOverride = pending.some(
+          (row) => row.instructionPointId === point.id
+        );
+        if ((!positionId && !credentialId) || asksForOverride) {
           throw new TRPCError({ code: "BAD_REQUEST" });
         }
         const [row] = await evidence.insertEvidence([
@@ -250,7 +252,11 @@ export class InstructionsService {
             positionId,
             credentialId,
             kind: decision.evidenceKind ?? point.evidenceKind ?? "achievement",
-            encryptedText: point.encryptedText,
+            // Edited wording, as on the interview's approval screen; the
+            // quote stays the user's original words.
+            encryptedText: decision.text
+              ? cipher.encrypt(decision.text)
+              : point.encryptedText,
             encryptedSourceQuote: point.encryptedText,
             language: profile.interviewLanguage,
             approvedAt: confirmedAt,
@@ -263,11 +269,7 @@ export class InstructionsService {
               positionId,
               kind: item.kind,
               encryptedOriginal: cipher.encrypt(item.original),
-              // Default choice (spec): generalize clients and figures.
-              choice:
-                item.kind === "client" || item.kind === "figure"
-                  ? "generalize"
-                  : null,
+              choice: defaultSensitivityChoice(item.kind),
               encryptedGeneralized: item.suggestedGeneralization
                 ? cipher.encrypt(item.suggestedGeneralization)
                 : null,
@@ -283,10 +285,7 @@ export class InstructionsService {
         });
       }
 
-      const confirmed = new Set(input.confirmedOverrideIds);
-      const pending = (await repository.listOverrides(opening.id)).filter(
-        (row) => !row.confirmedAt
-      );
+      const confirmed = new Set(input.confirmedLockedFactOverrideIds);
       await repository.confirmOverrides(
         pending.filter((row) => confirmed.has(row.id)).map((row) => row.id),
         confirmedAt
@@ -298,13 +297,13 @@ export class InstructionsService {
   }
 
   /**
-   * Removes a point from this application. A promoted point's evidence
-   * stays in the evidence base, where the user manages it.
+   * Removes a kept point from this application, with the overrides it
+   * asked for. A promoted point is evidence now, managed in the career.
    */
   async removePoint(input: {
     userId: string;
     openingId: string;
-    pointId: string;
+    instructionPointId: string;
   }) {
     const { opening } = await this.requireOpening(
       input.userId,
@@ -312,18 +311,26 @@ export class InstructionsService {
     );
     await this.db.transaction(async (tx) => {
       const repository = new InstructionsRepository(tx);
-      const points = await repository.listPoints(opening.id);
-      if (!points.some((point) => point.id === input.pointId)) {
-        throw notFound();
+      const point = (await repository.listPoints(opening.id)).find(
+        (row) => row.id === input.instructionPointId
+      );
+      if (!point || point.status === "removed") throw notFound();
+      if (point.status === "promoted") {
+        throw new TRPCError({ code: "BAD_REQUEST" });
       }
-      await repository.updatePoint(input.pointId, { status: "removed" });
+      await repository.updatePoint(point.id, { status: "removed" });
+      await repository.deleteOverrides(
+        (await repository.listOverrides(opening.id))
+          .filter((row) => row.instructionPointId === point.id)
+          .map((row) => row.id)
+      );
     });
   }
 
   async removeOverride(input: {
     userId: string;
     openingId: string;
-    overrideId: string;
+    lockedFactOverrideId: string;
   }) {
     const { opening } = await this.requireOpening(
       input.userId,
@@ -332,10 +339,10 @@ export class InstructionsService {
     await this.db.transaction(async (tx) => {
       const repository = new InstructionsRepository(tx);
       const overrides = await repository.listOverrides(opening.id);
-      if (!overrides.some((row) => row.id === input.overrideId)) {
+      if (!overrides.some((row) => row.id === input.lockedFactOverrideId)) {
         throw notFound();
       }
-      await repository.deleteOverrides([input.overrideId]);
+      await repository.deleteOverrides([input.lockedFactOverrideId]);
     });
   }
 }

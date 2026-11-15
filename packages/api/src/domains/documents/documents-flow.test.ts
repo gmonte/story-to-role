@@ -26,6 +26,7 @@ import {
 } from "@repo/api/test/pglite";
 import { InstructionsRepository } from "@repo/api/domains/applications/instructions-repository";
 import { InstructionsService } from "@repo/api/domains/applications/instructions-service";
+import type { InstructionDecision } from "@repo/api/domains/applications/schemas/instructions";
 import { runSplitInstructions } from "@repo/api/domains/applications/run-split-instructions";
 
 import { DocumentsRepository } from "./documents-repository";
@@ -670,7 +671,7 @@ describe("resume generation and snapshots", () => {
       }),
       cipher: ctx.cipher,
       userId: ctx.user.id,
-      instructionsId: submitted.id,
+      applicationInstructionsId: submitted.id,
     });
 
     const review = await instructions.get({
@@ -724,32 +725,49 @@ describe("resume generation and snapshots", () => {
       })
     ).rejects.toMatchObject({ code: "PRECONDITION_FAILED" });
 
-    const [migration, emphasis, , gap] = review.points;
+    const [migration, emphasis, titleChange, gap] = review.points;
+    const decide = (
+      instructionPointId: string,
+      changes: Partial<InstructionDecision> = {}
+    ): InstructionDecision => ({
+      instructionPointId,
+      promote: false,
+      text: null,
+      positionId: null,
+      credentialId: null,
+      evidenceKind: null,
+      ...changes,
+    });
+    // A locked-fact change stays in this application: never promoted.
+    await expect(
+      instructions.confirm({
+        userId: ctx.user.id,
+        openingId: ctx.opening.id,
+        decisions: [
+          decide(titleChange.id, { promote: true, positionId: ctx.positionId }),
+        ],
+        confirmedLockedFactOverrideIds: [],
+      })
+    ).rejects.toMatchObject({ code: "BAD_REQUEST" });
     await instructions.confirm({
       userId: ctx.user.id,
       openingId: ctx.opening.id,
       decisions: [
-        {
-          pointId: migration.id,
+        decide(migration.id, {
           promote: true,
+          // Edited on the approval screen; the quote keeps the original.
+          text: "Led the Kubernetes migration in 2021 at Initrode",
           positionId: ctx.positionId,
-          credentialId: null,
           evidenceKind: "achievement",
-        },
-        {
-          pointId: gap.id,
-          promote: false,
-          positionId: null,
-          credentialId: null,
-          evidenceKind: null,
-        },
+        }),
+        decide(gap.id),
       ],
-      confirmedOverrideIds: review.overrides.map((row) => row.id),
+      confirmedLockedFactOverrideIds: review.overrides.map((row) => row.id),
     });
     await instructions.removePoint({
       userId: ctx.user.id,
       openingId: ctx.opening.id,
-      pointId: emphasis.id,
+      instructionPointId: emphasis.id,
     });
 
     const promoted = (
@@ -760,7 +778,7 @@ describe("resume generation and snapshots", () => {
     ).find(
       (row) =>
         ctx.cipher.decrypt(row.encryptedText) ===
-        "I led the Kubernetes migration in 2021 at Initrode"
+        "Led the Kubernetes migration in 2021 at Initrode"
     );
     expect(promoted).toBeDefined();
     expect(ctx.cipher.decrypt(promoted!.encryptedSourceQuote)).toBe(
@@ -817,5 +835,23 @@ describe("resume generation and snapshots", () => {
     expect(version.instructionTrace).toEqual([
       { instructionId: gap.id, text: "I built a CLI in Go at Globex" },
     ]);
+
+    // Removing the point that asked for an override removes the override;
+    // a promoted point is evidence now and stays.
+    await instructions.removePoint({
+      userId: ctx.user.id,
+      openingId: ctx.opening.id,
+      instructionPointId: titleChange.id,
+    });
+    await expect(
+      instructions.removePoint({
+        userId: ctx.user.id,
+        openingId: ctx.opening.id,
+        instructionPointId: migration.id,
+      })
+    ).rejects.toMatchObject({ code: "BAD_REQUEST" });
+    expect(
+      await instructions.get({ userId: ctx.user.id, openingId: ctx.opening.id })
+    ).toMatchObject({ overrides: [] });
   });
 });

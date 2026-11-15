@@ -21,11 +21,11 @@ export class InstructionsRepository {
     return inserted;
   }
 
-  async findInstructions(instructionsId: string) {
+  async findInstructions(applicationInstructionsId: string) {
     const [row] = await this.tx
       .select()
       .from(applicationInstructionsTable)
-      .where(eq(applicationInstructionsTable.id, instructionsId));
+      .where(eq(applicationInstructionsTable.id, applicationInstructionsId));
     return row ?? null;
   }
 
@@ -40,13 +40,13 @@ export class InstructionsRepository {
   }
 
   async updateInstructions(
-    instructionsId: string,
+    applicationInstructionsId: string,
     changes: Partial<Insert<typeof applicationInstructionsTable>>
   ) {
     await this.tx
       .update(applicationInstructionsTable)
       .set(changes)
-      .where(eq(applicationInstructionsTable.id, instructionsId));
+      .where(eq(applicationInstructionsTable.id, applicationInstructionsId));
   }
 
   listPoints(openingId: string) {
@@ -55,6 +55,21 @@ export class InstructionsRepository {
       .from(instructionPointsTable)
       .where(eq(instructionPointsTable.openingId, openingId))
       .orderBy(asc(instructionPointsTable.sequence));
+  }
+
+  /** Draft points, locked until the transaction ends. */
+  lockDraftPoints(openingId: string) {
+    return this.tx
+      .select()
+      .from(instructionPointsTable)
+      .where(
+        and(
+          eq(instructionPointsTable.openingId, openingId),
+          eq(instructionPointsTable.status, "draft")
+        )
+      )
+      .orderBy(asc(instructionPointsTable.sequence))
+      .for("update");
   }
 
   async nextSequence(openingId: string) {
@@ -85,20 +100,20 @@ export class InstructionsRepository {
   }
 
   async updatePoint(
-    pointId: string,
+    instructionPointId: string,
     changes: Partial<Insert<typeof instructionPointsTable>>
   ) {
     await this.tx
       .update(instructionPointsTable)
       .set(changes)
-      .where(eq(instructionPointsTable.id, pointId));
+      .where(eq(instructionPointsTable.id, instructionPointId));
   }
 
-  async deletePoints(pointIds: string[]) {
-    if (pointIds.length === 0) return;
+  async deletePoints(instructionPointIds: string[]) {
+    if (instructionPointIds.length === 0) return;
     await this.tx
       .delete(instructionPointsTable)
-      .where(inArray(instructionPointsTable.id, pointIds));
+      .where(inArray(instructionPointsTable.id, instructionPointIds));
   }
 
   listOverrides(openingId: string) {
@@ -122,24 +137,24 @@ export class InstructionsRepository {
         ],
         set: {
           encryptedValue: row.encryptedValue,
-          pointId: row.pointId,
+          instructionPointId: row.instructionPointId,
           confirmedAt: null,
         },
       });
   }
 
-  async confirmOverrides(overrideIds: string[], confirmedAt: Date) {
-    if (overrideIds.length === 0) return;
+  async confirmOverrides(lockedFactOverrideIds: string[], confirmedAt: Date) {
+    if (lockedFactOverrideIds.length === 0) return;
     await this.tx
       .update(lockedFactOverridesTable)
       .set({ confirmedAt })
-      .where(inArray(lockedFactOverridesTable.id, overrideIds));
+      .where(inArray(lockedFactOverridesTable.id, lockedFactOverrideIds));
   }
 
-  async deleteOverrides(overrideIds: string[]) {
-    if (overrideIds.length === 0) return;
+  async deleteOverrides(lockedFactOverrideIds: string[]) {
+    if (lockedFactOverrideIds.length === 0) return;
     await this.tx
       .delete(lockedFactOverridesTable)
-      .where(inArray(lockedFactOverridesTable.id, overrideIds));
+      .where(inArray(lockedFactOverridesTable.id, lockedFactOverrideIds));
   }
 }

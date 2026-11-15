@@ -40,7 +40,14 @@ import { useInstructionLabels } from "../hooks/use-instruction-labels";
  * and the user decides, point by point, which ones also go to the evidence
  * base and confirms any locked-fact override before generating.
  */
-export function InstructionsReview({ openingId }: { openingId: string }) {
+export function InstructionsReview({
+  openingId,
+  onUnreviewedChange,
+}: {
+  openingId: string;
+  /** Typed text not yet reviewed: generating now would leave it out. */
+  onUnreviewedChange: (unreviewed: boolean) => void;
+}) {
   const t = useTranslation();
   const trpc = useTRPC();
   const refresh = useRefreshInstructions();
@@ -50,6 +57,7 @@ export function InstructionsReview({ openingId }: { openingId: string }) {
     trpc.instructions.split.mutationOptions({
       onSuccess: async () => {
         setText("");
+        onUnreviewedChange(false);
         await refresh();
       },
       onError: (error) => toast.error(error.message),
@@ -98,7 +106,10 @@ export function InstructionsReview({ openingId }: { openingId: string }) {
           <Textarea
             id="instructions"
             value={text}
-            onChange={(event) => setText(event.target.value)}
+            onChange={(event) => {
+              setText(event.target.value);
+              onUnreviewedChange(!!event.target.value.trim());
+            }}
             maxLength={4000}
             rows={3}
             placeholder={t.formatMessage({
@@ -181,17 +192,21 @@ export function ConfirmedInstructions({
               </Badge>
             )}
           </span>
-          <Button
-            size="icon"
-            variant="ghost"
-            className="size-6"
-            aria-label={t.formatMessage({
-              defaultMessage: "Remove from this application",
-            })}
-            onClick={() => removePoint.mutate({ openingId, pointId: point.id })}
-          >
-            <X />
-          </Button>
+          {point.status === "kept" && (
+            <Button
+              size="icon"
+              variant="ghost"
+              className="size-6"
+              aria-label={t.formatMessage({
+                defaultMessage: "Remove from this application",
+              })}
+              onClick={() =>
+                removePoint.mutate({ openingId, instructionPointId: point.id })
+              }
+            >
+              <X />
+            </Button>
+          )}
         </li>
       ))}
       {overrides.map((row) => (
@@ -206,7 +221,7 @@ export function ConfirmedInstructions({
             className="size-6"
             aria-label={t.formatMessage({ defaultMessage: "Remove override" })}
             onClick={() =>
-              removeOverride.mutate({ openingId, overrideId: row.id })
+              removeOverride.mutate({ openingId, lockedFactOverrideId: row.id })
             }
           >
             <X />
@@ -217,8 +232,11 @@ export function ConfirmedInstructions({
   );
 }
 
-/** A point's target: "position:<id>", "credential:<id>" or none. */
-type Decision = { promote: boolean; target: string };
+/**
+ * The user's choice on a point: whether to promote it, its target
+ * ("position:<id>", "credential:<id>" or none) and its wording as evidence.
+ */
+type Decision = { promote: boolean; target: string; text: string };
 
 const targetOf = (point: InstructionPointView) =>
   point.positionId
@@ -251,7 +269,14 @@ function DraftReview({
     Object.fromEntries(
       drafts.map((point) => [
         point.id,
-        { promote: point.suggestedPromotion, target: targetOf(point) },
+        {
+          // A locked-fact change stays in this application.
+          promote:
+            point.suggestedPromotion &&
+            !overrides.some((row) => row.instructionPointId === point.id),
+          target: targetOf(point),
+          text: point.text,
+        },
       ])
     )
   );
@@ -263,7 +288,9 @@ function DraftReview({
     })
   );
   const incomplete = drafts.some(
-    (point) => decisions[point.id].promote && !decisions[point.id].target
+    (point) =>
+      decisions[point.id].promote &&
+      (!decisions[point.id].target || !decisions[point.id].text.trim())
   );
 
   return (
@@ -285,7 +312,9 @@ function DraftReview({
           return (
             <li key={point.id} className="grid gap-1.5 text-sm">
               <span>{point.text}</span>
-              {!overrides.some((row) => row.pointId === point.id) && (
+              {!overrides.some(
+                (row) => row.instructionPointId === point.id
+              ) && (
                 <label className="flex items-center gap-2 text-xs">
                   <Checkbox
                     checked={decision.promote}
@@ -295,6 +324,18 @@ function DraftReview({
                     defaultMessage: "Also add to my evidence",
                   })}
                 </label>
+              )}
+              {decision.promote && (
+                <Textarea
+                  value={decision.text}
+                  onChange={(event) => set({ text: event.target.value })}
+                  maxLength={1000}
+                  rows={2}
+                  className="text-xs"
+                  aria-label={t.formatMessage({
+                    defaultMessage: "Wording in your evidence",
+                  })}
+                />
               )}
               {decision.promote && (
                 <Select
@@ -380,17 +421,19 @@ function DraftReview({
           confirm.mutate({
             openingId,
             decisions: drafts.map((point) => {
-              const { promote, target } = decisions[point.id];
+              const { promote, target, text } = decisions[point.id];
               const [kind, id] = target.split(":");
               return {
-                pointId: point.id,
+                instructionPointId: point.id,
                 promote,
+                text:
+                  promote && text.trim() !== point.text ? text.trim() : null,
                 positionId: kind === "position" ? id : null,
                 credentialId: kind === "credential" ? id : null,
                 evidenceKind: point.evidenceKind,
               };
             }),
-            confirmedOverrideIds: confirmed,
+            confirmedLockedFactOverrideIds: confirmed,
           })
         }
       >

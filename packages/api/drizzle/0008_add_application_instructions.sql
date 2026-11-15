@@ -12,7 +12,7 @@ CREATE TABLE IF NOT EXISTS "instruction_points" (
 	"createdAt" timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
 	"profileId" uuid NOT NULL,
 	"openingId" uuid NOT NULL,
-	"instructionsId" uuid,
+	"applicationInstructionsId" uuid,
 	"source" text NOT NULL,
 	"fitCheckItemId" uuid,
 	"sequence" integer NOT NULL,
@@ -35,7 +35,7 @@ CREATE TABLE IF NOT EXISTS "locked_fact_overrides" (
 	"positionId" uuid NOT NULL,
 	"field" text NOT NULL,
 	"encryptedValue" text NOT NULL,
-	"pointId" uuid,
+	"instructionPointId" uuid,
 	"confirmedAt" timestamp with time zone,
 	CONSTRAINT "locked_fact_overrides_field_unique" UNIQUE("openingId","positionId","field")
 );
@@ -57,7 +57,7 @@ DO $$ BEGIN
 EXCEPTION WHEN duplicate_object THEN null;
 END $$;--> statement-breakpoint
 DO $$ BEGIN
- ALTER TABLE "instruction_points" ADD CONSTRAINT "instruction_points_instructionsId_application_instructions_id_fk" FOREIGN KEY ("instructionsId") REFERENCES "public"."application_instructions"("id") ON DELETE set null ON UPDATE no action;
+ ALTER TABLE "instruction_points" ADD CONSTRAINT "instruction_points_applicationInstructionsId_application_instructions_id_fk" FOREIGN KEY ("applicationInstructionsId") REFERENCES "public"."application_instructions"("id") ON DELETE set null ON UPDATE no action;
 EXCEPTION WHEN duplicate_object THEN null;
 END $$;--> statement-breakpoint
 DO $$ BEGIN
@@ -89,7 +89,7 @@ DO $$ BEGIN
 EXCEPTION WHEN duplicate_object THEN null;
 END $$;--> statement-breakpoint
 DO $$ BEGIN
- ALTER TABLE "locked_fact_overrides" ADD CONSTRAINT "locked_fact_overrides_pointId_instruction_points_id_fk" FOREIGN KEY ("pointId") REFERENCES "public"."instruction_points"("id") ON DELETE set null ON UPDATE no action;
+ ALTER TABLE "locked_fact_overrides" ADD CONSTRAINT "locked_fact_overrides_instructionPointId_instruction_points_id_fk" FOREIGN KEY ("instructionPointId") REFERENCES "public"."instruction_points"("id") ON DELETE set null ON UPDATE no action;
 EXCEPTION WHEN duplicate_object THEN null;
 END $$;--> statement-breakpoint
 CREATE INDEX IF NOT EXISTS "application_instructions_opening_id_idx" ON "application_instructions" USING btree ("openingId");--> statement-breakpoint

@@ -69,9 +69,11 @@ export const instructionPointsTable = createTable(
       .uuid()
       .notNull()
       .references(() => openingsTable.id, { onDelete: "cascade" }),
-    instructionsId: d.uuid().references(() => applicationInstructionsTable.id, {
-      onDelete: "set null",
-    }),
+    applicationInstructionsId: d
+      .uuid()
+      .references(() => applicationInstructionsTable.id, {
+        onDelete: "set null",
+      }),
     source: d.text().$type<InstructionSource>().notNull(),
     fitCheckItemId: d
       .uuid()
@@ -124,7 +126,7 @@ export const lockedFactOverridesTable = createTable(
       .references(() => positionsTable.id, { onDelete: "cascade" }),
     field: d.text().$type<LockedField>().notNull(),
     encryptedValue: d.text().notNull(),
-    pointId: d
+    instructionPointId: d
       .uuid()
       .references(() => instructionPointsTable.id, { onDelete: "set null" }),
     confirmedAt: d.timestamp({ withTimezone: true }),

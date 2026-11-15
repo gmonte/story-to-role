@@ -110,9 +110,11 @@ export class DocumentsService {
       const instructions = new InstructionsRepository(tx);
       const latest = await instructions.latestInstructions(opening.id);
       const points = await instructions.listPoints(opening.id);
+      const overrides = await instructions.listOverrides(opening.id);
       if (
         latest?.status === "splitting" ||
-        points.some((point) => point.status === "draft")
+        points.some((point) => point.status === "draft") ||
+        overrides.some((row) => !row.confirmedAt)
       ) {
         throw new TRPCError({ code: "PRECONDITION_FAILED" });
       }

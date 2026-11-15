@@ -22,7 +22,7 @@ export const splitInstructionsTask = task({
             ai,
             cipher,
             userId,
-            instructionsId: subjectId,
+            applicationInstructionsId: subjectId,
           });
         } catch (error) {
           await new InstructionsRepository(db).updateInstructions(subjectId, {

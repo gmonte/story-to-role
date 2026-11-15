@@ -268,6 +268,38 @@ describe("application instructions and overrides", () => {
     ]);
   });
 
+  it("traces a skill spelled out only in an instruction to it", () => {
+    const { content, dropped } = assembleResume({
+      draft: {
+        ...draft,
+        skills: [
+          {
+            label: "Platform",
+            items: ["TypeScript", "Kubernetes migration"],
+            evidence_ids: [I1],
+          },
+        ],
+      },
+      context,
+      sections,
+      header,
+    });
+    expect(dropped.filter((row) => row.reason === "unknown_skill")).toEqual([]);
+    const skills = content.sections.find((s) => s.kind === "skills");
+    expect(skills).toMatchObject({
+      groups: [
+        {
+          text: "TypeScript, Kubernetes migration",
+          origin: {
+            kind: "instruction",
+            instructionIds: [I1],
+            evidenceIds: [E3],
+          },
+        },
+      ],
+    });
+  });
+
   it("refuses an instruction about another position, or unsupported figures", () => {
     const other: CareerContext = {
       ...context,

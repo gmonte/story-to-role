@@ -139,14 +139,14 @@ export function assembleResume(input: {
       const groups = draft.skills.flatMap((group) => {
         const cited = group.evidence_ids.filter((id) => evidenceById.has(id));
         const citedText = normalize(
-          [
-            ...cited.map((id) => evidenceById.get(id)!.text),
-            ...group.evidence_ids.flatMap(
-              (id) => instructionById.get(id)?.text ?? []
-            ),
-          ].join(" ")
+          cited.map((id) => evidenceById.get(id)!.text).join(" ")
+        );
+        const citedInstructions = group.evidence_ids.filter((id) =>
+          instructionById.has(id)
         );
         const evidenceIds = new Set(cited);
+        // Instructions that spell out a skill the evidence does not show.
+        const instructionIds = new Set<string>();
         const items = group.items.filter((item) => {
           const skill = context.skills.find(
             (row) => normalize(row.name) === normalize(item)
@@ -156,6 +156,13 @@ export function assembleResume(input: {
             return true;
           }
           if (citedText.includes(normalize(item))) return true;
+          const instruction = citedInstructions.find((id) =>
+            normalize(instructionById.get(id)!.text).includes(normalize(item))
+          );
+          if (instruction) {
+            instructionIds.add(instruction);
+            return true;
+          }
           dropped.push({ text: item, reason: "unknown_skill" });
           return false;
         });
@@ -165,10 +172,17 @@ export function assembleResume(input: {
                 id: newLineId(),
                 label: group.label.trim(),
                 text: items.join(", "),
-                origin: {
-                  kind: "skill" as const,
-                  evidenceIds: [...evidenceIds],
-                },
+                origin:
+                  instructionIds.size > 0
+                    ? {
+                        kind: "instruction" as const,
+                        instructionIds: [...instructionIds],
+                        evidenceIds: [...evidenceIds],
+                      }
+                    : {
+                        kind: "skill" as const,
+                        evidenceIds: [...evidenceIds],
+                      },
               },
             ]
           : [];

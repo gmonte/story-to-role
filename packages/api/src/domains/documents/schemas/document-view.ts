@@ -60,6 +60,9 @@ export const versionViewSchema = z.object({
   pages: z.number(),
   atsCheck: atsCheckSchema.nullable(),
   trace: z.array(evidenceTraceSchema),
+  instructionTrace: z.array(
+    z.object({ instructionId: z.uuid(), text: z.string() })
+  ),
   credentialApprovals: z.array(
     z.object({ credentialId: z.uuid(), approvedAt: z.date() })
   ),

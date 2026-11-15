@@ -1,5 +1,6 @@
 import { TRPCError } from "@trpc/server";
 
+import { InstructionsRepository } from "@repo/api/domains/applications/instructions-repository";
 import { CareerRepository } from "@repo/api/domains/career/career-repository";
 import {
   getUserCipher,
@@ -105,6 +106,16 @@ export class DocumentsService {
       if (opening.status !== "analyzed") {
         throw new TRPCError({ code: "PRECONDITION_FAILED" });
       }
+      // Instructions are reviewed point by point before generating.
+      const instructions = new InstructionsRepository(tx);
+      const latest = await instructions.latestInstructions(opening.id);
+      const points = await instructions.listPoints(opening.id);
+      if (
+        latest?.status === "splitting" ||
+        points.some((point) => point.status === "draft")
+      ) {
+        throw new TRPCError({ code: "PRECONDITION_FAILED" });
+      }
       const repository = new DocumentsRepository(tx);
       const application = await repository.findOrInsertApplication({
         profileId: profile.id,
@@ -162,7 +173,7 @@ export class DocumentsService {
       if (!application) return { application: null, documents: [] };
       const cipher = await getUserCipher(tx, input.userId);
       const keywords = await this.keywordsWithEvidence(tx, cipher, opening.id);
-      const trace = await this.traceSource(tx, cipher, profile.id);
+      const trace = await this.traceSource(tx, cipher, profile.id, opening.id);
       const documents = await repository.listApplicationDocuments(
         application.id
       );
@@ -212,6 +223,7 @@ export class DocumentsService {
           ? atsCheck({ text: resumeText(content), keywords })
           : null,
         trace: trace.evidenceFor(content),
+        instructionTrace: trace.instructionsFor(content),
         credentialApprovals: trace.credentialApprovals,
       });
     }
@@ -258,18 +270,25 @@ export class DocumentsService {
 
   /**
    * Where lines come from, loaded once per view: each evidence item's quote,
-   * position or credential and approval date, and each credential's
-   * approval date.
+   * position or credential and approval date, each instruction point's
+   * text, and each credential's approval date.
    */
   private async traceSource(
     tx: DbClient,
     cipher: UserCipher,
-    profileId: string
+    profileId: string,
+    openingId: string
   ) {
     const career = new CareerRepository(tx);
     const positions = await career.listPositions(profileId);
     const credentials = await career.listCredentials(profileId);
     const evidence = await new EvidenceRepository(tx).listEvidence(profileId);
+    // Removed points keep their row, so old lines still trace to them.
+    const instructions = new Map(
+      (await new InstructionsRepository(tx).listPoints(openingId)).map(
+        (point) => [point.id, cipher.decrypt(point.encryptedText)]
+      )
+    );
     const byId = new Map(
       evidence.map((row): [string, EvidenceTrace] => {
         const position = positions.find((p) => p.id === row.positionId);
@@ -301,12 +320,25 @@ export class DocumentsService {
       evidenceFor(content: ResumeContent) {
         const ids = new Set(
           resumeLines(content).flatMap((line) =>
-            line.origin.kind === "evidence" || line.origin.kind === "skill"
+            line.origin.kind === "evidence" ||
+            line.origin.kind === "skill" ||
+            line.origin.kind === "instruction"
               ? line.origin.evidenceIds
               : []
           )
         );
         return [...ids].flatMap((id) => byId.get(id) ?? []);
+      },
+      instructionsFor(content: ResumeContent) {
+        const ids = new Set(
+          resumeLines(content).flatMap((line) =>
+            line.origin.kind === "instruction" ? line.origin.instructionIds : []
+          )
+        );
+        return [...ids].flatMap((id) => {
+          const text = instructions.get(id);
+          return text === undefined ? [] : [{ instructionId: id, text }];
+        });
       },
       credentialApprovals: credentials.flatMap((row) =>
         row.approvedAt

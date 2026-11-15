@@ -151,7 +151,12 @@ export function ResumeEditor({
     setEdits(content && { snapshotId: version.snapshot.id, content });
   const content = draft ?? version.content;
   const language = version.language;
-  const traceById = new Map(version.trace.map((row) => [row.evidenceId, row]));
+  const traceIndex: TraceIndex = {
+    evidence: new Map(version.trace.map((row) => [row.evidenceId, row])),
+    instructions: new Map(
+      version.instructionTrace.map((row) => [row.instructionId, row.text])
+    ),
+  };
   const approvals = new Map(
     version.credentialApprovals.map((row) => [row.credentialId, row.approvedAt])
   );
@@ -329,7 +334,7 @@ export function ResumeEditor({
               content={content}
               language={language}
               trace={trace}
-              traceById={traceById}
+              traceIndex={traceIndex}
               approvals={approvals}
               onEdit={edit}
             />
@@ -360,7 +365,7 @@ function SectionBody({
   content,
   language,
   trace,
-  traceById,
+  traceIndex,
   approvals,
   onEdit,
 }: {
@@ -368,7 +373,7 @@ function SectionBody({
   content: ResumeContent;
   language: VersionView["language"];
   trace: boolean;
-  traceById: Map<string, EvidenceTrace>;
+  traceIndex: TraceIndex;
   approvals: Map<string, Date>;
   onEdit: (content: ResumeContent) => void;
 }) {
@@ -378,7 +383,7 @@ function SectionBody({
       key={row.id}
       origin={row.origin}
       trace={trace}
-      traceById={traceById}
+      traceIndex={traceIndex}
     >
       <EditableText
         value={row.text}
@@ -507,22 +512,34 @@ function SectionBody({
   }
 }
 
+/** Where lines come from: evidence by id and instruction points' text. */
+type TraceIndex = {
+  evidence: Map<string, EvidenceTrace>;
+  instructions: Map<string, string>;
+};
+
 /** A line with its origin on hover, colored by origin in trace mode. */
 function TracedLine({
   origin,
   trace,
-  traceById,
+  traceIndex,
   children,
 }: {
   origin: LineOrigin;
   trace: boolean;
-  traceById: Map<string, EvidenceTrace>;
+  traceIndex: TraceIndex;
   children: React.ReactNode;
 }) {
   const t = useTranslation();
   const sources =
-    origin.kind === "evidence" || origin.kind === "skill"
-      ? origin.evidenceIds.flatMap((id) => traceById.get(id) ?? [])
+    origin.kind === "manual" || origin.kind === "credential"
+      ? []
+      : origin.evidenceIds.flatMap((id) => traceIndex.evidence.get(id) ?? []);
+  const instructions =
+    origin.kind === "instruction"
+      ? origin.instructionIds.flatMap(
+          (id) => traceIndex.instructions.get(id) ?? []
+        )
       : [];
 
   return (
@@ -540,12 +557,23 @@ function TracedLine({
       <TooltipContent side="left" className="max-w-sm">
         {origin.kind === "manual" ? (
           t.formatMessage({ defaultMessage: "Written by you" })
-        ) : origin.kind === "instruction" ? (
-          t.formatMessage({
-            defaultMessage: "From this application's instructions",
-          })
-        ) : sources.length > 0 ? (
+        ) : sources.length > 0 || instructions.length > 0 ? (
           <div className="flex flex-col gap-2">
+            {instructions.map((text) => (
+              <div key={text} className="flex flex-col gap-0.5">
+                <span>
+                  {t.formatMessage(
+                    { defaultMessage: "“{quote}”" },
+                    { quote: text }
+                  )}
+                </span>
+                <span className="opacity-70">
+                  {t.formatMessage({
+                    defaultMessage: "From this application's instructions",
+                  })}
+                </span>
+              </div>
+            ))}
             {sources.map((source) => (
               <div key={source.evidenceId} className="flex flex-col gap-0.5">
                 <span>

@@ -9,7 +9,10 @@ import {
 import { resolveSections } from "../template/resolve-sections";
 import { assembleResume, type ResumeDraft } from "./assemble-resume";
 import { atsCheck } from "./ats-check";
-import type { CareerContext } from "./load-career-context";
+import {
+  applyLockedFactOverrides,
+  type CareerContext,
+} from "./load-career-context";
 import {
   estimatePages,
   findForbiddenLines,
@@ -24,6 +27,8 @@ const E1 = "00000000-0000-4000-8000-0000000000e1";
 const E2 = "00000000-0000-4000-8000-0000000000e2";
 const E3 = "00000000-0000-4000-8000-0000000000e3";
 const C1 = "00000000-0000-4000-8000-0000000000c1";
+const I1 = "00000000-0000-4000-8000-0000000000a1";
+const I2 = "00000000-0000-4000-8000-0000000000a2";
 
 const context: CareerContext = {
   positions: [
@@ -82,6 +87,20 @@ const context: CareerContext = {
   ],
   skills: [{ id: "s1", name: "TypeScript", evidenceIds: [E3] }],
   projects: [],
+  instructions: [
+    {
+      id: I1,
+      positionId: P1,
+      credentialId: null,
+      text: "I led the Kubernetes migration in 2021",
+    },
+    {
+      id: I2,
+      positionId: null,
+      credentialId: null,
+      text: "Emphasize people management",
+    },
+  ],
 };
 
 const header: ResumeHeaderFields = {
@@ -211,6 +230,95 @@ describe("assembling a resume", () => {
       { original: "Kubernetes", choice: "exclude" },
     ]);
     expect(findForbiddenLines(content, filter)).toContain("title_line");
+  });
+});
+
+describe("application instructions and overrides", () => {
+  const withBullets = (
+    bullets: ResumeDraft["experience"][number]["bullets"]
+  ): ResumeDraft => ({
+    ...draft,
+    skills: [],
+    experience: [{ position_id: P1, context: null, bullets }],
+  });
+  const linesOf = (content: ReturnType<typeof assembleResume>["content"]) =>
+    content.sections.flatMap((section) =>
+      section.kind === "experience"
+        ? section.entries.flatMap((entry) => entry.lines)
+        : []
+    );
+
+  it("lets a line rest on an instruction and traces it there", () => {
+    const { content, dropped } = assembleResume({
+      draft: withBullets([
+        { text: "Led the Kubernetes migration in 2021.", evidence_ids: [I1] },
+        {
+          text: "Led the migration that cut deploy time by 40%.",
+          evidence_ids: [E1, I1],
+        },
+      ]),
+      context,
+      sections,
+      header,
+    });
+    expect(dropped).toEqual([]);
+    expect(linesOf(content).map((line) => line.origin)).toEqual([
+      { kind: "instruction", instructionIds: [I1], evidenceIds: [] },
+      { kind: "instruction", instructionIds: [I1], evidenceIds: [E1] },
+    ]);
+  });
+
+  it("refuses an instruction about another position, or unsupported figures", () => {
+    const other: CareerContext = {
+      ...context,
+      instructions: [{ ...context.instructions[0], positionId: P2 }],
+    };
+    const { content, dropped } = assembleResume({
+      draft: withBullets([
+        { text: "Led the Kubernetes migration.", evidence_ids: [I1] },
+      ]),
+      context: other,
+      sections,
+      header,
+    });
+    expect(linesOf(content)).toEqual([]);
+    expect(dropped).toEqual([
+      { text: "Led the Kubernetes migration.", reason: "no_evidence" },
+    ]);
+
+    const figures = assembleResume({
+      draft: withBullets([
+        { text: "Led 12 people in the migration.", evidence_ids: [I1] },
+      ]),
+      context,
+      sections,
+      header,
+    });
+    expect(figures.dropped).toEqual([
+      { text: "Led 12 people in the migration.", reason: "unsupported_figure" },
+    ]);
+  });
+
+  it("prints a confirmed override instead of the locked fact, and enforces it", () => {
+    const positions = applyLockedFactOverrides(context.positions, [
+      { positionId: P1, field: "title", value: "Engineering Manager" },
+      { positionId: P2, field: "end_date", value: "2021-06" },
+    ]);
+    const { content } = assembleResume({
+      draft,
+      context: { ...context, positions },
+      sections,
+      header,
+    });
+    const experience = content.sections.find((s) => s.kind === "experience");
+    expect(experience).toMatchObject({
+      entries: [
+        { positionId: P1, title: "Engineering Manager", employer: "Globex" },
+        { positionId: P2, title: "Developer", endDate: "2021-06" },
+      ],
+    });
+    expect(lockedFactViolations(content, positions)).toEqual([]);
+    expect(lockedFactViolations(content, context.positions)).toEqual([P1, P2]);
   });
 });
 

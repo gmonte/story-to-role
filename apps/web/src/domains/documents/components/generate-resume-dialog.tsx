@@ -47,6 +47,8 @@ import {
 } from "@repo/web/components/ui/select";
 import { toast } from "@repo/web/components/ui/sonner";
 
+import { InstructionsReview } from "~/domains/applications/components/instructions-review";
+import { useApplicationInstructions } from "~/domains/applications/hooks/use-application-instructions";
 import { useOpeningLabels } from "~/domains/openings/hooks/use-opening-labels";
 import { useTRPC } from "~/tools/trpc/client";
 
@@ -106,6 +108,12 @@ export function GenerateResumeDialog({
     ),
   }));
   const repeatsLanguage = !versionId && existingLanguages.includes(language);
+  const instructions = useApplicationInstructions(openingId);
+  // Points are reviewed before generating (resume spec).
+  const instructionsPending =
+    !!instructions.data?.splitting ||
+    !!instructions.data?.points.some((point) => point.status === "draft") ||
+    !!instructions.data?.overrides.some((row) => !row.confirmed);
   const generate = useMutation(
     trpc.documents.generateResume.mutationOptions({
       onSuccess: async () => {
@@ -119,7 +127,7 @@ export function GenerateResumeDialog({
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>{trigger}</DialogTrigger>
-      <DialogContent>
+      <DialogContent className="max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>
             {versionId
@@ -256,6 +264,8 @@ export function GenerateResumeDialog({
           </p>
         )}
 
+        <InstructionsReview openingId={openingId} />
+
         <Collapsible>
           <CollapsibleTrigger className="text-muted-foreground flex items-center gap-1 text-xs hover:underline">
             <ChevronDown className="size-3.5" />
@@ -309,7 +319,7 @@ export function GenerateResumeDialog({
             {t.formatMessage({ defaultMessage: "Template, header and style" })}
           </Link>
           <Button
-            disabled={generate.isPending}
+            disabled={generate.isPending || instructionsPending}
             onClick={() =>
               generate.mutate({
                 openingId,

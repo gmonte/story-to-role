@@ -9,6 +9,7 @@ export * from "./domains/evidence/db/evidence-tables";
 export * from "./domains/interview/db/interview-tables";
 export * from "./domains/openings/db/openings-tables";
 export * from "./domains/applications/db/applications-tables";
+export * from "./domains/applications/db/instructions-tables";
 export * from "./domains/documents/db/documents-tables";
 export * from "./domains/documents/db/writing-tables";
 

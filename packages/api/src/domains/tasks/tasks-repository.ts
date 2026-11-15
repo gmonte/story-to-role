@@ -1,5 +1,6 @@
 import { and, eq, gt, inArray } from "drizzle-orm";
 
+import type { AiFunding } from "@repo/api/domains/ai/ai-funding";
 import type { DbClient } from "@repo/api/tools/db-client";
 
 import { tasksTable } from "./db/tasks-tables";
@@ -23,6 +24,7 @@ export class TasksRepository {
     userId: string;
     type: TaskType;
     subjectId?: string;
+    funding?: AiFunding;
   }): Promise<Task> {
     const [task] = await this.tx
       .insert(tasksTable)
@@ -38,6 +40,7 @@ export class TasksRepository {
         userId: tasksTable.userId,
         type: tasksTable.type,
         subjectId: tasksTable.subjectId,
+        funding: tasksTable.funding,
       })
       .from(tasksTable)
       .where(eq(tasksTable.id, taskId));

@@ -2,6 +2,7 @@ import { sql } from "drizzle-orm";
 import { index } from "drizzle-orm/pg-core";
 
 import { usersTable } from "@repo/api/domains/users/db/users-tables";
+import type { AiFunding } from "@repo/api/domains/ai/ai-funding";
 import { createTable } from "@repo/api/utils/db/create-table";
 
 import type { TaskProgress, TaskStatus, TaskType } from "../schemas/task";
@@ -35,6 +36,8 @@ export const tasksTable = createTable(
     runId: d.text(),
     progress: d.jsonb().$type<TaskProgress>(),
     errorMessage: d.text(),
+    // Who pays for the task's AI calls, decided when it starts.
+    funding: d.text().$type<AiFunding>().notNull().default("credits"),
     startedAt: d.timestamp({ withTimezone: true }),
     finishedAt: d.timestamp({ withTimezone: true }),
   }),

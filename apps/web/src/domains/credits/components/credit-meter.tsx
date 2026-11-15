@@ -95,6 +95,44 @@ export function CreditMeter() {
               )}
             </span>
           )}
+          {data.key && (
+            <span
+              className={
+                data.key.status === "active" ? undefined : "text-amber-600"
+              }
+            >
+              {data.key.status !== "active"
+                ? t.formatMessage({
+                    defaultMessage:
+                      "Your own key stopped working: see Plan and credits.",
+                  })
+                : data.key.paysNext
+                  ? t.formatMessage(
+                      {
+                        defaultMessage:
+                          "Your own key pays for AI now: about {amount} this month (an estimate). Credits stay as a reserve.",
+                      },
+                      {
+                        amount: t.formatNumber(data.key.spentThisMonthUsd, {
+                          style: "currency",
+                          currency: "USD",
+                        }),
+                      }
+                    )
+                  : t.formatMessage(
+                      {
+                        defaultMessage:
+                          "Your own key takes over when this month’s plan credits run out (about {amount} spent on it this month).",
+                      },
+                      {
+                        amount: t.formatNumber(data.key.spentThisMonthUsd, {
+                          style: "currency",
+                          currency: "USD",
+                        }),
+                      }
+                    )}
+            </span>
+          )}
           {data.courtesy && (
             <span className="text-muted-foreground">
               {data.courtesy.endsAt
@@ -121,6 +159,19 @@ export function CreditMeter() {
           )}
         </div>
         <DropdownMenuSeparator />
+        {data.storedLocked > 0 && (
+          <DropdownMenuItem asChild>
+            <Link href="/app/billing#finish-with-credits">
+              {t.formatMessage(
+                {
+                  defaultMessage:
+                    "Finish with credits: {credits, number} stored credits wait for your OK",
+                },
+                { credits: data.storedLocked }
+              )}
+            </Link>
+          </DropdownMenuItem>
+        )}
         <DropdownMenuItem asChild>
           <Link href="/app/billing">
             {data.plan === "free"

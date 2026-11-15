@@ -1,4 +1,5 @@
 import { CareerRepository } from "@repo/api/domains/career/career-repository";
+import { TasksRepository } from "@repo/api/domains/tasks/tasks-repository";
 import { getUserCipher } from "@repo/api/domains/encryption/user-cipher";
 import { loadSensitiveFilter } from "@repo/api/domains/evidence/sensitive/load-sensitive-filter";
 import type { DbClient } from "@repo/api/tools/db-client";
@@ -23,7 +24,13 @@ export async function createTaskAi(input: {
   const sensitiveFilter = profile
     ? await loadSensitiveFilter({ db: input.db, cipher, profileId: profile.id })
     : undefined;
-  const { funding, providerPackage } = resolveAiFunding();
+  const task = await new TasksRepository(input.db).findOwner(input.taskId);
+  const { funding, providerPackage } = await resolveAiFunding({
+    db: input.db,
+    userId: input.userId,
+    cipher,
+    funding: task?.funding ?? "credits",
+  });
 
   return {
     cipher,

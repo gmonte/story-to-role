@@ -11,13 +11,15 @@ import {
 
 /**
  * Not enough credits for what an action may cost (its cap); `kept` is what
- * the credit reserve holds back from it.
+ * the credit reserve holds back from it, `stored` what confirming "Finish
+ * with credits" would add.
  */
 export class InsufficientCreditsError extends Error {
   constructor(
     readonly needed: number,
     readonly available: number,
-    readonly kept = 0
+    readonly kept = 0,
+    readonly stored = 0
   ) {
     super(`Needs up to ${needed} credits, ${available} available`);
   }
@@ -156,17 +158,19 @@ export async function revokeLots(
  * plan credits first, those expiring first; then stored credits (packs and
  * welcome credits), those expiring first. Fit-check lots pay fit checks.
  * On a paid plan, stored credits wait for the user's confirmation
- * ("Finish with credits"), never spent silently.
+ * ("Finish with credits"), never spent silently: `allowStored`.
  */
 export async function spendableLots(
   tx: DbClient,
   userId: string,
   scope: CreditScope,
-  now: Date
+  now: Date,
+  allowStored?: boolean
 ) {
   const repository = new CreditsRepository(tx);
   const lots = await repository.liveLots(userId, now);
-  const storedAllowed = (await currentPlan(tx, userId, now)).kind === "free";
+  const storedAllowed =
+    allowStored ?? (await storedCreditsAllowed(tx, userId, now));
   const order = (source: CreditSource) =>
     planSources.includes(source) ? 0 : 1;
   const time = (date: Date | null) =>
@@ -185,17 +189,33 @@ export async function spendableLots(
     );
 }
 
+/**
+ * Whether stored credits may be spent without asking: always on Free, on
+ * a paid plan once the user confirmed "Finish with credits".
+ */
+export async function storedCreditsAllowed(
+  tx: DbClient,
+  userId: string,
+  now: Date
+) {
+  return (
+    (await currentPlan(tx, userId, now)).kind === "free" ||
+    (await new CreditsRepository(tx).storedCreditsConfirmed(userId, now))
+  );
+}
+
+const sum = (rows: Array<{ remaining: number }>) =>
+  rows.reduce((total, row) => total + row.remaining, 0);
+
 /** What the user can spend now on an action of this scope. */
 export async function spendableTotal(
   tx: DbClient,
   userId: string,
   scope: CreditScope,
-  now: Date
+  now: Date,
+  allowStored?: boolean
 ) {
-  return (await spendableLots(tx, userId, scope, now)).reduce(
-    (total, row) => total + row.remaining,
-    0
-  );
+  return sum(await spendableLots(tx, userId, scope, now, allowStored));
 }
 
 /**
@@ -206,15 +226,32 @@ export function assertFits(input: {
   cap: number;
   available: number;
   keep: number;
+  // Stored credits that would count once the user confirms.
+  stored?: number;
 }) {
   const usable = Math.max(0, input.available - input.keep);
   if (usable < input.cap) {
     throw new InsufficientCreditsError(
       input.cap,
       usable,
-      Math.min(input.keep, input.available)
+      Math.min(input.keep, input.available),
+      input.stored ?? 0
     );
   }
+}
+
+/** Stored credits a paid-plan user hasn't confirmed spending yet. */
+export async function lockedStoredCredits(
+  tx: DbClient,
+  userId: string,
+  scope: CreditScope,
+  now: Date
+) {
+  if (await storedCreditsAllowed(tx, userId, now)) return 0;
+  return (
+    (await spendableTotal(tx, userId, scope, now, true)) -
+    (await spendableTotal(tx, userId, scope, now, false))
+  );
 }
 
 /**
@@ -241,8 +278,15 @@ export async function reserveCredits(
   await repository.lockUser(input.userId);
   await ensureMonthlyCredits(tx, input.userId, now);
   const lots = await spendableLots(tx, input.userId, input.scope, now);
-  const available = lots.reduce((total, row) => total + row.remaining, 0);
-  assertFits({ cap: input.cap, available, keep: input.keep ?? 0 });
+  const available = sum(lots);
+  if (available - (input.keep ?? 0) < input.cap) {
+    assertFits({
+      cap: input.cap,
+      available,
+      keep: input.keep ?? 0,
+      stored: await lockedStoredCredits(tx, input.userId, input.scope, now),
+    });
+  }
   let left = input.cap;
   const entries = [];
   for (const row of lots) {

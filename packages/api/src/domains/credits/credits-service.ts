@@ -1,10 +1,17 @@
 import { TRPCError } from "@trpc/server";
 
 import type { DbClient } from "@repo/api/tools/db-client";
+import { AiKeysRepository } from "@repo/api/domains/ai/ai-keys-repository";
+import { AiUsageRepository } from "@repo/api/domains/ai/ai-usage-repository";
 
-import { ensureMonthlyCredits } from "./credit-ledger";
+import { decideFunding } from "./credit-funding";
+import {
+  billingMonth,
+  ensureMonthlyCredits,
+  lockedStoredCredits,
+} from "./credit-ledger";
 import { currentPlan } from "./credit-plan";
-import { creditCap } from "./credit-pricing";
+import { creditCap, usdForUsage } from "./credit-pricing";
 import { creditReserve, nearReserve, resumeEstimate } from "./credit-reserve";
 import { settleTask } from "./settle-task";
 import { CreditsRepository } from "./credits-repository";
@@ -61,8 +68,41 @@ export class CreditsService {
         courtesy: courtesy
           ? { monthlyCredits: courtesy.monthlyCredits, endsAt: courtesy.endsAt }
           : null,
+        key: await this.keyFunding(tx, userId, now),
+        storedLocked: await lockedStoredCredits(tx, userId, "any", now),
       };
     });
+  }
+
+  /**
+   * "Finish with credits": on a paid plan, the user agrees to spend their
+   * stored credits (packs, welcome credits) once the plan's credits and
+   * their key run out, until the month ends.
+   */
+  async confirmStoredCredits(userId: string, now = new Date()) {
+    await new CreditsRepository(this.db).confirmStoredCredits(
+      userId,
+      billingMonth(now).next
+    );
+  }
+
+  private async keyFunding(tx: DbClient, userId: string, now: Date) {
+    const key = await new AiKeysRepository(tx).findByUserId(userId);
+    if (!key) return null;
+    const monthStart = new Date(
+      Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1)
+    );
+    const usage = await new AiUsageRepository(tx).keyFundedUsageSince(
+      userId,
+      monthStart
+    );
+    return {
+      status: key.status,
+      paysNext:
+        (await decideFunding(tx, { userId, cap: 1, scope: "any", now })) ===
+        "key",
+      spentThisMonthUsd: Math.round(usdForUsage(usage) * 100) / 100,
+    };
   }
 
   listCourtesyGrants(): Promise<CourtesyGrant[]> {

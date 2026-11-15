@@ -1,9 +1,11 @@
 import { TRPCError } from "@trpc/server";
 
+import { decideFunding } from "@repo/api/domains/credits/credit-funding";
 import {
   assertFits,
   ensureMonthlyCredits,
   InsufficientCreditsError,
+  lockedStoredCredits,
   reserveCredits,
   settleCredits,
   spendableTotal,
@@ -64,18 +66,23 @@ export class TasksService {
     const cap = creditCap(input.type, input.hints);
     if (cap <= 0) return;
     const now = new Date();
+    const scope = scopeOf(input.type);
     await this.db
       .transaction(async (tx) => {
         await ensureMonthlyCredits(tx, input.userId, now);
+        const funding = await decideFunding(tx, {
+          userId: input.userId,
+          cap,
+          scope,
+          now,
+        });
+        // The user's key pays: credits don't limit them.
+        if (funding === "key") return;
         assertFits({
           cap,
-          available: await spendableTotal(
-            tx,
-            input.userId,
-            scopeOf(input.type),
-            now
-          ),
+          available: await spendableTotal(tx, input.userId, scope, now),
           keep: await keptFor(tx, input.userId, input.type, now),
+          stored: await lockedStoredCredits(tx, input.userId, scope, now),
         });
       })
       .catch(asPaymentRequired);
@@ -98,18 +105,30 @@ export class TasksService {
       .transaction(async (tx) => {
         // The reserve is read under the lock that reserving holds.
         await new CreditsRepository(tx).lockUser(input.userId);
+        const cap = creditCap(input.type, input.hints);
+        const scope = scopeOf(input.type);
+        const funding = await decideFunding(tx, {
+          userId: input.userId,
+          cap,
+          scope,
+          now,
+        });
         const created = await new TasksRepository(tx).create({
           userId: input.userId,
           type: input.type,
           subjectId: input.subjectId,
+          funding,
         });
-        await reserveCredits(tx, {
-          userId: input.userId,
-          taskId: created.id,
-          cap: creditCap(input.type, input.hints),
-          scope: scopeOf(input.type),
-          keep: await keptFor(tx, input.userId, input.type, now),
-        });
+        // A key-funded task reserves nothing: the user's key pays.
+        if (funding === "credits") {
+          await reserveCredits(tx, {
+            userId: input.userId,
+            taskId: created.id,
+            cap,
+            scope,
+            keep: await keptFor(tx, input.userId, input.type, now),
+          });
+        }
         return created;
       })
       .catch(asPaymentRequired);

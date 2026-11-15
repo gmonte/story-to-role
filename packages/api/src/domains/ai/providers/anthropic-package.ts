@@ -3,6 +3,7 @@ import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
 import { z } from "zod";
 
 import {
+  KeyUnusableError,
   ToolRefusal,
   type AiRole,
   type AiTextRequest,
@@ -86,6 +87,43 @@ function toParams(request: AiTextRequest) {
 }
 
 /**
+ * A provider error that means the key itself is the problem: refused
+ * (invalid, revoked, no permission) or out of credit.
+ */
+function keyError(error: unknown) {
+  if (!(error instanceof Anthropic.APIError)) return null;
+  const body = error.error as { error?: { type?: string; message?: string } };
+  const type = body?.error?.type;
+  const message = body?.error?.message ?? "";
+  if (error.status === 401 || error.status === 403) {
+    return new KeyUnusableError("refused");
+  }
+  if (type === "billing_error" || /credit balance/i.test(message)) {
+    return new KeyUnusableError("out_of_credit");
+  }
+  return null;
+}
+
+/** Every call of the package reports an unusable key the same way. */
+function withKeyErrors(target: ProviderPackage): ProviderPackage {
+  const attempt = async <R>(call: () => Promise<R>) => {
+    try {
+      return await call();
+    } catch (error) {
+      throw keyError(error) ?? error;
+    }
+  };
+  return {
+    ...target,
+    validateKey: () => attempt(() => target.validateKey()),
+    generateText: (request) => attempt(() => target.generateText(request)),
+    generateObject: (request) => attempt(() => target.generateObject(request)),
+    runAgent: (request) => attempt(() => target.runAgent(request)),
+    searchWeb: (request) => attempt(() => target.searchWeb(request)),
+  };
+}
+
+/**
  * The default package, paid with StoryToRole's key for credit-funded users or
  * with the user's own key when they bring one.
  */
@@ -96,9 +134,19 @@ export function createAnthropicPackage({
 }): ProviderPackage {
   const client = new Anthropic({ apiKey });
 
-  return {
+  return withKeyErrors({
     provider: "anthropic",
     models,
+
+    async validateKey() {
+      // One output token on the cheapest model: proves both the key and
+      // that it has credit, at a negligible cost.
+      await client.messages.create({
+        model: models.classification,
+        max_tokens: 1,
+        messages: [{ role: "user", content: "Hi" }],
+      });
+    },
 
     async generateText(request) {
       const response = await client.messages.create(toParams(request));
@@ -225,5 +273,5 @@ export function createAnthropicPackage({
         usage: toUsage(response.model, response.usage),
       };
     },
-  };
+  });
 }

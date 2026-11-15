@@ -1,5 +1,7 @@
 import type { DbClient } from "@repo/api/tools/db-client";
 import { triggerClient } from "@repo/api/tools/trigger/trigger-client";
+import { AiKeysRepository } from "@repo/api/domains/ai/ai-keys-repository";
+import { KeyUnusableError } from "@repo/api/domains/ai/providers/provider-package";
 import { settleTask } from "@repo/api/domains/credits/settle-task";
 
 import { TasksRepository } from "./tasks-repository";
@@ -46,7 +48,22 @@ export async function runTask(
       },
     });
   } catch (error) {
-    await repository.markFailed({ taskId, errorMessage: "The task failed" });
+    const keyFailure =
+      owner.funding === "key" && error instanceof KeyUnusableError
+        ? error.reason
+        : null;
+    if (keyFailure) {
+      // The user sees why on their key; nothing is charged.
+      await new AiKeysRepository(db).setStatus(
+        owner.userId,
+        keyFailure,
+        new Date()
+      );
+    }
+    await repository.markFailed({
+      taskId,
+      errorMessage: keyFailure ? `key_${keyFailure}` : "The task failed",
+    });
     // A failed task releases its reservation (billing spec).
     await settleTask(db, { userId: owner.userId, taskId, succeeded: false });
     throw error;

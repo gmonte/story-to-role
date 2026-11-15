@@ -150,3 +150,34 @@ export const sensitiveItemsTable = createTable(
   }),
   (t) => [index("sensitive_items_profile_id_idx").on(t.profileId)]
 );
+
+/**
+ * What the user wants from their next role (guided-interview spec, data
+ * model): approved from motivation interview points, reused by later cover
+ * letters so they ask less.
+ */
+export const careerGoalsTable = createTable(
+  "career_goals",
+  (d) => ({
+    id: d.uuid().defaultRandom().primaryKey(),
+    createdAt: d
+      .timestamp({ withTimezone: true })
+      .default(sql`CURRENT_TIMESTAMP`)
+      .notNull(),
+    profileId: d
+      .uuid()
+      .notNull()
+      .references(() => careerProfilesTable.id, { onDelete: "cascade" }),
+    encryptedText: d.text().notNull(),
+    language: d.text().$type<InterviewLanguage>().notNull(),
+    // Where it came from (data model: a motivation interview turn or an
+    // application instruction) and that point's id.
+    source: d
+      .text()
+      .$type<"motivation_interview" | "application_instruction">()
+      .notNull(),
+    sourcePointId: d.uuid(),
+    approvedAt: d.timestamp({ withTimezone: true }).notNull(),
+  }),
+  (t) => [index("career_goals_profile_id_idx").on(t.profileId)]
+);

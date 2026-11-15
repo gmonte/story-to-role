@@ -15,6 +15,7 @@ import {
   getTestDatabase,
 } from "@repo/api/test/pglite";
 
+import { companyResearchTable } from "../db/research-tables";
 import { ResearchRepository } from "./research-repository";
 import { ResearchService } from "./research-service";
 import { runResearchCompany } from "./run-research-company";
@@ -128,7 +129,7 @@ describe("company research", () => {
       ["Hooli opened a Lisbon office in 2026.", "Hooli in Lisbon", false],
     ]);
 
-    await ctx.research.select({
+    await ctx.research.selectFacts({
       userId: ctx.user.id,
       openingId: ctx.opening.id,
       companyFactIds: [done.facts[1].id],
@@ -155,5 +156,39 @@ describe("company research", () => {
       ["Hooli opened a Lisbon office in 2026.", true],
       ["Hooli's mission is to make the world a better place.", false],
     ]);
+  });
+
+  it("refuses another user's opening and lets a dead run be replaced", async () => {
+    const ctx = await setup();
+    const stranger = await createTestUser("eve@example.com");
+    await new CareerService(ctx.db, {
+      start: vi.fn(),
+    } as never).getOrCreateProfile({
+      userId: stranger.id,
+      defaultLanguage: "en-US",
+    });
+    await expect(
+      ctx.research.start({ userId: stranger.id, openingId: ctx.opening.id })
+    ).rejects.toMatchObject({ code: "NOT_FOUND" });
+
+    await ctx.research.start({
+      userId: ctx.user.id,
+      openingId: ctx.opening.id,
+    });
+    // A run whose worker died long ago shows as failed and blocks nothing.
+    await ctx.db
+      .update(companyResearchTable)
+      .set({ createdAt: new Date(Date.now() - 10 * 60_000) });
+    expect(
+      (
+        await ctx.research.get({
+          userId: ctx.user.id,
+          openingId: ctx.opening.id,
+        })
+      ).status
+    ).toBe("failed");
+    await expect(
+      ctx.research.start({ userId: ctx.user.id, openingId: ctx.opening.id })
+    ).resolves.toBeDefined();
   });
 });

@@ -48,6 +48,15 @@ export class OpeningsRepository {
     return row;
   }
 
+  /** Holds the opening's row until the transaction ends. */
+  async lockOpening(openingId: string) {
+    await this.tx
+      .select({ id: openingsTable.id })
+      .from(openingsTable)
+      .where(eq(openingsTable.id, openingId))
+      .for("update");
+  }
+
   async findOpeningById(openingId: string) {
     const [row] = await this.tx
       .select()

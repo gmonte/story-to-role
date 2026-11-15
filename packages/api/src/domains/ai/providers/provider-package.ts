@@ -4,7 +4,7 @@ import type { z } from "zod";
  * The AI roles of the pipeline. A provider package maps each role to one of
  * its models; nothing else in the app names a model.
  */
-export type AiRole = "classification" | "writing" | "maximum";
+export type AiRole = "classification" | "writing" | "maximum" | "research";
 
 export type AiMessage = { role: "user" | "assistant"; content: string };
 

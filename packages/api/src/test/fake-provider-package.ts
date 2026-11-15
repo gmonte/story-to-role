@@ -60,6 +60,7 @@ export function fakeProviderPackage(script: {
       classification: "claude-haiku-5-5",
       writing: "claude-sonnet-5-5",
       maximum: "claude-opus-5-5",
+      research: "claude-sonnet-5-5",
     },
     generateObject,
     generateText,

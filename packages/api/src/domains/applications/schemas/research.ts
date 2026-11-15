@@ -11,7 +11,7 @@ export const companyFactsDraftSchema = z.object({
 export const companyFactViewSchema = z.object({
   id: z.uuid(),
   text: z.string(),
-  sourceUrl: z.string(),
+  sourceUrl: z.url({ protocol: /^https?$/ }),
   sourceTitle: z.string(),
   approved: z.boolean(),
 });

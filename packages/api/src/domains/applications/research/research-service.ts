@@ -12,6 +12,9 @@ import { ResearchRepository } from "./research-repository";
 
 const notFound = () => new TRPCError({ code: "NOT_FOUND" });
 
+/** Longer than a run may take (its task stops at 5 minutes). */
+const staleResearchMs = 6 * 60_000;
+
 /**
  * Company research from the user's side (resume spec, "Cover letter
  * inputs"): run on request, then the user selects which facts a cover
@@ -50,7 +53,11 @@ export class ResearchService {
       const cipher = await getUserCipher(tx, input.userId);
       const latest = await repository.latestResearch(opening.id);
       return {
-        status: latest?.status ?? null,
+        status:
+          latest?.status === "researching" &&
+          Date.now() - latest.createdAt.getTime() >= staleResearchMs
+            ? "failed"
+            : (latest?.status ?? null),
         facts: (await repository.listFacts(opening.id)).map((fact) => ({
           id: fact.id,
           text: cipher.decrypt(fact.encryptedText),
@@ -74,25 +81,37 @@ export class ResearchService {
     if (!opening.encryptedCompany) throw new TRPCError({ code: "BAD_REQUEST" });
     const research = await this.db.transaction(async (tx) => {
       const repository = new ResearchRepository(tx);
+      // Locked: two starts at once can't both find no run in progress.
+      await new OpeningsRepository(tx).lockOpening(opening.id);
       const latest = await repository.latestResearch(opening.id);
-      if (latest?.status === "researching") {
-        throw new TRPCError({ code: "CONFLICT" });
-      }
+      // A run older than this died without saying so; a new one may start.
+      const alive =
+        latest?.status === "researching" &&
+        Date.now() - latest.createdAt.getTime() < staleResearchMs;
+      if (alive) throw new TRPCError({ code: "CONFLICT" });
       return repository.insertResearch({
         profileId: profile.id,
         openingId: opening.id,
       });
     });
-    const { realtime } = await this.tasks.start({
-      userId: input.userId,
-      type: "research_company",
-      subjectId: research.id,
-    });
-    return { realtime };
+    try {
+      const { realtime } = await this.tasks.start({
+        userId: input.userId,
+        type: "research_company",
+        subjectId: research.id,
+      });
+      return { realtime };
+    } catch (error) {
+      await new ResearchRepository(this.db).setResearchStatus(
+        research.id,
+        "failed"
+      );
+      throw error;
+    }
   }
 
   /** The facts the cover letter may use: those selected, and only those. */
-  async select(input: {
+  async selectFacts(input: {
     userId: string;
     openingId: string;
     companyFactIds: string[];

@@ -15,6 +15,8 @@ const models: Record<AiRole, string> = {
   classification: "claude-haiku-5-5",
   writing: "claude-sonnet-5-5",
   maximum: "claude-opus-5-5",
+  // Company research: the only role with web access (web search).
+  research: "claude-sonnet-5-5",
 };
 
 // How many times a paused server-side search turn is sent back.
@@ -26,6 +28,7 @@ const effortByRole = {
   classification: "low",
   writing: "medium",
   maximum: "high",
+  research: "medium",
 } as const;
 
 function toUsage(model: string, usage: Anthropic.Usage): AiUsage {
@@ -154,6 +157,7 @@ export function createAnthropicPackage({
       const messages: Anthropic.MessageParam[] = [...request.messages];
       const usages: AiUsage[] = [];
       const sources = new Map<string, string>();
+      const texts: string[] = [];
       // A long server-side search pauses; sending the turn back resumes it.
       for (let resume = 0; resume <= maxSearchResumes; resume++) {
         const response = await client.messages.create({
@@ -164,6 +168,9 @@ export function createAnthropicPackage({
               type: "web_search_20260209",
               name: "web_search",
               max_uses: request.maxSearches,
+              // Results come back as blocks here, so every page is known
+              // (none hidden behind a code execution step).
+              allowed_callers: ["direct"],
             },
           ],
         });
@@ -185,12 +192,15 @@ export function createAnthropicPackage({
             }
           }
         }
+        // Text written before a pause counts as much as after it.
+        texts.push(
+          ...response.content.flatMap((block) =>
+            block.type === "text" ? [block.text] : []
+          )
+        );
         if (response.stop_reason !== "pause_turn") {
-          const text = response.content
-            .flatMap((block) => (block.type === "text" ? [block.text] : []))
-            .join("");
           return {
-            text,
+            text: texts.join(""),
             sources: [...sources].map(([url, title]) => ({ url, title })),
             usages,
           };

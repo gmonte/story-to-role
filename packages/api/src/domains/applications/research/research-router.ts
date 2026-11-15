@@ -44,7 +44,7 @@ export const researchRouter = createTRPCRouter({
       new ResearchService(db).start({ userId: ctx.userId, ...input })
     ),
 
-  select: userProcedure
+  selectFacts: userProcedure
     .meta(
       openApiMeta(
         "research",
@@ -56,7 +56,10 @@ export const researchRouter = createTRPCRouter({
     .input(z.object({ openingId: z.uuid(), companyFactIds: z.array(z.uuid()) }))
     .output(okSchema)
     .mutation(async ({ ctx, input }) => {
-      await new ResearchService(db).select({ userId: ctx.userId, ...input });
+      await new ResearchService(db).selectFacts({
+        userId: ctx.userId,
+        ...input,
+      });
       return ok;
     }),
 });

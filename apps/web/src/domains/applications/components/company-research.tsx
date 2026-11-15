@@ -118,14 +118,15 @@ function FactSelection({
     facts.filter((fact) => fact.approved).map((fact) => fact.id)
   );
   const save = useMutation(
-    trpc.research.select.mutationOptions({
+    trpc.research.selectFacts.mutationOptions({
       onSuccess: onSaved,
       onError: (error) => toast.error(error.message),
     })
   );
+  const approved = facts.filter((fact) => fact.approved).map((fact) => fact.id);
   const changed =
-    selected.length !== facts.filter((fact) => fact.approved).length ||
-    selected.some((id) => !facts.find((fact) => fact.id === id)?.approved);
+    selected.length !== approved.length ||
+    selected.some((id) => !approved.includes(id));
 
   return (
     <div className="flex flex-col gap-2">
@@ -155,6 +156,7 @@ function FactSelection({
             <span className="flex flex-col gap-0.5">
               <span>{fact.text}</span>
               <a
+                // Only http(s) reaches here: the API validates the scheme.
                 href={fact.sourceUrl}
                 target="_blank"
                 rel="noopener noreferrer"

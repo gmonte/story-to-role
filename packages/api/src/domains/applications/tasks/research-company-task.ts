@@ -4,6 +4,7 @@ import { createTaskAi } from "@repo/api/domains/ai/create-task-ai";
 import { runTask } from "@repo/api/domains/tasks/run-task";
 import { db } from "@repo/api/tools/db";
 
+import { ResearchRepository } from "../research/research-repository";
 import { runResearchCompany } from "../research/run-research-company";
 
 export const researchCompanyTask = task({
@@ -15,14 +16,23 @@ export const researchCompanyTask = task({
       { db, taskId, type: "research_company" },
       async ({ userId, subjectId }) => {
         if (!subjectId) throw new Error(`Task ${taskId} has no research`);
-        const { ai, cipher } = await createTaskAi({ db, userId, taskId });
-        await runResearchCompany({
-          db,
-          ai,
-          cipher,
-          userId,
-          researchId: subjectId,
-        });
+        // Whatever fails, the run ends as failed: never left researching.
+        try {
+          const { ai, cipher } = await createTaskAi({ db, userId, taskId });
+          await runResearchCompany({
+            db,
+            ai,
+            cipher,
+            userId,
+            researchId: subjectId,
+          });
+        } catch (error) {
+          await new ResearchRepository(db).setResearchStatus(
+            subjectId,
+            "failed"
+          );
+          throw error;
+        }
       }
     );
   },

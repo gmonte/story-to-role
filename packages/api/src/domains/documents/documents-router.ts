@@ -64,6 +64,7 @@ export const documentsRouter = createTRPCRouter({
         versionId: z.uuid().optional(),
         sectionsForcedIn: z.array(resumeSectionKindSchema).optional(),
         sectionsForcedOut: z.array(resumeSectionKindSchema).optional(),
+        referenceVersionId: z.uuid().optional(),
       })
     )
     .output(

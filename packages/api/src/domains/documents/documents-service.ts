@@ -85,6 +85,8 @@ export class DocumentsService {
     /** Sections forced in or out for this application only. */
     sectionsForcedIn?: ResumeSectionKind[];
     sectionsForcedOut?: ResumeSectionKind[];
+    /** "Use as reference": a similar version of the user's, to guide the draft. */
+    referenceVersionId?: string;
   }): Promise<{ generationId: string; realtime: RealtimeSubscription }> {
     const profile = await this.requireProfile(input.userId);
     const generation = await this.db.transaction(async (tx) => {
@@ -130,10 +132,19 @@ export class DocumentsService {
         const version = await repository.findVersion(input.versionId);
         if (version?.documentId !== document.id) throw notFound();
       }
+      const referenced = input.referenceVersionId
+        ? await requireUserVersion(tx, input.userId, input.referenceVersionId)
+        : null;
+      if (referenced && referenced.document.kind !== "resume") {
+        throw new TRPCError({ code: "BAD_REQUEST" });
+      }
+      const reference =
+        referenced && (await repository.latestSnapshot(referenced.version.id));
       return repository.insertGeneration({
         profileId: profile.id,
         documentId: document.id,
         versionId: input.versionId ?? null,
+        referenceSnapshotId: reference?.id ?? null,
         language: input.language,
         reviewDepth: input.reviewDepth,
         writingLevel: input.writingLevel,
@@ -183,6 +194,25 @@ export class DocumentsService {
           )
         ),
       };
+    });
+  }
+
+  /** A library document, as the editor shows it (no opening, no ATS check). */
+  async libraryDocument(input: {
+    userId: string;
+    documentId: string;
+  }): Promise<DocumentView> {
+    const profile = await this.requireProfile(input.userId);
+    return this.db.transaction(async (tx) => {
+      const document = await new DocumentsRepository(tx).findDocument(
+        input.documentId
+      );
+      if (document?.profileId !== profile.id || document.applicationId) {
+        throw notFound();
+      }
+      const cipher = await getUserCipher(tx, input.userId);
+      const trace = await this.traceSource(tx, cipher, profile.id, null);
+      return this.documentView(tx, cipher, document, null, trace);
     });
   }
 
@@ -256,6 +286,7 @@ export class DocumentsService {
             language: generation.language,
             reviewDepth: generation.reviewDepth,
             writingLevel: generation.writingLevel,
+            tone: generation.tone,
             progress: await repository.generationProgress(generation.id),
             createdAt: generation.createdAt,
           }
@@ -306,7 +337,8 @@ export class DocumentsService {
     tx: DbClient,
     cipher: UserCipher,
     profileId: string,
-    openingId: string
+    // Library documents have no application, so no instructions.
+    openingId: string | null
   ) {
     const career = new CareerRepository(tx);
     const positions = await career.listPositions(profileId);
@@ -323,9 +355,10 @@ export class DocumentsService {
     );
     // Removed points keep their row, so old lines still trace to them.
     const instructions = new Map(
-      (await new InstructionsRepository(tx).listPoints(openingId)).map(
-        (point) => [point.id, cipher.decrypt(point.encryptedText)]
-      )
+      (openingId
+        ? await new InstructionsRepository(tx).listPoints(openingId)
+        : []
+      ).map((point) => [point.id, cipher.decrypt(point.encryptedText)])
     );
     const byId = new Map(
       evidence.map((row): [string, EvidenceTrace] => {

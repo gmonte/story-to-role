@@ -72,6 +72,7 @@ export function GenerateResumeDialog({
   pendingGaps,
   existingLanguages = [],
   application,
+  referenceVersionId,
   trigger,
 }: {
   openingId: string;
@@ -85,6 +86,8 @@ export function GenerateResumeDialog({
     sectionsForcedIn: ResumeSectionKind[];
     sectionsForcedOut: ResumeSectionKind[];
   } | null;
+  /** "Use as reference": a similar version that guides the draft. */
+  referenceVersionId?: string;
   trigger: ReactNode;
 }) {
   const t = useTranslation();
@@ -341,6 +344,7 @@ export function GenerateResumeDialog({
                 writingLevel,
                 tone,
                 versionId,
+                referenceVersionId,
                 sectionsForcedIn: resumeSectionKinds.filter(
                   (kind) => forced[kind] === "in"
                 ),

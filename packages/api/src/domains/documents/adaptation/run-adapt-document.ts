@@ -17,6 +17,7 @@ import { outputLanguageNames } from "../generation/resume-prompts";
 import {
   findForbiddenLines,
   lockedFactViolations,
+  relockFacts,
   resumeLines,
 } from "../generation/resume-checks";
 import type { OutputLanguage } from "../schemas/document";
@@ -152,19 +153,22 @@ export async function runAdaptDocument(deps: {
         encryptedContent: cipher.encrypt(JSON.stringify(content)),
         generationId: generation.id,
       });
-      // One link per pair: recreating a version from the one adapted from
-      // it turns the link around instead of making a cycle.
+      // One link per pair, within one document (a version reused from
+      // another document stays independent): recreating a version from
+      // the one adapted from it turns the link around, never a cycle.
       const source = generation.sourceVersionId
         ? await repository.findVersion(generation.sourceVersionId)
         : null;
-      if (source?.adaptedFromVersionId === version.id) {
-        await repository.updateVersion(source.id, {
-          adaptedFromVersionId: null,
+      if (source?.documentId === version.documentId) {
+        if (source.adaptedFromVersionId === version.id) {
+          await repository.updateVersion(source.id, {
+            adaptedFromVersionId: null,
+          });
+        }
+        await repository.updateVersion(version.id, {
+          adaptedFromVersionId: source.id,
         });
       }
-      await repository.updateVersion(version.id, {
-        adaptedFromVersionId: generation.sourceVersionId,
-      });
       await repository.updateGeneration(generation.id, {
         status: "completed",
         versionId: version.id,
@@ -200,10 +204,15 @@ async function adaptVersion(input: {
   cipher: UserCipher;
   filter: SensitiveFilter;
   profileId: string;
-  generation: { id: string; language: OutputLanguage; documentId: string };
+  generation: {
+    id: string;
+    language: OutputLanguage;
+    documentId: string;
+    sourceVersionId: string | null;
+  };
   source: ResumeContent;
 }) {
-  const { db, cipher, filter, source, generation } = input;
+  const { db, cipher, filter, generation } = input;
   const documents = new DocumentsRepository(db);
   const document = await documents.findDocument(generation.documentId);
   const application = document?.applicationId
@@ -216,6 +225,14 @@ async function adaptVersion(input: {
     filter,
     openingId: application?.openingId,
   });
+  // Reused from another document: its locked facts become this one's.
+  const sourceVersion = await documents.findVersion(
+    generation.sourceVersionId!
+  );
+  const source =
+    sourceVersion?.documentId === generation.documentId
+      ? input.source
+      : relockFacts(input.source, context.positions);
   const equivalents = await loadTitleEquivalents({
     db,
     cipher,

@@ -35,6 +35,8 @@ import { runSplitInstructions } from "@repo/api/domains/applications/run-split-i
 import { createLocalStorage } from "@repo/api/tools/storage/local-storage";
 
 import { AdaptationService } from "./adaptation/adaptation-service";
+import { LibraryService } from "./library/library-service";
+import { embedStaleVersions } from "./similar/embed-versions";
 import { runAdaptDocument } from "./adaptation/run-adapt-document";
 import { DocumentsRepository } from "./documents-repository";
 import { DocumentsService } from "./documents-service";
@@ -161,13 +163,9 @@ async function setup() {
     projects: [],
   });
 
-  async function generate(
-    reviewDepth: "quick" | "thorough",
-    script: {
-      drafts: ResumeDraft[];
-      ratings: number[];
-    }
-  ) {
+  type Script = { drafts: ResumeDraft[]; ratings: number[] };
+
+  async function generate(reviewDepth: "quick" | "thorough", script: Script) {
     const { generationId } = await documents.generateResume({
       userId: user.id,
       openingId: opening.id,
@@ -176,6 +174,11 @@ async function setup() {
       writingLevel: "standard",
       tone: "direct",
     });
+    return { generationId, ...(await runScripted(generationId, script)) };
+  }
+
+  /** Runs a generation's task with scripted drafts and ratings. */
+  async function runScripted(generationId: string, script: Script) {
     const drafts = [...script.drafts];
     const ratings = [...script.ratings];
     const filter = await loadSensitiveFilter({
@@ -205,7 +208,7 @@ async function setup() {
       userId: user.id,
       generationId,
     });
-    return { generationId, fake };
+    return { fake };
   }
 
   return {
@@ -221,6 +224,7 @@ async function setup() {
     documents,
     draft,
     generate,
+    runScripted,
   };
 }
 
@@ -1210,5 +1214,128 @@ describe("resume generation and snapshots", () => {
     ).toEqual([stored]);
     expect((await view()).pdf.ready).toBe(true);
     await rm(rootDir, { recursive: true, force: true });
+  });
+
+  it("keeps library documents by focus and suggests similar ones to reuse", async () => {
+    const ctx = await setup();
+    const line = {
+      text: "Led a team of 5 engineers.",
+      evidence_ids: [ctx.evidence[1].id],
+    };
+    const library = new LibraryService(
+      ctx.db,
+      new TasksService(ctx.db, ctx.trigger)
+    );
+    const created = await library.generateResume({
+      userId: ctx.user.id,
+      focus: "Platform",
+      language: "en-US",
+      reviewDepth: "quick",
+      writingLevel: "standard",
+      tone: "direct",
+    });
+    const { fake: libraryFake } = await ctx.runScripted(created.generationId, {
+      drafts: [ctx.draft([line]), ctx.draft([line])],
+      ratings: [8, 5],
+    });
+    // No opening behind it: the focus stands in for one.
+    expect(libraryFake.generateObject.mock.calls[0][0].system).toContain(
+      "Its focus: Platform"
+    );
+    expect(await library.list({ userId: ctx.user.id })).toMatchObject([
+      { id: created.documentId, focus: "Platform", languages: ["en-US"] },
+    ]);
+    const view = await ctx.documents.libraryDocument({
+      userId: ctx.user.id,
+      documentId: created.documentId,
+    });
+    const [libraryVersion] = view.versions;
+    expect(libraryVersion.atsCheck).toBeNull();
+    expect(libraryVersion.pdf.fileName).toBe("Platform_Resume.pdf");
+    // Not an application: the opening still has none.
+    expect(
+      (
+        await ctx.documents.forOpening({
+          userId: ctx.user.id,
+          openingId: ctx.opening.id,
+        })
+      ).application
+    ).toBeNull();
+
+    // Vectors from the local model (faked): the opening finds the document.
+    const vector = (seed: number) =>
+      Array.from(
+        { length: 384 },
+        (_, index) => ((index + seed) % 7) / 7 + 0.01
+      );
+    await embedStaleVersions({
+      db: ctx.db,
+      cipher: ctx.cipher,
+      embedder: { embed: async (texts) => texts.map(() => vector(1)) },
+      userId: ctx.user.id,
+    });
+    expect(
+      await library.similarForOpening({
+        userId: ctx.user.id,
+        openingId: ctx.opening.id,
+      })
+    ).toEqual([]);
+    await ctx.openings.updateOpening(ctx.opening.id, { embedding: vector(1) });
+    const [similar] = await library.similarForOpening({
+      userId: ctx.user.id,
+      openingId: ctx.opening.id,
+    });
+    expect(similar).toMatchObject({
+      versionId: libraryVersion.id,
+      source: { kind: "library", focus: "Platform" },
+    });
+
+    // Use as is: a copy starts the application.
+    await library.copyIntoApplication({
+      userId: ctx.user.id,
+      openingId: ctx.opening.id,
+      versionId: similar.versionId,
+      language: "en-US",
+    });
+    const opening = await ctx.documents.forOpening({
+      userId: ctx.user.id,
+      openingId: ctx.opening.id,
+    });
+    expect(opening.application).not.toBeNull();
+    expect(opening.documents[0].versions[0]).toMatchObject({
+      snapshot: { origin: "copied", author: "user" },
+      content: { sections: libraryVersion.content.sections },
+    });
+
+    // In another language than the output language, it is adapted instead.
+    const adapting = await library.copyIntoApplication({
+      userId: ctx.user.id,
+      openingId: ctx.opening.id,
+      versionId: similar.versionId,
+      language: "pt-BR",
+    });
+    expect(adapting).toMatchObject({ versionId: null });
+    expect(ctx.trigger.trigger).toHaveBeenLastCalledWith(
+      "adapt_document",
+      expect.anything()
+    );
+
+    // Use as reference: the document guides the next draft.
+    const { generationId } = await ctx.documents.generateResume({
+      userId: ctx.user.id,
+      openingId: ctx.opening.id,
+      language: "en-US",
+      reviewDepth: "quick",
+      writingLevel: "standard",
+      tone: "direct",
+      referenceVersionId: similar.versionId,
+    });
+    const { fake } = await ctx.runScripted(generationId, {
+      drafts: [ctx.draft([line]), ctx.draft([line])],
+      ratings: [8, 5],
+    });
+    expect(fake.generateObject.mock.calls[0][0].system).toContain(
+      "A resume the user made for a similar target"
+    );
   });
 });

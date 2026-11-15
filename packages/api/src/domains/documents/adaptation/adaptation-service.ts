@@ -1,36 +1,19 @@
 import { TRPCError } from "@trpc/server";
 
-import {
-  getUserCipher,
-  type UserCipher,
-} from "@repo/api/domains/encryption/user-cipher";
+import { getUserCipher } from "@repo/api/domains/encryption/user-cipher";
 import type { RealtimeSubscription } from "@repo/api/domains/tasks/schemas/task";
 import { TasksService } from "@repo/api/domains/tasks/tasks-service";
 import type { DbClient } from "@repo/api/tools/db-client";
 
 import { DocumentsRepository } from "../documents-repository";
 import { requireUserVersion } from "../require-version";
+import { decryptSnapshot } from "../snapshot-content";
 import type { OutputLanguage } from "../schemas/document";
-import {
-  type ResumeContent,
-  resumeContentSchema,
-} from "../schemas/resume-content";
+import type { ResumeContent } from "../schemas/resume-content";
 import { syncBases } from "./sync-link";
 import { type SyncChange, syncChanges } from "./three-way-merge";
 
 const notFound = () => new TRPCError({ code: "NOT_FOUND" });
-
-type Snapshot = NonNullable<
-  Awaited<ReturnType<DocumentsRepository["findSnapshot"]>>
->;
-
-export const decryptSnapshot = (
-  cipher: UserCipher,
-  snapshot: Snapshot
-): ResumeContent =>
-  resumeContentSchema.parse(
-    JSON.parse(cipher.decrypt(snapshot.encryptedContent))
-  );
 
 /**
  * Adaptations and language sync from the user's side (resume spec,

@@ -3,7 +3,7 @@ import type { UserCipher } from "@repo/api/domains/encryption/user-cipher";
 import type { DbClient } from "@repo/api/tools/db-client";
 import type { Storage } from "@repo/api/tools/storage/storage";
 
-import { decryptSnapshot } from "../adaptation/adaptation-service";
+import { decryptSnapshot } from "../snapshot-content";
 import { DocumentsRepository } from "../documents-repository";
 import { pdfTemplate } from "./pdf-template";
 import { renderResumePdf } from "./resume-pdf";

@@ -6,6 +6,7 @@ import { careerRouter } from "./domains/career/career-router";
 import { adaptationRouter } from "./domains/documents/adaptation/adaptation-router";
 import { chatRouter } from "./domains/chat/chat-router";
 import { documentsRouter } from "./domains/documents/documents-router";
+import { libraryRouter } from "./domains/documents/library/library-router";
 import { writingRouter } from "./domains/documents/writing/writing-router";
 import { interviewRouter } from "./domains/interview/interview-router";
 import { openingsRouter } from "./domains/openings/openings-router";
@@ -19,6 +20,7 @@ export const appRouter = createTRPCRouter({
   documents: documentsRouter,
   instructions: instructionsRouter,
   interview: interviewRouter,
+  library: libraryRouter,
   openings: openingsRouter,
   tasks: tasksRouter,
   users: usersRouter,

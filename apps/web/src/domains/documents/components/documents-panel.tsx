@@ -164,7 +164,7 @@ export function DocumentsPanel({
   );
 }
 
-function GenerationProgressLabel({
+export function GenerationProgressLabel({
   generation,
 }: {
   generation: { kind: GenerationKind; progress: TaskProgress | null };
@@ -193,7 +193,7 @@ function GenerationProgressLabel({
   }
 }
 
-function VersionChecks({ version }: { version: VersionView }) {
+export function VersionChecks({ version }: { version: VersionView }) {
   const t = useTranslation();
   const ats = version.atsCheck;
 

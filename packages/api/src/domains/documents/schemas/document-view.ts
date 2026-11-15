@@ -104,6 +104,7 @@ export const generationViewSchema = z.object({
   language: outputLanguageSchema,
   reviewDepth: reviewDepthSchema,
   writingLevel: writingLevelSchema,
+  tone: toneSchema,
   progress: taskProgressSchema.nullable(),
   createdAt: z.date(),
 });

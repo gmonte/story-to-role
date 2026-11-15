@@ -12,7 +12,7 @@ import { TasksService } from "@repo/api/domains/tasks/tasks-service";
 import type { DbClient } from "@repo/api/tools/db-client";
 import { getStorage, type Storage } from "@repo/api/tools/storage/storage";
 
-import { decryptSnapshot } from "../adaptation/adaptation-service";
+import { decryptSnapshot } from "../snapshot-content";
 import { DocumentsRepository } from "../documents-repository";
 import { requireUserVersion } from "../require-version";
 import { fileNamer } from "./file-namer";

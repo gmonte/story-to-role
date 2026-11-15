@@ -10,6 +10,7 @@ import { cn } from "@repo/web/lib/utils";
 
 import { ApplicationContext } from "~/domains/applications/components/application-context";
 import { DocumentsPanel } from "~/domains/documents/components/documents-panel";
+import { SimilarDocuments } from "~/domains/documents/components/similar-documents";
 
 import { useOpening } from "../hooks/use-opening";
 import { useOpeningLabels } from "../hooks/use-opening-labels";
@@ -90,6 +91,12 @@ export function FitCheckPanel({ openingId }: { openingId: string }) {
       {opening.data.status === "analyzed" && (
         <>
           <DocumentsPanel
+            openingId={openingId}
+            defaultLanguage={opening.data.language ?? "en-US"}
+            defaultTone={opening.data.suggestedTone ?? "your_style"}
+            pendingGaps={pendingGaps(opening.data)}
+          />
+          <SimilarDocuments
             openingId={openingId}
             defaultLanguage={opening.data.language ?? "en-US"}
             defaultTone={opening.data.suggestedTone ?? "your_style"}

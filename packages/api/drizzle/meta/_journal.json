@@ -78,6 +78,13 @@
       "when": 1794765331737,
       "tag": "0010_add_rendered_files",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1794766873620,
+      "tag": "0011_add_document_vectors",
+      "breakpoints": true
     }
   ]
 }

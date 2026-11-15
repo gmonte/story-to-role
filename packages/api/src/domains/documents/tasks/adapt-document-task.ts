@@ -4,8 +4,10 @@ import { createTaskAi } from "@repo/api/domains/ai/create-task-ai";
 import { createSensitiveFilter } from "@repo/api/domains/evidence/sensitive/sensitive-filter";
 import { runTask } from "@repo/api/domains/tasks/run-task";
 import { db } from "@repo/api/tools/db";
+import { localEmbedder } from "@repo/api/tools/embeddings/embedder";
 import { getStorage } from "@repo/api/tools/storage/storage";
 
+import { refreshVersionVectors } from "../similar/embed-versions";
 import { runAdaptDocument } from "../adaptation/run-adapt-document";
 
 export const adaptDocumentTask = task({
@@ -31,6 +33,13 @@ export const adaptDocumentTask = task({
           generationId: subjectId,
           reportProgress,
           storage: getStorage(),
+        });
+        // The new snapshot's vector, for similar-document suggestions.
+        await refreshVersionVectors({
+          db,
+          cipher,
+          embedder: localEmbedder,
+          userId,
         });
       }
     );

@@ -87,6 +87,42 @@ export function findForbiddenLines(
 }
 
 /**
+ * Prints the locked facts this context holds (its application's overrides
+ * and title equivalents) over content written for another document, such
+ * as a version reused from another application, whose overrides belong
+ * to that application only.
+ */
+export function relockFacts(
+  content: ResumeContent,
+  positions: ContextPosition[]
+): ResumeContent {
+  return {
+    ...content,
+    sections: content.sections.map((section) =>
+      section.kind === "experience"
+        ? {
+            ...section,
+            entries: section.entries.map((entry) => {
+              const position = positions.find(
+                (row) => row.id === entry.positionId
+              );
+              return position
+                ? {
+                    ...entry,
+                    employer: position.employer,
+                    title: position.title,
+                    startDate: position.startDate,
+                    endDate: position.endDate,
+                  }
+                : entry;
+            }),
+          }
+        : section
+    ),
+  };
+}
+
+/**
  * Positions whose employer, title or dates differ from the locked facts.
  * Code fills them, so a violation means the content was tampered with.
  */

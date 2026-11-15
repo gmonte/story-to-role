@@ -1,13 +1,17 @@
 import {
   and,
   asc,
+  cosineDistance,
   count,
   desc,
   eq,
   inArray,
+  isNotNull,
   isNull,
   lt,
+  ne,
   or,
+  sql,
 } from "drizzle-orm";
 
 import { applicationsTable } from "@repo/api/domains/applications/db/applications-tables";
@@ -446,6 +450,102 @@ export class DocumentsRepository {
       )
       .where(eq(documentSnapshotsTable.versionId, versionId));
     return rows.map((row) => row.storageKey);
+  }
+
+  /**
+   * The profile's versions whose latest snapshot has no vector yet, with
+   * that snapshot: what the similarity refresh has to embed.
+   */
+  async staleVersionVectors(profileId: string) {
+    const latest = this.tx
+      .selectDistinctOn([documentSnapshotsTable.versionId], {
+        versionId: documentSnapshotsTable.versionId,
+        snapshotId: sql<string>`${documentSnapshotsTable.id}`.as("snapshot_id"),
+        encryptedContent: documentSnapshotsTable.encryptedContent,
+      })
+      .from(documentSnapshotsTable)
+      .orderBy(
+        documentSnapshotsTable.versionId,
+        desc(documentSnapshotsTable.sequence)
+      )
+      .as("latest");
+    return this.tx
+      .select({
+        versionId: documentVersionsTable.id,
+        snapshotId: latest.snapshotId,
+        encryptedContent: latest.encryptedContent,
+      })
+      .from(documentVersionsTable)
+      .innerJoin(
+        documentsTable,
+        eq(documentsTable.id, documentVersionsTable.documentId)
+      )
+      .innerJoin(latest, eq(latest.versionId, documentVersionsTable.id))
+      .where(
+        and(
+          eq(documentsTable.profileId, profileId),
+          or(
+            isNull(documentVersionsTable.embeddedSnapshotId),
+            ne(documentVersionsTable.embeddedSnapshotId, latest.snapshotId)
+          )
+        )
+      );
+  }
+
+  /** The profile's library documents (no application), newest first. */
+  listLibraryDocuments(profileId: string) {
+    return this.tx
+      .select()
+      .from(documentsTable)
+      .where(
+        and(
+          eq(documentsTable.profileId, profileId),
+          isNull(documentsTable.applicationId)
+        )
+      )
+      .orderBy(desc(documentsTable.createdAt));
+  }
+
+  /**
+   * Resume versions closest to a vector (an opening's): library documents
+   * and other applications' documents, sent ones included.
+   */
+  similarVersions(input: {
+    profileId: string;
+    embedding: number[];
+    excludeApplicationId: string | null;
+    limit: number;
+  }) {
+    const distance = cosineDistance(
+      documentVersionsTable.embedding,
+      input.embedding
+    );
+    return this.tx
+      .select({
+        version: documentVersionsTable,
+        document: documentsTable,
+        distance,
+      })
+      .from(documentVersionsTable)
+      .innerJoin(
+        documentsTable,
+        eq(documentsTable.id, documentVersionsTable.documentId)
+      )
+      .where(
+        and(
+          eq(documentsTable.profileId, input.profileId),
+          eq(documentsTable.kind, "resume"),
+          isNotNull(documentVersionsTable.embedding),
+          input.excludeApplicationId
+            ? or(
+                isNull(documentsTable.applicationId),
+                ne(documentsTable.applicationId, input.excludeApplicationId)
+              )
+            : undefined
+        )
+      )
+      .orderBy(distance)
+      .limit(input.limit);
   }
 
   async findTemplate(profileId: string) {

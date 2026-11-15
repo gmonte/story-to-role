@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 
 import { useMutation } from "@tanstack/react-query";
 import {
@@ -31,7 +31,6 @@ import {
   positionTitleLine,
   sectionTitles,
 } from "@repo/api/domains/documents/rendering/output-conventions";
-import type { Tone } from "@repo/api/domains/openings/schemas/opening";
 import { useTranslation } from "@repo/intl/use-translation";
 import { Button } from "@repo/web/components/ui/button";
 import {
@@ -69,7 +68,6 @@ import {
 import { sectionText } from "../utils/section-text";
 import { AdaptVersionDialog } from "./adapt-version-dialog";
 import { DownloadPdfDialog } from "./download-pdf-dialog";
-import { GenerateResumeDialog } from "./generate-resume-dialog";
 import { TitleProposals } from "./title-proposals";
 import { VersionHistorySheet } from "./version-history-sheet";
 
@@ -87,15 +85,12 @@ const originTone: Record<LineOrigin["kind"], string> = {
  * changes behind undo and the change history.
  */
 export function ResumeEditor({
-  openingId,
   versions,
-  defaultTone,
-  pendingGaps,
+  generateAgain,
 }: {
-  openingId: string;
   versions: VersionView[];
-  defaultTone: Tone;
-  pendingGaps: number;
+  /** The screen's own "Generate again" dialog, around the given trigger. */
+  generateAgain: (version: VersionView, trigger: ReactNode) => ReactNode;
 }) {
   const t = useTranslation();
   const labels = useDocumentLabels();
@@ -226,19 +221,13 @@ export function ResumeEditor({
               }
             />
           )}
-          <GenerateResumeDialog
-            openingId={openingId}
-            defaultLanguage={language}
-            defaultTone={defaultTone}
-            versionId={version.id}
-            pendingGaps={pendingGaps}
-            trigger={
-              <Button size="sm" variant="ghost">
-                <Sparkles />
-                {t.formatMessage({ defaultMessage: "Generate again" })}
-              </Button>
-            }
-          />
+          {generateAgain(
+            version,
+            <Button size="sm" variant="ghost">
+              <Sparkles />
+              {t.formatMessage({ defaultMessage: "Generate again" })}
+            </Button>
+          )}
           <Dialog>
             <DialogTrigger asChild>
               <Button size="sm" variant="ghost">

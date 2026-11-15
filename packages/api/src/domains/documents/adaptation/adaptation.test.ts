@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { lockedFactViolations } from "../generation/resume-checks";
+import { lockedFactViolations, relockFacts } from "../generation/resume-checks";
 import type { ResumeContent } from "../schemas/resume-content";
 import { adaptContent, type AdaptationDraft } from "./adapt-content";
 import { keepsFigures } from "./figures";
@@ -312,5 +312,27 @@ describe("figures across languages", () => {
     );
     expect(keepsFigures("Cut 40% in 2022", "Reduziu 40%")).toBe(false);
     expect(keepsFigures("Saved $2M", "Economizou R$2M")).toBe(false);
+  });
+});
+
+describe("relocking facts", () => {
+  it("prints this context's locked facts over content from another document", () => {
+    const borrowed = adaptContent({
+      source: english,
+      draft,
+      titles: new Map([[P1, "Engineering Manager"]]),
+    }).content;
+    const relocked = relockFacts(borrowed, [
+      {
+        id: P1,
+        employer: "Globex",
+        title: "Analista de Sistemas Sênior",
+        startDate: "2021-03",
+        endDate: null,
+      },
+    ]);
+    expect(relocked.sections[2]).toMatchObject({
+      entries: [{ title: "Analista de Sistemas Sênior", employer: "Globex" }],
+    });
   });
 });

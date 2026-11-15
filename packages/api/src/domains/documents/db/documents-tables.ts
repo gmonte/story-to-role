@@ -7,6 +7,7 @@ import {
   positionsTable,
 } from "@repo/api/domains/career/db/career-tables";
 import type { Tone } from "@repo/api/domains/openings/schemas/opening";
+import { embeddingDimensions } from "@repo/api/tools/embeddings/embedding-model";
 import { createTable } from "@repo/api/utils/db/create-table";
 
 import type {
@@ -70,6 +71,10 @@ export const documentVersionsTable = createTable(
     // The base of each sync is read from the snapshots adaptations and
     // syncs produced, so undo moves it back on its own.
     adaptedFromVersionId: d.uuid(),
+    // The latest snapshot's vector (ADR 0004), for suggesting similar
+    // documents to an opening; refreshed by the tasks that run the model.
+    embedding: d.vector({ dimensions: embeddingDimensions }),
+    embeddedSnapshotId: d.uuid(),
   }),
   (t) => [index("document_versions_document_id_idx").on(t.documentId)]
 );
@@ -132,6 +137,8 @@ export const generationsTable = createTable(
     // Sync: the target's snapshot the proposal starts from, the user's
     // selection, and the proposal awaiting acceptance.
     targetSnapshotId: d.uuid(),
+    // "Use as reference": a similar document whose choices guide the draft.
+    referenceSnapshotId: d.uuid(),
     encryptedSyncPlan: d.text(),
     encryptedProposal: d.text(),
     reviewDepth: d.text().$type<ReviewDepth>().notNull(),

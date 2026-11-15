@@ -46,6 +46,19 @@ export class EvidenceRepository {
     return this.tx.insert(storiesTable).values(rows).returning();
   }
 
+  async findStory(input: { profileId: string; storyId: string }) {
+    const [row] = await this.tx
+      .select()
+      .from(storiesTable)
+      .where(
+        and(
+          eq(storiesTable.id, input.storyId),
+          eq(storiesTable.profileId, input.profileId)
+        )
+      );
+    return row ?? null;
+  }
+
   async updateStoryEvidence(input: { storyId: string; evidenceIds: string[] }) {
     await this.tx
       .update(storiesTable)

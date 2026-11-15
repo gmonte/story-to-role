@@ -66,7 +66,8 @@ export const motivationRouter = createTRPCRouter({
     ),
 
   answer: userProcedure
-    .use(rateLimited("taskStart"))
+    // A chat answer, limited like the career interview's messages.
+    .use(rateLimited("chatMessage"))
     .meta(
       openApiMeta(
         "motivation",
@@ -114,7 +115,7 @@ export const motivationRouter = createTRPCRouter({
     .input(
       z.object({
         openingId: z.uuid(),
-        decisions: z.array(motivationDecisionSchema),
+        decisions: z.array(motivationDecisionSchema).max(50),
       })
     )
     .output(okSchema)

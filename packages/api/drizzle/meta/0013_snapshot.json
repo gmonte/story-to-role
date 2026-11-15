@@ -1,5 +1,5 @@
 {
-  "id": "e86397af-bcc0-4d09-83a2-2437d0f1f4be",
+  "id": "9bec8ba4-3f2e-47d2-bc7d-5905e6e28f9a",
   "prevId": "eb98ebc6-e8e0-44e7-8833-b47940e79bd6",
   "version": "7",
   "dialect": "postgresql",
@@ -1528,6 +1528,12 @@
         },
         "language": {
           "name": "language",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "source": {
+          "name": "source",
           "type": "text",
           "primaryKey": false,
           "notNull": true
@@ -3811,6 +3817,12 @@
           "primaryKey": false,
           "notNull": true,
           "default": false
+        },
+        "encryptedSensitiveItems": {
+          "name": "encryptedSensitiveItems",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
         },
         "status": {
           "name": "status",

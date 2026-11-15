@@ -1,17 +1,34 @@
 import { TRPCError } from "@trpc/server";
+import { z } from "zod";
 
 import { CareerRepository } from "@repo/api/domains/career/career-repository";
-import { getUserCipher } from "@repo/api/domains/encryption/user-cipher";
+import {
+  getUserCipher,
+  type UserCipher,
+} from "@repo/api/domains/encryption/user-cipher";
 import { EvidenceRepository } from "@repo/api/domains/evidence/evidence-repository";
+import { defaultSensitivityChoice } from "@repo/api/domains/evidence/schemas/evidence";
 import { OpeningsRepository } from "@repo/api/domains/openings/openings-repository";
 import type { RealtimeSubscription } from "@repo/api/domains/tasks/schemas/task";
 import { TasksService } from "@repo/api/domains/tasks/tasks-service";
 import type { DbClient } from "@repo/api/tools/db-client";
 
+import { flaggedSensitiveItemSchema } from "../schemas/instructions";
 import type { MotivationView, StoryChoice } from "../schemas/motivation";
 import { MotivationRepository } from "./motivation-repository";
+import { awaitingInterviewer } from "./motivation-turns";
+
+const sensitiveItemsOf = (cipher: UserCipher, encrypted: string | null) =>
+  encrypted
+    ? z
+        .array(flaggedSensitiveItemSchema)
+        .parse(JSON.parse(cipher.decrypt(encrypted)))
+    : [];
 
 const notFound = () => new TRPCError({ code: "NOT_FOUND" });
+
+/** Longer than a turn may take: the interviewer is gone, not thinking. */
+const staleTurnMs = 3 * 60_000;
 
 /** How many stories the user chooses from (resume spec: the top three). */
 const storyChoices = 3;
@@ -68,14 +85,16 @@ export class MotivationService {
       }
       const cipher = await getUserCipher(tx, input.userId);
       const turns = await repository.listTurns(interview.id);
+      const waiting =
+        interview.status === "in_progress" && awaitingInterviewer(turns);
+      // A turn that never came back: the interview failed, it can restart.
+      const since = (turns.at(-1)?.createdAt ?? interview.createdAt).getTime();
+      const stale = waiting && Date.now() - since >= staleTurnMs;
       return {
         interviewId: interview.id,
-        status: interview.status,
+        status: stale ? "failed" : interview.status,
         storyId: interview.storyId,
-        // An answer (or nothing yet) waits for the interviewer's next step.
-        thinking:
-          interview.status === "in_progress" &&
-          (turns.length === 0 || turns.at(-1)!.role === "answer"),
+        thinking: waiting && !stale,
         turns: turns.map((turn) => ({
           role: turn.role,
           text: cipher.decrypt(turn.encryptedText),
@@ -123,8 +142,13 @@ export class MotivationService {
       );
       const score = (evidenceIds: string[]) =>
         Math.min(...evidenceIds.map((id) => rank.get(id) ?? Infinity));
+      // Closest first; ties (or no vector yet) go to the newest stories.
       const ranked = [...stories]
-        .sort((a, b) => score(a.evidenceIds) - score(b.evidenceIds))
+        .sort(
+          (a, b) =>
+            score(a.evidenceIds) - score(b.evidenceIds) ||
+            b.approvedAt.getTime() - a.approvedAt.getTime()
+        )
         .slice(0, storyChoices);
 
       const [fitCheck] = await openings.latestFitChecks([opening.id]);
@@ -161,13 +185,21 @@ export class MotivationService {
     });
   }
 
+  /** Starts the interviewer's turn; a start that fails fails the interview. */
   private async askNext(userId: string, interviewId: string) {
-    const { realtime } = await this.tasks.start({
-      userId,
-      type: "motivation_turn",
-      subjectId: interviewId,
-    });
-    return { realtime };
+    try {
+      const { realtime } = await this.tasks.start({
+        userId,
+        type: "motivation_turn",
+        subjectId: interviewId,
+      });
+      return { realtime };
+    } catch (error) {
+      await new MotivationRepository(this.db).updateInterview(interviewId, {
+        status: "failed",
+      });
+      throw error;
+    }
   }
 
   /** Starts (or starts over) the interview, with the story the letter tells. */
@@ -217,7 +249,7 @@ export class MotivationService {
       }
       // One answer per question: the interviewer must have asked.
       const turns = await repository.listTurns(interview.id);
-      if (turns.length === 0 || turns.at(-1)!.role === "answer") {
+      if (awaitingInterviewer(turns)) {
         throw new TRPCError({ code: "CONFLICT" });
       }
       const cipher = await getUserCipher(tx, input.userId);
@@ -283,11 +315,13 @@ export class MotivationService {
         (point) => point.status === "draft"
       );
       const story = interview.storyId
-        ? (await evidence.listStories(profile.id)).find(
-            (row) => row.id === interview.storyId
-          )
+        ? await evidence.findStory({
+            profileId: profile.id,
+            storyId: interview.storyId,
+          })
         : null;
       const approvedAt = new Date();
+      const cipher = await getUserCipher(tx, input.userId);
 
       const goals = drafts.filter(
         (point) => point.kind === "goal" && saved.has(point.id)
@@ -297,6 +331,7 @@ export class MotivationService {
           profileId: profile.id,
           encryptedText: point.encryptedText,
           language: profile.interviewLanguage,
+          source: "motivation_interview" as const,
           sourcePointId: point.id,
           approvedAt,
         }))
@@ -323,6 +358,24 @@ export class MotivationService {
           storyId: story.id,
           evidenceIds: [...story.evidenceIds, ...rows.map((row) => row.id)],
         });
+        // Through the same approval as interview evidence: flagged names
+        // and figures go to the sensitive-data review.
+        await evidence.insertSensitiveItems(
+          details.flatMap((point) =>
+            sensitiveItemsOf(cipher, point.encryptedSensitiveItems).map(
+              (item) => ({
+                profileId: profile.id,
+                positionId: story.positionId,
+                kind: item.kind,
+                encryptedOriginal: cipher.encrypt(item.original),
+                choice: defaultSensitivityChoice(item.kind),
+                encryptedGeneralized: item.suggestedGeneralization
+                  ? cipher.encrypt(item.suggestedGeneralization)
+                  : null,
+              })
+            )
+          )
+        );
       }
       const promoted = [...goals, ...details].map((point) => point.id);
       await repository.updatePoints(promoted, { status: "promoted" });

@@ -4,6 +4,7 @@ CREATE TABLE IF NOT EXISTS "career_goals" (
 	"profileId" uuid NOT NULL,
 	"encryptedText" text NOT NULL,
 	"language" text NOT NULL,
+	"source" text NOT NULL,
 	"sourcePointId" uuid,
 	"approvedAt" timestamp with time zone NOT NULL
 );
@@ -26,6 +27,7 @@ CREATE TABLE IF NOT EXISTS "motivation_points" (
 	"kind" text NOT NULL,
 	"encryptedText" text NOT NULL,
 	"suggested" boolean DEFAULT false NOT NULL,
+	"encryptedSensitiveItems" text,
 	"status" text DEFAULT 'draft' NOT NULL
 );
 --> statement-breakpoint

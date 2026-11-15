@@ -109,6 +109,10 @@ async function setup() {
     trigger: vi.fn(async () => ({ runId: "run", accessToken: "t" })),
   };
   const motivation = new MotivationService(db, new TasksService(db, trigger));
+  const misuse = {
+    isCoolingDown: vi.fn(async () => false),
+    recordBlocked: vi.fn(() => Promise.resolve()),
+  };
   const turn = async (script: {
     verdict?: "on_topic" | "off_topic";
     question?: {
@@ -130,7 +134,12 @@ async function setup() {
         if (system.startsWith("You interview")) {
           return { about_story: false, ...script.question };
         }
-        return { points: script.points ?? [] };
+        return {
+          points: (script.points ?? []).map((point) => ({
+            sensitive_items: [],
+            ...point,
+          })),
+        };
       },
     });
     await runMotivationTurn({
@@ -142,12 +151,23 @@ async function setup() {
         providerPackage: fake.providerPackage,
       }),
       cipher,
+      misuse,
       userId: user.id,
       interviewId: interview.interviewId!,
     });
     return fake;
   };
-  return { db, user, profile, opening, stories, motivation, trigger, turn };
+  return {
+    db,
+    user,
+    profile,
+    opening,
+    stories,
+    motivation,
+    trigger,
+    turn,
+    misuse,
+  };
 }
 
 describe("motivation interview and story choice", () => {
@@ -201,9 +221,12 @@ describe("motivation interview and story choice", () => {
     await ctx.motivation.answer({ ...ids, text: "Give me a cake recipe." });
     // Off topic: the fixed reply and the question again, nothing else.
     await ctx.turn({ verdict: "off_topic" });
+    // Counted toward the misuse cooldown, like in the career interview.
+    expect(ctx.misuse.recordBlocked).toHaveBeenCalledTimes(1);
+    // The fixed reply in the interview language, then the question again.
     expect((await ctx.motivation.get(ids)).turns.at(-1)).toEqual({
       role: "steer",
-      text: "When did you decide to migrate?",
+      text: "Here I can only talk about this opening and why you want it. Back to the question:\nWhen did you decide to migrate?",
     });
     await ctx.motivation.answer({
       ...ids,

@@ -75,7 +75,11 @@ function StoryChoice({
   const choices = useQuery(
     trpc.motivation.storyChoices.queryOptions({ openingId })
   );
-  const [storyId, setStoryId] = useState<string | null>(null);
+  // The closest story comes chosen; the user may pick another or none.
+  const [picked, setPicked] = useState<string | null | undefined>(undefined);
+  const storyId =
+    picked === undefined ? (choices.data?.[0]?.storyId ?? null) : picked;
+  const setStoryId = (id: string | null) => setPicked(id);
   const onError = (error: { message: string }) => toast.error(error.message);
   const start = useMutation(
     trpc.motivation.start.mutationOptions({ onSuccess: refresh, onError })
@@ -123,16 +127,31 @@ function StoryChoice({
                 {choice.position}
               </span>
             )}
-            {choice.fits.length > 0 && (
-              <span className="text-muted-foreground text-xs">
-                {t.formatMessage(
-                  { defaultMessage: "Fits: {requirements}" },
-                  { requirements: choice.fits.join(", ") }
-                )}
-              </span>
-            )}
+            <span className="text-muted-foreground text-xs">
+              {choice.fits.length > 0
+                ? t.formatMessage(
+                    { defaultMessage: "Fits: {requirements}" },
+                    { requirements: choice.fits.join(", ") }
+                  )
+                : t.formatMessage({
+                    defaultMessage:
+                      "Its evidence is among the closest to this opening.",
+                  })}
+            </span>
           </button>
         ))}
+        {!!choices.data?.length && (
+          <button
+            type="button"
+            onClick={() => setStoryId(null)}
+            className={cn(
+              "bg-background rounded-lg border p-3 text-left text-sm",
+              storyId === null && "border-primary"
+            )}
+          >
+            {t.formatMessage({ defaultMessage: "Without a story" })}
+          </button>
+        )}
         {choices.data?.length === 0 && (
           <p className="text-muted-foreground text-sm">
             {t.formatMessage({
@@ -235,15 +254,7 @@ function Interview({
                 : "bg-muted self-start"
             )}
           >
-            {turn.role === "steer" && (
-              <span className="text-muted-foreground block text-xs">
-                {t.formatMessage({
-                  defaultMessage:
-                    "Let's keep to this opening and why you want it.",
-                })}
-              </span>
-            )}
-            {turn.text}
+            <span className="whitespace-pre-wrap"> {turn.text}</span>
           </li>
         ))}
         {motivation.thinking && (
@@ -255,7 +266,7 @@ function Interview({
           </li>
         )}
       </ul>
-      {!motivation.thinking && (
+      {!motivation.thinking && !answer.isPending && (
         <div className="flex items-end gap-2">
           <Textarea
             value={text}

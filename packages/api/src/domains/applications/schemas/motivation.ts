@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+import { sensitiveItemKindSchema } from "@repo/api/domains/evidence/schemas/evidence";
+
 export const motivationStatusSchema = z.enum([
   "in_progress",
   "finished",
@@ -47,6 +49,13 @@ export const motivationSplitSchema = z.object({
       kind: motivationPointKindSchema,
       // A goal or story detail worth saving beyond this application.
       worth_saving: z.boolean(),
+      sensitive_items: z.array(
+        z.object({
+          kind: sensitiveItemKindSchema,
+          original: z.string(),
+          suggested_generalization: z.string().nullable(),
+        })
+      ),
     })
   ),
 });

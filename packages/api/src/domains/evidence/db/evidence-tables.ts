@@ -170,7 +170,12 @@ export const careerGoalsTable = createTable(
       .references(() => careerProfilesTable.id, { onDelete: "cascade" }),
     encryptedText: d.text().notNull(),
     language: d.text().$type<InterviewLanguage>().notNull(),
-    // The motivation point it came from.
+    // Where it came from (data model: a motivation interview turn or an
+    // application instruction) and that point's id.
+    source: d
+      .text()
+      .$type<"motivation_interview" | "application_instruction">()
+      .notNull(),
     sourcePointId: d.uuid(),
     approvedAt: d.timestamp({ withTimezone: true }).notNull(),
   }),

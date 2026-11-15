@@ -3,6 +3,7 @@ import { TRPCError } from "@trpc/server";
 import type { DbClient } from "@repo/api/tools/db-client";
 
 import { ensureMonthlyCredits } from "./credit-ledger";
+import { currentPlan } from "./credit-plan";
 import { creditCap } from "./credit-pricing";
 import { creditReserve, nearReserve, resumeEstimate } from "./credit-reserve";
 import { settleTask } from "./settle-task";
@@ -36,10 +37,10 @@ export class CreditsService {
             (a.expiresAt?.getTime() ?? Infinity) -
             (b.expiresAt?.getTime() ?? Infinity)
         );
-      const courtesy = await repository.activeCourtesy(userId, now);
+      const { kind, courtesy } = await currentPlan(tx, userId, now);
       const resume = await resumeEstimate(tx, userId);
       return {
-        plan: courtesy ? "courtesy" : "free",
+        plan: kind,
         available: lots.reduce((total, lot) => total + lot.remaining, 0),
         reserved: await repository.reserved(userId),
         lots,

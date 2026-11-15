@@ -18,7 +18,8 @@
     "test": "lerna run test --stream",
     "predeploy:web": "lerna run predeploy --scope='web' --stream",
     "prepare": "node .husky/install.mjs",
-    "typecheck": "lerna run typecheck"
+    "typecheck": "lerna run typecheck",
+    "stripe:listen": "stripe listen --forward-to localhost:3000/api/webhooks/stripe --events checkout.session.completed,checkout.session.async_payment_succeeded,checkout.session.async_payment_failed,invoice.paid,invoice.payment_failed,customer.subscription.updated,customer.subscription.deleted,charge.refunded"
   },
   "devDependencies": {
     "@commitlint/cli": "catalog:root",

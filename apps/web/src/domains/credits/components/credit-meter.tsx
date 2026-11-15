@@ -1,6 +1,7 @@
 "use client";
 
 import { Coins } from "lucide-react";
+import Link from "next/link";
 
 import {
   type CreditSummary,
@@ -10,6 +11,7 @@ import { useTranslation } from "@repo/intl/use-translation";
 import {
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
@@ -118,6 +120,16 @@ export function CreditMeter() {
             </span>
           )}
         </div>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem asChild>
+          <Link href="/app/billing">
+            {data.plan === "free"
+              ? t.formatMessage({
+                  defaultMessage: "Subscribe or buy credits",
+                })
+              : t.formatMessage({ defaultMessage: "Plan and credits" })}
+          </Link>
+        </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
   );

@@ -30,6 +30,7 @@ catalogs:
     fflate: 0.8.3
     mammoth: 1.13.0
     postgres: 3.4.8
+    stripe: 23.1.0
     trigger.dev: 4.8.5
     unpdf: 2.2.0
 

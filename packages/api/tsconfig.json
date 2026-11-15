@@ -15,6 +15,7 @@
   "include": [
     "src",
     "drizzle.config.ts",
+    "scripts",
     "@types/*.d.ts",
     "vitest.*.ts",
     "trigger.config.ts"

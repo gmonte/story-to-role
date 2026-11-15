@@ -21,10 +21,8 @@ import {
   openingDocumentsSchema,
   snapshotSummarySchema,
 } from "./schemas/document-view";
-import {
-  resumeContentSchema,
-  resumeSectionKindSchema,
-} from "./schemas/resume-content";
+import { documentContentSchema } from "./schemas/document-content";
+import { resumeSectionKindSchema } from "./schemas/resume-content";
 
 const snapshotRef = z.object({ snapshotId: z.uuid() });
 
@@ -87,7 +85,7 @@ export const documentsRouter = createTRPCRouter({
       z.object({
         versionId: z.uuid(),
         baseSnapshotId: z.uuid(),
-        content: resumeContentSchema,
+        content: documentContentSchema,
       })
     )
     .output(snapshotRef)
@@ -135,7 +133,7 @@ export const documentsRouter = createTRPCRouter({
       )
     )
     .input(snapshotRef)
-    .output(snapshotSummarySchema.extend({ content: resumeContentSchema }))
+    .output(snapshotSummarySchema.extend({ content: documentContentSchema }))
     .query(({ ctx, input }) =>
       new DocumentsService(db).snapshot({ userId: ctx.userId, ...input })
     ),

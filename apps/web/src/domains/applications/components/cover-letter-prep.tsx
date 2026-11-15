@@ -12,8 +12,14 @@ import { Checkbox } from "@repo/web/components/ui/checkbox";
 import { toast } from "@repo/web/components/ui/sonner";
 import { Textarea } from "@repo/web/components/ui/textarea";
 import { cn } from "@repo/web/lib/utils";
+import type { OutputLanguage } from "@repo/api/domains/documents/schemas/document";
+import type { VersionView } from "@repo/api/domains/documents/schemas/document-view";
+import type { Tone } from "@repo/api/domains/openings/schemas/opening";
 
 import { VoiceInputButton } from "~/domains/career/components/voice-input-button";
+import { CoverLetterEditor } from "~/domains/documents/components/cover-letter-editor";
+import { GenerateLetterDialog } from "~/domains/documents/components/generate-letter-dialog";
+import { useOpeningDocuments } from "~/domains/documents/hooks/use-opening-documents";
 import { useTimeline } from "~/domains/career/hooks/use-career-queries";
 import { useTRPC } from "~/tools/trpc/client";
 
@@ -33,32 +39,130 @@ function useRefreshMotivation() {
  * motivation interview whose points stay here or, approved one by one,
  * become career goals or story details.
  */
-export function CoverLetterPrep({ openingId }: { openingId: string }) {
+export function CoverLetterPrep({
+  openingId,
+  defaultLanguage,
+  defaultTone,
+}: {
+  openingId: string;
+  defaultLanguage: OutputLanguage;
+  defaultTone: Tone;
+}) {
   const trpc = useTRPC();
   const motivation = useQuery({
     ...trpc.motivation.get.queryOptions({ openingId }),
     refetchInterval: (query) => (query.state.data?.thinking ? 1500 : false),
   });
+  const documents = useOpeningDocuments(openingId);
   const data = motivation.data;
   if (!data) return null;
-
+  const letter = documents.data?.documents.find(
+    (document) => document.kind === "cover_letter"
+  );
+  const resumeVersions =
+    documents.data?.documents.find((document) => document.kind === "resume")
+      ?.versions ?? [];
+  const generating =
+    letter?.generation?.status === "pending" ||
+    letter?.generation?.status === "running";
+  const writeLetter = (
+    <WriteLetter
+      openingId={openingId}
+      generating={generating}
+      failed={letter?.generation?.status === "failed"}
+      resumeVersions={resumeVersions}
+      defaultLanguage={defaultLanguage}
+      defaultTone={defaultTone}
+    />
+  );
+  // The interview done or skipped and a letter written: the letter.
+  if (
+    letter?.versions.length &&
+    (data.status === "finished" || data.status === "skipped")
+  ) {
+    return (
+      <CoverLetterEditor
+        openingId={openingId}
+        document={letter}
+        resumeVersions={resumeVersions}
+        defaultTone={defaultTone}
+      />
+    );
+  }
   if (!data.status || data.status === "failed") {
     return (
       <StoryChoice openingId={openingId} failed={data.status === "failed"} />
     );
   }
   if (data.status === "skipped") {
-    return <Skipped openingId={openingId} />;
+    return (
+      <div className="flex flex-col gap-4">
+        <Skipped openingId={openingId} />
+        {writeLetter}
+      </div>
+    );
   }
   if (data.status === "in_progress") {
     return <Interview openingId={openingId} motivation={data} />;
   }
   return (
-    <PointsReview
-      key={data.points.map((point) => `${point.id}:${point.status}`).join()}
-      openingId={openingId}
-      motivation={data}
-    />
+    <div className="flex flex-col gap-6">
+      <PointsReview
+        key={data.points.map((point) => `${point.id}:${point.status}`).join()}
+        openingId={openingId}
+        motivation={data}
+      />
+      {!data.points.some((point) => point.status === "draft") && writeLetter}
+    </div>
+  );
+}
+
+/** The step after the interview: writing the letter itself. */
+function WriteLetter({
+  openingId,
+  generating,
+  failed,
+  resumeVersions,
+  defaultLanguage,
+  defaultTone,
+}: {
+  openingId: string;
+  generating: boolean;
+  failed: boolean;
+  resumeVersions: VersionView[];
+  defaultLanguage: OutputLanguage;
+  defaultTone: Tone;
+}) {
+  const t = useTranslation();
+  if (generating) {
+    return (
+      <p className="text-muted-foreground flex items-center gap-2 text-sm">
+        <Loader2 className="size-4 animate-spin" />
+        {t.formatMessage({ defaultMessage: "Writing the cover letter…" })}
+      </p>
+    );
+  }
+  return (
+    <section className="flex flex-col items-start gap-2">
+      {failed && (
+        <p className="text-xs text-red-600">
+          {t.formatMessage({
+            defaultMessage: "The last letter failed. Try again.",
+          })}
+        </p>
+      )}
+      <GenerateLetterDialog
+        openingId={openingId}
+        resumeVersions={resumeVersions}
+        defaultLanguage={defaultLanguage}
+        defaultTone={defaultTone}
+        trigger={
+          <Button>
+            {t.formatMessage({ defaultMessage: "Generate cover letter" })}
+          </Button>
+        }
+      />
+    </section>
   );
 }
 

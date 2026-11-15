@@ -152,7 +152,15 @@ export function OpeningView({ openingId }: { openingId: string }) {
         )}
 
         {view === "letter" && data.status === "analyzed" ? (
-          <CoverLetterPrep openingId={openingId} />
+          <CoverLetterPrep
+            openingId={openingId}
+            defaultLanguage={data.language ?? "en-US"}
+            defaultTone={
+              documents.data?.application?.tone ??
+              data.suggestedTone ??
+              "your_style"
+            }
+          />
         ) : view === "resume" && resumeVersions.length > 0 ? (
           <ResumeEditor
             versions={resumeVersions}

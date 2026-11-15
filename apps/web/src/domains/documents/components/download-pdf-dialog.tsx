@@ -66,7 +66,7 @@ export function DownloadPdfDialog({ version }: { version: VersionView }) {
           <DialogDescription>
             {t.formatMessage({
               defaultMessage:
-                "The latest change of this version, in the resume layout. Accents and symbols are left out of the file name, since some portals break on them.",
+                "The latest change of this version, in its layout. Accents and symbols are left out of the file name, since some portals break on them.",
             })}
           </DialogDescription>
         </DialogHeader>

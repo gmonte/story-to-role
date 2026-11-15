@@ -75,6 +75,9 @@ export const documentVersionsTable = createTable(
     // documents to an opening; refreshed by the tasks that run the model.
     embedding: d.vector({ dimensions: embeddingDimensions }),
     embeddedSnapshotId: d.uuid(),
+    // A cover letter's outdated notice the user dismissed, for that resume
+    // snapshot.
+    dismissedResumeSnapshotId: d.uuid(),
   }),
   (t) => [index("document_versions_document_id_idx").on(t.documentId)]
 );
@@ -139,6 +142,12 @@ export const generationsTable = createTable(
     targetSnapshotId: d.uuid(),
     // "Use as reference": a similar document whose choices guide the draft.
     referenceSnapshotId: d.uuid(),
+    // A cover letter's resume (resume spec, "Cover letter and its resume"):
+    // the version and the exact snapshot it was written from.
+    resumeVersionId: d
+      .uuid()
+      .references(() => documentVersionsTable.id, { onDelete: "set null" }),
+    resumeSnapshotId: d.uuid(),
     encryptedSyncPlan: d.text(),
     encryptedProposal: d.text(),
     reviewDepth: d.text().$type<ReviewDepth>().notNull(),

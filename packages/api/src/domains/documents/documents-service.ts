@@ -14,6 +14,8 @@ import { TasksRepository } from "@repo/api/domains/tasks/tasks-repository";
 import { TasksService } from "@repo/api/domains/tasks/tasks-service";
 import type { DbClient } from "@repo/api/tools/db-client";
 import { getStorage, type Storage } from "@repo/api/tools/storage/storage";
+import { MotivationRepository } from "@repo/api/domains/applications/motivation/motivation-repository";
+import { ResearchRepository } from "@repo/api/domains/applications/research/research-repository";
 
 import { DocumentsRepository } from "./documents-repository";
 import { outdatedVersions } from "./adaptation/sync-status";
@@ -21,13 +23,14 @@ import { proposalDiff } from "./adaptation/three-way-merge";
 import { fileNamer } from "./rendering/file-namer";
 import { pdfTemplate } from "./rendering/pdf-template";
 import { requireUserVersion } from "./require-version";
+import { decryptDocument } from "./snapshot-content";
+import { applyLetterEdit, estimateLetterPages } from "./letter/assemble-letter";
+import type { CoverLetterContent } from "./schemas/cover-letter-content";
+import type { DocumentContent } from "./schemas/document-content";
+import { documentLines } from "./document-text";
 import { applyUserEdit, LockedFactEditError } from "./editing/apply-user-edit";
 import { atsCheck } from "./generation/ats-check";
-import {
-  estimatePages,
-  resumeLines,
-  resumeText,
-} from "./generation/resume-checks";
+import { estimatePages, resumeText } from "./generation/resume-checks";
 import type {
   OutputLanguage,
   ReviewDepth,
@@ -40,10 +43,9 @@ import type {
   SnapshotSummary,
   VersionView,
 } from "./schemas/document-view";
-import {
-  type ResumeContent,
-  resumeContentSchema,
-  type ResumeSectionKind,
+import type {
+  ResumeContent,
+  ResumeSectionKind,
 } from "./schemas/resume-content";
 
 const notFound = () => new TRPCError({ code: "NOT_FOUND" });
@@ -232,11 +234,12 @@ export class DocumentsService {
     for (const version of versions) {
       const latest = await repository.latestSnapshot(version.id);
       if (!latest) continue;
-      const content = this.decryptContent(cipher, latest.encryptedContent);
+      const content = decryptDocument(cipher, latest);
       const rendered = await repository.findRenderedFile(
         latest.id,
         pdfTemplate
       );
+      const isResume = content.kind === "resume";
       views.push({
         id: version.id,
         language: version.language,
@@ -247,7 +250,9 @@ export class DocumentsService {
         snapshotCount: await repository.countSnapshots(version.id),
         content,
         // The rendered PDF's real length once it exists; an estimate before.
-        pages: rendered?.pages ?? estimatePages(content),
+        pages:
+          rendered?.pages ??
+          (isResume ? estimatePages(content) : estimateLetterPages(content)),
         pdf: {
           ready: !!rendered,
           rendering:
@@ -258,14 +263,21 @@ export class DocumentsService {
             )),
           fileName: nameFor(version, content),
         },
-        atsCheck: keywords
-          ? atsCheck({ text: resumeText(content), keywords })
-          : null,
+        atsCheck:
+          keywords && isResume
+            ? atsCheck({ text: resumeText(content), keywords })
+            : null,
         trace: trace.evidenceFor(content),
         instructionTrace: trace.instructionsFor(content),
         credentialApprovals: trace.credentialApprovals,
         outdated: outdated.get(version.id) ?? [],
-        titleProposals: trace.titleProposalsFor(content, version.language),
+        titleProposals: isResume
+          ? trace.titleProposalsFor(content, version.language)
+          : [],
+        letterTrace: isResume ? null : await trace.letterSources(),
+        letter: isResume
+          ? null
+          : await this.letterStatus(tx, version, document.applicationId),
       });
     }
     const pending = await repository.pendingProposal(document.id);
@@ -297,8 +309,10 @@ export class DocumentsService {
               generationId: pending.id,
               versionId: pending.versionId,
               lines: proposalDiff(
-                this.decryptContent(cipher, proposed.encryptedContent),
-                this.decryptContent(cipher, pending.encryptedProposal)
+                decryptDocument(cipher, proposed),
+                decryptDocument(cipher, {
+                  encryptedContent: pending.encryptedProposal,
+                })
               ),
             }
           : null,
@@ -388,21 +402,17 @@ export class DocumentsService {
       })
     );
     return {
-      evidenceFor(content: ResumeContent) {
+      evidenceFor(content: DocumentContent) {
         const ids = new Set(
-          resumeLines(content).flatMap((line) =>
-            line.origin.kind === "evidence" ||
-            line.origin.kind === "skill" ||
-            line.origin.kind === "instruction"
-              ? line.origin.evidenceIds
-              : []
+          documentLines(content).flatMap((line) =>
+            "evidenceIds" in line.origin ? line.origin.evidenceIds : []
           )
         );
         return [...ids].flatMap((id) => byId.get(id) ?? []);
       },
-      instructionsFor(content: ResumeContent) {
+      instructionsFor(content: DocumentContent) {
         const ids = new Set(
-          resumeLines(content).flatMap((line) =>
+          documentLines(content).flatMap((line) =>
             line.origin.kind === "instruction" ? line.origin.instructionIds : []
           )
         );
@@ -410,6 +420,36 @@ export class DocumentsService {
           const text = instructions.get(id);
           return text === undefined ? [] : [{ instructionId: id, text }];
         });
+      },
+      /** A letter's other sources: approved facts, points and goals. */
+      async letterSources() {
+        const facts = openingId
+          ? await new ResearchRepository(tx).listFacts(openingId)
+          : [];
+        const interview = openingId
+          ? await new MotivationRepository(tx).findInterviewByOpening(openingId)
+          : null;
+        const points = interview
+          ? await new MotivationRepository(tx).listPoints(interview.id)
+          : [];
+        const goals = await new EvidenceRepository(tx).listCareerGoals(
+          profileId
+        );
+        return {
+          companyFacts: facts.map((fact) => ({
+            id: fact.id,
+            text: cipher.decrypt(fact.encryptedText),
+            sourceUrl: cipher.decrypt(fact.encryptedSourceUrl),
+          })),
+          motivationPoints: points.map((point) => ({
+            id: point.id,
+            text: cipher.decrypt(point.encryptedText),
+          })),
+          careerGoals: goals.map((goal) => ({
+            id: goal.id,
+            text: cipher.decrypt(goal.encryptedText),
+          })),
+        };
       },
       titleProposalsFor(content: ResumeContent, language: OutputLanguage) {
         return content.sections.flatMap((section) =>
@@ -446,8 +486,41 @@ export class DocumentsService {
     };
   }
 
-  private decryptContent(cipher: UserCipher, encrypted: string) {
-    return resumeContentSchema.parse(JSON.parse(cipher.decrypt(encrypted)));
+  /**
+   * A cover letter's resume (resume spec, "Cover letter and its resume"):
+   * the resume version and snapshot its latest generated text came from.
+   * Outdated once that version has a newer snapshot, unless the user
+   * dismissed the notice for it; a deleted resume means none.
+   */
+  private async letterStatus(
+    tx: DbClient,
+    version: { id: string; dismissedResumeSnapshotId: string | null },
+    applicationId: string | null
+  ) {
+    const repository = new DocumentsRepository(tx);
+    const source = await repository.letterSource(version.id);
+    const resumeVersion = source?.resumeVersionId
+      ? await repository.findVersion(source.resumeVersionId)
+      : null;
+    const resumeLatest = resumeVersion
+      ? await repository.latestSnapshot(resumeVersion.id)
+      : null;
+    const opening = applicationId
+      ? await repository.findApplication(applicationId)
+      : null;
+    const interview = opening
+      ? await new MotivationRepository(tx).findInterviewByOpening(
+          opening.openingId
+        )
+      : null;
+    return {
+      resumeVersionId: resumeVersion?.id ?? null,
+      outdated:
+        !!resumeLatest &&
+        resumeLatest.id !== source?.resumeSnapshotId &&
+        resumeLatest.id !== version.dismissedResumeSnapshotId,
+      motivationSkipped: interview?.status !== "finished",
+    };
   }
 
   /**
@@ -458,7 +531,7 @@ export class DocumentsService {
     userId: string;
     versionId: string;
     baseSnapshotId: string;
-    content: ResumeContent;
+    content: DocumentContent;
   }) {
     return this.db.transaction(async (tx) => {
       const repository = new DocumentsRepository(tx);
@@ -473,12 +546,19 @@ export class DocumentsService {
         throw new TRPCError({ code: "CONFLICT" });
       }
       const cipher = await getUserCipher(tx, input.userId);
-      let content: ResumeContent;
+      let content: DocumentContent;
       try {
-        content = applyUserEdit(
-          this.decryptContent(cipher, latest.encryptedContent),
-          input.content
-        );
+        const previous = decryptDocument(cipher, latest);
+        if (previous.kind !== input.content.kind) {
+          throw new TRPCError({ code: "BAD_REQUEST" });
+        }
+        content =
+          previous.kind === "resume" && input.content.kind === "resume"
+            ? applyUserEdit(previous, input.content)
+            : applyLetterEdit(
+                previous as CoverLetterContent,
+                input.content as CoverLetterContent
+              );
       } catch (error) {
         if (error instanceof LockedFactEditError) {
           throw new TRPCError({ code: "BAD_REQUEST" });
@@ -553,7 +633,7 @@ export class DocumentsService {
     const cipher = await getUserCipher(this.db, input.userId);
     return {
       ...summary(snapshot),
-      content: this.decryptContent(cipher, snapshot.encryptedContent),
+      content: decryptDocument(cipher, snapshot),
     };
   }
 

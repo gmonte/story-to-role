@@ -17,6 +17,7 @@ import { getUserCipher } from "@repo/api/domains/encryption/user-cipher";
 import {
   evidenceTable,
   sensitiveItemsTable,
+  storiesTable,
 } from "@repo/api/domains/evidence/db/evidence-tables";
 import { loadSensitiveFilter } from "@repo/api/domains/evidence/sensitive/load-sensitive-filter";
 import { OpeningsRepository } from "@repo/api/domains/openings/openings-repository";
@@ -30,6 +31,8 @@ import {
 } from "@repo/api/test/pglite";
 import { InstructionsRepository } from "@repo/api/domains/applications/instructions-repository";
 import { InstructionsService } from "@repo/api/domains/applications/instructions-service";
+import { MotivationRepository } from "@repo/api/domains/applications/motivation/motivation-repository";
+import { ResearchRepository } from "@repo/api/domains/applications/research/research-repository";
 import type { InstructionDecision } from "@repo/api/domains/applications/schemas/instructions";
 import { runSplitInstructions } from "@repo/api/domains/applications/run-split-instructions";
 import { createLocalStorage } from "@repo/api/tools/storage/local-storage";
@@ -38,12 +41,18 @@ import { AdaptationService } from "./adaptation/adaptation-service";
 import { LibraryService } from "./library/library-service";
 import { embedStaleVersions } from "./similar/embed-versions";
 import { runAdaptDocument } from "./adaptation/run-adapt-document";
+import type { LetterDraft } from "./letter/assemble-letter";
+import { LetterService } from "./letter/letter-service";
+import { runGenerateLetter } from "./letter/run-generate-letter";
+import { runUpdateLetter } from "./letter/run-update-letter";
+import type { CoverLetterContent } from "./schemas/cover-letter-content";
 import { DocumentsRepository } from "./documents-repository";
 import { DocumentsService } from "./documents-service";
 import type { ResumeDraft } from "./generation/assemble-resume";
 import { runGenerateResume } from "./generation/run-generate-resume";
 import { PdfService } from "./rendering/pdf-service";
 import { runRenderPdf } from "./rendering/run-render-pdf";
+import type { DocumentContent } from "./schemas/document-content";
 import type { ResumeContent } from "./schemas/resume-content";
 
 vi.mock("@repo/common/env/web.env", () => ({
@@ -228,8 +237,16 @@ async function setup() {
   };
 }
 
-const experienceOf = (content: ResumeContent) => {
-  const section = content.sections.find((s) => s.kind === "experience");
+/** Narrows a version's content to the resume these tests generate. */
+const resumeOf = (content: DocumentContent): ResumeContent => {
+  if (content.kind !== "resume") throw new Error("not a resume");
+  return content;
+};
+
+const experienceOf = (content: DocumentContent) => {
+  const section = resumeOf(content).sections.find(
+    (s) => s.kind === "experience"
+  );
   if (section?.kind !== "experience") throw new Error("no experience");
   return section.entries[0];
 };
@@ -294,7 +311,7 @@ describe("resume generation and snapshots", () => {
       "Cut deploy time by 40% with Kubernetes.",
       "Led a team of 5 engineers.",
     ]);
-    expect(version.content.sections.map((s) => s.kind)).toEqual([
+    expect(resumeOf(version.content).sections.map((s) => s.kind)).toEqual([
       "summary",
       "skills",
       "experience",
@@ -398,7 +415,7 @@ describe("resume generation and snapshots", () => {
     );
     expect(JSON.stringify(version.content)).not.toMatch(/Globex|Klingon/);
 
-    const tampered = structuredClone(version.content);
+    const tampered = structuredClone(resumeOf(version.content));
     const languages = tampered.sections.find((s) => s.kind === "languages");
     if (languages && "entries" in languages && languages.kind === "languages") {
       languages.entries[0].level = "Native";
@@ -474,7 +491,7 @@ describe("resume generation and snapshots", () => {
     const first = version.snapshot.id;
 
     // An edited line becomes "written by you"; untouched lines keep their origin.
-    const edited = structuredClone(version.content);
+    const edited = structuredClone(resumeOf(version.content));
     experienceOf(edited).lines[0].text =
       "Led and mentored a team of 5 engineers.";
     await ctx.documents.saveEdit({
@@ -492,7 +509,7 @@ describe("resume generation and snapshots", () => {
     expect(experienceOf(current.content).lines[0].origin).toEqual({
       kind: "manual",
     });
-    expect(current.content.sections[0]).toMatchObject({
+    expect(resumeOf(current.content).sections[0]).toMatchObject({
       line: { origin: { kind: "evidence" } },
     });
 
@@ -505,7 +522,7 @@ describe("resume generation and snapshots", () => {
         content: edited,
       })
     ).rejects.toMatchObject({ code: "CONFLICT" });
-    const tampered = structuredClone(current.content);
+    const tampered = structuredClone(resumeOf(current.content));
     experienceOf(tampered).title = "CTO";
     await expect(
       ctx.documents.saveEdit({
@@ -993,8 +1010,8 @@ describe("resume generation and snapshots", () => {
       versionId: english.id,
       baseSnapshotId: english.snapshot.id,
       content: {
-        ...english.content,
-        sections: english.content.sections.map((section) =>
+        ...resumeOf(english.content),
+        sections: resumeOf(english.content).sections.map((section) =>
           section.kind === "experience"
             ? {
                 ...section,
@@ -1304,7 +1321,7 @@ describe("resume generation and snapshots", () => {
     expect(opening.application).not.toBeNull();
     expect(opening.documents[0].versions[0]).toMatchObject({
       snapshot: { origin: "copied", author: "user" },
-      content: { sections: libraryVersion.content.sections },
+      content: { sections: resumeOf(libraryVersion.content).sections },
     });
 
     // In another language than the output language, it is adapted instead.
@@ -1337,5 +1354,310 @@ describe("resume generation and snapshots", () => {
     expect(fake.generateObject.mock.calls[0][0].system).toContain(
       "A resume the user made for a similar target"
     );
+  });
+
+  it("writes a cover letter from approved sources and keeps it in step with its resume", async () => {
+    const ctx = await setup();
+    const [kubernetes, team] = ctx.evidence;
+    await ctx.generate("quick", {
+      drafts: [
+        ctx.draft([
+          { text: "Led a team of 5 engineers.", evidence_ids: [team.id] },
+        ]),
+        ctx.draft([
+          { text: "Led a team of 5 engineers.", evidence_ids: [team.id] },
+        ]),
+      ],
+      ratings: [8, 5],
+    });
+    const view = () =>
+      ctx.documents.forOpening({
+        userId: ctx.user.id,
+        openingId: ctx.opening.id,
+      });
+    const [resumeVersion] = (await view()).documents[0].versions;
+
+    // The letter's inputs: a story, an approved company fact, the interview.
+    const [story] = await ctx.db
+      .insert(storiesTable)
+      .values({
+        profileId: ctx.profile.id,
+        positionId: ctx.positionId,
+        encryptedProblem: ctx.cipher.encrypt("Deploys took hours"),
+        encryptedAction: ctx.cipher.encrypt("Moved services to Kubernetes"),
+        encryptedResult: ctx.cipher.encrypt("Deploys in minutes"),
+        language: "en-US",
+        evidenceIds: [kubernetes.id],
+        approvedAt: new Date(),
+      })
+      .returning();
+    const research = await new ResearchRepository(ctx.db).insertResearch({
+      profileId: ctx.profile.id,
+      openingId: ctx.opening.id,
+      status: "done",
+    });
+    await new ResearchRepository(ctx.db).insertFacts([
+      {
+        profileId: ctx.profile.id,
+        openingId: ctx.opening.id,
+        researchId: research.id,
+        encryptedText: ctx.cipher.encrypt(
+          "Hooli opened a Lisbon office in 2026."
+        ),
+        encryptedSourceUrl: ctx.cipher.encrypt("https://hooli.example/lisbon"),
+        encryptedSourceTitle: ctx.cipher.encrypt("Hooli in Lisbon"),
+        approvedAt: new Date(),
+      },
+    ]);
+    const [fact] = await new ResearchRepository(ctx.db).listFacts(
+      ctx.opening.id
+    );
+    const motivation = new MotivationRepository(ctx.db);
+    const interview = await motivation.replaceInterview({
+      profileId: ctx.profile.id,
+      openingId: ctx.opening.id,
+      storyId: story.id,
+      status: "finished",
+    });
+    await motivation.insertPoints([
+      {
+        profileId: ctx.profile.id,
+        interviewId: interview.id,
+        kind: "company",
+        encryptedText: ctx.cipher.encrypt("I use Hooli every day"),
+        status: "kept",
+      },
+    ]);
+    const [point] = await motivation.listPoints(interview.id);
+
+    const letters = new LetterService(
+      ctx.db,
+      new TasksService(ctx.db, ctx.trigger)
+    );
+    const runLetter = async (generationId: string, drafts: LetterDraft[]) => {
+      const queue = [...drafts];
+      const filter = await loadSensitiveFilter({
+        db: ctx.db,
+        cipher: ctx.cipher,
+        profileId: ctx.profile.id,
+      });
+      const fake = fakeProviderPackage({ object: () => queue.shift() });
+      const generation = await new DocumentsRepository(ctx.db).findGeneration(
+        generationId
+      );
+      const run =
+        generation?.kind === "letter_update"
+          ? runUpdateLetter
+          : runGenerateLetter;
+      await run({
+        db: ctx.db,
+        ai: createAiClient({
+          db: ctx.db,
+          userId: ctx.user.id,
+          funding: "credits",
+          providerPackage: fake.providerPackage,
+          sensitiveFilter: filter,
+        }),
+        cipher: ctx.cipher,
+        filter,
+        userId: ctx.user.id,
+        generationId,
+      });
+      return fake;
+    };
+    const cite = (
+      text: string,
+      ids: Partial<
+        Record<
+          | "evidence_ids"
+          | "company_fact_ids"
+          | "motivation_point_ids"
+          | "career_goal_ids",
+          string[]
+        >
+      >
+    ) => ({
+      text,
+      evidence_ids: [],
+      company_fact_ids: [],
+      motivation_point_ids: [],
+      career_goal_ids: [],
+      ...ids,
+    });
+    const opening = cite(
+      "When Hooli opened its Lisbon office in 2026, I wanted in.",
+      {
+        company_fact_ids: [fact.id],
+      }
+    );
+    const storyParagraph = cite(
+      "At Globex, deploys took hours, so I moved our services to Kubernetes.",
+      {
+        evidence_ids: [kubernetes.id],
+      }
+    );
+    const closing = cite("I use Hooli every day and would love to talk.", {
+      motivation_point_ids: [point.id],
+    });
+
+    const { generationId } = await letters.generate({
+      userId: ctx.user.id,
+      openingId: ctx.opening.id,
+      language: "en-US",
+      tone: "warm",
+      writingLevel: "standard",
+      resumeVersionId: resumeVersion.id,
+    });
+    const fake = await runLetter(generationId, [
+      // A claim with no source: refused, then fixed on the second round.
+      {
+        greeting: "Dear Hooli team,",
+        paragraphs: [
+          opening,
+          cite("I am the best engineer alive.", {}),
+          storyParagraph,
+        ],
+        closing: "Sincerely,",
+      },
+      {
+        greeting: "Dear Hooli team,",
+        paragraphs: [opening, storyParagraph, closing],
+        closing: "Sincerely,",
+      },
+    ]);
+    expect(fake.generateObject).toHaveBeenCalledTimes(2);
+    const prompt = fake.generateObject.mock.calls[0][0];
+    expect(prompt.system).toContain("one convincing story");
+    expect(JSON.stringify(prompt)).toContain("Deploys took hours");
+
+    const letterDocument = () =>
+      view().then(
+        (data) => data.documents.find((d) => d.kind === "cover_letter")!
+      );
+    let [letter] = (await letterDocument()).versions;
+    expect(letter.content).toMatchObject({
+      kind: "cover_letter",
+      greeting: "Dear Hooli team,",
+      paragraphs: [
+        {
+          text: opening.text,
+          origin: { kind: "letter", companyFactIds: [fact.id] },
+        },
+        {
+          text: storyParagraph.text,
+          origin: { kind: "letter", evidenceIds: [kubernetes.id] },
+        },
+        {
+          text: closing.text,
+          origin: { kind: "letter", motivationPointIds: [point.id] },
+        },
+      ],
+    });
+    expect(letter.letter).toEqual({
+      resumeVersionId: resumeVersion.id,
+      outdated: false,
+      motivationSkipped: false,
+    });
+    expect(letter.letterTrace?.companyFacts).toEqual([
+      {
+        id: fact.id,
+        text: "Hooli opened a Lisbon office in 2026.",
+        sourceUrl: "https://hooli.example/lisbon",
+      },
+    ]);
+    expect(letter.pages).toBeLessThanOrEqual(1);
+
+    // The resume changes: the letter is outdated relative to it.
+    const editResume = async (title: string) => {
+      const [current] = (await view()).documents[0].versions;
+      await ctx.documents.saveEdit({
+        userId: ctx.user.id,
+        versionId: current.id,
+        baseSnapshotId: current.snapshot.id,
+        content: {
+          ...resumeOf(current.content),
+          header: { ...current.content.header, titleLine: title },
+        },
+      });
+    };
+    await editResume("Staff Platform Engineer");
+    [letter] = (await letterDocument()).versions;
+    expect(letter.letter?.outdated).toBe(true);
+
+    // Update the cover letter: a proposal that keeps untouched paragraphs.
+    const updated = await letters.update({
+      userId: ctx.user.id,
+      versionId: letter.id,
+    });
+    await runLetter(updated.generationId, [
+      {
+        greeting: "Dear Hooli team,",
+        paragraphs: [
+          opening,
+          cite(
+            "At Globex, as a staff-level engineer, I moved our services to Kubernetes.",
+            { evidence_ids: [kubernetes.id] }
+          ),
+          closing,
+        ],
+        closing: "Sincerely,",
+      },
+    ]);
+    const { proposal } = await letterDocument();
+    expect(
+      proposal?.lines.map((line) => ({
+        before: line.before,
+        after: line.after,
+      }))
+    ).toEqual([
+      {
+        before: null,
+        after:
+          "At Globex, as a staff-level engineer, I moved our services to Kubernetes.",
+      },
+      { before: storyParagraph.text, after: null },
+    ]);
+    await new AdaptationService(
+      ctx.db,
+      new TasksService(ctx.db, ctx.trigger)
+    ).acceptSync({
+      userId: ctx.user.id,
+      generationId: updated.generationId,
+    });
+    [letter] = (await letterDocument()).versions;
+    expect(letter.letter?.outdated).toBe(false);
+    const content = letter.content as CoverLetterContent;
+    expect(content.paragraphs[0].origin).toMatchObject({
+      companyFactIds: [fact.id],
+    });
+
+    // Kept as it is: no notice until the resume changes again.
+    await editResume("Principal Platform Engineer");
+    expect((await letterDocument()).versions[0].letter?.outdated).toBe(true);
+    await letters.dismissOutdated({
+      userId: ctx.user.id,
+      versionId: letter.id,
+    });
+    expect((await letterDocument()).versions[0].letter?.outdated).toBe(false);
+
+    // The user's edit makes a paragraph their own words.
+    [letter] = (await letterDocument()).versions;
+    const edited = letter.content as CoverLetterContent;
+    await ctx.documents.saveEdit({
+      userId: ctx.user.id,
+      versionId: letter.id,
+      baseSnapshotId: letter.snapshot.id,
+      content: {
+        ...edited,
+        paragraphs: edited.paragraphs.map((line, index) =>
+          index === 2 ? { ...line, text: "Let's talk soon." } : line
+        ),
+      },
+    });
+    const [after] = (await letterDocument()).versions;
+    expect((after.content as CoverLetterContent).paragraphs[2]).toMatchObject({
+      text: "Let's talk soon.",
+      origin: { kind: "manual" },
+    });
   });
 });

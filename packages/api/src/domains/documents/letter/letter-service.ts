@@ -1,0 +1,173 @@
+import { TRPCError } from "@trpc/server";
+
+import { CareerRepository } from "@repo/api/domains/career/career-repository";
+import { OpeningsRepository } from "@repo/api/domains/openings/openings-repository";
+import type { Tone } from "@repo/api/domains/openings/schemas/opening";
+import type { RealtimeSubscription } from "@repo/api/domains/tasks/schemas/task";
+import { TasksService } from "@repo/api/domains/tasks/tasks-service";
+import type { DbClient } from "@repo/api/tools/db-client";
+
+import { DocumentsRepository } from "../documents-repository";
+import { requireUserVersion } from "../require-version";
+import type { OutputLanguage, WritingLevel } from "../schemas/document";
+
+const notFound = () => new TRPCError({ code: "NOT_FOUND" });
+
+/**
+ * Cover letters from the user's side (resume spec, "Cover letter and its
+ * resume"): generated with or without a resume version of the same
+ * application, recording the exact resume snapshot used; once that resume
+ * changes, updated as a proposal, generated again, or the notice dismissed.
+ */
+export class LetterService {
+  constructor(
+    private readonly db: DbClient,
+    private readonly tasks = new TasksService(db)
+  ) {}
+
+  private async start(userId: string, generationId: string) {
+    const { realtime } = await this.tasks.start({
+      userId,
+      type: "generate_document",
+      subjectId: generationId,
+    });
+    return { generationId, realtime };
+  }
+
+  /** Generates a letter: a new version, or into an existing one again. */
+  async generate(input: {
+    userId: string;
+    openingId: string;
+    language: OutputLanguage;
+    tone: Tone;
+    writingLevel: WritingLevel;
+    resumeVersionId: string | null;
+    versionId?: string;
+  }): Promise<{ generationId: string; realtime: RealtimeSubscription }> {
+    const generation = await this.db.transaction(async (tx) => {
+      const repository = new DocumentsRepository(tx);
+      const profile = await new CareerRepository(tx).findProfileByUserId(
+        input.userId
+      );
+      const opening =
+        profile &&
+        (await new OpeningsRepository(tx).findOpening({
+          profileId: profile.id,
+          openingId: input.openingId,
+        }));
+      if (!profile || !opening) throw notFound();
+      const application = await repository.findOrInsertApplication({
+        profileId: profile.id,
+        openingId: opening.id,
+      });
+      const document = await repository.findOrInsertApplicationDocument({
+        profileId: profile.id,
+        applicationId: application.id,
+        kind: "cover_letter",
+      });
+      if (input.versionId) {
+        const version = await repository.findVersion(input.versionId);
+        if (version?.documentId !== document.id) throw notFound();
+      }
+      // The resume it accompanies: a version of this application's resume.
+      const resume = input.resumeVersionId
+        ? await requireUserVersion(tx, input.userId, input.resumeVersionId)
+        : null;
+      if (
+        resume &&
+        (resume.document.kind !== "resume" ||
+          resume.document.applicationId !== application.id)
+      ) {
+        throw new TRPCError({ code: "BAD_REQUEST" });
+      }
+      const resumeSnapshot =
+        resume && (await repository.latestSnapshot(resume.version.id));
+      return repository.insertGeneration({
+        profileId: profile.id,
+        documentId: document.id,
+        versionId: input.versionId ?? null,
+        language: input.language,
+        reviewDepth: "quick",
+        writingLevel: input.writingLevel,
+        tone: input.tone,
+        resumeVersionId: resume?.version.id ?? null,
+        resumeSnapshotId: resumeSnapshot?.id ?? null,
+      });
+    });
+    return this.start(input.userId, generation.id);
+  }
+
+  /** The letter version, its latest snapshot and the resume it came from. */
+  private async requireOutdatedLetter(
+    tx: DbClient,
+    userId: string,
+    versionId: string
+  ) {
+    const repository = new DocumentsRepository(tx);
+    const { version, document, profile } = await requireUserVersion(
+      tx,
+      userId,
+      versionId
+    );
+    if (document.kind !== "cover_letter") throw notFound();
+    const source = await repository.letterSource(version.id);
+    const resumeLatest = source?.resumeVersionId
+      ? await repository.latestSnapshot(source.resumeVersionId)
+      : null;
+    if (
+      !source ||
+      !resumeLatest ||
+      resumeLatest.id === source.resumeSnapshotId
+    ) {
+      throw new TRPCError({ code: "PRECONDITION_FAILED" });
+    }
+    return { version, document, profile, source, resumeLatest };
+  }
+
+  /**
+   * "Update the cover letter": adjusts only the passages affected by what
+   * changed in the resume, as a proposal the user reviews.
+   */
+  async update(input: {
+    userId: string;
+    versionId: string;
+  }): Promise<{ generationId: string; realtime: RealtimeSubscription }> {
+    const generation = await this.db.transaction(async (tx) => {
+      const repository = new DocumentsRepository(tx);
+      const { version, document, profile, source, resumeLatest } =
+        await this.requireOutdatedLetter(tx, input.userId, input.versionId);
+      const latest = await repository.latestSnapshot(version.id);
+      if (!latest) throw notFound();
+      return repository.insertGeneration({
+        profileId: profile.id,
+        documentId: document.id,
+        kind: "letter_update",
+        versionId: version.id,
+        language: version.language,
+        targetSnapshotId: latest.id,
+        // The resume snapshot the letter used, to diff against.
+        sourceSnapshotId: source.resumeSnapshotId,
+        resumeVersionId: source.resumeVersionId,
+        resumeSnapshotId: resumeLatest.id,
+        reviewDepth: "quick",
+        writingLevel: "standard",
+        tone: source.tone,
+      });
+    });
+    return this.start(input.userId, generation.id);
+  }
+
+  /** Keeps the letter as it is: no notice until the resume changes again. */
+  async dismissOutdated(input: { userId: string; versionId: string }) {
+    await this.db.transaction(async (tx) => {
+      const { version, resumeLatest } = await this.requireOutdatedLetter(
+        tx,
+        input.userId,
+        input.versionId
+      );
+      await new DocumentsRepository(tx).updateVersion(version.id, {
+        dismissedResumeSnapshotId: resumeLatest.id,
+      });
+    });
+  }
+}

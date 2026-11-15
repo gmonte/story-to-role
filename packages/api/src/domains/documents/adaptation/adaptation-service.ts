@@ -69,6 +69,10 @@ export class AdaptationService {
         input.userId,
         input.versionId
       );
+      // Cover letters adapt with their own rules, not this one's yet.
+      if (document.kind !== "resume") {
+        throw new TRPCError({ code: "BAD_REQUEST" });
+      }
       const target = input.targetVersionId
         ? await repository.findVersion(input.targetVersionId)
         : null;
@@ -129,6 +133,8 @@ export class AdaptationService {
     } = await requireUserVersion(tx, input.userId, input.versionId);
     const from = await repository.findVersion(input.fromVersionId);
     if (from?.documentId !== document.id) throw notFound();
+    if (document.kind !== "resume")
+      throw new TRPCError({ code: "BAD_REQUEST" });
     const bases = await syncBases(repository, target, from);
     if (!bases) throw new TRPCError({ code: "BAD_REQUEST" });
     const source = await repository.latestSnapshot(from.id);
@@ -207,7 +213,13 @@ export class AdaptationService {
   ) {
     const repository = new DocumentsRepository(tx);
     const found = await repository.findGeneration(generationId);
-    if (found?.kind !== "sync" || !found.versionId) throw notFound();
+    // A language sync, or a cover letter adjusted to its resume.
+    if (
+      (found?.kind !== "sync" && found?.kind !== "letter_update") ||
+      !found.versionId
+    ) {
+      throw notFound();
+    }
     const { version, profile } = await requireUserVersion(
       tx,
       userId,

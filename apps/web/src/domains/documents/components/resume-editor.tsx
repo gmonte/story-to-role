@@ -71,12 +71,13 @@ import { DownloadPdfDialog } from "./download-pdf-dialog";
 import { TitleProposals } from "./title-proposals";
 import { VersionHistorySheet } from "./version-history-sheet";
 
-const originTone: Record<LineOrigin["kind"], string> = {
+export const originTone: Record<LineOrigin["kind"], string> = {
   evidence: "border-l-emerald-500 bg-emerald-500/5",
   skill: "border-l-emerald-500 bg-emerald-500/5",
   credential: "border-l-emerald-500 bg-emerald-500/5",
   instruction: "border-l-sky-500 bg-sky-500/5",
   manual: "border-l-amber-500 bg-amber-500/5",
+  letter: "border-l-emerald-500 bg-emerald-500/5",
 };
 
 /**
@@ -143,7 +144,8 @@ export function ResumeEditor({
     })
   );
 
-  if (!version) return null;
+  // This editor shows resumes; cover letters have their own.
+  if (version?.content.kind !== "resume") return null;
   const draft =
     edits?.snapshotId === version.snapshot.id ? edits.content : null;
   const setDraft = (content: ResumeContent | null) =>
@@ -694,7 +696,7 @@ function RenameVersionDialog({
 }
 
 /** A line printed from a record (a locked fact, a credential). */
-function NotedLine({
+export function NotedLine({
   note,
   trace,
   children,
@@ -722,7 +724,7 @@ function NotedLine({
   );
 }
 
-function CopyButton({ text }: { text: string }) {
+export function CopyButton({ text }: { text: string }) {
   const t = useTranslation();
   return (
     <Button
@@ -741,7 +743,7 @@ function CopyButton({ text }: { text: string }) {
 }
 
 /** Text that turns into a textarea when clicked. */
-function EditableText({
+export function EditableText({
   value,
   onChange,
   className,

@@ -5,8 +5,8 @@ import type { DbClient } from "@repo/api/tools/db-client";
 import type { Embedder } from "@repo/api/tools/embeddings/embedder";
 
 import { DocumentsRepository } from "../documents-repository";
-import { resumeText } from "../generation/resume-checks";
-import { decryptSnapshot } from "../snapshot-content";
+import { documentText } from "../document-text";
+import { decryptDocument } from "../snapshot-content";
 
 /**
  * Vectors of the user's document versions, for suggesting similar ones to
@@ -27,7 +27,7 @@ export async function embedStaleVersions(input: {
   const stale = await repository.staleVersionVectors(profile.id);
   if (stale.length === 0) return;
   const vectors = await input.embedder.embed(
-    stale.map((row) => resumeText(decryptSnapshot(input.cipher, row))),
+    stale.map((row) => documentText(decryptDocument(input.cipher, row))),
     "passage"
   );
   for (const [index, row] of stale.entries()) {

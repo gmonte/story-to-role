@@ -100,57 +100,19 @@ export function DownloadPdfDialog({ version }: { version: VersionView }) {
                 {t.formatMessage({ defaultMessage: "Download" })}
               </a>
             </Button>
-          ) : (
+          ) : rendering || request.isPending ? (
             <Button disabled>
               <Loader2 className="animate-spin" />
               {t.formatMessage({ defaultMessage: "Preparing the PDF…" })}
+            </Button>
+          ) : (
+            // Neither ready nor rendering: the last render didn't finish.
+            <Button onClick={() => request.mutate({ versionId: version.id })}>
+              {t.formatMessage({ defaultMessage: "Try again" })}
             </Button>
           )}
         </DialogFooter>
       </DialogContent>
     </Dialog>
-  );
-}
-
-/** The application as one ZIP: every version's PDF, named after the opening. */
-export function DownloadZipButton({
-  openingId,
-  versions,
-}: {
-  openingId: string;
-  versions: VersionView[];
-}) {
-  const t = useTranslation();
-  const trpc = useTRPC();
-  const refresh = useRefreshDocuments();
-  const prepare = useMutation(
-    trpc.documents.prepareApplicationZip.mutationOptions({
-      onSuccess: refresh,
-      onError: (error) => toast.error(error.message),
-    })
-  );
-  const ready = versions.every((version) => version.pdf.ready);
-  const rendering = versions.some((version) => version.pdf.rendering);
-
-  return ready ? (
-    <Button size="sm" variant="outline" className="self-start" asChild>
-      <a href={`/api/openings/${openingId}/documents-zip`}>
-        <Download />
-        {t.formatMessage({ defaultMessage: "Download all (ZIP)" })}
-      </a>
-    </Button>
-  ) : (
-    <Button
-      size="sm"
-      variant="outline"
-      className="self-start"
-      disabled={prepare.isPending || rendering}
-      onClick={() => prepare.mutate({ openingId })}
-    >
-      {rendering ? <Loader2 className="animate-spin" /> : <Download />}
-      {rendering
-        ? t.formatMessage({ defaultMessage: "Preparing the PDFs…" })
-        : t.formatMessage({ defaultMessage: "Prepare all as ZIP" })}
-    </Button>
   );
 }

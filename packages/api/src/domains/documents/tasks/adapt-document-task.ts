@@ -4,6 +4,7 @@ import { createTaskAi } from "@repo/api/domains/ai/create-task-ai";
 import { createSensitiveFilter } from "@repo/api/domains/evidence/sensitive/sensitive-filter";
 import { runTask } from "@repo/api/domains/tasks/run-task";
 import { db } from "@repo/api/tools/db";
+import { getStorage } from "@repo/api/tools/storage/storage";
 
 import { runAdaptDocument } from "../adaptation/run-adapt-document";
 
@@ -29,6 +30,7 @@ export const adaptDocumentTask = task({
           userId,
           generationId: subjectId,
           reportProgress,
+          storage: getStorage(),
         });
       }
     );

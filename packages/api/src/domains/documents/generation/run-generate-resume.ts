@@ -8,8 +8,11 @@ import type { SensitiveFilter } from "@repo/api/domains/evidence/sensitive/sensi
 import { OpeningsRepository } from "@repo/api/domains/openings/openings-repository";
 import type { TaskProgress } from "@repo/api/domains/tasks/schemas/task";
 import type { DbClient } from "@repo/api/tools/db-client";
+import type { Storage } from "@repo/api/tools/storage/storage";
 
 import { DocumentsRepository } from "../documents-repository";
+import { fitToPages } from "../rendering/fit-to-pages";
+import { storeRenderedPdf } from "../rendering/store-rendered-pdf";
 import type { ResumeContent, ResumeSection } from "../schemas/resume-content";
 import { loadWritingSetup } from "../writing/load-writing-setup";
 import { resolveSections } from "../template/resolve-sections";
@@ -34,7 +37,6 @@ import {
   lockedFactViolations,
   maxResumePages,
   resumeLines,
-  trimToPages,
 } from "./resume-checks";
 
 const reviewSchema = z.object({
@@ -77,6 +79,8 @@ export async function runGenerateResume(deps: {
   userId: string;
   generationId: string;
   reportProgress?: (progress: TaskProgress) => Promise<void>;
+  /** Where the final PDF is kept; without it, it is only measured. */
+  storage?: Storage;
 }) {
   const { db, ai, cipher, filter } = deps;
   const documents = new DocumentsRepository(db);
@@ -227,17 +231,19 @@ export async function runGenerateResume(deps: {
       return candidate.rating > top.rating ? candidate : top;
     });
     // Code has the last word: lines with a forbidden term go, and a resume
-    // still over two pages loses the last bullets of its oldest positions.
-    const content = trimToPages(
-      withoutLines(best.content, best.forbidden),
-      maxResumePages
-    );
+    // whose real PDF runs over two pages loses the last bullets of its
+    // oldest positions.
+    const fitted = await fitToPages({
+      content: withoutLines(best.content, best.forbidden),
+      language: generation.language,
+    });
+    const { content } = fitted;
     if (lockedFactViolations(content, context.positions).length > 0) {
       throw new Error(`Generation ${generation.id} altered a locked fact`);
     }
 
     await progress(totalRounds + 2, "saving");
-    await db.transaction(async (tx) => {
+    const snapshotId = await db.transaction(async (tx) => {
       const repository = new DocumentsRepository(tx);
       const existing = generation.versionId
         ? await repository.findVersion(generation.versionId)
@@ -278,7 +284,21 @@ export async function runGenerateResume(deps: {
         bestRound: best.round,
         finishedAt: new Date(),
       });
+      return snapshot.id;
     });
+    // The PDF measured above is the snapshot's: kept, it downloads at once.
+    if (deps.storage) {
+      await storeRenderedPdf({
+        db,
+        cipher,
+        storage: deps.storage,
+        userId: deps.userId,
+        profileId: profile.id,
+        snapshotId,
+        bytes: fitted.bytes,
+        pages: fitted.pages,
+      });
+    }
   } catch (error) {
     await documents.updateGeneration(generation.id, {
       status: "failed",

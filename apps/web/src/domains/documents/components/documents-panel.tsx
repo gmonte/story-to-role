@@ -18,7 +18,7 @@ import { useDocumentLabels } from "../hooks/use-document-labels";
 import { useOpeningDocuments } from "../hooks/use-opening-documents";
 import { useSelectedVersion } from "../hooks/use-selected-version";
 import { AdaptVersionDialog } from "./adapt-version-dialog";
-import { DownloadZipButton } from "./download-pdf-dialog";
+import { DownloadZipButton } from "./download-zip-button";
 import { GenerateResumeDialog } from "./generate-resume-dialog";
 import { OutdatedNotice, SyncProposal } from "./language-sync";
 
@@ -201,21 +201,17 @@ function VersionChecks({ version }: { version: VersionView }) {
     <div className="flex flex-col gap-2">
       {version.pages > 2 && (
         <p className="rounded-lg border border-amber-500/40 bg-amber-500/10 p-2.5 text-xs">
-          {version.pdf.ready
-            ? t.formatMessage(
-                {
-                  defaultMessage:
-                    "{pages} pages in the PDF: over the two-page limit. Trim old positions' bullets or turn off an optional section.",
-                },
-                { pages: t.formatNumber(version.pages) }
-              )
-            : t.formatMessage(
-                {
-                  defaultMessage:
-                    "About {pages} pages: over the two-page limit. Trim old positions' bullets or turn off an optional section.",
-                },
-                { pages: t.formatNumber(version.pages) }
-              )}
+          {t.formatMessage(
+            {
+              defaultMessage:
+                "{measured, select, yes {{pages} pages in the PDF} other {About {pages} pages}}: over the two-page limit. {position, select, none {Turn off an optional section.} other {Trim the bullets of {position}, your oldest position, or turn off an optional section.}}",
+            },
+            {
+              measured: version.pdf.ready ? "yes" : "no",
+              pages: t.formatNumber(version.pages),
+              position: oldestWithBullets(version) ?? "none",
+            }
+          )}
         </p>
       )}
       {ats && (
@@ -260,4 +256,12 @@ function VersionChecks({ version }: { version: VersionView }) {
       )}
     </div>
   );
+}
+
+/** Where trimming costs least: the oldest position that still has bullets. */
+function oldestWithBullets(version: VersionView) {
+  const entries = version.content.sections.flatMap((section) =>
+    section.kind === "experience" ? section.entries : []
+  );
+  return entries.findLast((entry) => entry.lines.length > 0)?.employer ?? null;
 }

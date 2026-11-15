@@ -7,6 +7,7 @@ import {
   type UserCipher,
 } from "@repo/api/domains/encryption/user-cipher";
 import { OpeningsRepository } from "@repo/api/domains/openings/openings-repository";
+import { TasksRepository } from "@repo/api/domains/tasks/tasks-repository";
 import { TasksService } from "@repo/api/domains/tasks/tasks-service";
 import type { DbClient } from "@repo/api/tools/db-client";
 import { getStorage, type Storage } from "@repo/api/tools/storage/storage";
@@ -14,11 +15,8 @@ import { getStorage, type Storage } from "@repo/api/tools/storage/storage";
 import { decryptSnapshot } from "../adaptation/adaptation-service";
 import { DocumentsRepository } from "../documents-repository";
 import { requireUserVersion } from "../require-version";
-import {
-  applicationZipName,
-  documentFileName,
-  uniqueFileNames,
-} from "./file-names";
+import { fileNamer } from "./file-namer";
+import { applicationZipName, uniqueFileNames } from "./file-names";
 import { pdfTemplate } from "./pdf-template";
 
 type Version = NonNullable<
@@ -27,24 +25,6 @@ type Version = NonNullable<
 type Document = NonNullable<
   Awaited<ReturnType<DocumentsRepository["findDocument"]>>
 >;
-
-/** Where a document's file name takes its `<Title>`: the opening's title. */
-export async function titleForFileName(
-  tx: DbClient,
-  cipher: UserCipher,
-  document: Document
-) {
-  const repository = new DocumentsRepository(tx);
-  const application = document.applicationId
-    ? await repository.findApplication(document.applicationId)
-    : null;
-  const opening = application
-    ? await new OpeningsRepository(tx).findOpeningById(application.openingId)
-    : null;
-  return opening?.encryptedTitle
-    ? cipher.decrypt(opening.encryptedTitle)
-    : null;
-}
 
 /**
  * Downloads (resume spec, "Download"): PDFs rendered on demand in a task
@@ -70,7 +50,7 @@ export class PdfService {
     const latest = await repository.latestSnapshot(version.id);
     if (!latest) throw new TRPCError({ code: "NOT_FOUND" });
     if (await repository.findRenderedFile(latest.id, pdfTemplate)) return true;
-    if (!(await repository.activeTask(latest.id, "render_pdf"))) {
+    if (!(await new TasksRepository(tx).activeTask(latest.id, "render_pdf"))) {
       await this.tasks.start({
         userId,
         type: "render_pdf",
@@ -137,15 +117,10 @@ export class PdfService {
       latest && (await repository.findRenderedFile(latest.id, pdfTemplate));
     const stored = file && (await this.storage.get(file.storageKey));
     if (!latest || !stored) return null;
-    const content = decryptSnapshot(cipher, latest);
+    const nameFor = await fileNamer(this.db, cipher, document);
     return {
       bytes: Buffer.from(cipher.decrypt(stored.toString()), "base64"),
-      fileName: documentFileName({
-        kind: document.kind,
-        language: version.language,
-        name: content.header.name,
-        title: await titleForFileName(this.db, cipher, document),
-      }),
+      fileName: nameFor(version, decryptSnapshot(cipher, latest)),
       label: version.encryptedLabel
         ? cipher.decrypt(version.encryptedLabel)
         : null,

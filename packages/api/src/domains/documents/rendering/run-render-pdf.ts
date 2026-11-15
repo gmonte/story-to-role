@@ -7,6 +7,7 @@ import { decryptSnapshot } from "../adaptation/adaptation-service";
 import { DocumentsRepository } from "../documents-repository";
 import { pdfTemplate } from "./pdf-template";
 import { renderResumePdf } from "./resume-pdf";
+import { storeRenderedPdf } from "./store-rendered-pdf";
 
 /**
  * Renders a snapshot's PDF in the specified layout and keeps it, encrypted,
@@ -34,23 +35,24 @@ export async function runRenderPdf(deps: {
   if (!version || profile?.userId !== deps.userId) {
     throw new Error(`Snapshot ${snapshot.id} belongs to another user`);
   }
+  // One layout in the MVP: the cover letter's comes with the letters.
+  if (document.kind !== "resume") {
+    throw new Error(`No PDF layout for ${document.kind} yet`);
+  }
   if (await documents.findRenderedFile(snapshot.id, pdfTemplate)) return;
 
   const { bytes, pages } = await renderResumePdf({
     content: decryptSnapshot(cipher, snapshot),
     language: version.language,
   });
-  const storageKey = `users/${deps.userId}/pdfs/${snapshot.id}-${pdfTemplate}`;
-  await deps.storage.put(
-    storageKey,
-    Buffer.from(cipher.encrypt(bytes.toString("base64"))),
-    { contentType: "application/octet-stream" }
-  );
-  await documents.insertRenderedFile({
+  await storeRenderedPdf({
+    db,
+    cipher,
+    storage: deps.storage,
+    userId: deps.userId,
     profileId: profile.id,
     snapshotId: snapshot.id,
-    template: pdfTemplate,
-    storageKey,
+    bytes,
     pages,
   });
 }

@@ -1,5 +1,6 @@
 import { PdfService } from "@repo/api/domains/documents/rendering/pdf-service";
 import { db } from "@repo/api/tools/db";
+import { logger } from "@repo/common/tools/logger";
 
 import { currentUserId, fileResponse } from "../../../documents/download";
 
@@ -23,7 +24,9 @@ export async function GET(
       contentType: "application/zip",
       extension: "zip",
     });
-  } catch {
+  } catch (error) {
+    // Not the user's, or unreadable: never say which to the client.
+    logger.warn(["documents"], "ZIP download failed", { error });
     return new Response(null, { status: 404 });
   }
 }

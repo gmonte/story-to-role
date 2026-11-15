@@ -10,6 +10,7 @@ import { EvidenceRepository } from "@repo/api/domains/evidence/evidence-reposito
 import { OpeningsRepository } from "@repo/api/domains/openings/openings-repository";
 import type { Tone } from "@repo/api/domains/openings/schemas/opening";
 import type { RealtimeSubscription } from "@repo/api/domains/tasks/schemas/task";
+import { TasksRepository } from "@repo/api/domains/tasks/tasks-repository";
 import { TasksService } from "@repo/api/domains/tasks/tasks-service";
 import type { DbClient } from "@repo/api/tools/db-client";
 import { getStorage, type Storage } from "@repo/api/tools/storage/storage";
@@ -17,8 +18,7 @@ import { getStorage, type Storage } from "@repo/api/tools/storage/storage";
 import { DocumentsRepository } from "./documents-repository";
 import { outdatedVersions } from "./adaptation/sync-status";
 import { proposalDiff } from "./adaptation/three-way-merge";
-import { documentFileName } from "./rendering/file-names";
-import { titleForFileName } from "./rendering/pdf-service";
+import { fileNamer } from "./rendering/file-namer";
 import { pdfTemplate } from "./rendering/pdf-template";
 import { requireUserVersion } from "./require-version";
 import { applyUserEdit, LockedFactEditError } from "./editing/apply-user-edit";
@@ -189,11 +189,11 @@ export class DocumentsService {
   private async documentView(
     tx: DbClient,
     cipher: UserCipher,
-    document: Parameters<typeof titleForFileName>[2],
+    document: Parameters<typeof fileNamer>[2] & { id: string },
     keywords: Array<{ term: string; backedByEvidence: boolean }> | null,
     trace: TraceSource
   ): Promise<DocumentView> {
-    const title = await titleForFileName(tx, cipher, document);
+    const nameFor = await fileNamer(tx, cipher, document);
     const repository = new DocumentsRepository(tx);
     const versions = await repository.listVersions([document.id]);
     const generation = await repository.latestGeneration(document.id);
@@ -222,13 +222,11 @@ export class DocumentsService {
           ready: !!rendered,
           rendering:
             !rendered &&
-            !!(await repository.activeTask(latest.id, "render_pdf")),
-          fileName: documentFileName({
-            kind: document.kind,
-            language: version.language,
-            name: content.header.name,
-            title,
-          }),
+            !!(await new TasksRepository(tx).activeTask(
+              latest.id,
+              "render_pdf"
+            )),
+          fileName: nameFor(version, content),
         },
         atsCheck: keywords
           ? atsCheck({ text: resumeText(content), keywords })
@@ -484,9 +482,7 @@ export class DocumentsService {
       if (!latest || !previous) {
         throw new TRPCError({ code: "PRECONDITION_FAILED" });
       }
-      const renderedKeys = await repository.renderedKeys({
-        snapshotId: latest.id,
-      });
+      const renderedKeys = await repository.renderedKeysOfSnapshot(latest.id);
       await repository.deleteSnapshot(latest.id);
       return { result: { snapshotId: previous.id }, renderedKeys };
     });
@@ -616,7 +612,7 @@ export class DocumentsService {
         input.userId,
         input.versionId
       );
-      const keys = await repository.renderedKeys({ versionId: version.id });
+      const keys = await repository.renderedKeysOfVersion(version.id);
       await repository.deleteVersion(version.id);
       return keys;
     });

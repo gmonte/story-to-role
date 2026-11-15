@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import type { ResumeContent } from "../schemas/resume-content";
+import { fitToPages } from "./fit-to-pages";
 import { renderResumePdf } from "./resume-pdf";
 
 const P1 = "00000000-0000-4000-8000-000000000001";
@@ -52,5 +53,55 @@ describe("rendering a resume PDF", () => {
       language: "pt-BR",
     });
     expect(long.pages).toBeGreaterThan(2);
+  });
+
+  it("trims until the real PDF fits in two pages, oldest position first", async () => {
+    const content = resume(60);
+    const older = {
+      ...(
+        content.sections[1] as Extract<
+          ResumeContent["sections"][number],
+          { kind: "experience" }
+        >
+      ).entries[0],
+      positionId: "00000000-0000-4000-8000-000000000002",
+      employer: "Acme",
+      startDate: "2015-01",
+      endDate: "2020-12",
+    };
+    const twoPositions: ResumeContent = {
+      ...content,
+      sections: [
+        content.sections[0],
+        {
+          kind: "experience",
+          entries: [
+            (
+              content.sections[1] as Extract<
+                ResumeContent["sections"][number],
+                { kind: "experience" }
+              >
+            ).entries[0],
+            older,
+          ],
+        },
+      ],
+    };
+    const fitted = await fitToPages({
+      content: twoPositions,
+      language: "en-US",
+    });
+    expect(fitted.pages).toBeLessThanOrEqual(2);
+    const [recent, old] = (
+      fitted.content.sections[1] as Extract<
+        ResumeContent["sections"][number],
+        { kind: "experience" }
+      >
+    ).entries;
+    expect(old.lines.length).toBeLessThan(recent.lines.length);
+    // Trimming drops lines; it never rewrites one.
+    expect(recent.lines.map((line) => line.id)).toEqual(
+      Array.from({ length: recent.lines.length }, (_, index) => `b${index}`)
+    );
   });
 });

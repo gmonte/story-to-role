@@ -7,6 +7,7 @@ import type { UserCipher } from "@repo/api/domains/encryption/user-cipher";
 import { EvidenceRepository } from "@repo/api/domains/evidence/evidence-repository";
 import { loadSensitiveFilter } from "@repo/api/domains/evidence/sensitive/load-sensitive-filter";
 import type { DbClient } from "@repo/api/tools/db-client";
+import { embedStaleVersions } from "@repo/api/domains/documents/similar/embed-versions";
 import type { Embedder } from "@repo/api/tools/embeddings/embedder";
 
 import type { LinkResult } from "../links/read-link";
@@ -198,6 +199,8 @@ export async function runAnalyzeOpening(deps: Deps) {
       embedding: missingVectors[index],
     });
   }
+  // And for every document version, so similar documents can be suggested.
+  await embedStaleVersions({ db, cipher, embedder, userId: deps.userId });
 
   // Each evidence line carries its position, so seniority and years read
   // against the history; excluded items drop out (sensitive-data control).

@@ -1,12 +1,15 @@
 import {
   and,
   asc,
+  cosineDistance,
   count,
   desc,
   eq,
   inArray,
+  isNotNull,
   isNull,
   lt,
+  ne,
   or,
 } from "drizzle-orm";
 
@@ -446,6 +449,74 @@ export class DocumentsRepository {
       )
       .where(eq(documentSnapshotsTable.versionId, versionId));
     return rows.map((row) => row.storageKey);
+  }
+
+  /** Every version of the profile's documents, with its document. */
+  listProfileVersions(profileId: string) {
+    return this.tx
+      .select({ version: documentVersionsTable, document: documentsTable })
+      .from(documentVersionsTable)
+      .innerJoin(
+        documentsTable,
+        eq(documentsTable.id, documentVersionsTable.documentId)
+      )
+      .where(eq(documentsTable.profileId, profileId));
+  }
+
+  /** The profile's library documents (no application), newest first. */
+  listLibraryDocuments(profileId: string) {
+    return this.tx
+      .select()
+      .from(documentsTable)
+      .where(
+        and(
+          eq(documentsTable.profileId, profileId),
+          isNull(documentsTable.applicationId)
+        )
+      )
+      .orderBy(desc(documentsTable.createdAt));
+  }
+
+  /**
+   * Resume versions closest to a vector (an opening's): library documents
+   * and other applications' documents, sent ones included.
+   */
+  similarVersions(input: {
+    profileId: string;
+    embedding: number[];
+    excludeApplicationId: string | null;
+    limit: number;
+  }) {
+    const distance = cosineDistance(
+      documentVersionsTable.embedding,
+      input.embedding
+    );
+    return this.tx
+      .select({
+        version: documentVersionsTable,
+        document: documentsTable,
+        distance,
+      })
+      .from(documentVersionsTable)
+      .innerJoin(
+        documentsTable,
+        eq(documentsTable.id, documentVersionsTable.documentId)
+      )
+      .where(
+        and(
+          eq(documentsTable.profileId, input.profileId),
+          eq(documentsTable.kind, "resume"),
+          isNotNull(documentVersionsTable.embedding),
+          input.excludeApplicationId
+            ? or(
+                isNull(documentsTable.applicationId),
+                ne(documentsTable.applicationId, input.excludeApplicationId)
+              )
+            : undefined
+        )
+      )
+      .orderBy(distance)
+      .limit(input.limit);
   }
 
   async findTemplate(profileId: string) {

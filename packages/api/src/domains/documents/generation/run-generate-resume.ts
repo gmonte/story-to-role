@@ -10,6 +10,7 @@ import type { TaskProgress } from "@repo/api/domains/tasks/schemas/task";
 import type { DbClient } from "@repo/api/tools/db-client";
 import type { Storage } from "@repo/api/tools/storage/storage";
 
+import { decryptSnapshot } from "../adaptation/adaptation-service";
 import { DocumentsRepository } from "../documents-repository";
 import { fitToPages } from "../rendering/fit-to-pages";
 import { storeRenderedPdf } from "../rendering/store-rendered-pdf";
@@ -96,32 +97,37 @@ export async function runGenerateResume(deps: {
   const application = document?.applicationId
     ? await documents.findApplication(document.applicationId)
     : null;
-  if (!document || !application) {
-    throw new Error(`Generation ${generation.id} has no application`);
+  // A library document has its focus where an application has its opening.
+  const focus = document?.encryptedFocus
+    ? cipher.decrypt(document.encryptedFocus)
+    : null;
+  if (!document || (!application && !focus)) {
+    throw new Error(`Generation ${generation.id} has no application or focus`);
   }
 
   await documents.updateGeneration(generation.id, { status: "running" });
   try {
-    const brief = await loadOpeningBrief({
-      db,
-      cipher,
-      openingId: application.openingId,
-    });
+    const brief: OpeningBrief = application
+      ? await loadOpeningBrief({ db, cipher, openingId: application.openingId })
+      : { title: focus, company: null, terms: [], fitCheck: [], focus };
+    const reference = generation.referenceSnapshotId
+      ? await documents.findSnapshot(generation.referenceSnapshotId)
+      : null;
     const setup = await loadWritingSetup({ db, cipher, userId: deps.userId });
     const context = await loadCareerContext({
       db,
       cipher,
       profileId: generation.profileId,
       filter,
-      openingId: application.openingId,
+      openingId: application?.openingId,
       language: generation.language,
     });
     const sections = resolveSections({
       template: setup.templateSections,
       language: generation.language,
       topics: [brief.title ?? "", ...brief.terms.map((term) => term.text)],
-      forcedIn: application.sectionsForcedIn,
-      forcedOut: application.sectionsForcedOut,
+      forcedIn: application?.sectionsForcedIn ?? [],
+      forcedOut: application?.sectionsForcedOut ?? [],
     });
     const material = resumeMaterial({
       context,
@@ -130,6 +136,7 @@ export async function runGenerateResume(deps: {
       language: generation.language,
       tone: generation.tone,
       style: setup.style,
+      reference: reference && decryptSnapshot(cipher, reference),
     });
     const role = generation.writingLevel === "maximum" ? "maximum" : "writing";
     const totalRounds = generationSettings.reviewRounds[generation.reviewDepth];

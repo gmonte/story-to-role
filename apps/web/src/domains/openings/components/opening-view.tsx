@@ -14,6 +14,7 @@ import { toast } from "@repo/web/components/ui/sonner";
 import { Tabs, TabsList, TabsTrigger } from "@repo/web/components/ui/tabs";
 import { Textarea } from "@repo/web/components/ui/textarea";
 
+import { GenerateResumeDialog } from "~/domains/documents/components/generate-resume-dialog";
 import { ResumeEditor } from "~/domains/documents/components/resume-editor";
 import { useOpeningDocuments } from "~/domains/documents/hooks/use-opening-documents";
 import { useTRPC } from "~/tools/trpc/client";
@@ -144,14 +145,21 @@ export function OpeningView({ openingId }: { openingId: string }) {
 
         {view === "resume" && resumeVersions.length > 0 ? (
           <ResumeEditor
-            openingId={openingId}
             versions={resumeVersions}
-            defaultTone={
-              documents.data?.application?.tone ??
-              data.suggestedTone ??
-              "your_style"
-            }
-            pendingGaps={pendingGaps(data)}
+            generateAgain={(version, trigger) => (
+              <GenerateResumeDialog
+                openingId={openingId}
+                defaultLanguage={version.language}
+                defaultTone={
+                  documents.data?.application?.tone ??
+                  data.suggestedTone ??
+                  "your_style"
+                }
+                versionId={version.id}
+                pendingGaps={pendingGaps(data)}
+                trigger={trigger}
+              />
+            )}
           />
         ) : (
           <>

@@ -9,12 +9,17 @@ import { documentFileName } from "./file-names";
 
 /**
  * Suggested PDF names for one document's versions: `<Title>` is the
- * opening's title, read once; the name is the one printed on each version.
+ * opening's title, or a library document's focus, read once; the name is
+ * the one printed on each version.
  */
 export async function fileNamer(
   tx: DbClient,
   cipher: UserCipher,
-  document: { kind: DocumentKind; applicationId: string | null }
+  document: {
+    kind: DocumentKind;
+    applicationId: string | null;
+    encryptedFocus: string | null;
+  }
 ) {
   const application = document.applicationId
     ? await new DocumentsRepository(tx).findApplication(document.applicationId)
@@ -22,9 +27,8 @@ export async function fileNamer(
   const opening = application
     ? await new OpeningsRepository(tx).findOpeningById(application.openingId)
     : null;
-  const title = opening?.encryptedTitle
-    ? cipher.decrypt(opening.encryptedTitle)
-    : null;
+  const encrypted = opening?.encryptedTitle ?? document.encryptedFocus;
+  const title = encrypted ? cipher.decrypt(encrypted) : null;
   return (version: { language: OutputLanguage }, content: ResumeContent) =>
     documentFileName({
       kind: document.kind,

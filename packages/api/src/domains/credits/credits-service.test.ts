@@ -8,8 +8,9 @@ import {
   closeTestDatabase,
   getTestDatabase,
 } from "@repo/api/test/pglite";
+import { TasksRepository } from "@repo/api/domains/tasks/tasks-repository";
 
-import { grantCredits } from "./credit-ledger";
+import { grantCredits, reserveCredits, spendableTotal } from "./credit-ledger";
 import { creditCap } from "./credit-pricing";
 import { CreditsService } from "./credits-service";
 import { creditLotsTable } from "./db/credits-tables";
@@ -141,13 +142,73 @@ describe("credits service", () => {
     const ctx = await setup();
     await createTestUser("grace@example.com", { credits: 0 });
 
-    expect(await ctx.credits.reconcile(now)).toEqual({ users: 2, granted: 2 });
-    expect(await ctx.credits.reconcile(now)).toEqual({ users: 2, granted: 0 });
-    expect(await ctx.credits.spendable(ctx.user.id, now)).toBe(200);
+    expect(await ctx.credits.reconcile(now)).toEqual({
+      users: 2,
+      granted: 2,
+      settled: 0,
+    });
+    expect(await ctx.credits.reconcile(now)).toEqual({
+      users: 2,
+      granted: 0,
+      settled: 0,
+    });
+    expect(await spendableTotal(ctx.db, ctx.user.id, "any", now)).toBe(200);
 
     // A restore that lost a grant: reconciliation brings it back.
     await ctx.db.delete(creditLotsTable);
-    expect(await ctx.credits.reconcile(now)).toEqual({ users: 2, granted: 2 });
-    expect(await ctx.credits.spendable(ctx.user.id, now)).toBe(200);
+    expect(await ctx.credits.reconcile(now)).toEqual({
+      users: 2,
+      granted: 2,
+      settled: 0,
+    });
+    expect(await spendableTotal(ctx.db, ctx.user.id, "any", now)).toBe(200);
+  });
+
+  it("keeps stored credits off the courtesy plan until the user confirms", async () => {
+    const ctx = await setup(500);
+    const admin = await createTestUser("owner@example.com", { credits: 0 });
+    await ctx.credits.grantCourtesy({
+      adminUserId: admin.id,
+      email: "ada@example.com",
+      monthlyCredits: 20,
+      endsAt: null,
+      now,
+    });
+
+    expect(await spendableTotal(ctx.db, ctx.user.id, "any", now)).toBe(20);
+  });
+
+  it("never lets an ended courtesy grant's credits come back", async () => {
+    const ctx = await setup();
+    const admin = await createTestUser("owner@example.com", { credits: 0 });
+    await ctx.credits.grantCourtesy({
+      adminUserId: admin.id,
+      email: "ada@example.com",
+      monthlyCredits: 100,
+      endsAt: null,
+      now,
+    });
+    const task = await new TasksRepository(ctx.db).create({
+      userId: ctx.user.id,
+      type: "generate_document",
+    });
+    await reserveCredits(ctx.db, {
+      userId: ctx.user.id,
+      taskId: task.id,
+      cap: 60,
+      scope: "any",
+      now,
+    });
+    const [grant] = await ctx.credits.listCourtesyGrants();
+    await ctx.credits.endCourtesy({ courtesyGrantId: grant.id, now });
+
+    // The task dies; reconciliation releases its reservation later.
+    await new TasksRepository(ctx.db).markFailed({
+      taskId: task.id,
+      errorMessage: "killed",
+    });
+    expect((await ctx.credits.reconcile(now)).settled).toBe(1);
+    // Only the welcome credits reconciliation granted: none of the 100.
+    expect(await spendableTotal(ctx.db, ctx.user.id, "any", now)).toBe(200);
   });
 });

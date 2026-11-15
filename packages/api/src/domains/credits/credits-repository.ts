@@ -1,6 +1,10 @@
-import { and, desc, eq, gt, isNull, like, or, sql } from "drizzle-orm";
+import { and, desc, eq, gt, isNull, like, lt, or, sql } from "drizzle-orm";
 
-import { documentsTable } from "@repo/api/domains/documents/db/documents-tables";
+import {
+  documentsTable,
+  generationsTable,
+} from "@repo/api/domains/documents/db/documents-tables";
+import { tasksTable } from "@repo/api/domains/tasks/db/tasks-tables";
 import { usersTable } from "@repo/api/domains/users/db/users-tables";
 import type { DbClient } from "@repo/api/tools/db-client";
 
@@ -39,11 +43,8 @@ export class CreditsRepository {
     await this.tx.insert(creditEntriesTable).values(rows);
   }
 
-  /**
-   * Lots not yet expired, each with what is left of it: the user's, or
-   * those whose origin matches a pattern.
-   */
-  liveLots(userId: string | undefined, now: Date, originLike?: string) {
+  /** The user's lots not yet expired, each with what is left of it. */
+  liveLots(userId: string, now: Date) {
     return this.tx
       .select({
         lot: creditLotsTable,
@@ -56,8 +57,7 @@ export class CreditsRepository {
       )
       .where(
         and(
-          userId ? eq(creditLotsTable.userId, userId) : undefined,
-          originLike ? like(creditLotsTable.origin, originLike) : undefined,
+          eq(creditLotsTable.userId, userId),
           or(
             isNull(creditLotsTable.expiresAt),
             gt(creditLotsTable.expiresAt, now)
@@ -115,6 +115,7 @@ export class CreditsRepository {
         endsAt: courtesyGrantsTable.endsAt,
         endedAt: courtesyGrantsTable.endedAt,
         createdAt: courtesyGrantsTable.createdAt,
+        active: sql<boolean>`${courtesyGrantsTable.endedAt} is null and (${courtesyGrantsTable.endsAt} is null or ${courtesyGrantsTable.endsAt} > now())`,
       })
       .from(courtesyGrantsTable)
       .innerJoin(usersTable, eq(usersTable.id, courtesyGrantsTable.userId))
@@ -127,11 +128,6 @@ export class CreditsRepository {
       .from(courtesyGrantsTable)
       .where(eq(courtesyGrantsTable.id, courtesyGrantId))
       .then((rows) => rows[0] ?? null);
-  }
-
-  /** The lots granted by one courtesy grant (one per month). */
-  courtesyLots(courtesyGrantId: string, now: Date) {
-    return this.liveLots(undefined, now, `courtesy:${courtesyGrantId}:%`);
   }
 
   findActiveUserByEmail(email: string) {
@@ -178,10 +174,78 @@ export class CreditsRepository {
     return inserted;
   }
 
-  async endCourtesyGrant(grantId: string, endedAt: Date) {
+  async endCourtesyGrant(courtesyGrantId: string, endedAt: Date) {
     await this.tx
       .update(courtesyGrantsTable)
       .set({ endedAt })
-      .where(eq(courtesyGrantsTable.id, grantId));
+      .where(eq(courtesyGrantsTable.id, courtesyGrantId));
+  }
+
+  /**
+   * Ends a courtesy grant's lots now: a lot's expiry, not its entries,
+   * changes, so a reservation released onto it later stays unspendable.
+   */
+  async expireCourtesyLots(courtesyGrantId: string, now: Date) {
+    await this.tx
+      .update(creditLotsTable)
+      .set({ expiresAt: now })
+      .where(
+        and(
+          like(creditLotsTable.origin, `courtesy:${courtesyGrantId}:%`),
+          or(
+            isNull(creditLotsTable.expiresAt),
+            gt(creditLotsTable.expiresAt, now)
+          )
+        )
+      );
+  }
+
+  /**
+   * Reservations left open by runs that died without settling (killed,
+   * crashed): their tasks finished, or started before `startedBefore`.
+   */
+  openReservations(startedBefore: Date) {
+    return this.tx
+      .selectDistinct({
+        taskId: tasksTable.id,
+        userId: tasksTable.userId,
+        status: tasksTable.status,
+      })
+      .from(creditEntriesTable)
+      .innerJoin(tasksTable, eq(tasksTable.id, creditEntriesTable.taskId))
+      .where(
+        and(
+          eq(creditEntriesTable.kind, "reserve"),
+          sql`not exists (select 1 from ${creditEntriesTable} r where r."taskId" = ${tasksTable.id} and r.kind = 'release')`,
+          or(
+            sql`${tasksTable.status} in ('completed', 'failed')`,
+            lt(tasksTable.createdAt, startedBefore)
+          )
+        )
+      );
+  }
+
+  /** The depth and level of the profile's last resume, its usual choices. */
+  lastResumeChoices(profileId: string) {
+    return this.tx
+      .select({
+        reviewDepth: generationsTable.reviewDepth,
+        writingLevel: generationsTable.writingLevel,
+      })
+      .from(generationsTable)
+      .innerJoin(
+        documentsTable,
+        eq(documentsTable.id, generationsTable.documentId)
+      )
+      .where(
+        and(
+          eq(generationsTable.profileId, profileId),
+          eq(generationsTable.kind, "generate"),
+          eq(documentsTable.kind, "resume")
+        )
+      )
+      .orderBy(desc(generationsTable.createdAt))
+      .limit(1)
+      .then((rows) => rows[0] ?? null);
   }
 }

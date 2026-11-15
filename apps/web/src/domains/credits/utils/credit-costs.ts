@@ -15,7 +15,7 @@ export const resumeCredits = (
   choice: { reviewDepth: ReviewDepth; writingLevel: WritingLevel }
 ) =>
   estimates &&
-  estimates.resume *
+  estimates.resumeBase *
     levelFactor(choice.writingLevel) *
     (choice.reviewDepth === "thorough" ? 2 : 1);
 

@@ -118,8 +118,6 @@ export function CourtesyGrants() {
 
       <ul className="grid gap-2">
         {(grants.data ?? []).map((row) => {
-          const active =
-            !row.endedAt && (!row.endsAt || row.endsAt > new Date());
           return (
             <li
               key={row.id}
@@ -153,7 +151,7 @@ export function CourtesyGrants() {
                       )}
                 </span>
               </span>
-              {active ? (
+              {row.active ? (
                 <Button
                   size="sm"
                   variant="ghost"

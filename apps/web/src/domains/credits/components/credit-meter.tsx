@@ -2,7 +2,10 @@
 
 import { Coins } from "lucide-react";
 
-import type { CreditSummary } from "@repo/api/domains/credits/schemas/credits";
+import {
+  type CreditSummary,
+  planSources,
+} from "@repo/api/domains/credits/schemas/credits";
 import { useTranslation } from "@repo/intl/use-translation";
 import {
   DropdownMenu,
@@ -131,27 +134,32 @@ function LotLine({ lot }: { lot: CreditSummary["lots"][number] }) {
     subscription: t.formatMessage({ defaultMessage: "from the plan" }),
     pack: t.formatMessage({ defaultMessage: "from a pack" }),
   }[lot.source];
+  if (!lot.expiresAt) {
+    return (
+      <span>
+        {t.formatMessage(
+          { defaultMessage: "{credits, number} {source}, never expire" },
+          { credits: lot.remaining, source }
+        )}
+      </span>
+    );
+  }
+  // Expiry is the instant the next period starts: show its eve.
+  const date = t.formatDate(new Date(lot.expiresAt.getTime() - 1), {
+    dateStyle: "medium",
+  });
   return (
     <span>
-      {lot.expiresAt
+      {planSources.includes(lot.source)
         ? t.formatMessage(
-            {
-              defaultMessage: "{credits, number} {source}, valid until {date}",
-            },
-            {
-              credits: lot.remaining,
-              source,
-              // Expiry is the instant the next period starts: show its eve.
-              date: t.formatDate(new Date(lot.expiresAt.getTime() - 1), {
-                dateStyle: "medium",
-              }),
-            }
+            { defaultMessage: "{credits, number} {source}, expire on {date}" },
+            { credits: lot.remaining, source, date }
           )
         : t.formatMessage(
             {
-              defaultMessage: "{credits, number} {source}, never expire",
+              defaultMessage: "{credits, number} {source}, valid until {date}",
             },
-            { credits: lot.remaining, source }
+            { credits: lot.remaining, source, date }
           )}
     </span>
   );

@@ -32,12 +32,13 @@ export const creditEntryKindSchema = z.enum([
   "release",
   "debit",
   "refund",
-  // What was left of a lot when its origin ended early (a courtesy grant).
-  "expire",
 ]);
 export type CreditEntryKind = z.infer<typeof creditEntryKindSchema>;
 
 export const creditSummarySchema = z.object({
+  // Free, or the paid plan through a courtesy grant (subscriptions join
+  // with Stripe).
+  plan: z.enum(["free", "courtesy"]),
   // What the user can still spend now, plan and stored credits together.
   available: z.number().int(),
   reserved: z.number().int(),
@@ -53,10 +54,12 @@ export const creditSummarySchema = z.object({
   reserve: z.number().int(),
   // The balance approaches the reserve: the interview wraps up.
   nearReserve: z.boolean(),
-  // "Up to N credits" for the usual actions, at the default choices;
-  // Thorough review and the maximum level each double the resume's.
+  // "Up to N credits" for the usual actions: the resume at the user's
+  // usual choices (their last resume's, else Quick and standard); its
+  // `resumeBase` is at Quick and standard, which the dialogs scale.
   estimates: z.object({
     resume: z.number().int(),
+    resumeBase: z.number().int(),
     coverLetter: z.number().int(),
     fitCheck: z.number().int(),
     adaptation: z.number().int(),
@@ -79,5 +82,6 @@ export const courtesyGrantSchema = z.object({
   endsAt: z.date().nullable(),
   endedAt: z.date().nullable(),
   createdAt: z.date(),
+  active: z.boolean(),
 });
 export type CourtesyGrant = z.infer<typeof courtesyGrantSchema>;

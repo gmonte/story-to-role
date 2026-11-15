@@ -36,7 +36,7 @@ export function billingMonth(now: Date) {
  * points to its origin"): granting the same origin again changes nothing.
  */
 export async function grantCredits(
-  tx: DbClient,
+  db: DbClient,
   input: {
     userId: string;
     source: CreditSource;
@@ -46,26 +46,30 @@ export async function grantCredits(
     scope?: CreditScope;
   }
 ) {
-  const repository = new CreditsRepository(tx);
-  const lot = await repository.insertLot({
-    userId: input.userId,
-    source: input.source,
-    scope: input.scope ?? "any",
-    amount: input.amount,
-    expiresAt: input.expiresAt,
-    origin: input.origin,
+  // The lot and its grant entry together: a lot without its entry would
+  // hold its origin with no balance, and block every later grant.
+  return db.transaction(async (tx) => {
+    const repository = new CreditsRepository(tx);
+    const lot = await repository.insertLot({
+      userId: input.userId,
+      source: input.source,
+      scope: input.scope ?? "any",
+      amount: input.amount,
+      expiresAt: input.expiresAt,
+      origin: input.origin,
+    });
+    if (lot && input.amount > 0) {
+      await repository.insertEntries([
+        {
+          userId: input.userId,
+          lotId: lot.id,
+          kind: "grant",
+          amount: input.amount,
+        },
+      ]);
+    }
+    return lot;
   });
-  if (lot && input.amount > 0) {
-    await repository.insertEntries([
-      {
-        userId: input.userId,
-        lotId: lot.id,
-        kind: "grant",
-        amount: input.amount,
-      },
-    ]);
-  }
-  return lot;
 }
 
 /**
@@ -105,6 +109,8 @@ export async function ensureMonthlyCredits(
  * The lots a payment may draw on, in the funding order (billing spec):
  * plan credits first, those expiring first; then stored credits (packs and
  * welcome credits), those expiring first. Fit-check lots pay fit checks.
+ * On the courtesy plan, stored credits wait for the user's confirmation
+ * ("Finish with credits"), never spent silently.
  */
 export async function spendableLots(
   tx: DbClient,
@@ -112,7 +118,9 @@ export async function spendableLots(
   scope: CreditScope,
   now: Date
 ) {
-  const lots = await new CreditsRepository(tx).liveLots(userId, now);
+  const repository = new CreditsRepository(tx);
+  const lots = await repository.liveLots(userId, now);
+  const storedAllowed = !(await repository.activeCourtesy(userId, now));
   const order = (source: CreditSource) =>
     planSources.includes(source) ? 0 : 1;
   const time = (date: Date | null) =>
@@ -121,7 +129,8 @@ export async function spendableLots(
     .filter(
       (row) =>
         row.remaining > 0 &&
-        (row.lot.scope === "any" || row.lot.scope === scope)
+        (row.lot.scope === "any" || row.lot.scope === scope) &&
+        (storedAllowed || planSources.includes(row.lot.source))
     )
     .sort(
       (a, b) =>
@@ -244,24 +253,4 @@ export async function settleCredits(
     }
   }
   await repository.insertEntries(rows);
-}
-
-/**
- * Ends what is left of lots whose origin ended early (a courtesy grant
- * ended by the owner): an expiry entry takes their remaining balance.
- */
-export async function expireLots(
-  tx: DbClient,
-  lots: Array<{ lot: { id: string; userId: string }; remaining: number }>
-) {
-  await new CreditsRepository(tx).insertEntries(
-    lots
-      .filter((row) => row.remaining > 0)
-      .map((row) => ({
-        userId: row.lot.userId,
-        lotId: row.lot.id,
-        kind: "expire" as const,
-        amount: -row.remaining,
-      }))
-  );
 }

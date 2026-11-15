@@ -13,6 +13,7 @@ import {
   creditCap,
   scopeOf,
 } from "@repo/api/domains/credits/credit-pricing";
+import { CreditsRepository } from "@repo/api/domains/credits/credits-repository";
 import {
   creditReserve,
   keepsReserve,
@@ -30,6 +31,12 @@ const paymentRequired = (error: InsufficientCreditsError) =>
     message: error.message,
     cause: error,
   });
+
+const asPaymentRequired = (error: unknown) => {
+  throw error instanceof InsufficientCreditsError
+    ? paymentRequired(error)
+    : error;
+};
 
 /** What an action may not touch: the credit reserve, for the interview. */
 const keptFor = (tx: DbClient, userId: string, type: TaskType, now: Date) =>
@@ -71,11 +78,7 @@ export class TasksService {
           keep: await keptFor(tx, input.userId, input.type, now),
         });
       })
-      .catch((error: unknown) => {
-        throw error instanceof InsufficientCreditsError
-          ? paymentRequired(error)
-          : error;
-      });
+      .catch(asPaymentRequired);
   }
 
   /**
@@ -90,8 +93,11 @@ export class TasksService {
     subjectId?: string;
     hints?: CapHints;
   }): Promise<{ task: Task; realtime: RealtimeSubscription }> {
+    const now = new Date();
     const task = await this.db
       .transaction(async (tx) => {
+        // The reserve is read under the lock that reserving holds.
+        await new CreditsRepository(tx).lockUser(input.userId);
         const created = await new TasksRepository(tx).create({
           userId: input.userId,
           type: input.type,
@@ -102,15 +108,11 @@ export class TasksService {
           taskId: created.id,
           cap: creditCap(input.type, input.hints),
           scope: scopeOf(input.type),
-          keep: await keptFor(tx, input.userId, input.type, new Date()),
+          keep: await keptFor(tx, input.userId, input.type, now),
         });
         return created;
       })
-      .catch((error: unknown) => {
-        throw error instanceof InsufficientCreditsError
-          ? paymentRequired(error)
-          : error;
-      });
+      .catch(asPaymentRequired);
 
     const repository = new TasksRepository(this.db);
     try {

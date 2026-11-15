@@ -238,6 +238,14 @@ export function GenerateResumeDialog({
                 </label>
               ))}
             </RadioGroup>
+            {credits.data?.plan === "free" && (
+              <p className="text-muted-foreground text-xs">
+                {t.formatMessage({
+                  defaultMessage:
+                    "Quick with the standard level comes chosen on Free: it leaves enough credits for the second language and the cover letter.",
+                })}
+              </p>
+            )}
           </div>
 
           <div className="grid gap-1.5">

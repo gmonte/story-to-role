@@ -2,13 +2,10 @@ import { TRPCError } from "@trpc/server";
 
 import type { DbClient } from "@repo/api/tools/db-client";
 
-import {
-  ensureMonthlyCredits,
-  expireLots,
-  spendableTotal,
-} from "./credit-ledger";
+import { ensureMonthlyCredits } from "./credit-ledger";
 import { creditCap } from "./credit-pricing";
 import { creditReserve, nearReserve, resumeEstimate } from "./credit-reserve";
+import { settleTask } from "./settle-task";
 import { CreditsRepository } from "./credits-repository";
 import type { CourtesyGrant, CreditSummary } from "./schemas/credits";
 import { grantWelcomeCredits } from "./welcome-credits";
@@ -22,9 +19,9 @@ export class CreditsService {
    * actions may cost. This month's plan credits are granted on the way.
    */
   async summary(userId: string, now = new Date()): Promise<CreditSummary> {
+    // Granting this month's credits is idempotent (by origin): no lock.
     return this.db.transaction(async (tx) => {
       const repository = new CreditsRepository(tx);
-      await repository.lockUser(userId);
       await ensureMonthlyCredits(tx, userId, now);
       const lots = (await repository.liveLots(userId, now))
         .filter((row) => row.remaining > 0)
@@ -40,18 +37,17 @@ export class CreditsService {
             (b.expiresAt?.getTime() ?? Infinity)
         );
       const courtesy = await repository.activeCourtesy(userId, now);
+      const resume = await resumeEstimate(tx, userId);
       return {
+        plan: courtesy ? "courtesy" : "free",
         available: lots.reduce((total, lot) => total + lot.remaining, 0),
         reserved: await repository.reserved(userId),
         lots,
         reserve: await creditReserve(tx, userId, now),
-        nearReserve: await nearReserve(tx, {
-          userId,
-          available: await spendableTotal(tx, userId, "any", now),
-          now,
-        }),
+        nearReserve: await nearReserve(tx, userId, now),
         estimates: {
-          resume: await resumeEstimate(tx, userId),
+          resume: resume.usual,
+          resumeBase: resume.base,
           coverLetter: creditCap("generate_document", {
             documentKind: "cover_letter",
           }),
@@ -66,11 +62,6 @@ export class CreditsService {
           : null,
       };
     });
-  }
-
-  /** What the user can spend now on anything (not fit-check-only lots). */
-  spendable(userId: string, now = new Date()) {
-    return spendableTotal(this.db, userId, "any", now);
   }
 
   listCourtesyGrants(): Promise<CourtesyGrant[]> {
@@ -126,7 +117,7 @@ export class CreditsService {
   private async end(tx: DbClient, courtesyGrantId: string, now: Date) {
     const repository = new CreditsRepository(tx);
     await repository.endCourtesyGrant(courtesyGrantId, now);
-    await expireLots(tx, await repository.courtesyLots(courtesyGrantId, now));
+    await repository.expireCourtesyLots(courtesyGrantId, now);
   }
 
   /**
@@ -134,9 +125,11 @@ export class CreditsService {
    * welcome credits for every user and this month's plan credits. Every
    * grant is keyed by its origin, so running it again duplicates nothing
    * and restores what is missing. Stripe's grants join in their slice.
+   * Reservations that runs left open (killed, crashed) settle too.
    */
   async reconcile(now = new Date()) {
-    const users = await new CreditsRepository(this.db).listActiveUserIds();
+    const repository = new CreditsRepository(this.db);
+    const users = await repository.listActiveUserIds();
     let granted = 0;
     for (const user of users) {
       await this.db.transaction(async (tx) => {
@@ -145,6 +138,17 @@ export class CreditsService {
         await ensureMonthlyCredits(tx, user.id, now);
       });
     }
-    return { users: users.length, granted };
+    // Past the longest run (an hour), a pending task is dead.
+    const stale = await repository.openReservations(
+      new Date(now.getTime() - 2 * 3600 * 1000)
+    );
+    for (const task of stale) {
+      await settleTask(this.db, {
+        userId: task.userId,
+        taskId: task.taskId,
+        succeeded: task.status === "completed",
+      });
+    }
+    return { users: users.length, granted, settled: stale.length };
   }
 }

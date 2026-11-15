@@ -43,12 +43,12 @@ const t = initTRPC
   .create({
     transformer: SuperJSON,
     errorFormatter({ shape, error, ctx }) {
-      const credits =
+      const shortfall =
         error.cause instanceof InsufficientCreditsError ? error.cause : null;
       return {
         ...shape,
         message:
-          credits && ctx ? creditsMessage(ctx.t, credits) : shape.message,
+          shortfall && ctx ? creditsMessage(ctx.t, shortfall) : shape.message,
         data: {
           ...shape.data,
           zodError:

@@ -1,8 +1,6 @@
 import type { DbClient } from "@repo/api/tools/db-client";
 import { triggerClient } from "@repo/api/tools/trigger/trigger-client";
-import { AiUsageRepository } from "@repo/api/domains/ai/ai-usage-repository";
-import { settleCredits } from "@repo/api/domains/credits/credit-ledger";
-import { creditsForUsage } from "@repo/api/domains/credits/credit-pricing";
+import { settleTask } from "@repo/api/domains/credits/settle-task";
 
 import { TasksRepository } from "./tasks-repository";
 import type { TaskProgress, TaskType } from "./schemas/task";
@@ -47,25 +45,14 @@ export async function runTask(
         await repository.updateProgress({ taskId, progress });
       },
     });
-    await repository.markCompleted(taskId);
-    // The reservation settles to what the calls cost, never above the cap.
-    await settleTask(db, owner.userId, taskId, true);
   } catch (error) {
     await repository.markFailed({ taskId, errorMessage: "The task failed" });
     // A failed task releases its reservation (billing spec).
-    await settleTask(db, owner.userId, taskId, false);
+    await settleTask(db, { userId: owner.userId, taskId, succeeded: false });
     throw error;
   }
-}
-
-async function settleTask(
-  db: DbClient,
-  userId: string,
-  taskId: string,
-  succeeded: boolean
-) {
-  const actual = succeeded
-    ? creditsForUsage(await new AiUsageRepository(db).creditFundedUsage(taskId))
-    : 0;
-  await db.transaction((tx) => settleCredits(tx, { userId, taskId, actual }));
+  await repository.markCompleted(taskId);
+  // Outside the try: a settlement error never turns a finished task into a
+  // failed, free one; reconciliation settles what is left open.
+  await settleTask(db, { userId: owner.userId, taskId, succeeded: true });
 }

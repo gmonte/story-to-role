@@ -45,6 +45,9 @@ const input: PositionPromptInput = {
   knownFacts: ["achievement: Cut deploy time from 2h to 15min"],
   draftFacts: ["tool: Kubernetes"],
   notesFromOtherPositions: ["Mentioned leading on-call at Acme"],
+  conflicts: [
+    { id: "c1", field: "startDate", options: ["2021-01", "2020-11"] },
+  ],
   currentProject: "Platform migration",
 };
 
@@ -61,6 +64,7 @@ describe("position agent prompt", () => {
     expect(prompt).toContain("Engineer at Globex: Built the billing system.");
     expect(prompt).toContain("Converse in Brazilian Portuguese.");
     expect(prompt).toContain("Current stage: stories.");
+    expect(prompt).toContain("- c1: startDate: 2021-01 or 2020-11");
     expect(prompt).toContain(
       "Current project (subsession): Platform migration."
     );

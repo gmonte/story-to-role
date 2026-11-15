@@ -30,7 +30,12 @@ export type Depth = {
   nudge: { kind: "achievements_without_number"; count: number } | null;
 };
 
-const hasNumber = (text: string) => /\d/.test(text);
+// A result "with a number" measures something: a figure of two or more
+// digits, a percentage or multiple, money, or a number with a unit
+// ("6 engineers", "2 hours"). "Python 3" is not a result.
+const measuredNumber =
+  /(\d{2,}|\d+([.,]\d+)?\s*(%|x\b|k\b|m\b|mi\b|bi\b|h\b|min|hours?|days?|weeks?|months?|years?|horas?|dias?|semanas?|meses|m[eê]s|anos?|people|pessoas|engineers|engenheiros|users|usu[aá]rios|customers|clientes|services|servi[cç]os|teams?|times?|squads?)|(R\$|US\$|\$|€|£)\s?\d)/i;
+const hasNumber = (text: string) => measuredNumber.test(text);
 
 /**
  * How complete a position's story is, shown beside its workflow status as a

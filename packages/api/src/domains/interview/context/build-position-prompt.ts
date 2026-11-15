@@ -1,5 +1,5 @@
 import type {
-  CareerLanguage,
+  InterviewLanguage,
   ScriptKind,
 } from "@repo/api/domains/career/schemas/career";
 
@@ -16,7 +16,7 @@ export type PromptPosition = {
 
 /** What the position agent sees besides the current session's turns. */
 export type PositionPromptInput = {
-  language: CareerLanguage;
+  language: InterviewLanguage;
   scriptKind: ScriptKind;
   stage: InterviewStage;
   // The interview target: a position, a credential's story, or none yet.
@@ -29,10 +29,12 @@ export type PositionPromptInput = {
   knownFacts: string[];
   draftFacts: string[];
   notesFromOtherPositions: string[];
+  // Titles or dates that disagree between the user's files.
+  conflicts: Array<{ id: string; field: string; options: string[] }>;
   currentProject: string | null;
 };
 
-const languageNames: Record<CareerLanguage, string> = {
+const languageNames: Record<InterviewLanguage, string> = {
   "en-US": "English",
   "pt-BR": "Brazilian Portuguese",
 };
@@ -113,6 +115,13 @@ export function buildPositionPrompt(input: PositionPromptInput) {
     section(
       "Already approved for this position (do not ask again)",
       input.knownFacts.map((fact) => `- ${fact}`)
+    ),
+    section(
+      "Facts that disagree between the user's files (ask which is right, then call propose_resolve_conflict)",
+      input.conflicts.map(
+        (conflict) =>
+          `- ${conflict.id}: ${conflict.field}: ${conflict.options.join(" or ")}`
+      )
     ),
     section(
       "Notes left from other positions",

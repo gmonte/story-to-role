@@ -41,19 +41,33 @@ function normalizeText(text: string) {
   return text.toLowerCase().replace(/\s+/g, " ").trim();
 }
 
-// An open end date means "still there": compare it as far in the future.
-function periodsOverlap(a: ImportedPosition, b: ImportedPosition) {
-  if (!a.startDate || !b.startDate) return true;
-  const aEnd = a.endDate ?? "9999-12";
-  const bEnd = b.endDate ?? "9999-12";
-  return a.startDate <= bEnd && b.startDate <= aEnd;
+function monthIndex(yearMonth: string) {
+  const [year, month] = yearMonth.split("-").map(Number);
+  return year * 12 + month;
 }
 
-function isSamePosition(a: ImportedPosition, b: ImportedPosition) {
-  return (
-    normalizeEmployer(a.employer) === normalizeEmployer(b.employer) &&
-    periodsOverlap(a, b)
-  );
+// Months two periods share; an open end date means "still there".
+function overlapMonths(a: ImportedPosition, b: ImportedPosition) {
+  if (!a.startDate || !b.startDate) return null;
+  const end = (position: ImportedPosition) =>
+    position.endDate ? monthIndex(position.endDate) : Number.MAX_SAFE_INTEGER;
+  const start = Math.max(monthIndex(a.startDate), monthIndex(b.startDate));
+  return Math.min(end(a), end(b)) - start + 1;
+}
+
+/**
+ * Same employer and a real overlap. Periods that only touch (a promotion
+ * starting the month the previous title ended) stay separate unless the
+ * titles match; without dates, only the same title matches.
+ */
+export function isSamePosition(a: ImportedPosition, b: ImportedPosition) {
+  if (normalizeEmployer(a.employer) !== normalizeEmployer(b.employer)) {
+    return false;
+  }
+  const sameTitle = normalizeText(a.title) === normalizeText(b.title);
+  const overlap = overlapMonths(a, b);
+  if (overlap === null) return sameTitle;
+  return overlap > 1 || (overlap > 0 && sameTitle);
 }
 
 function conflictsBetween(
@@ -106,10 +120,9 @@ export function mergeImportedPositions(
       isSamePosition(position, incoming)
     );
 
+    // A second entry for the same position adds its own conflicts and
+    // facts; nothing found in a file is silently dropped.
     if (existing) {
-      if (plan.updates.some((update) => update.positionId === existing.id)) {
-        continue;
-      }
       plan.updates.push({
         positionId: existing.id,
         imported: incoming,

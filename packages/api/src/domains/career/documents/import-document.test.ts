@@ -230,6 +230,32 @@ describe("document import", () => {
     ]);
   });
 
+  it("approves every imported position without conflicts in one step", async () => {
+    const ctx = await setup();
+    await ctx.importFile(resumeA, {
+      positions: [acmeA],
+      credentials: [],
+      exclusions: [],
+    });
+    const interview = new InterviewService(
+      ctx.db,
+      new TasksService(ctx.db, {
+        trigger: vi.fn(async () => ({ runId: "r", accessToken: "t" })),
+      })
+    );
+
+    const { approved } =
+      await interview.approveImportedPositionsWithoutConflicts(ctx.user.id);
+
+    expect(approved).toBe(1);
+    const [position] = (await ctx.timeline()).positions;
+    expect(position).toMatchObject({
+      status: "approved",
+      languages: ["en-US"],
+      depth: { counts: { evidence: 1 } },
+    });
+  });
+
   it("refuses a file that is not a career document before extracting", async () => {
     const ctx = await setup();
     const fake = await ctx.importFile(

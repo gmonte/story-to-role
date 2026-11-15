@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-import { careerLanguageSchema } from "@repo/api/domains/career/schemas/career";
+import { interviewLanguageSchema } from "@repo/api/domains/career/schemas/career";
 import {
   sensitiveItemKindSchema,
   sensitivityChoiceSchema,
@@ -36,7 +36,7 @@ export const draftViewSchema = z.object({
     .nullable(),
   quote: z.string(),
   fromDocument: z.boolean(),
-  language: careerLanguageSchema,
+  language: interviewLanguageSchema,
   lowDetail: z.boolean(),
 });
 export type DraftView = z.infer<typeof draftViewSchema>;
@@ -65,8 +65,17 @@ export type SessionView = z.infer<typeof sessionViewSchema>;
 export const extractionDecisionSchema = z.object({
   draftId: z.uuid(),
   approved: z.boolean(),
-  // The user's edit of the extracted text (facts) or story fields.
+  // The user's edit of an extracted fact's text…
   text: z.string().trim().min(1).max(800).optional(),
+  // …or of a story's fields: every item stays editable.
+  story: z
+    .object({
+      problem: z.string().trim().min(1).max(800),
+      action: z.string().trim().min(1).max(800),
+      partners: z.string().trim().max(300).optional(),
+      result: z.string().trim().min(1).max(800),
+    })
+    .optional(),
 });
 export type ExtractionDecision = z.infer<typeof extractionDecisionSchema>;
 

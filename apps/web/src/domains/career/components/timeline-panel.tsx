@@ -16,6 +16,7 @@ import { ImportDocuments } from "./import-documents";
 import { NarrativeCard } from "./narrative-card";
 import { PositionCard } from "./position-card";
 import { PositionFormDialog } from "./position-form-dialog";
+import { ApproveImportedButton } from "./approve-imported-button";
 import { ProposalCards } from "./proposal-cards";
 import { SensitiveReview } from "./sensitive-review";
 
@@ -26,6 +27,13 @@ export function TimelinePanel() {
 
   if (!timeline.data) return null;
   const { positions, removedPositions } = timeline.data;
+  const bilingual = timeline.data.evidenceLanguages.length > 1;
+  const canApproveImported = positions.some(
+    (position) =>
+      (position.origin === "imported" || position.origin === "truth_file") &&
+      position.status !== "approved" &&
+      position.conflicts.length === 0
+  );
 
   return (
     <div className="flex flex-col gap-6">
@@ -48,6 +56,7 @@ export function TimelinePanel() {
             }
           />
         </div>
+        {canApproveImported && <ApproveImportedButton />}
         {positions.length === 0 && (
           <p className="text-muted-foreground text-xs">
             {t.formatMessage({
@@ -60,6 +69,7 @@ export function TimelinePanel() {
             key={position.id}
             position={position}
             others={positions.filter((other) => other.id !== position.id)}
+            bilingual={bilingual}
           />
         ))}
         {removedPositions.length > 0 && (
@@ -83,6 +93,7 @@ export function TimelinePanel() {
                   key={position.id}
                   position={position}
                   others={[]}
+                  bilingual={bilingual}
                 />
               ))}
             </CollapsibleContent>

@@ -35,6 +35,21 @@ export class InterviewRepository {
     return row;
   }
 
+  /** Locks the session row until the transaction ends (approvals). */
+  async findSessionForUpdate(input: { profileId: string; sessionId: string }) {
+    const [row] = await this.tx
+      .select()
+      .from(interviewSessionsTable)
+      .where(
+        and(
+          eq(interviewSessionsTable.id, input.sessionId),
+          eq(interviewSessionsTable.profileId, input.profileId)
+        )
+      )
+      .for("update");
+    return row;
+  }
+
   async findSessionById(sessionId: string) {
     const [row] = await this.tx
       .select()
@@ -99,6 +114,16 @@ export class InterviewRepository {
       .from(interviewTurnsTable)
       .where(eq(interviewTurnsTable.id, turnId));
     return row;
+  }
+
+  async updateTurnKind(input: {
+    turnId: string;
+    kind: Insert<typeof interviewTurnsTable>["kind"];
+  }) {
+    await this.tx
+      .update(interviewTurnsTable)
+      .set({ kind: input.kind })
+      .where(eq(interviewTurnsTable.id, input.turnId));
   }
 
   async insertTurn(turn: Insert<typeof interviewTurnsTable>) {

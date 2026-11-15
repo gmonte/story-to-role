@@ -12,9 +12,11 @@ import type { Storage } from "@repo/api/tools/storage/storage";
 import { CareerRepository } from "../career-repository";
 import { CareerService } from "../career-service";
 import {
+  interviewLanguages,
   credentialKindSchema,
   credentialStatusSchema,
 } from "../schemas/career";
+import { isSamePosition } from "../timeline/merge-imported-positions";
 import { isAcceptedDocumentType } from "./document-limits";
 import { extractDocumentText } from "./extract-text";
 
@@ -29,6 +31,8 @@ const yearMonth = z
   .catch(undefined);
 
 const extractionSchema = z.object({
+  // The document's language: each fact keeps the language it was told in.
+  language: z.enum(interviewLanguages).catch("en-US"),
   positions: z.array(
     z.object({
       employer: z.string(),
@@ -90,6 +94,14 @@ export async function runImportDocument(
   const document = await career.findDocument(deps.sourceDocumentId);
   if (!document) throw new Error(`Document ${deps.sourceDocumentId} not found`);
 
+  // The task acts for its creator only: the document must be theirs.
+  const owner = await career.findProfileById(document.profileId);
+  if (owner?.userId !== deps.userId) {
+    throw new Error(
+      `Document ${deps.sourceDocumentId} belongs to another user`
+    );
+  }
+
   const reject = (reason: string) =>
     career.updateDocument(document.id, {
       status: "rejected",
@@ -134,6 +146,7 @@ export async function runImportDocument(
     schema: extractionSchema,
     system: [
       "Extract the career facts in this document. Record only what it states; add, infer or round nothing.",
+      "- language: the language the document is written in (en-US or pt-BR).",
       "- positions: employer, title, dates as YYYY-MM (leave end_date out for a current position), location.",
       "- facts per position: achievements, responsibilities, metrics, tools, awards and skills, each with `quote` copied exactly from the document.",
       "- credentials: education, certifications, languages (with level), courses, publications, awards, volunteering.",
@@ -155,6 +168,7 @@ export async function runImportDocument(
       cipher: deps.cipher,
       profileId: document.profileId,
       sourceDocumentId: document.id,
+      origin: document.kind === "truth_file" ? "truth_file" : "imported",
       imported: extraction.positions.map((position) => ({
         employer: position.employer.trim(),
         title: position.title.trim(),
@@ -166,24 +180,34 @@ export async function runImportDocument(
       })),
     });
 
-    const profile = await tx.query.careerProfilesTable.findFirst({
-      where: (row, { eq }) => eq(row.id, document.profileId),
-    });
-    const language = profile?.interviewLanguage ?? "en-US";
+    const language = extraction.language ?? owner.interviewLanguage;
     const interview = new InterviewRepository(tx);
     const sessions = await interview.listSessions(document.profileId);
+    const targets = [...new Set(touched.map((entry) => entry.positionId))];
 
-    for (const { positionId, imported } of touched) {
-      const position = extraction.positions.find(
-        (candidate) =>
-          candidate.employer.trim() === imported.employer &&
-          candidate.title.trim() === imported.title
+    for (const positionId of targets) {
+      // Every extracted entry for this position brings its facts, even a
+      // duplicate entry of the same file.
+      const matches = touched
+        .filter((entry) => entry.positionId === positionId)
+        .map((entry) => entry.imported);
+      const entries = extraction.positions.filter((candidate) =>
+        matches.some((match) =>
+          isSamePosition(match, {
+            employer: candidate.employer.trim(),
+            title: candidate.title.trim(),
+            startDate: candidate.start_date,
+            endDate: candidate.end_date,
+          })
+        )
       );
       // Facts whose quote isn't in the document are dropped (principle 2).
-      const facts = (position?.facts ?? []).flatMap((fact) => {
-        const quote = findQuote(text, fact.quote);
-        return quote ? [{ ...fact, quote }] : [];
-      });
+      const facts = entries
+        .flatMap((entry) => entry.facts)
+        .flatMap((fact) => {
+          const quote = findQuote(text, fact.quote);
+          return quote ? [{ ...fact, quote }] : [];
+        });
       if (facts.length === 0) continue;
 
       const session =

@@ -3,7 +3,7 @@
 import { useMutation } from "@tanstack/react-query";
 import { ShieldCheck } from "lucide-react";
 
-import type { CareerLanguage } from "@repo/api/domains/career/schemas/career";
+import type { InterviewLanguage } from "@repo/api/domains/career/schemas/career";
 import { useTranslation } from "@repo/intl/use-translation";
 import { Button } from "@repo/web/components/ui/button";
 
@@ -19,7 +19,7 @@ import { InterviewLanguageSelect } from "./interview-language-select";
 export function PrivacyNotice({
   interviewLanguage,
 }: {
-  interviewLanguage: CareerLanguage;
+  interviewLanguage: InterviewLanguage;
 }) {
   const t = useTranslation();
   const trpc = useTRPC();
@@ -43,7 +43,7 @@ export function PrivacyNotice({
     }),
     t.formatMessage({
       defaultMessage:
-        "Voice input runs on your device: audio never leaves it. Your conversation is encrypted and deleted 7 days after you approve what was extracted.",
+        "Voice input runs on your device: audio never leaves it. Your interview answers are encrypted and deleted 7 days after you approve what was extracted.",
     }),
   ];
 

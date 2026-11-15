@@ -23,6 +23,7 @@ import { useTRPC } from "~/tools/trpc/client";
 import { useCareerLabels } from "../hooks/use-career-labels";
 import { useRefreshCareer } from "../hooks/use-career-queries";
 import { useCareerWorkspace } from "./career-workspace-context";
+import { LanguageBadges } from "./language-badges";
 import { PositionFormDialog } from "./position-form-dialog";
 
 /**
@@ -32,9 +33,11 @@ import { PositionFormDialog } from "./position-form-dialog";
 export function PositionCard({
   position,
   others,
+  bilingual,
 }: {
   position: PositionView;
   others: PositionView[];
+  bilingual: boolean;
 }) {
   const t = useTranslation();
   const labels = useCareerLabels();
@@ -45,9 +48,10 @@ export function PositionCard({
 
   const openSession = useMutation(
     trpc.interview.openSession.mutationOptions({
+      // Refresh first: the chat only keeps a session listed as open.
       onSuccess: async ({ sessionId }) => {
-        setActiveSessionId(sessionId);
         await refresh();
+        setActiveSessionId(sessionId);
       },
       onError,
     })
@@ -156,6 +160,15 @@ export function PositionCard({
           <Badge variant="outline">
             {labels.positionStatus(position.status)}
           </Badge>
+          {position.origin === "truth_file" && (
+            <Badge variant="outline">
+              {t.formatMessage({ defaultMessage: "From your truth file" })}
+            </Badge>
+          )}
+          <LanguageBadges
+            languages={position.languages}
+            bilingual={bilingual}
+          />
           {position.depth.level && (
             <Badge variant="secondary">
               {labels.depth(position.depth.level)}

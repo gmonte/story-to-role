@@ -1,9 +1,6 @@
-import { and, eq, isNull } from "drizzle-orm";
-
 import type { AiClient } from "@repo/api/domains/ai/ai-client";
 import { checkTopic } from "@repo/api/domains/ai/topic-gate";
 import { CareerRepository } from "@repo/api/domains/career/career-repository";
-import { crossNotesTable } from "@repo/api/domains/career/db/career-tables";
 import type { UserCipher } from "@repo/api/domains/encryption/user-cipher";
 import { EvidenceRepository } from "@repo/api/domains/evidence/evidence-repository";
 import type { DbClient } from "@repo/api/tools/db-client";
@@ -47,17 +44,24 @@ export async function runInterviewTurn(
   if (!userTurn?.encryptedContent || session?.status !== "open") {
     throw new Error(`Turn ${deps.userTurnId} has no open session`);
   }
+  // The task acts for its creator only: the turn must be theirs.
+  const owner = await new CareerRepository(db).findProfileById(
+    session.profileId
+  );
+  if (owner?.userId !== deps.userId) {
+    throw new Error(`Turn ${deps.userTurnId} belongs to another user`);
+  }
   const message = cipher.decrypt(userTurn.encryptedContent);
 
   const turns = await interview.listTurns(session.id);
-  const conversation = turns
+  const sessionTurns = turns
     .filter((turn) => turn.kind === "text" && turn.encryptedContent)
     .map((turn) => ({
       id: turn.id,
       role: turn.role,
       content: cipher.decrypt(turn.encryptedContent!),
     }));
-  const previousQuestion = conversation
+  const previousQuestion = sessionTurns
     .filter((turn) => turn.role === "assistant")
     .at(-1)?.content;
 
@@ -73,8 +77,15 @@ export async function runInterviewTurn(
     return { kind };
   };
 
+  // A blocked message is marked on the user's turn too, so it never joins
+  // the turns sent to the main model nor serves as a quote source.
+  const block = async (kind: "off_topic" | "blocked_override" | "cooldown") => {
+    await interview.updateTurnKind({ turnId: userTurn.id, kind });
+    return reply(kind, fixedReply(kind, userTurn.language));
+  };
+
   if (await deps.misuse.isCoolingDown(deps.userId)) {
-    return reply("cooldown", fixedReply("cooldown", userTurn.language));
+    return block("cooldown");
   }
 
   const verdict = await checkTopic({
@@ -85,8 +96,7 @@ export async function runInterviewTurn(
   });
   if (verdict !== "on_topic") {
     await deps.misuse.recordBlocked(deps.userId);
-    const kind = verdict === "override" ? "blocked_override" : "off_topic";
-    return reply(kind, fixedReply(kind, userTurn.language));
+    return block(verdict === "override" ? "blocked_override" : "off_topic");
   }
 
   const promptInput = await loadPromptInput({ db, cipher, session });
@@ -98,7 +108,7 @@ export async function runInterviewTurn(
     positionId: session.positionId,
     projectId: session.projectId,
     language: userTurn.language,
-    userTurns: conversation
+    userTurns: sessionTurns
       .filter((turn) => turn.role === "user")
       .map(({ id, content }) => ({ id, content })),
     positionIds: promptInput.timeline.map((position) => position.id),
@@ -110,7 +120,7 @@ export async function runInterviewTurn(
     maxTokens: interviewSettings.agentMaxTokens,
     maxIterations: interviewSettings.agentMaxIterations,
     system: buildPositionPrompt(promptInput),
-    messages: conversation.map(({ role, content }) => ({
+    messages: sessionTurns.map(({ role, content }) => ({
       role,
       content:
         role === "user" ? `<user_message>${content}</user_message>` : content,
@@ -156,9 +166,7 @@ async function loadPromptInput({
   const interview = new InterviewRepository(db);
 
   const [profileRows, positionRows, drafts] = await Promise.all([
-    db.query.careerProfilesTable.findFirst({
-      where: (profile, { eq: equals }) => equals(profile.id, session.profileId),
-    }),
+    career.findProfileById(session.profileId),
     career.listPositions(session.profileId),
     interview.listDrafts(session.id),
   ]);
@@ -229,6 +237,7 @@ async function loadPromptInput({
       neighbourSummaries: [],
       knownFacts: credentialEvidence,
       notesFromOtherPositions: [],
+      conflicts: [],
     };
   }
 
@@ -242,6 +251,7 @@ async function loadPromptInput({
       neighbourSummaries: [],
       knownFacts: [],
       notesFromOtherPositions: [],
+      conflicts: [],
     };
   }
 
@@ -252,17 +262,10 @@ async function loadPromptInput({
     (row) => row.id === session.positionId
   )!;
 
-  const [knownEvidence, notes] = await Promise.all([
+  const [knownEvidence, notes, conflicts] = await Promise.all([
     evidence.listEvidenceForPosition(positionRow.id),
-    db
-      .select()
-      .from(crossNotesTable)
-      .where(
-        and(
-          eq(crossNotesTable.toPositionId, positionRow.id),
-          isNull(crossNotesTable.resolvedAt)
-        )
-      ),
+    career.listOpenCrossNotes(positionRow.id),
+    career.listOpenConflicts([positionRow.id]),
   ]);
 
   return {
@@ -287,5 +290,12 @@ async function loadPromptInput({
     notesFromOtherPositions: notes.map((note) =>
       cipher.decrypt(note.encryptedText)
     ),
+    conflicts: conflicts.map((conflict) => ({
+      id: conflict.id,
+      field: conflict.field,
+      options: JSON.parse(
+        cipher.decrypt(conflict.encryptedOptions)
+      ) as string[],
+    })),
   };
 }

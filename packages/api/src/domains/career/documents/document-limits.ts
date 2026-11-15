@@ -17,6 +17,20 @@ export const acceptedDocumentTypes = {
 
 export type AcceptedDocumentType = keyof typeof acceptedDocumentTypes;
 
+const typesByExtension: Record<string, AcceptedDocumentType> = {
+  pdf: "application/pdf",
+  docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  md: "text/markdown",
+  txt: "text/plain",
+};
+
+/** Browsers often send no type for .md files: fall back to the extension. */
+export function documentTypeOf(input: { fileName: string; mimeType: string }) {
+  if (input.mimeType in acceptedDocumentTypes) return input.mimeType;
+  const extension = input.fileName.split(".").pop()?.toLowerCase() ?? "";
+  return typesByExtension[extension] ?? input.mimeType;
+}
+
 export function isAcceptedDocumentType(
   mimeType: string
 ): mimeType is AcceptedDocumentType {

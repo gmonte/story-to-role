@@ -6,7 +6,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRealtimeRun } from "@trigger.dev/react-hooks";
 import { ArrowUp, ListChecks } from "lucide-react";
 
-import type { CareerLanguage } from "@repo/api/domains/career/schemas/career";
+import type { InterviewLanguage } from "@repo/api/domains/career/schemas/career";
 import type { RealtimeSubscription } from "@repo/api/domains/tasks/schemas/task";
 import { useTranslation } from "@repo/intl/use-translation";
 import { Badge } from "@repo/web/components/ui/badge";
@@ -33,7 +33,7 @@ export function InterviewChat({
   interviewLanguage,
 }: {
   sessionId: string;
-  interviewLanguage: CareerLanguage;
+  interviewLanguage: InterviewLanguage;
 }) {
   const t = useTranslation();
   const labels = useCareerLabels();
@@ -127,7 +127,7 @@ export function InterviewChat({
                 <p>
                   {t.formatMessage({
                     defaultMessage:
-                      "This session is getting long. Save what you said so far and continue in a fresh one.",
+                      "This session is getting long. Approve what you said so far and continue in a new session.",
                   })}
                 </p>
                 <Button
@@ -136,7 +136,7 @@ export function InterviewChat({
                   onClick={() => proposeExtraction.mutate({ sessionId })}
                 >
                   {t.formatMessage({
-                    defaultMessage: "Review and save progress",
+                    defaultMessage: "Review and approve",
                   })}
                 </Button>
               </li>

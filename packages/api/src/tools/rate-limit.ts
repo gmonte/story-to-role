@@ -13,6 +13,8 @@ export const rateLimits = {
   chatMessage: Ratelimit.slidingWindow(10, "1 m"),
   // Starting any other task (imports, generations, the sample task).
   taskStart: Ratelimit.slidingWindow(5, "1 m"),
+  // Interview sessions opened or resumed per day (guardrail 7).
+  sessionOpen: Ratelimit.slidingWindow(40, "1 d"),
 } as const;
 
 export type RateLimitName = keyof typeof rateLimits;

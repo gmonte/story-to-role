@@ -6,6 +6,7 @@ import {
   careerNarrativesTable,
   careerProfilesTable,
   credentialsTable,
+  crossNotesTable,
   positionConflictsTable,
   positionSummariesTable,
   positionsTable,
@@ -24,6 +25,42 @@ export class CareerRepository {
       .from(careerProfilesTable)
       .where(eq(careerProfilesTable.userId, userId));
     return row;
+  }
+
+  async findProfileById(profileId: string) {
+    const [row] = await this.tx
+      .select()
+      .from(careerProfilesTable)
+      .where(eq(careerProfilesTable.id, profileId));
+    return row;
+  }
+
+  async insertCrossNote(note: Insert<typeof crossNotesTable>) {
+    await this.tx.insert(crossNotesTable).values(note);
+  }
+
+  listOpenCrossNotes(toPositionId: string) {
+    return this.tx
+      .select()
+      .from(crossNotesTable)
+      .where(
+        and(
+          eq(crossNotesTable.toPositionId, toPositionId),
+          isNull(crossNotesTable.resolvedAt)
+        )
+      );
+  }
+
+  async resolveCrossNotes(toPositionId: string) {
+    await this.tx
+      .update(crossNotesTable)
+      .set({ resolvedAt: new Date() })
+      .where(
+        and(
+          eq(crossNotesTable.toPositionId, toPositionId),
+          isNull(crossNotesTable.resolvedAt)
+        )
+      );
   }
 
   async insertProfileIfMissing(profile: Insert<typeof careerProfilesTable>) {
@@ -107,19 +144,29 @@ export class CareerRepository {
     await this.tx.insert(positionConflictsTable).values(conflicts);
   }
 
-  async findConflict(conflictId: string) {
+  async updateConflictOptions(input: {
+    positionConflictId: string;
+    encryptedOptions: string;
+  }) {
+    await this.tx
+      .update(positionConflictsTable)
+      .set({ encryptedOptions: input.encryptedOptions })
+      .where(eq(positionConflictsTable.id, input.positionConflictId));
+  }
+
+  async findConflict(positionConflictId: string) {
     const [row] = await this.tx
       .select()
       .from(positionConflictsTable)
-      .where(eq(positionConflictsTable.id, conflictId));
+      .where(eq(positionConflictsTable.id, positionConflictId));
     return row;
   }
 
-  async resolveConflict(conflictId: string) {
+  async resolveConflict(positionConflictId: string) {
     await this.tx
       .update(positionConflictsTable)
       .set({ resolvedAt: new Date() })
-      .where(eq(positionConflictsTable.id, conflictId));
+      .where(eq(positionConflictsTable.id, positionConflictId));
   }
 
   async moveConflicts(input: { fromPositionId: string; toPositionId: string }) {
@@ -239,13 +286,13 @@ export class CareerRepository {
       );
   }
 
-  async findProposal(input: { profileId: string; proposalId: string }) {
+  async findProposal(input: { profileId: string; timelineProposalId: string }) {
     const [row] = await this.tx
       .select()
       .from(timelineProposalsTable)
       .where(
         and(
-          eq(timelineProposalsTable.id, input.proposalId),
+          eq(timelineProposalsTable.id, input.timelineProposalId),
           eq(timelineProposalsTable.profileId, input.profileId)
         )
       );
@@ -260,13 +307,16 @@ export class CareerRepository {
     return row;
   }
 
-  async decideProposal(input: { proposalId: string; accepted: boolean }) {
+  async decideProposal(input: {
+    timelineProposalId: string;
+    accepted: boolean;
+  }) {
     await this.tx
       .update(timelineProposalsTable)
       .set(
         input.accepted ? { acceptedAt: new Date() } : { rejectedAt: new Date() }
       )
-      .where(eq(timelineProposalsTable.id, input.proposalId));
+      .where(eq(timelineProposalsTable.id, input.timelineProposalId));
   }
 
   async latestNarrative(profileId: string) {

@@ -8,7 +8,7 @@ import {
   projectsTable,
   sourceDocumentsTable,
 } from "@repo/api/domains/career/db/career-tables";
-import type { CareerLanguage } from "@repo/api/domains/career/schemas/career";
+import type { InterviewLanguage } from "@repo/api/domains/career/schemas/career";
 import { createTable } from "@repo/api/utils/db/create-table";
 
 import type {
@@ -46,7 +46,7 @@ export const evidenceTable = createTable(
       .references(() => projectsTable.id, { onDelete: "set null" }),
     kind: d.text().$type<EvidenceKind>().notNull(),
     encryptedText: d.text().notNull(),
-    language: d.text().$type<CareerLanguage>().notNull(),
+    language: d.text().$type<InterviewLanguage>().notNull(),
     encryptedSourceQuote: d.text().notNull(),
     // The turn is deleted 7 days after approval; its id stays for the trace.
     sourceTurnId: d.uuid(),
@@ -85,7 +85,7 @@ export const storiesTable = createTable(
     encryptedAction: d.text().notNull(),
     encryptedPartners: d.text(),
     encryptedResult: d.text().notNull(),
-    language: d.text().$type<CareerLanguage>().notNull(),
+    language: d.text().$type<InterviewLanguage>().notNull(),
     evidenceIds: d
       .uuid()
       .array()

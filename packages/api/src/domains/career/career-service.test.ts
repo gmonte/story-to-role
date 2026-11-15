@@ -42,6 +42,7 @@ async function importPositions(
       cipher,
       profileId: ctx.profile.id,
       sourceDocumentId: crypto.randomUUID(),
+      origin: "imported",
       imported,
     });
   });
@@ -81,7 +82,7 @@ describe("career timeline", () => {
 
     await ctx.career.resolveConflict({
       userId: ctx.user.id,
-      conflictId: positions[0].conflicts[0].id,
+      positionConflictId: positions[0].conflicts[0].id,
       value: "2019-11",
     });
     const [resolved] = (await ctx.timeline()).positions;

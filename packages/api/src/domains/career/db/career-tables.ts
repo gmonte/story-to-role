@@ -5,7 +5,7 @@ import { usersTable } from "@repo/api/domains/users/db/users-tables";
 import { createTable } from "@repo/api/utils/db/create-table";
 
 import type {
-  CareerLanguage,
+  InterviewLanguage,
   ConflictField,
   CredentialKind,
   CredentialStatus,
@@ -38,7 +38,7 @@ export const careerProfilesTable = createTable(
       .uuid()
       .notNull()
       .references(() => usersTable.id, { onDelete: "cascade" }),
-    interviewLanguage: d.text().$type<CareerLanguage>().notNull(),
+    interviewLanguage: d.text().$type<InterviewLanguage>().notNull(),
     privacyNoticeAcceptedAt: d.timestamp({ withTimezone: true }),
   }),
   (t) => [unique("career_profiles_user_id_unique").on(t.userId)]

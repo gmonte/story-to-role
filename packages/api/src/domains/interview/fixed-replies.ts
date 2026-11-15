@@ -1,4 +1,4 @@
-import type { CareerLanguage } from "@repo/api/domains/career/schemas/career";
+import type { InterviewLanguage } from "@repo/api/domains/career/schemas/career";
 
 import type { TurnKind } from "./schemas/interview";
 
@@ -12,7 +12,7 @@ type BlockedKind = Extract<
  * guardrails 3 and 8), in the interview language: they steer the user back
  * to the current question.
  */
-const replies: Record<CareerLanguage, Record<BlockedKind, string>> = {
+const replies: Record<InterviewLanguage, Record<BlockedKind, string>> = {
   "en-US": {
     off_topic:
       "I can only help with your career story here. Let's get back to the last question.",
@@ -31,6 +31,6 @@ const replies: Record<CareerLanguage, Record<BlockedKind, string>> = {
   },
 };
 
-export function fixedReply(kind: BlockedKind, language: CareerLanguage) {
+export function fixedReply(kind: BlockedKind, language: InterviewLanguage) {
   return replies[language][kind];
 }

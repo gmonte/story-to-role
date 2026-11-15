@@ -86,6 +86,39 @@ describe("merging imported positions into the timeline", () => {
     ]);
   });
 
+  it("keeps a promotion whose period only touches the previous title", () => {
+    const existing: TimelinePosition = {
+      id: "p1",
+      employer: "Acme",
+      title: "Engineer",
+      startDate: "2018-01",
+      endDate: "2020-01",
+    };
+
+    const plan = mergeImportedPositions(
+      [existing],
+      [{ ...acme, employer: "Acme", startDate: "2020-01" }]
+    );
+
+    expect(plan.creates).toHaveLength(1);
+  });
+
+  it("matches an undated entry only by title", () => {
+    const existing: TimelinePosition = {
+      id: "p1",
+      employer: "Acme",
+      title: "Engineer",
+    };
+
+    expect(mergeImportedPositions([existing], [acme]).creates).toEqual([acme]);
+    expect(
+      mergeImportedPositions(
+        [existing],
+        [{ employer: "ACME", title: "engineer" }]
+      ).updates
+    ).toHaveLength(1);
+  });
+
   it("merges duplicates inside one import", () => {
     const plan = mergeImportedPositions([], [acme, { ...acme }]);
 

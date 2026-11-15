@@ -81,6 +81,18 @@ describe("position depth", () => {
     });
   });
 
+  it("counts only numbers that measure something", () => {
+    const depth = computeDepth({
+      ...base,
+      achievements: [
+        "Migrated the codebase to Python 3",
+        "Mentored 4 engineers",
+        "Saved R$ 2 mil",
+      ],
+    });
+    expect(depth.counts.resultsWithNumbers).toBe(2);
+  });
+
   it("treats a short-script position as done once it has stories", () => {
     expect(
       computeDepth({

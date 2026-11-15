@@ -1,8 +1,6 @@
 import { TRPCError } from "@trpc/server";
-import { and, eq, isNull } from "drizzle-orm";
 
 import { CareerRepository } from "@repo/api/domains/career/career-repository";
-import { crossNotesTable } from "@repo/api/domains/career/db/career-tables";
 import type { ScriptKind } from "@repo/api/domains/career/schemas/career";
 import { getUserCipher } from "@repo/api/domains/encryption/user-cipher";
 import { EvidenceRepository } from "@repo/api/domains/evidence/evidence-repository";
@@ -76,6 +74,10 @@ export class InterviewService {
     positionId?: string;
     credentialId?: string;
   }) {
+    // A session is about one target: a position, a credential, or none yet.
+    if (input.positionId && input.credentialId) {
+      throw new TRPCError({ code: "BAD_REQUEST" });
+    }
     const profile = await this.requireProfile(input.userId);
     if (!profile.privacyNoticeAcceptedAt) {
       throw new TRPCError({ code: "PRECONDITION_FAILED" });
@@ -302,6 +304,13 @@ export class InterviewService {
       const cipher = await getUserCipher(tx, input.userId);
       const approvedAt = new Date();
 
+      // Locked and re-checked: a second submit finds the session closed.
+      const locked = await interview.findSessionForUpdate({
+        profileId: profile.id,
+        sessionId: session.id,
+      });
+      if (locked?.status !== "open") throw notFound();
+
       const drafts = (await interview.listDrafts(session.id)).filter(
         (draft) => draft.status === "draft"
       );
@@ -322,29 +331,42 @@ export class InterviewService {
         const payload = JSON.parse(
           cipher.decrypt(draft.encryptedPayload)
         ) as Record<string, string | undefined>;
-        const edit = decisions.get(draft.id)?.text;
-        return edit && draft.kind !== "story"
-          ? { ...payload, text: edit }
-          : payload;
+        const decision = decisions.get(draft.id);
+        if (draft.kind === "story") return { ...payload, ...decision?.story };
+        return decision?.text ? { ...payload, text: decision.text } : payload;
       };
 
-      const evidenceRows = await evidence.insertEvidence(
-        approved
-          .filter((draft) => (evidenceKinds as string[]).includes(draft.kind))
-          .map((draft) => ({
-            ...owner,
-            projectId: draft.projectId,
-            kind: draft.kind as EvidenceKind,
-            encryptedText: cipher.encrypt(payloadOf(draft).text ?? ""),
-            encryptedSourceQuote: draft.encryptedQuote,
-            sourceTurnId: draft.sourceTurnId,
-            sourceDocumentId: draft.sourceDocumentId,
-            language: draft.language,
-            lowDetail: draft.lowDetail,
-            approvedAt,
-          }))
+      const evidenceDrafts = approved.filter((draft) =>
+        (evidenceKinds as string[]).includes(draft.kind)
       );
-      const evidenceIds = evidenceRows.map((row) => row.id);
+      const evidenceRows = await evidence.insertEvidence(
+        evidenceDrafts.map((draft) => ({
+          ...owner,
+          projectId: draft.projectId,
+          kind: draft.kind as EvidenceKind,
+          encryptedText: cipher.encrypt(payloadOf(draft).text ?? ""),
+          encryptedSourceQuote: draft.encryptedQuote,
+          sourceTurnId: draft.sourceTurnId,
+          sourceDocumentId: draft.sourceDocumentId,
+          language: draft.language,
+          lowDetail: draft.lowDetail,
+          approvedAt,
+        }))
+      );
+      // A story or skill links the evidence told in the same message (or
+      // found in the same document), never the whole session.
+      const evidenceFromSameSource = (draft: (typeof drafts)[number]) =>
+        evidenceRows
+          .filter((_, index) => {
+            const source = evidenceDrafts[index];
+            return (
+              (!!draft.sourceTurnId &&
+                source.sourceTurnId === draft.sourceTurnId) ||
+              (!!draft.sourceDocumentId &&
+                source.sourceDocumentId === draft.sourceDocumentId)
+            );
+          })
+          .map((row) => row.id);
 
       await evidence.insertStories(
         approved
@@ -360,7 +382,7 @@ export class InterviewService {
                 : null,
               encryptedResult: cipher.encrypt(story.result ?? ""),
               language: draft.language,
-              evidenceIds,
+              evidenceIds: evidenceFromSameSource(draft),
               approvedAt,
             };
           })
@@ -376,6 +398,7 @@ export class InterviewService {
       );
       for (const draft of approved.filter((d) => d.kind === "skill")) {
         const name = (payloadOf(draft).text ?? "").trim();
+        const evidenceIds = evidenceFromSameSource(draft);
         const existing = existingSkills.find(
           (skill) => skill.name.toLowerCase() === name.toLowerCase()
         );
@@ -432,15 +455,7 @@ export class InterviewService {
           status: "approved",
           approvedAt,
         });
-        await tx
-          .update(crossNotesTable)
-          .set({ resolvedAt: approvedAt })
-          .where(
-            and(
-              eq(crossNotesTable.toPositionId, session.positionId),
-              isNull(crossNotesTable.resolvedAt)
-            )
-          );
+        await career.resolveCrossNotes(session.positionId);
         return { nextSessionId: null, summarize: true };
       }
 
@@ -514,6 +529,56 @@ export class InterviewService {
         reviewedAt: new Date(),
       });
     });
+  }
+
+  /**
+   * The shortcut for imports (guided interview spec): every position whose
+   * facts came only from files, with no conflict left, is approved with all
+   * its extracted facts. Positions with conflicts wait for the user.
+   */
+  async approveImportedPositionsWithoutConflicts(userId: string) {
+    const profile = await this.requireProfile(userId);
+    const career = new CareerRepository(this.db);
+    const interview = new InterviewRepository(this.db);
+    const positions = (await career.listPositions(profile.id)).filter(
+      (position) =>
+        position.status === "pending" || position.status === "in_progress"
+    );
+    const conflicts = await career.listOpenConflicts(
+      positions.map((p) => p.id)
+    );
+    const sessions = await interview.listSessions(profile.id);
+
+    let approved = 0;
+    for (const position of positions) {
+      if (conflicts.some((conflict) => conflict.positionId === position.id))
+        continue;
+      const session = sessions.find(
+        (candidate) =>
+          candidate.positionId === position.id && candidate.status === "open"
+      );
+      if (!session) continue;
+      const [turns, drafts] = await Promise.all([
+        interview.listTurns(session.id),
+        interview.listDrafts(session.id),
+      ]);
+      const pending = drafts.filter((draft) => draft.status === "draft");
+      // Only file imports: a session the user talked in is reviewed by them.
+      if (turns.length > 0 || pending.length === 0) continue;
+      if (!pending.every((draft) => draft.sourceDocumentId)) continue;
+
+      await this.approveExtraction({
+        userId,
+        sessionId: session.id,
+        closePosition: true,
+        decisions: pending.map((draft) => ({
+          draftId: draft.id,
+          approved: true,
+        })),
+      });
+      approved++;
+    }
+    return { approved };
   }
 
   /** The open session of each target, for the timeline's "continue" action. */

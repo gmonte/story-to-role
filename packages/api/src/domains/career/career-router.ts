@@ -2,6 +2,7 @@ import { z } from "zod";
 
 import { realtimeSubscriptionSchema } from "@repo/api/domains/tasks/schemas/task";
 import { db } from "@repo/api/tools/db";
+import { ok, okSchema, openApiMeta } from "@repo/api/tools/openapi";
 import {
   createTRPCRouter,
   rateLimited,
@@ -10,32 +11,31 @@ import {
 } from "@repo/api/tools/trpc";
 
 import { CareerService } from "./career-service";
-import { careerLanguageSchema, type CareerLanguage } from "./schemas/career";
+import {
+  interviewLanguageSchema,
+  type InterviewLanguage,
+} from "./schemas/career";
 import {
   credentialInputSchema,
   positionInputSchema,
   timelineSchema,
 } from "./schemas/timeline";
 
-const ok = z.object({ ok: z.literal(true) });
-const done = { ok: true as const };
-
 /** New profiles start in the interface language. */
-function defaultLanguage(ctx: Pick<TRPCContext, "t">): CareerLanguage {
+function defaultLanguage(ctx: Pick<TRPCContext, "t">): InterviewLanguage {
   return ctx.t.locale === "pt-BR" ? "pt-BR" : "en-US";
 }
 
-const meta = (
-  method: "GET" | "POST" | "PUT" | "DELETE",
-  path: `/${string}`,
-  summary: string
-) => ({
-  openapi: { method, path, tags: ["career"], summary, protect: true },
-});
-
 export const careerRouter = createTRPCRouter({
   timeline: userProcedure
-    .meta(meta("GET", "/career/timeline", "Returns the user's career timeline"))
+    .meta(
+      openApiMeta(
+        "career",
+        "GET",
+        "/career/timeline",
+        "Returns the user's career timeline"
+      )
+    )
     .input(z.object({}))
     .output(timelineSchema)
     .query(({ ctx }) =>
@@ -46,34 +46,44 @@ export const careerRouter = createTRPCRouter({
     ),
 
   updateSettings: userProcedure
-    .meta(meta("PUT", "/career/settings", "Sets the interview language"))
-    .input(z.object({ interviewLanguage: careerLanguageSchema }))
-    .output(ok)
+    .meta(
+      openApiMeta(
+        "career",
+        "PUT",
+        "/career/settings",
+        "Sets the interview language"
+      )
+    )
+    .input(z.object({ interviewLanguage: interviewLanguageSchema }))
+    .output(okSchema)
     .mutation(async ({ ctx, input }) => {
       await new CareerService(db).updateSettings({
         userId: ctx.userId,
         ...input,
       });
-      return done;
+      return ok;
     }),
 
   acceptPrivacyNotice: userProcedure
     .meta(
-      meta(
+      openApiMeta(
+        "career",
         "POST",
         "/career/privacy-notice",
         "Records that the user read the privacy notice"
       )
     )
     .input(z.object({}))
-    .output(ok)
+    .output(okSchema)
     .mutation(async ({ ctx }) => {
       await new CareerService(db).acceptPrivacyNotice(ctx.userId);
-      return done;
+      return ok;
     }),
 
   addPosition: userProcedure
-    .meta(meta("POST", "/positions", "Adds a position by hand"))
+    .meta(
+      openApiMeta("career", "POST", "/positions", "Adds a position by hand")
+    )
     .input(positionInputSchema)
     .output(z.object({ positionId: z.uuid() }))
     .mutation(({ ctx, input }) =>
@@ -81,93 +91,105 @@ export const careerRouter = createTRPCRouter({
     ),
 
   updatePosition: userProcedure
-    .meta(meta("PUT", "/positions/by-id/{positionId}", "Edits a position"))
+    .meta(
+      openApiMeta(
+        "career",
+        "PUT",
+        "/positions/by-id/{positionId}",
+        "Edits a position"
+      )
+    )
     .input(positionInputSchema.extend({ positionId: z.uuid() }))
-    .output(ok)
+    .output(okSchema)
     .mutation(async ({ ctx, input: { positionId, ...position } }) => {
       await new CareerService(db).updatePosition({
         userId: ctx.userId,
         positionId,
         position,
       });
-      return done;
+      return ok;
     }),
 
   removePosition: userProcedure
     .meta(
-      meta(
+      openApiMeta(
+        "career",
         "DELETE",
         "/positions/by-id/{positionId}",
         "Removes a position (it can be restored)"
       )
     )
     .input(z.object({ positionId: z.uuid() }))
-    .output(ok)
+    .output(okSchema)
     .mutation(async ({ ctx, input }) => {
       await new CareerService(db).removePosition({
         userId: ctx.userId,
         ...input,
       });
-      return done;
+      return ok;
     }),
 
   restorePosition: userProcedure
     .meta(
-      meta(
+      openApiMeta(
+        "career",
         "POST",
         "/positions/by-id/{positionId}/restore",
         "Restores a removed position with its evidence"
       )
     )
     .input(z.object({ positionId: z.uuid() }))
-    .output(ok)
+    .output(okSchema)
     .mutation(async ({ ctx, input }) => {
       await new CareerService(db).restorePosition({
         userId: ctx.userId,
         ...input,
       });
-      return done;
+      return ok;
     }),
 
   mergePositions: userProcedure
     .meta(
-      meta(
+      openApiMeta(
+        "career",
         "POST",
         "/positions/by-id/{positionId}/merge",
         "Merges a position into another"
       )
     )
     .input(z.object({ positionId: z.uuid(), intoPositionId: z.uuid() }))
-    .output(ok)
+    .output(okSchema)
     .mutation(async ({ ctx, input }) => {
       await new CareerService(db).mergePositions({
         userId: ctx.userId,
         ...input,
       });
-      return done;
+      return ok;
     }),
 
   resolveConflict: userProcedure
     .meta(
-      meta(
+      openApiMeta(
+        "career",
         "POST",
         "/position-conflicts/by-id/{positionConflictId}/resolve",
         "Picks one side of a conflict"
       )
     )
     .input(z.object({ positionConflictId: z.uuid(), value: z.string().min(1) }))
-    .output(ok)
+    .output(okSchema)
     .mutation(async ({ ctx, input }) => {
       await new CareerService(db).resolveConflict({
         userId: ctx.userId,
-        conflictId: input.positionConflictId,
-        value: input.value,
+        ...input,
       });
-      return done;
+      return ok;
     }),
 
   addCredential: userProcedure
-    .meta(meta("POST", "/credentials", "Adds a credential by hand"))
+    .meta(
+      openApiMeta("career", "POST", "/credentials", "Adds a credential by hand")
+    )
     .input(credentialInputSchema)
     .output(z.object({ credentialId: z.uuid() }))
     .mutation(({ ctx, input }) =>
@@ -179,113 +201,130 @@ export const careerRouter = createTRPCRouter({
 
   updateCredential: userProcedure
     .meta(
-      meta("PUT", "/credentials/by-id/{credentialId}", "Edits a credential")
+      openApiMeta(
+        "career",
+        "PUT",
+        "/credentials/by-id/{credentialId}",
+        "Edits a credential"
+      )
     )
     .input(credentialInputSchema.extend({ credentialId: z.uuid() }))
-    .output(ok)
+    .output(okSchema)
     .mutation(async ({ ctx, input: { credentialId, ...credential } }) => {
       await new CareerService(db).updateCredential({
         userId: ctx.userId,
         credentialId,
         credential,
       });
-      return done;
+      return ok;
     }),
 
   approveCredential: userProcedure
     .meta(
-      meta(
+      openApiMeta(
+        "career",
         "POST",
         "/credentials/by-id/{credentialId}/approve",
         "Approves an imported credential"
       )
     )
     .input(z.object({ credentialId: z.uuid() }))
-    .output(ok)
+    .output(okSchema)
     .mutation(async ({ ctx, input }) => {
       await new CareerService(db).approveCredential({
         userId: ctx.userId,
         ...input,
       });
-      return done;
+      return ok;
     }),
 
   removeCredential: userProcedure
     .meta(
-      meta(
+      openApiMeta(
+        "career",
         "DELETE",
         "/credentials/by-id/{credentialId}",
         "Removes a credential"
       )
     )
     .input(z.object({ credentialId: z.uuid() }))
-    .output(ok)
+    .output(okSchema)
     .mutation(async ({ ctx, input }) => {
       await new CareerService(db).removeCredential({
         userId: ctx.userId,
         ...input,
       });
-      return done;
+      return ok;
     }),
 
   acceptProposal: userProcedure
     .meta(
-      meta(
+      openApiMeta(
+        "career",
         "POST",
         "/timeline-proposals/by-id/{timelineProposalId}/accept",
         "Applies a timeline change the interviewer proposed"
       )
     )
     .input(z.object({ timelineProposalId: z.uuid() }))
-    .output(ok)
+    .output(okSchema)
     .mutation(async ({ ctx, input }) => {
       await new CareerService(db).acceptProposal({
         userId: ctx.userId,
-        proposalId: input.timelineProposalId,
+        ...input,
       });
-      return done;
+      return ok;
     }),
 
   rejectProposal: userProcedure
     .meta(
-      meta(
+      openApiMeta(
+        "career",
         "POST",
         "/timeline-proposals/by-id/{timelineProposalId}/reject",
         "Dismisses a proposed timeline change"
       )
     )
     .input(z.object({ timelineProposalId: z.uuid() }))
-    .output(ok)
+    .output(okSchema)
     .mutation(async ({ ctx, input }) => {
       await new CareerService(db).rejectProposal({
         userId: ctx.userId,
-        proposalId: input.timelineProposalId,
+        ...input,
       });
-      return done;
+      return ok;
     }),
 
   requestNarrative: userProcedure
     .use(rateLimited("taskStart"))
-    .meta(meta("POST", "/career/narrative", "Drafts the career narrative"))
+    .meta(
+      openApiMeta(
+        "career",
+        "POST",
+        "/career/narrative",
+        "Drafts the career narrative"
+      )
+    )
     .input(z.object({}))
     .output(z.object({ realtime: realtimeSubscriptionSchema }))
     .mutation(({ ctx }) => new CareerService(db).requestNarrative(ctx.userId)),
 
   approveNarrative: userProcedure
     .meta(
-      meta(
+      openApiMeta(
+        "career",
         "POST",
         "/career/narratives/by-id/{narrativeId}/approve",
         "Approves the career narrative"
       )
     )
     .input(z.object({ narrativeId: z.uuid() }))
-    .output(ok)
+    .output(okSchema)
     .mutation(async ({ ctx, input }) => {
       await new CareerService(db).approveNarrative({
         userId: ctx.userId,
         ...input,
       });
-      return done;
+      return ok;
     }),
 });

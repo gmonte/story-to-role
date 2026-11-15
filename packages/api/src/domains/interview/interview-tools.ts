@@ -5,14 +5,11 @@ import {
   type AiTool,
 } from "@repo/api/domains/ai/providers/provider-package";
 import { CareerRepository } from "@repo/api/domains/career/career-repository";
-import {
-  crossNotesTable,
-  projectsTable,
-} from "@repo/api/domains/career/db/career-tables";
+import { projectsTable } from "@repo/api/domains/career/db/career-tables";
 import {
   type timelineProposalKindSchema,
   yearMonthSchema,
-  type CareerLanguage,
+  type InterviewLanguage,
 } from "@repo/api/domains/career/schemas/career";
 import type { UserCipher } from "@repo/api/domains/encryption/user-cipher";
 import { sensitiveItemKindSchema } from "@repo/api/domains/evidence/schemas/evidence";
@@ -29,7 +26,7 @@ export type InterviewToolContext = {
   sessionId: string;
   positionId: string | null;
   projectId: string | null;
-  language: CareerLanguage;
+  language: InterviewLanguage;
   // The user's turns of this session: the only words a fact may rest on.
   userTurns: Array<{ id: string; content: string }>;
   // Positions of the timeline the agent may refer to.
@@ -233,11 +230,20 @@ export function createInterviewTools(context: InterviewToolContext): AiTool[] {
       z.object({ position_id: z.string(), note: z.string().min(1).max(500) }),
       async (input) => {
         requireKnownPosition(context, input.position_id);
-        await context.db.insert(crossNotesTable).values({
+        await career.insertCrossNote({
           fromPositionId: context.positionId,
           toPositionId: input.position_id,
           encryptedText: cipher.encrypt(input.note),
         });
+        // A note on an approved position reopens it (guided interview spec).
+        const target = await career.findPosition({
+          profileId: context.profileId,
+          positionId: input.position_id,
+        });
+        if (target?.status === "approved") {
+          await career.updatePosition(target.id, { status: "in_progress" });
+          return "Note saved; that position was reopened so the user can review it.";
+        }
         return "Note saved on that position.";
       }
     ),
@@ -310,6 +316,39 @@ export function createInterviewTools(context: InterviewToolContext): AiTool[] {
           startDate: input.start_date,
           endDate: input.still_there ? "current" : input.end_date,
           location: input.location,
+          reason: input.reason,
+        });
+      }
+    ),
+
+    tool(
+      "propose_resolve_conflict",
+      "When the user says which of two conflicting values (from different files) is right, propose choosing it. Applies only if the user confirms.",
+      z.object({
+        position_conflict_id: z.string(),
+        value: z
+          .string()
+          .min(1)
+          .describe("One of the conflict's options, exactly as listed."),
+        reason: z.string().max(300),
+      }),
+      async (input) => {
+        const conflict = await career.findConflict(input.position_conflict_id);
+        if (!conflict || !context.positionIds.includes(conflict.positionId)) {
+          throw new ToolRefusal("Unknown conflict id.");
+        }
+        const options = JSON.parse(
+          cipher.decrypt(conflict.encryptedOptions)
+        ) as string[];
+        if (!options.includes(input.value)) {
+          throw new ToolRefusal(
+            `The value must be one of: ${options.join(", ")}.`
+          );
+        }
+        return proposeTimelineChange("resolve_conflict", {
+          positionId: conflict.positionId,
+          positionConflictId: conflict.id,
+          value: input.value,
           reason: input.reason,
         });
       }

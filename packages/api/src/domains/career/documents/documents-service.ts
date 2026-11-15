@@ -7,7 +7,11 @@ import { getStorage, type Storage } from "@repo/api/tools/storage/storage";
 
 import { CareerRepository } from "../career-repository";
 import type { SourceDocumentKind } from "../schemas/career";
-import { documentLimits, isAcceptedDocumentType } from "./document-limits";
+import {
+  documentLimits,
+  documentTypeOf,
+  isAcceptedDocumentType,
+} from "./document-limits";
 
 /**
  * Receives an imported resume or truth file: the file is stored encrypted
@@ -27,8 +31,9 @@ export class DocumentsService {
     mimeType: string;
     bytes: Buffer;
   }) {
+    const mimeType = documentTypeOf(input);
     if (
-      !isAcceptedDocumentType(input.mimeType) ||
+      !isAcceptedDocumentType(mimeType) ||
       input.bytes.length === 0 ||
       input.bytes.length > documentLimits.maxBytes
     ) {
@@ -52,7 +57,7 @@ export class DocumentsService {
         profileId: profile.id,
         kind: input.kind,
         encryptedFileName: cipher.encrypt(input.fileName.slice(0, 255)),
-        mimeType: input.mimeType,
+        mimeType,
         storageKey,
       });
     });

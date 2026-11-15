@@ -67,7 +67,10 @@ export function CredentialsSection({
   );
   const tellStory = useMutation(
     trpc.interview.openSession.mutationOptions({
-      onSuccess: ({ sessionId }) => setActiveSessionId(sessionId),
+      onSuccess: async ({ sessionId }) => {
+        await refresh();
+        setActiveSessionId(sessionId);
+      },
       onError,
     })
   );
@@ -109,11 +112,19 @@ export function CredentialsSection({
                   .join(" · ")}
               </p>
             </div>
-            {!credential.approved && (
-              <Badge variant="outline">
-                {t.formatMessage({ defaultMessage: "To review" })}
-              </Badge>
-            )}
+            <div className="flex shrink-0 gap-1">
+              {credential.depth.counts.stories > 0 &&
+                credential.depth.level && (
+                  <Badge variant="secondary">
+                    {labels.depth(credential.depth.level)}
+                  </Badge>
+                )}
+              {!credential.approved && (
+                <Badge variant="outline">
+                  {t.formatMessage({ defaultMessage: "To review" })}
+                </Badge>
+              )}
+            </div>
           </div>
           <div className="flex flex-wrap gap-1.5">
             {!credential.approved && (

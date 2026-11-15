@@ -10,7 +10,7 @@ import { toast } from "@repo/web/components/ui/sonner";
 
 import { useTRPC } from "~/tools/trpc/client";
 
-import { useTimeline } from "../hooks/use-career-queries";
+import { useRefreshCareer, useTimeline } from "../hooks/use-career-queries";
 import { useCareerWorkspace } from "./career-workspace-context";
 import { InterviewChat } from "./interview-chat";
 import { InterviewLanguageSelect } from "./interview-language-select";
@@ -24,19 +24,30 @@ export function InterviewColumn() {
   const t = useTranslation();
   const trpc = useTRPC();
   const timeline = useTimeline();
+  const refresh = useRefreshCareer();
   const openSessions = useQuery(trpc.interview.openSessions.queryOptions({}));
   const { activeSessionId, setActiveSessionId } = useCareerWorkspace();
 
   const open = useMutation(
     trpc.interview.openSession.mutationOptions({
-      onSuccess: ({ sessionId }) => setActiveSessionId(sessionId),
+      onSuccess: async ({ sessionId }) => {
+        await refresh();
+        setActiveSessionId(sessionId);
+      },
       onError: (error) => toast.error(error.message),
     })
   );
 
-  // Come back anytime: resume the session left open.
+  // Come back anytime: resume the session left open. A session closed
+  // elsewhere (approved from the timeline) leaves the chat.
   useEffect(() => {
-    if (!activeSessionId && openSessions.data?.[0]) {
+    if (!openSessions.data) return;
+    const stillOpen = openSessions.data.some(
+      (session) => session.sessionId === activeSessionId
+    );
+    if (activeSessionId && !stillOpen) {
+      setActiveSessionId(null);
+    } else if (!activeSessionId && openSessions.data[0]) {
       setActiveSessionId(openSessions.data[0].sessionId);
     }
   }, [activeSessionId, openSessions.data, setActiveSessionId]);

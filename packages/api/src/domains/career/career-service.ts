@@ -1,4 +1,5 @@
 import { TRPCError } from "@trpc/server";
+import { z } from "zod";
 
 import type { DbClient } from "@repo/api/tools/db-client";
 import {
@@ -12,14 +13,20 @@ import { interviewStages } from "@repo/api/domains/interview/schemas/interview";
 
 import { CareerRepository } from "./career-repository";
 import { computeDepth } from "./depth";
-import type { CareerLanguage, ConflictField } from "./schemas/career";
-import type {
-  CredentialInput,
-  CredentialView,
-  PositionInput,
-  PositionView,
-  Timeline,
-  TimelineProposalView,
+import {
+  yearMonthSchema,
+  type InterviewLanguage,
+  type ConflictField,
+  type TimelineProposalKind,
+} from "./schemas/career";
+import {
+  positionInputSchema,
+  type CredentialInput,
+  type CredentialView,
+  type PositionInput,
+  type PositionView,
+  type Timeline,
+  type TimelineProposalView,
 } from "./schemas/timeline";
 import {
   mergeImportedPositions,
@@ -56,7 +63,7 @@ export class CareerService {
   /** The profile is created on first use, in the interface language. */
   async getOrCreateProfile(input: {
     userId: string;
-    defaultLanguage: CareerLanguage;
+    defaultLanguage: InterviewLanguage;
   }) {
     const repository = new CareerRepository(this.db);
     let profile = await repository.findProfileByUserId(input.userId);
@@ -81,7 +88,7 @@ export class CareerService {
 
   async updateSettings(input: {
     userId: string;
-    interviewLanguage: CareerLanguage;
+    interviewLanguage: InterviewLanguage;
   }) {
     const profile = await this.requireProfile(input.userId);
     await new CareerRepository(this.db).updateProfile(profile.id, {
@@ -98,7 +105,7 @@ export class CareerService {
 
   async getTimeline(input: {
     userId: string;
-    defaultLanguage: CareerLanguage;
+    defaultLanguage: InterviewLanguage;
   }): Promise<Timeline> {
     const profile = await this.getOrCreateProfile(input);
 
@@ -158,6 +165,7 @@ export class CareerService {
               (item) => item.positionId === row.id && !item.reviewedAt
             ).length,
           }),
+          languages: [...new Set(ownEvidence.map((e) => e.language))],
         };
       };
 
@@ -170,6 +178,9 @@ export class CareerService {
       const narrative = await career.latestNarrative(profile.id);
 
       return {
+        evidenceLanguages: [
+          ...new Set(evidenceRows.map((row) => row.language)),
+        ],
         narrative: narrative
           ? {
               id: narrative.id,
@@ -199,6 +210,26 @@ export class CareerService {
             endDate: row.endDate,
             status: row.status,
             approved: !!row.approvedAt,
+            depth: (() => {
+              const own = evidenceRows.filter((e) => e.credentialId === row.id);
+              const storyCount = stories.filter(
+                (s) => s.credentialId === row.id
+              ).length;
+              return computeDepth({
+                hasDates: true,
+                scriptKind: "short",
+                approved: !!row.approvedAt,
+                reachedContext: storyCount > 0 || own.length > 0,
+                storyCount,
+                achievements: own
+                  .filter(
+                    (e) => e.kind === "achievement" || e.kind === "metric"
+                  )
+                  .map((e) => cipher.decrypt(e.encryptedText)),
+                toolCount: own.filter((e) => e.kind === "tool").length,
+                sensitivePending: 0,
+              });
+            })(),
           })
         ),
         documents: (await career.listDocuments(profile.id)).map((row) => ({
@@ -360,13 +391,13 @@ export class CareerService {
 
   async resolveConflict(input: {
     userId: string;
-    conflictId: string;
+    positionConflictId: string;
     value: string;
   }) {
     const profile = await this.requireProfile(input.userId);
     await this.db.transaction(async (tx) => {
       const career = new CareerRepository(tx);
-      const conflict = await career.findConflict(input.conflictId);
+      const conflict = await career.findConflict(input.positionConflictId);
       const position =
         conflict &&
         (await career.findPosition({
@@ -405,6 +436,7 @@ export class CareerService {
     cipher: UserCipher;
     profileId: string;
     sourceDocumentId: string;
+    origin: "imported" | "truth_file";
     imported: ImportedPosition[];
   }) {
     const career = new CareerRepository(input.tx);
@@ -429,12 +461,18 @@ export class CareerService {
     for (const position of plan.creates) {
       const row = await career.insertPosition({
         profileId: input.profileId,
-        origin: "imported",
+        origin: input.origin,
         sourceDocumentIds: [input.sourceDocumentId],
         ...this.sealPosition(input.cipher, position),
       });
       touched.push({ positionId: row.id, imported: position });
     }
+
+    // One open conflict per field: options from every source join it.
+    const openConflicts = await career.listOpenConflicts(
+      plan.updates.map((update) => update.positionId)
+    );
+    const planned = new Map<string, Set<string>>();
 
     for (const update of plan.updates) {
       const row = rows.find((r) => r.id === update.positionId);
@@ -447,17 +485,52 @@ export class CareerService {
           ? { encryptedLocation: input.cipher.encrypt(update.fill.location) }
           : {}),
       });
-      await career.insertConflicts(
-        update.conflicts.map((conflict) => ({
-          positionId: row.id,
-          field: conflict.field,
-          encryptedOptions: input.cipher.encrypt(
-            JSON.stringify(conflict.options)
-          ),
-        }))
-      );
+      for (const conflict of update.conflicts) {
+        const key = `${row.id}:${conflict.field}`;
+        const existing = openConflicts.find(
+          (open) => open.positionId === row.id && open.field === conflict.field
+        );
+        const options = new Set([
+          ...(existing
+            ? (JSON.parse(
+                input.cipher.decrypt(existing.encryptedOptions)
+              ) as string[])
+            : []),
+          ...(planned.get(key) ?? []),
+          ...conflict.options,
+        ]);
+        planned.set(key, options);
+        if (existing) {
+          await career.updateConflictOptions({
+            positionConflictId: existing.id,
+            encryptedOptions: input.cipher.encrypt(
+              JSON.stringify([...options])
+            ),
+          });
+        }
+      }
       touched.push({ positionId: row.id, imported: update.imported });
     }
+
+    await career.insertConflicts(
+      [...planned.entries()]
+        .filter(([key]) => {
+          const [positionId, field] = key.split(":");
+          return !openConflicts.some(
+            (open) => open.positionId === positionId && open.field === field
+          );
+        })
+        .map(([key, options]) => {
+          const [positionId, field] = key.split(":");
+          return {
+            positionId,
+            field: field as ConflictField,
+            encryptedOptions: input.cipher.encrypt(
+              JSON.stringify([...options])
+            ),
+          };
+        })
+    );
 
     return touched;
   }
@@ -523,89 +596,93 @@ export class CareerService {
     });
   }
 
-  /** Applies a change the interviewer proposed, now that the user confirmed it. */
-  async acceptProposal(input: { userId: string; proposalId: string }) {
-    const profile = await this.requireProfile(input.userId);
-    const proposal = await this.db.transaction(async (tx) => {
-      const career = new CareerRepository(tx);
-      const row = await career.findProposal({
-        profileId: profile.id,
-        proposalId: input.proposalId,
-      });
-      if (!row || row.acceptedAt || row.rejectedAt) throw notFound();
-      const cipher = await getUserCipher(tx, input.userId);
-      await career.decideProposal({ proposalId: row.id, accepted: true });
-      return {
-        kind: row.kind,
-        payload: JSON.parse(cipher.decrypt(row.encryptedPayload)) as Record<
-          string,
-          string | undefined
-        >,
-      };
-    });
-
-    const { payload } = proposal;
-    switch (proposal.kind) {
-      case "update_position":
-        return this.applyPositionCorrection({
-          userId: input.userId,
-          positionId: payload.positionId ?? "",
-          correction: payload,
-        });
-      case "add_position": {
-        const { positionId } = await this.addPosition({
-          userId: input.userId,
-          position: {
-            employer: payload.employer ?? "",
-            title: payload.title ?? "",
-            startDate: payload.startDate,
-            endDate: payload.endDate,
-            location: payload.location,
-          },
-        });
-        await this.db.transaction((tx) =>
-          new CareerRepository(tx).updatePosition(positionId, {
-            origin: "interview",
-          })
-        );
-        return;
-      }
-      case "remove_position":
-        return this.removePosition({
-          userId: input.userId,
-          positionId: payload.positionId ?? "",
-        });
-      case "merge_positions":
-        return this.mergePositions({
-          userId: input.userId,
-          positionId: payload.positionId ?? "",
-          intoPositionId: payload.intoPositionId ?? "",
-        });
-      case "split_position":
-        return this.splitPosition({
-          userId: input.userId,
-          positionId: payload.positionId ?? "",
-          title: payload.title ?? "",
-          startDate: payload.startDate ?? "",
-        });
-    }
-  }
-
-  async rejectProposal(input: { userId: string; proposalId: string }) {
+  /**
+   * Applies a change the interviewer proposed, now that the user confirmed
+   * it. Marking the proposal and applying the change commit together.
+   */
+  async acceptProposal(input: { userId: string; timelineProposalId: string }) {
     const profile = await this.requireProfile(input.userId);
     await this.db.transaction(async (tx) => {
       const career = new CareerRepository(tx);
       const row = await career.findProposal({
         profileId: profile.id,
-        proposalId: input.proposalId,
+        timelineProposalId: input.timelineProposalId,
       });
       if (!row || row.acceptedAt || row.rejectedAt) throw notFound();
-      await career.decideProposal({ proposalId: row.id, accepted: false });
+      const cipher = await getUserCipher(tx, input.userId);
+      const parsed = proposalPayloadSchemas[row.kind].safeParse(
+        JSON.parse(cipher.decrypt(row.encryptedPayload))
+      );
+      if (!parsed.success) throw notFound();
+
+      await career.decideProposal({
+        timelineProposalId: row.id,
+        accepted: true,
+      });
+      // The same operations as the user's own actions, inside this transaction.
+      const service = new CareerService(tx, this.tasks);
+      const userId = input.userId;
+      const payload = parsed.data as Record<string, string | undefined>;
+      switch (row.kind) {
+        case "update_position":
+          return service.applyPositionCorrection({
+            userId,
+            positionId: payload.positionId!,
+            correction: payload,
+          });
+        case "add_position": {
+          const { positionId } = await service.addPosition({
+            userId,
+            position: payloadToPosition(payload),
+          });
+          return career.updatePosition(positionId, { origin: "interview" });
+        }
+        case "remove_position":
+          return service.removePosition({
+            userId,
+            positionId: payload.positionId!,
+          });
+        case "resolve_conflict":
+          return service.resolveConflict({
+            userId,
+            positionConflictId: payload.positionConflictId!,
+            value: payload.value!,
+          });
+        case "merge_positions":
+          return service.mergePositions({
+            userId,
+            positionId: payload.positionId!,
+            intoPositionId: payload.intoPositionId!,
+          });
+        case "split_position":
+          return service.splitPosition({
+            userId,
+            positionId: payload.positionId!,
+            title: payload.title!,
+            startDate: payload.startDate!,
+          });
+      }
+    });
+  }
+
+  async rejectProposal(input: { userId: string; timelineProposalId: string }) {
+    const profile = await this.requireProfile(input.userId);
+    await this.db.transaction(async (tx) => {
+      const career = new CareerRepository(tx);
+      const row = await career.findProposal({
+        profileId: profile.id,
+        timelineProposalId: input.timelineProposalId,
+      });
+      if (!row || row.acceptedAt || row.rejectedAt) throw notFound();
+      await career.decideProposal({
+        timelineProposalId: row.id,
+        accepted: false,
+      });
     });
   }
 
   /** Applies the facts the user corrected during the interview. */
-  private async applyPositionCorrection(input: {
+  async applyPositionCorrection(input: {
     userId: string;
     positionId: string;
     correction: Record<string, string | undefined>;
@@ -635,7 +712,7 @@ export class CareerService {
    * A promotion with a new scope becomes its own entry: the new position
    * starts at `startDate` and the original ends the month before.
    */
-  private async splitPosition(input: {
+  async splitPosition(input: {
     userId: string;
     positionId: string;
     title: string;
@@ -687,6 +764,39 @@ export class CareerService {
       status: credential.status,
     };
   }
+}
+
+const optionalText = z.string().trim().min(1).max(200).optional();
+
+/** What each kind of proposal carries, checked before it is applied. */
+const proposalPayloadSchemas: Record<TimelineProposalKind, z.ZodObject> = {
+  update_position: z.object({
+    positionId: z.uuid(),
+    employer: optionalText,
+    title: optionalText,
+    startDate: yearMonthSchema.optional(),
+    endDate: z.union([yearMonthSchema, z.literal("current")]).optional(),
+    location: optionalText,
+  }),
+  add_position: positionInputSchema,
+  remove_position: z.object({ positionId: z.uuid() }),
+  resolve_conflict: z.object({
+    positionId: z.uuid(),
+    positionConflictId: z.uuid(),
+    value: z.string().min(1),
+  }),
+  merge_positions: z.object({ positionId: z.uuid(), intoPositionId: z.uuid() }),
+  split_position: z.object({
+    positionId: z.uuid(),
+    title: z.string().trim().min(1).max(200),
+    startDate: yearMonthSchema,
+  }),
+};
+
+function payloadToPosition(
+  payload: Record<string, string | undefined>
+): PositionInput {
+  return positionInputSchema.parse(payload);
 }
 
 function previousMonth(yearMonth: string) {

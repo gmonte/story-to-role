@@ -2,7 +2,7 @@ import { z } from "zod";
 
 import { depthLevels } from "../depth";
 import {
-  careerLanguageSchema,
+  interviewLanguageSchema,
   conflictFieldSchema,
   credentialKindSchema,
   credentialStatusSchema,
@@ -59,6 +59,8 @@ export const positionViewSchema = z.object({
   scriptKind: scriptKindSchema,
   conflicts: z.array(positionConflictSchema),
   depth: depthSchema,
+  // Languages its evidence was told in.
+  languages: z.array(interviewLanguageSchema),
 });
 export type PositionView = z.infer<typeof positionViewSchema>;
 
@@ -80,6 +82,8 @@ export const credentialViewSchema = credentialInputSchema.extend({
   startDate: z.string().nullable(),
   endDate: z.string().nullable(),
   approved: z.boolean(),
+  // A credential's story counts in depth like a position's.
+  depth: depthSchema,
 });
 export type CredentialView = z.infer<typeof credentialViewSchema>;
 
@@ -101,7 +105,7 @@ export const timelineProposalViewSchema = z.object({
 export type TimelineProposalView = z.infer<typeof timelineProposalViewSchema>;
 
 export const careerProfileViewSchema = z.object({
-  interviewLanguage: careerLanguageSchema,
+  interviewLanguage: interviewLanguageSchema,
   privacyNoticeAccepted: z.boolean(),
 });
 
@@ -120,5 +124,7 @@ export const timelineSchema = z.object({
   documents: z.array(sourceDocumentViewSchema),
   proposals: z.array(timelineProposalViewSchema),
   narrative: narrativeViewSchema.nullable(),
+  // Languages the whole career holds evidence in: badges show only for two.
+  evidenceLanguages: z.array(interviewLanguageSchema),
 });
 export type Timeline = z.infer<typeof timelineSchema>;

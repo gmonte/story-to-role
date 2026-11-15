@@ -2,6 +2,7 @@ import { auth } from "@clerk/nextjs/server";
 import type { NextRequest } from "next/server";
 import { z } from "zod";
 
+import { documentLimits } from "@repo/api/domains/career/documents/document-limits";
 import { DocumentsService } from "@repo/api/domains/career/documents/documents-service";
 import { sourceDocumentKindSchema } from "@repo/api/domains/career/schemas/career";
 import { UsersRepository } from "@repo/api/domains/users/users-repository";
@@ -30,6 +31,13 @@ export async function POST(request: NextRequest) {
     return new Response(null, { status: 429 });
   }
 
+  // Refuse oversized uploads before reading the body (a little room for the
+  // multipart framing around the file).
+  const length = Number(request.headers.get("content-length") ?? 0);
+  if (!length || length > documentLimits.maxBytes + 64 * 1024) {
+    return new Response(null, { status: 413 });
+  }
+
   const form = formSchema.safeParse(
     Object.fromEntries(await request.formData())
   );
@@ -40,9 +48,7 @@ export async function POST(request: NextRequest) {
       userId: user.id,
       kind: form.data.kind,
       fileName: form.data.file.name,
-      mimeType:
-        form.data.file.type ||
-        (form.data.file.name.endsWith(".md") ? "text/markdown" : ""),
+      mimeType: form.data.file.type,
       bytes: Buffer.from(await form.data.file.arrayBuffer()),
     });
     return Response.json(result);

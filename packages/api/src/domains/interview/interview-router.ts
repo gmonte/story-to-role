@@ -3,6 +3,7 @@ import { z } from "zod";
 import { sensitivityChoiceSchema } from "@repo/api/domains/evidence/schemas/evidence";
 import { realtimeSubscriptionSchema } from "@repo/api/domains/tasks/schemas/task";
 import { db } from "@repo/api/tools/db";
+import { ok, okSchema, openApiMeta } from "@repo/api/tools/openapi";
 import {
   createTRPCRouter,
   rateLimited,
@@ -16,21 +17,12 @@ import {
   sessionViewSchema,
 } from "./schemas/session-view";
 
-const ok = z.object({ ok: z.literal(true) });
-const done = { ok: true as const };
-
-const meta = (
-  method: "GET" | "POST" | "PUT",
-  path: `/${string}`,
-  summary: string
-) => ({
-  openapi: { method, path, tags: ["interview"], summary, protect: true },
-});
-
 export const interviewRouter = createTRPCRouter({
   openSession: userProcedure
+    .use(rateLimited("sessionOpen"))
     .meta(
-      meta(
+      openApiMeta(
+        "interview",
         "POST",
         "/interview/sessions",
         "Resumes or opens the interview session of a position or credential"
@@ -49,7 +41,8 @@ export const interviewRouter = createTRPCRouter({
 
   openSessions: userProcedure
     .meta(
-      meta(
+      openApiMeta(
+        "interview",
         "GET",
         "/interview/sessions",
         "Lists the user's open interview sessions"
@@ -69,7 +62,8 @@ export const interviewRouter = createTRPCRouter({
 
   session: userProcedure
     .meta(
-      meta(
+      openApiMeta(
+        "interview",
         "GET",
         "/interview/sessions/by-id/{sessionId}",
         "Returns an interview session with its turns and drafts"
@@ -84,7 +78,8 @@ export const interviewRouter = createTRPCRouter({
   sendMessage: userProcedure
     .use(rateLimited("chatMessage"))
     .meta(
-      meta(
+      openApiMeta(
+        "interview",
         "POST",
         "/interview/sessions/by-id/{sessionId}/messages",
         "Sends a message to the interviewer"
@@ -100,25 +95,27 @@ export const interviewRouter = createTRPCRouter({
 
   proposeExtraction: userProcedure
     .meta(
-      meta(
+      openApiMeta(
+        "interview",
         "POST",
         "/interview/sessions/by-id/{sessionId}/extraction",
         "Opens the approval screen for the session"
       )
     )
     .input(z.object({ sessionId: z.uuid() }))
-    .output(ok)
+    .output(okSchema)
     .mutation(async ({ ctx, input }) => {
       await new InterviewService(db).proposeExtraction({
         userId: ctx.userId,
         ...input,
       });
-      return done;
+      return ok;
     }),
 
   approveExtraction: userProcedure
     .meta(
-      meta(
+      openApiMeta(
+        "interview",
         "POST",
         "/interview/sessions/by-id/{sessionId}/extraction/approve",
         "Approves the extracted facts"
@@ -139,9 +136,27 @@ export const interviewRouter = createTRPCRouter({
       })
     ),
 
+  approveImportedPositions: userProcedure
+    .meta(
+      openApiMeta(
+        "interview",
+        "POST",
+        "/interview/imported-positions/approve",
+        "Approves every imported position without conflicts"
+      )
+    )
+    .input(z.object({}))
+    .output(z.object({ approved: z.number() }))
+    .mutation(({ ctx }) =>
+      new InterviewService(db).approveImportedPositionsWithoutConflicts(
+        ctx.userId
+      )
+    ),
+
   sensitiveItems: userProcedure
     .meta(
-      meta(
+      openApiMeta(
+        "interview",
         "GET",
         "/sensitive-items",
         "Lists the sensitive items and their choices"
@@ -155,7 +170,8 @@ export const interviewRouter = createTRPCRouter({
 
   setSensitiveChoice: userProcedure
     .meta(
-      meta(
+      openApiMeta(
+        "interview",
         "PUT",
         "/sensitive-items/by-id/{sensitiveItemId}",
         "Sets use, generalize or exclude for a sensitive item"
@@ -168,12 +184,12 @@ export const interviewRouter = createTRPCRouter({
         generalized: z.string().max(300).optional(),
       })
     )
-    .output(ok)
+    .output(okSchema)
     .mutation(async ({ ctx, input }) => {
       await new InterviewService(db).setSensitiveChoice({
         userId: ctx.userId,
         ...input,
       });
-      return done;
+      return ok;
     }),
 });

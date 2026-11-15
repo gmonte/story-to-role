@@ -16,10 +16,17 @@ import { cn } from "@repo/web/lib/utils";
 import { useTRPC } from "~/tools/trpc/client";
 
 import { useCareerLabels } from "../hooks/use-career-labels";
-import { useRefreshCareer } from "../hooks/use-career-queries";
+import { useRefreshCareer, useTimeline } from "../hooks/use-career-queries";
 import { useCareerWorkspace } from "./career-workspace-context";
+import { LanguageBadges } from "./language-badges";
 
-type Decision = { approved: boolean; text?: string };
+type StoryFields = {
+  problem: string;
+  action: string;
+  partners?: string;
+  result: string;
+};
+type Decision = { approved: boolean; text?: string; story?: StoryFields };
 
 /**
  * The extraction is a proposal: each extracted line sits beside the user's
@@ -34,6 +41,12 @@ export function ApprovalScreen({ session }: { session: SessionView }) {
   const { setActiveSessionId } = useCareerWorkspace();
   const [decisions, setDecisions] = useState<Record<string, Decision>>({});
   const [editing, setEditing] = useState<string | null>(null);
+  const timeline = useTimeline();
+  const bilingual =
+    new Set([
+      ...(timeline.data?.evidenceLanguages ?? []),
+      ...session.drafts.map((draft) => draft.language),
+    ]).size > 1;
 
   const decisionOf = (draftId: string): Decision =>
     decisions[draftId] ?? { approved: true };
@@ -91,11 +104,12 @@ export function ApprovalScreen({ session }: { session: SessionView }) {
       <ol className="flex flex-col gap-3">
         {session.drafts.map((draft) => {
           const decision = decisionOf(draft.id);
+          const story = decision.story ?? draft.story;
           const text =
             decision.text ??
             draft.text ??
-            (draft.story
-              ? `${draft.story.problem} → ${draft.story.action} → ${draft.story.result}`
+            (story
+              ? `${story.problem} → ${story.action} → ${story.result}`
               : "");
           return (
             <li
@@ -110,13 +124,25 @@ export function ApprovalScreen({ session }: { session: SessionView }) {
                   <Badge variant="secondary">
                     {labels.draftKind(draft.kind)}
                   </Badge>
+                  <LanguageBadges
+                    languages={[draft.language]}
+                    bilingual={bilingual}
+                  />
                   {draft.lowDetail && (
                     <Badge variant="outline">
                       {t.formatMessage({ defaultMessage: "Low detail" })}
                     </Badge>
                   )}
                 </div>
-                {editing === draft.id && !draft.story ? (
+                {editing === draft.id && draft.story ? (
+                  <StoryEditor
+                    story={decision.story ?? draft.story}
+                    onDone={(story) => {
+                      setDecision(draft.id, { story });
+                      setEditing(null);
+                    }}
+                  />
+                ) : editing === draft.id ? (
                   <Textarea
                     autoFocus
                     defaultValue={text}
@@ -131,7 +157,6 @@ export function ApprovalScreen({ session }: { session: SessionView }) {
                   <button
                     type="button"
                     className="text-left text-sm"
-                    disabled={!!draft.story}
                     onClick={() => setEditing(draft.id)}
                   >
                     {text}
@@ -195,6 +220,69 @@ export function ApprovalScreen({ session }: { session: SessionView }) {
           {t.formatMessage({ defaultMessage: "Approve and keep talking" })}
         </Button>
       </div>
+    </div>
+  );
+}
+
+/** Every item stays editable, a story's problem, action and result included. */
+function StoryEditor({
+  story,
+  onDone,
+}: {
+  story: StoryFields;
+  onDone: (story: StoryFields) => void;
+}) {
+  const t = useTranslation();
+  const [draft, setDraft] = useState(story);
+  const fields = [
+    { key: "problem", label: t.formatMessage({ defaultMessage: "Problem" }) },
+    {
+      key: "action",
+      label: t.formatMessage({ defaultMessage: "What you did" }),
+    },
+    {
+      key: "partners",
+      label: t.formatMessage({ defaultMessage: "With whom" }),
+    },
+    { key: "result", label: t.formatMessage({ defaultMessage: "Result" }) },
+  ] as const;
+
+  return (
+    <div className="flex flex-col gap-2">
+      {fields.map((field) => (
+        <label key={field.key} className="flex flex-col gap-1 text-xs">
+          <span className="text-muted-foreground">{field.label}</span>
+          <Textarea
+            rows={2}
+            value={draft[field.key] ?? ""}
+            onChange={(event) =>
+              setDraft((current) => ({
+                ...current,
+                [field.key]: event.target.value,
+              }))
+            }
+          />
+        </label>
+      ))}
+      <Button
+        size="sm"
+        variant="outline"
+        disabled={
+          !draft.problem.trim() || !draft.action.trim() || !draft.result.trim()
+        }
+        onClick={() =>
+          onDone({
+            problem: draft.problem.trim(),
+            action: draft.action.trim(),
+            partners: draft.partners?.trim()
+              ? draft.partners.trim()
+              : undefined,
+            result: draft.result.trim(),
+          })
+        }
+      >
+        {t.formatMessage({ defaultMessage: "Done" })}
+      </Button>
     </div>
   );
 }

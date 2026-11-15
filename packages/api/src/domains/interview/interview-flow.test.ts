@@ -1,13 +1,18 @@
 import { randomBytes } from "node:crypto";
 
+import { eq } from "drizzle-orm";
 import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { createAiClient } from "@repo/api/domains/ai/ai-client";
 import { aiUsageTable } from "@repo/api/domains/ai/db/ai-tables";
 import { ToolRefusal } from "@repo/api/domains/ai/providers/provider-package";
+import { positionsTable } from "@repo/api/domains/career/db/career-tables";
 import { CareerService } from "@repo/api/domains/career/career-service";
 import { getUserCipher } from "@repo/api/domains/encryption/user-cipher";
-import { evidenceTable } from "@repo/api/domains/evidence/db/evidence-tables";
+import {
+  evidenceTable,
+  storiesTable,
+} from "@repo/api/domains/evidence/db/evidence-tables";
 import { loadSensitiveFilter } from "@repo/api/domains/evidence/sensitive/load-sensitive-filter";
 import { TasksService } from "@repo/api/domains/tasks/tasks-service";
 import { createTestUser } from "@repo/api/test/create-test-user";
@@ -19,6 +24,8 @@ import {
 } from "@repo/api/test/pglite";
 import type { MisuseGuard } from "@repo/api/tools/misuse-guard";
 
+import { interviewSessionsTable } from "./db/interview-tables";
+import { interviewSettings } from "./interview-settings";
 import { InterviewService } from "./interview-service";
 import { runInterviewTurn } from "./run-interview-turn";
 
@@ -235,6 +242,17 @@ describe("guided interview", () => {
 
     expect(offTopic.runAgent).not.toHaveBeenCalled();
     expect(override.runAgent).not.toHaveBeenCalled();
+
+    // Later turns never carry the blocked messages to the main model.
+    const next = await ctx.say(sessionId, "I joined Acme in 2021.", {
+      agent: async () => "What does Acme do?",
+    });
+    expect(next.runAgent.mock.calls[0][0].messages).toEqual([
+      {
+        role: "user",
+        content: "<user_message>I joined Acme in 2021.</user_message>",
+      },
+    ]);
     expect(ctx.misuse.blocked).toBe(2);
     const { turns } = await ctx.interview.getSession({
       userId: ctx.user.id,
@@ -247,6 +265,7 @@ describe("guided interview", () => {
     ).toEqual([
       ["off_topic", expect.stringContaining("career story") as string],
       ["blocked_override", expect.stringContaining("can't change") as string],
+      ["text", "What does Acme do?"],
     ]);
   });
 
@@ -421,7 +440,7 @@ describe("guided interview", () => {
 
     await ctx.career.acceptProposal({
       userId: ctx.user.id,
-      proposalId: current.proposals[0].id,
+      timelineProposalId: current.proposals[0].id,
     });
     current = await timeline();
     expect(current.positions.map((p) => [p.employer, p.origin])).toContainEqual(
@@ -465,12 +484,152 @@ describe("guided interview", () => {
 
     await ctx.career.acceptProposal({
       userId: ctx.user.id,
-      proposalId: current.proposals[0].id,
+      timelineProposalId: current.proposals[0].id,
     });
     current = await timeline();
     expect(current.positions[0]).toMatchObject({
       startDate: "2021-03",
       title: "Staff Engineer",
+    });
+  });
+
+  it("links a story only to the evidence told in the same message, and lets the user edit it", async () => {
+    const ctx = await setup();
+    const { sessionId } = await ctx.interview.openSession({
+      userId: ctx.user.id,
+      positionId: ctx.positionId,
+    });
+    await ctx.say(sessionId, "I mentored 4 engineers.", {
+      agent: async (_request, callTool) => {
+        await callTool("save_draft_fact", {
+          kind: "achievement",
+          text: "Mentored 4 engineers",
+          quote: "mentored 4 engineers",
+        });
+        return "Tell me about the migration.";
+      },
+    });
+    await ctx.say(
+      sessionId,
+      "Deploys took 2 hours, I automated them and now they take 15 minutes.",
+      {
+        agent: async (_request, callTool) => {
+          await callTool("save_draft_fact", {
+            kind: "metric",
+            text: "Deploys from 2 hours to 15 minutes",
+            quote: "now they take 15 minutes",
+          });
+          await callTool("save_story", {
+            problem: "Slow deploys",
+            action: "Automated the deploys",
+            result: "15-minute deploys",
+            quote: "I automated them",
+          });
+          return "Anything else?";
+        },
+      }
+    );
+
+    const session = await ctx.interview.getSession({
+      userId: ctx.user.id,
+      sessionId,
+    });
+    const story = session.drafts.find((draft) => draft.kind === "story")!;
+    await ctx.interview.approveExtraction({
+      userId: ctx.user.id,
+      sessionId,
+      closePosition: true,
+      decisions: session.drafts.map((draft) => ({
+        draftId: draft.id,
+        approved: true,
+        ...(draft.id === story.id
+          ? {
+              story: {
+                problem: "Deploys took 2 hours",
+                action: "Automated the deploy pipeline",
+                result: "Deploys take 15 minutes",
+              },
+            }
+          : {}),
+      })),
+    });
+
+    const evidence = await ctx.db.select().from(evidenceTable);
+    const metric = evidence.find((row) => row.kind === "metric")!;
+    const [storyRow] = await ctx.db.select().from(storiesTable);
+    expect(storyRow.evidenceIds).toEqual([metric.id]);
+    const cipher = await getUserCipher(ctx.db, ctx.user.id);
+    expect(cipher.decrypt(storyRow.encryptedAction)).toBe(
+      "Automated the deploy pipeline"
+    );
+  });
+
+  it("reopens an approved position when a note is left on it", async () => {
+    const ctx = await setup();
+    const { positionId: older } = await ctx.career.addPosition({
+      userId: ctx.user.id,
+      position: {
+        employer: "Globex",
+        title: "Engineer",
+        startDate: "2017-01",
+        endDate: "2020-12",
+      },
+    });
+    await ctx.db
+      .update(positionsTable)
+      .set({ status: "approved" })
+      .where(eq(positionsTable.id, older));
+    const { sessionId } = await ctx.interview.openSession({
+      userId: ctx.user.id,
+      positionId: ctx.positionId,
+    });
+
+    await ctx.say(
+      sessionId,
+      "Like at Globex, I also ran the on-call rotation.",
+      {
+        agent: async (_request, callTool) => {
+          await callTool("note_for_position", {
+            position_id: older,
+            note: "Ran the on-call rotation",
+          });
+          return "Back to Acme: what did the team own?";
+        },
+      }
+    );
+
+    const [row] = await ctx.db
+      .select()
+      .from(positionsTable)
+      .where(eq(positionsTable.id, older));
+    expect(row.status).toBe("in_progress");
+  });
+
+  it("requires a checkpoint past twice the threshold", async () => {
+    const ctx = await setup();
+    const { sessionId } = await ctx.interview.openSession({
+      userId: ctx.user.id,
+      positionId: ctx.positionId,
+    });
+    await ctx.db
+      .update(interviewSessionsTable)
+      .set({ turnTokens: 2 * interviewSettings.checkpointTokens })
+      .where(eq(interviewSessionsTable.id, sessionId));
+
+    await expect(
+      ctx.interview.sendMessage({
+        userId: ctx.user.id,
+        sessionId,
+        message: "More",
+      })
+    ).rejects.toMatchObject({ code: "PRECONDITION_FAILED" });
+    const session = await ctx.interview.getSession({
+      userId: ctx.user.id,
+      sessionId,
+    });
+    expect(session).toMatchObject({
+      checkpoint: "required",
+      extractionProposed: true,
     });
   });
 

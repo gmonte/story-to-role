@@ -1,9 +1,9 @@
 import { z } from "zod";
 
 /** Languages the interview can be held in (and the interface shown in). */
-export const careerLanguages = ["en-US", "pt-BR"] as const;
-export const careerLanguageSchema = z.enum(careerLanguages);
-export type CareerLanguage = z.infer<typeof careerLanguageSchema>;
+export const interviewLanguages = ["en-US", "pt-BR"] as const;
+export const interviewLanguageSchema = z.enum(interviewLanguages);
+export type InterviewLanguage = z.infer<typeof interviewLanguageSchema>;
 
 /** A month, the precision resumes give: `2021-03`. */
 export const yearMonthSchema = z
@@ -20,7 +20,13 @@ export const positionStatuses = [
 export const positionStatusSchema = z.enum(positionStatuses);
 export type PositionStatus = z.infer<typeof positionStatusSchema>;
 
-export const positionOrigins = ["imported", "manual", "interview"] as const;
+// "truth_file": proposed as imported from the user's own truth file.
+export const positionOrigins = [
+  "imported",
+  "truth_file",
+  "manual",
+  "interview",
+] as const;
 export const positionOriginSchema = z.enum(positionOrigins);
 export type PositionOrigin = z.infer<typeof positionOriginSchema>;
 
@@ -65,6 +71,7 @@ export type ConflictField = z.infer<typeof conflictFieldSchema>;
 
 export const timelineProposalKindSchema = z.enum([
   "update_position",
+  "resolve_conflict",
   "add_position",
   "remove_position",
   "merge_positions",

@@ -9,7 +9,7 @@ import {
   sourceDocumentsTable,
 } from "@repo/api/domains/career/db/career-tables";
 import type {
-  CareerLanguage,
+  InterviewLanguage,
   ScriptKind,
 } from "@repo/api/domains/career/schemas/career";
 import type { SensitiveItemKind } from "@repo/api/domains/evidence/schemas/evidence";
@@ -84,7 +84,7 @@ export const interviewTurnsTable = createTable(
     role: d.text().$type<TurnRole>().notNull(),
     kind: d.text().$type<TurnKind>().notNull().default("text"),
     encryptedContent: d.text(),
-    language: d.text().$type<CareerLanguage>().notNull(),
+    language: d.text().$type<InterviewLanguage>().notNull(),
     tokenCount: d.integer().notNull().default(0),
   }),
   (t) => [index("interview_turns_session_id_idx").on(t.sessionId)]
@@ -120,7 +120,7 @@ export const draftFactsTable = createTable(
     projectId: d
       .uuid()
       .references(() => projectsTable.id, { onDelete: "set null" }),
-    language: d.text().$type<CareerLanguage>().notNull(),
+    language: d.text().$type<InterviewLanguage>().notNull(),
     lowDetail: d.boolean().notNull().default(false),
     status: d.text().$type<DraftStatus>().notNull().default("draft"),
   }),

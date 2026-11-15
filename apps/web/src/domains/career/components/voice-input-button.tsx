@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 
 import { Mic, MicOff } from "lucide-react";
 
-import type { CareerLanguage } from "@repo/api/domains/career/schemas/career";
+import type { InterviewLanguage } from "@repo/api/domains/career/schemas/career";
 import { useTranslation } from "@repo/intl/use-translation";
 import { Button } from "@repo/web/components/ui/button";
 import {
@@ -59,7 +59,7 @@ export function VoiceInputButton({
   language,
   onTranscript,
 }: {
-  language: CareerLanguage;
+  language: InterviewLanguage;
   onTranscript: (text: string) => void;
 }) {
   const t = useTranslation();

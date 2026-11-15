@@ -182,6 +182,27 @@ export class CreditsRepository {
   }
 
   /**
+   * Ends now the lots whose origin starts with a prefix (a refunded pack
+   * or invoice): their expiry changes, not their entries, so what a
+   * running task releases onto them later stays unspendable.
+   */
+  async expireLotsByOrigin(userId: string, originPrefix: string, now: Date) {
+    await this.tx
+      .update(creditLotsTable)
+      .set({ expiresAt: now })
+      .where(
+        and(
+          eq(creditLotsTable.userId, userId),
+          like(creditLotsTable.origin, `${originPrefix}%`),
+          or(
+            isNull(creditLotsTable.expiresAt),
+            gt(creditLotsTable.expiresAt, now)
+          )
+        )
+      );
+  }
+
+  /**
    * Ends a courtesy grant's lots now: a lot's expiry, not its entries,
    * changes, so a reservation released onto it later stays unspendable.
    */

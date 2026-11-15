@@ -21,6 +21,10 @@ export const creditSettings = {
   margin: 1.5,
   welcomeCredits: 200,
   monthlyFreeCredits: 10,
+  // The subscription's monthly credits and a pack's (billing spec,
+  // "Prices": the initial hypothesis).
+  subscriptionMonthlyCredits: 600,
+  packCredits: 300,
   packValidityMonths: 12,
 };
 

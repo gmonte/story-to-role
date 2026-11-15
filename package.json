@@ -18,7 +18,8 @@
     "test": "lerna run test --stream",
     "predeploy:web": "lerna run predeploy --scope='web' --stream",
     "prepare": "node .husky/install.mjs",
-    "typecheck": "lerna run typecheck"
+    "typecheck": "lerna run typecheck",
+    "stripe:listen": "lerna run stripe:listen --scope=@repo/api --stream"
   },
   "devDependencies": {
     "@commitlint/cli": "catalog:root",

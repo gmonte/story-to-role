@@ -36,9 +36,8 @@ export const creditEntryKindSchema = z.enum([
 export type CreditEntryKind = z.infer<typeof creditEntryKindSchema>;
 
 export const creditSummarySchema = z.object({
-  // Free, or the paid plan through a courtesy grant (subscriptions join
-  // with Stripe).
-  plan: z.enum(["free", "courtesy"]),
+  // Free, or the paid plan through a subscription or a courtesy grant.
+  plan: z.enum(["free", "subscription", "courtesy"]),
   // What the user can still spend now, plan and stored credits together.
   available: z.number().int(),
   reserved: z.number().int(),

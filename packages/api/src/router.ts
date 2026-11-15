@@ -4,6 +4,7 @@ import { createTRPCRouter } from "./tools/trpc";
 import { instructionsRouter } from "./domains/applications/instructions-router";
 import { motivationRouter } from "./domains/applications/motivation/motivation-router";
 import { researchRouter } from "./domains/applications/research/research-router";
+import { billingRouter } from "./domains/billing/billing-router";
 import { careerRouter } from "./domains/career/career-router";
 import { adaptationRouter } from "./domains/documents/adaptation/adaptation-router";
 import { creditsRouter } from "./domains/credits/credits-router";
@@ -19,6 +20,7 @@ import { usersRouter } from "./domains/users/users-router";
 
 export const appRouter = createTRPCRouter({
   adaptation: adaptationRouter,
+  billing: billingRouter,
   career: careerRouter,
   chat: chatRouter,
   credits: creditsRouter,

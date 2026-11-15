@@ -3,6 +3,7 @@ import type { TaskType } from "@repo/api/domains/tasks/schemas/task";
 import type { DbClient } from "@repo/api/tools/db-client";
 
 import { spendableTotal } from "./credit-ledger";
+import { currentPlan } from "./credit-plan";
 import { creditCap } from "./credit-pricing";
 import { CreditsRepository } from "./credits-repository";
 
@@ -40,11 +41,11 @@ export async function resumeEstimate(db: DbClient, userId: string) {
 /**
  * The credit reserve (billing spec, "Credit meter"): in the Free plan,
  * enough credits for the resume the user came for, kept until they have
- * one. A paid plan (a courtesy grant, for now) keeps nothing.
+ * one. A paid plan keeps nothing.
  */
 export async function creditReserve(db: DbClient, userId: string, now: Date) {
+  if ((await currentPlan(db, userId, now)).kind !== "free") return 0;
   const repository = new CreditsRepository(db);
-  if (await repository.activeCourtesy(userId, now)) return 0;
   const { profile, positions } = await careerSize(db, userId);
   if (profile && (await repository.hasResume(profile.id))) return 0;
   return creditCap("generate_document", { positions });

@@ -125,6 +125,7 @@ export default defineConfig({
     "./src/domains/documents/tasks",
     "./src/domains/applications/tasks",
     "./src/domains/credits/tasks",
+    "./src/domains/billing/tasks",
   ],
   build: {
     extensions: [syncVercelEnvForCurrentTarget],

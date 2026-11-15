@@ -1,5 +1,5 @@
 {
-  "id": "8e4e3b93-ddfc-440e-85bd-42dda0052f95",
+  "id": "fbee311a-1b68-4bb5-9f41-5809b76f36ea",
   "prevId": "f4eeaca6-f54a-4f55-87d3-3a6977c30c4e",
   "version": "7",
   "dialect": "postgresql",
@@ -902,6 +902,24 @@
           "primaryKey": false,
           "notNull": true,
           "default": false
+        },
+        "paidInvoiceId": {
+          "name": "paidInvoiceId",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "paidPeriodStart": {
+          "name": "paidPeriodStart",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "paidPeriodEnd": {
+          "name": "paidPeriodEnd",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
         }
       },
       "indexes": {

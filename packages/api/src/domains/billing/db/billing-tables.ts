@@ -34,7 +34,7 @@ export const billingCustomersTable = createTable(
 );
 
 /**
- * The subscription as Stripe last reported it; its period drives the
+ * The subscription as Stripe last reported it; its paid period drives the
  * monthly credits, granted from here without calling Stripe.
  */
 export const subscriptionsTable = createTable(
@@ -56,6 +56,12 @@ export const subscriptionsTable = createTable(
     currentPeriodStart: d.timestamp({ withTimezone: true }).notNull(),
     currentPeriodEnd: d.timestamp({ withTimezone: true }).notNull(),
     cancelAtPeriodEnd: d.boolean().notNull().default(false),
+    // The last paid invoice and the service period it paid for: monthly
+    // credits are granted from it, never before payment (billing spec:
+    // "each paid invoice … grants that month's credits").
+    paidInvoiceId: d.text(),
+    paidPeriodStart: d.timestamp({ withTimezone: true }),
+    paidPeriodEnd: d.timestamp({ withTimezone: true }),
   }),
   (t) => [
     unique("subscriptions_stripe_subscription_id_unique").on(

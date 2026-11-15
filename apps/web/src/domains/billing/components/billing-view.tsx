@@ -4,7 +4,10 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { ExternalLink } from "lucide-react";
 
 import { billingCatalog } from "@repo/api/domains/billing/billing-catalog";
-import type { CheckoutProduct } from "@repo/api/domains/billing/schemas/billing";
+import {
+  type CheckoutProduct,
+  isLiveSubscription,
+} from "@repo/api/domains/billing/schemas/billing";
 import { creditSettings } from "@repo/api/domains/credits/credit-pricing";
 import { useTranslation } from "@repo/intl/use-translation";
 import { Badge } from "@repo/web/components/ui/badge";
@@ -43,7 +46,7 @@ export function BillingView() {
       currency: currency.toUpperCase(),
     });
   const subscription = status.data?.subscription;
-  const subscribed = !!subscription && subscription.status !== "canceled";
+  const subscribed = !!subscription && isLiveSubscription(subscription.status);
   const busy = checkout.isPending || portal.isPending;
   const buy = (product: CheckoutProduct) => checkout.mutate({ product });
 

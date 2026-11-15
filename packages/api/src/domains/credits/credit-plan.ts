@@ -1,15 +1,21 @@
+import { BillingRepository } from "@repo/api/domains/billing/billing-repository";
 import type { DbClient } from "@repo/api/tools/db-client";
 
 import { CreditsRepository } from "./credits-repository";
 
 /**
  * The user's plan (billing spec, "Plans and AI funding"): the paid plan
- * through a Stripe subscription or a courtesy grant, else Free.
+ * through a live Stripe subscription or, for a user without one, a
+ * courtesy grant; else Free.
  */
 export async function currentPlan(db: DbClient, userId: string, now: Date) {
-  const repository = new CreditsRepository(db);
-  const subscription = await repository.activeSubscription(userId, now);
-  const courtesy = await repository.activeCourtesy(userId, now);
+  const subscription = await new BillingRepository(db).findLiveSubscription(
+    userId,
+    now
+  );
+  const courtesy = subscription
+    ? null
+    : await new CreditsRepository(db).activeCourtesy(userId, now);
   return {
     subscription,
     courtesy,
@@ -21,37 +27,34 @@ export async function currentPlan(db: DbClient, userId: string, now: Date) {
   };
 }
 
+/** `months` calendar months after `date`, its day clamped to the month's end. */
+function addMonths(date: Date, months: number) {
+  const target = new Date(date);
+  target.setUTCDate(1);
+  target.setUTCMonth(target.getUTCMonth() + months);
+  const lastDay = new Date(
+    Date.UTC(target.getUTCFullYear(), target.getUTCMonth() + 1, 0)
+  ).getUTCDate();
+  target.setUTCDate(Math.min(date.getUTCDate(), lastDay));
+  return target;
+}
+
 /**
- * The subscription month `now` falls in (billing spec, "Credit expiry":
- * monthly credits expire at the end of each billing month). A monthly
- * subscription's month is its period; an annual one's year is split into
- * months from its start.
+ * The billing month `now` falls in within a paid period (billing spec,
+ * "Credit expiry": monthly credits expire at the end of each billing
+ * month). A monthly invoice pays for one month; an annual one's year is
+ * split into months from its start. Null outside the paid period.
  */
-export function subscriptionMonth(
-  subscription: {
-    interval: "month" | "year";
-    currentPeriodStart: Date;
-    currentPeriodEnd: Date;
-  },
+export function paidMonth(
+  period: { start: Date; end: Date },
   now: Date
-) {
-  if (subscription.interval === "month") {
-    return {
-      start: subscription.currentPeriodStart,
-      end: subscription.currentPeriodEnd,
-    };
-  }
-  const addMonths = (months: number) => {
-    const date = new Date(subscription.currentPeriodStart);
-    date.setUTCMonth(date.getUTCMonth() + months);
-    return date;
-  };
+): { start: Date; end: Date } | null {
+  if (now < period.start || now >= period.end) return null;
   let month = 0;
-  while (month < 11 && addMonths(month + 1) <= now) month += 1;
-  const end = addMonths(month + 1);
+  while (addMonths(period.start, month + 1) <= now) month += 1;
+  const end = addMonths(period.start, month + 1);
   return {
-    start: addMonths(month),
-    end:
-      end < subscription.currentPeriodEnd ? end : subscription.currentPeriodEnd,
+    start: addMonths(period.start, month),
+    end: end < period.end ? end : period.end,
   };
 }

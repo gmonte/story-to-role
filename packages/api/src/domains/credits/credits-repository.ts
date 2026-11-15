@@ -4,7 +4,6 @@ import {
   documentsTable,
   generationsTable,
 } from "@repo/api/domains/documents/db/documents-tables";
-import { subscriptionsTable } from "@repo/api/domains/billing/db/billing-tables";
 import { tasksTable } from "@repo/api/domains/tasks/db/tasks-tables";
 import { usersTable } from "@repo/api/domains/users/db/users-tables";
 import type { DbClient } from "@repo/api/tools/db-client";
@@ -106,30 +105,6 @@ export class CreditsRepository {
   }
 
   /** Every courtesy grant, newest first, with whom it was granted to. */
-  /** The user's paid subscription, while Stripe reports it active. */
-  activeSubscription(userId: string, now: Date) {
-    return this.tx
-      .select()
-      .from(subscriptionsTable)
-      .where(
-        and(
-          eq(subscriptionsTable.userId, userId),
-          eq(subscriptionsTable.status, "active"),
-          gt(subscriptionsTable.currentPeriodEnd, now)
-        )
-      )
-      .limit(1)
-      .then((rows) => rows[0] ?? null);
-  }
-
-  /** Ends a lot now, by its origin (a refunded pack). */
-  async expireLot(origin: string, now: Date) {
-    await this.tx
-      .update(creditLotsTable)
-      .set({ expiresAt: now })
-      .where(eq(creditLotsTable.origin, origin));
-  }
-
   listCourtesyGrants() {
     return this.tx
       .select({
@@ -204,6 +179,27 @@ export class CreditsRepository {
       .update(courtesyGrantsTable)
       .set({ endedAt })
       .where(eq(courtesyGrantsTable.id, courtesyGrantId));
+  }
+
+  /**
+   * Ends now the lots whose origin starts with a prefix (a refunded pack
+   * or invoice): their expiry changes, not their entries, so what a
+   * running task releases onto them later stays unspendable.
+   */
+  async expireLotsByOrigin(userId: string, originPrefix: string, now: Date) {
+    await this.tx
+      .update(creditLotsTable)
+      .set({ expiresAt: now })
+      .where(
+        and(
+          eq(creditLotsTable.userId, userId),
+          like(creditLotsTable.origin, `${originPrefix}%`),
+          or(
+            isNull(creditLotsTable.expiresAt),
+            gt(creditLotsTable.expiresAt, now)
+          )
+        )
+      );
   }
 
   /**

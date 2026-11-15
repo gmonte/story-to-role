@@ -18,6 +18,9 @@ CREATE TABLE IF NOT EXISTS "subscriptions" (
 	"currentPeriodStart" timestamp with time zone NOT NULL,
 	"currentPeriodEnd" timestamp with time zone NOT NULL,
 	"cancelAtPeriodEnd" boolean DEFAULT false NOT NULL,
+	"paidInvoiceId" text,
+	"paidPeriodStart" timestamp with time zone,
+	"paidPeriodEnd" timestamp with time zone,
 	CONSTRAINT "subscriptions_stripe_subscription_id_unique" UNIQUE("stripeSubscriptionId")
 );
 --> statement-breakpoint

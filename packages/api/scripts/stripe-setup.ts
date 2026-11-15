@@ -25,7 +25,9 @@ const stripe = new Stripe(key);
 async function ensureProduct(product: { id: string; name: string }) {
   try {
     return await stripe.products.retrieve(product.id);
-  } catch {
+  } catch (error) {
+    // Only a missing product is created; any other failure stops here.
+    if ((error as { code?: string }).code !== "resource_missing") throw error;
     logger.info(["stripe:setup"], `creating product ${product.id}`);
     return stripe.products.create({ id: product.id, name: product.name });
   }

@@ -1,6 +1,6 @@
 import type { DbClient } from "@repo/api/tools/db-client";
 
-import { currentPlan, subscriptionMonth } from "./credit-plan";
+import { currentPlan, paidMonth } from "./credit-plan";
 import { creditSettings } from "./credit-pricing";
 import { CreditsRepository } from "./credits-repository";
 import {
@@ -75,9 +75,9 @@ export async function grantCredits(
 
 /**
  * This month's plan credits, granted when first needed: the subscription's
- * monthly credits (per subscription month), a courtesy grant's, or Free's
- * monthly credits for fit checks. Idempotent per month; they expire when
- * the month ends.
+ * monthly credits from its paid invoice (a billing month at a time; none
+ * before payment), a courtesy grant's, or Free's monthly credits for fit
+ * checks. Idempotent per month; they expire when the month ends.
  */
 export async function ensureMonthlyCredits(
   tx: DbClient,
@@ -86,18 +86,25 @@ export async function ensureMonthlyCredits(
 ) {
   const { key, next } = billingMonth(now);
   const plan = await currentPlan(tx, userId, now);
-  if (plan.subscription) {
-    const month = subscriptionMonth(plan.subscription, now);
-    await grantCredits(tx, {
-      userId,
-      source: "subscription",
-      amount: creditSettings.subscriptionMonthlyCredits,
-      origin: `subscription:${plan.subscription.stripeSubscriptionId}:${month.start.toISOString()}`,
-      expiresAt: month.end,
-    });
+  const { subscription, courtesy } = plan;
+  if (subscription) {
+    const { paidInvoiceId, paidPeriodStart, paidPeriodEnd } = subscription;
+    const month =
+      paidInvoiceId && paidPeriodStart && paidPeriodEnd
+        ? paidMonth({ start: paidPeriodStart, end: paidPeriodEnd }, now)
+        : null;
+    if (paidInvoiceId && month) {
+      await grantCredits(tx, {
+        userId,
+        source: "subscription",
+        amount: creditSettings.subscriptionMonthlyCredits,
+        origin: `${invoiceOrigin(paidInvoiceId)}${month.start.toISOString()}`,
+        expiresAt: month.end,
+      });
+    }
+    return;
   }
-  if (plan.courtesy) {
-    const { courtesy } = plan;
+  if (courtesy) {
     await grantCredits(tx, {
       userId,
       source: "courtesy",
@@ -106,8 +113,8 @@ export async function ensureMonthlyCredits(
       expiresAt:
         courtesy.endsAt && courtesy.endsAt < next ? courtesy.endsAt : next,
     });
+    return;
   }
-  if (plan.kind !== "free") return;
   await grantCredits(tx, {
     userId,
     source: "monthly_free",
@@ -115,6 +122,32 @@ export async function ensureMonthlyCredits(
     amount: creditSettings.monthlyFreeCredits,
     origin: `monthly_free:${userId}:${key}`,
     expiresAt: next,
+  });
+}
+
+/** Every lot a paid invoice granted starts with this origin. */
+export const invoiceOrigin = (invoiceId: string) => `invoice:${invoiceId}:`;
+
+/** A pack's lot, granted from its Checkout session. */
+export const packOrigin = (checkoutSessionId: string) =>
+  `pack:${checkoutSessionId}`;
+
+/**
+ * Takes back what is left of lots whose payment was refunded (a pack, an
+ * invoice's months): they end now, with the user's row locked.
+ */
+export async function revokeLots(
+  db: DbClient,
+  input: { userId: string; originPrefix: string; now?: Date }
+) {
+  await db.transaction(async (tx) => {
+    const repository = new CreditsRepository(tx);
+    await repository.lockUser(input.userId);
+    await repository.expireLotsByOrigin(
+      input.userId,
+      input.originPrefix,
+      input.now ?? new Date()
+    );
   });
 }
 

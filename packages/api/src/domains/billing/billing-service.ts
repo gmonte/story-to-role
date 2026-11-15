@@ -5,9 +5,11 @@ import type Stripe from "stripe";
 import {
   ensureMonthlyCredits,
   grantCredits,
+  invoiceOrigin,
+  packOrigin,
+  revokeLots,
 } from "@repo/api/domains/credits/credit-ledger";
 import { creditSettings } from "@repo/api/domains/credits/credit-pricing";
-import { CreditsRepository } from "@repo/api/domains/credits/credits-repository";
 import { UsersRepository } from "@repo/api/domains/users/users-repository";
 import type { DbClient } from "@repo/api/tools/db-client";
 import { getStripe } from "@repo/api/tools/stripe/stripe-client";
@@ -15,10 +17,12 @@ import { logger } from "@repo/common/tools/logger";
 
 import { billingCatalog } from "./billing-catalog";
 import { BillingRepository } from "./billing-repository";
-import type {
-  BillingStatus,
-  CheckoutProduct,
-  SubscriptionStatus,
+import {
+  type BillingStatus,
+  type CheckoutProduct,
+  checkoutProductSchema,
+  isLiveSubscription,
+  type SubscriptionStatus,
 } from "./schemas/billing";
 
 const logTags = ["billing"];
@@ -26,13 +30,30 @@ const logTags = ["billing"];
 /** What the service needs from Stripe (tests replace it). */
 export type StripeGateway = Pick<
   Stripe,
-  "customers" | "checkout" | "billingPortal" | "subscriptions" | "prices"
+  | "customers"
+  | "checkout"
+  | "billingPortal"
+  | "subscriptions"
+  | "prices"
+  | "invoicePayments"
 >;
 
 const idOf = (value: string | { id: string } | null | undefined) =>
   typeof value === "string" ? value : (value?.id ?? null);
 
-const packOrigin = (checkoutSessionId: string) => `pack:${checkoutSessionId}`;
+/** The service period an invoice paid for (its subscription line's). */
+function paidPeriod(invoice: Stripe.Invoice) {
+  const line = invoice.lines.data.find(
+    (row) => row.parent?.type === "subscription_item_details"
+  );
+  const period = line?.period ?? invoice.lines.data[0]?.period;
+  return period
+    ? {
+        start: new Date(period.start * 1000),
+        end: new Date(period.end * 1000),
+      }
+    : null;
+}
 
 /**
  * Payments through Stripe (billing spec, "Payments"): Checkout for the
@@ -73,7 +94,7 @@ export class BillingService {
       const current = await new BillingRepository(
         this.db
       ).findSubscriptionByUserId(input.userId);
-      if (current && current.status !== "canceled") {
+      if (current && isLiveSubscription(current.status)) {
         // One subscription: changes go through the Customer Portal.
         throw new TRPCError({ code: "CONFLICT" });
       }
@@ -121,8 +142,9 @@ export class BillingService {
       throw new TRPCError({ code: "NOT_FOUND" });
     }
     await this.applyCheckout(session, customer.userId);
+    const product = checkoutProductSchema.safeParse(session.metadata?.product);
     return {
-      product: session.metadata?.product ?? null,
+      product: product.success ? product.data : null,
       paid: session.payment_status !== "unpaid",
     };
   }
@@ -173,10 +195,11 @@ export class BillingService {
       }
       case "customer.subscription.updated":
       case "customer.subscription.deleted":
-        await this.saveSubscription(event.data.object, customer.userId);
+        // Events may arrive out of order: Stripe's current state wins.
+        await this.syncSubscription(event.data.object.id, customer.userId);
         break;
       case "charge.refunded":
-        await this.applyRefund(event.data.object);
+        await this.applyRefund(event.data.object, customer.userId);
         break;
       default:
         // checkout.session.async_payment_failed: nothing was granted.
@@ -194,29 +217,34 @@ export class BillingService {
     const customers = await new BillingRepository(this.db).listCustomers();
     for (const customer of customers) {
       try {
-        const subscriptions = await this.stripe.subscriptions.list({
-          customer: customer.stripeCustomerId,
-          status: "all",
-          limit: 10,
-        });
-        for (const subscription of subscriptions.data) {
-          await this.saveSubscription(subscription, customer.userId);
+        const subscriptions = await this.stripe.subscriptions
+          .list({ customer: customer.stripeCustomerId, status: "all" })
+          .autoPagingToArray({ limit: 100 });
+        for (const subscription of subscriptions) {
+          await this.syncSubscription(subscription.id, customer.userId);
         }
-        const sessions = await this.stripe.checkout.sessions.list({
-          customer: customer.stripeCustomerId,
-          status: "complete",
-          limit: 100,
-          expand: ["data.payment_intent.latest_charge"],
-        });
-        for (const session of sessions.data) {
+        const sessions = await this.stripe.checkout.sessions
+          .list({
+            customer: customer.stripeCustomerId,
+            status: "complete",
+            expand: ["data.payment_intent.latest_charge"],
+          })
+          .autoPagingToArray({ limit: 1000 });
+        for (const session of sessions) {
           if (session.mode !== "payment") continue;
           await this.applyCheckout(session, customer.userId);
           const charge = (session.payment_intent as Stripe.PaymentIntent | null)
             ?.latest_charge as Stripe.Charge | null | undefined;
-          if (charge?.refunded) await this.expirePack(session.id);
+          if (charge?.refunded) {
+            await revokeLots(this.db, {
+              userId: customer.userId,
+              originPrefix: packOrigin(session.id),
+            });
+          }
         }
       } catch (error) {
         logger.error(logTags, "Reconciliation failed for a customer", {
+          stripeCustomerId: customer.stripeCustomerId,
           error,
         });
       }
@@ -233,7 +261,7 @@ export class BillingService {
     const created = await this.stripe.customers.create(
       {
         email: user.email,
-        name: user.fullName || undefined,
+        ...(user.fullName ? { name: user.fullName } : {}),
         metadata: { userId },
       },
       { idempotencyKey: `customer:${userId}` }
@@ -284,23 +312,25 @@ export class BillingService {
     });
   }
 
+  /**
+   * Saves Stripe's current view of a subscription, records its latest
+   * invoice when paid, and grants that month's credits from it.
+   */
   private async syncSubscription(subscriptionId: string, userId: string) {
-    await this.saveSubscription(
-      await this.stripe.subscriptions.retrieve(subscriptionId),
-      userId
+    const subscription = await this.stripe.subscriptions.retrieve(
+      subscriptionId,
+      { expand: ["latest_invoice"] }
     );
-  }
-
-  /** Saves Stripe's view of a subscription and grants its month's credits. */
-  private async saveSubscription(
-    subscription: Stripe.Subscription,
-    userId: string
-  ) {
     const [item] = subscription.items.data;
     if (!item) return;
+    const invoice =
+      typeof subscription.latest_invoice === "object"
+        ? subscription.latest_invoice
+        : null;
+    const period = invoice?.status === "paid" ? paidPeriod(invoice) : null;
     await this.db.transaction(async (tx) => {
-      await new CreditsRepository(tx).lockUser(userId);
-      await new BillingRepository(tx).upsertSubscription({
+      const repository = new BillingRepository(tx);
+      await repository.upsertSubscription({
         userId,
         stripeSubscriptionId: subscription.id,
         status: subscription.status as SubscriptionStatus,
@@ -309,27 +339,54 @@ export class BillingService {
         currentPeriodEnd: new Date(item.current_period_end * 1000),
         cancelAtPeriodEnd: subscription.cancel_at_period_end,
       });
+      if (invoice?.id && period) {
+        await repository.recordPaidInvoice({
+          stripeSubscriptionId: subscription.id,
+          invoiceId: invoice.id,
+          periodStart: period.start,
+          periodEnd: period.end,
+        });
+      }
       await ensureMonthlyCredits(tx, userId, new Date());
     });
   }
 
-  /** A refunded pack takes its credits back (what is left of them). */
-  private async applyRefund(charge: Stripe.Charge) {
+  /**
+   * A refund takes back what it paid for (billing spec: reconciliation
+   * covers "refunds"): a pack's credits, or a subscription invoice's months.
+   * A refund that arrives before the grant still wins: the grant is made
+   * first, then revoked, so a late webhook can't bring it back.
+   */
+  private async applyRefund(charge: Stripe.Charge, userId: string) {
     if (!charge.refunded) return;
     const paymentIntentId = idOf(charge.payment_intent);
     if (!paymentIntentId) return;
-    const sessions = await this.stripe.checkout.sessions.list({
-      payment_intent: paymentIntentId,
-      limit: 1,
+    const [session] = (
+      await this.stripe.checkout.sessions.list({
+        payment_intent: paymentIntentId,
+        limit: 1,
+      })
+    ).data;
+    if (session?.mode === "payment") {
+      await this.applyCheckout(session, userId);
+      await revokeLots(this.db, {
+        userId,
+        originPrefix: packOrigin(session.id),
+      });
+      return;
+    }
+    const [payment] = (
+      await this.stripe.invoicePayments.list({
+        payment: { type: "payment_intent", payment_intent: paymentIntentId },
+        limit: 1,
+      })
+    ).data;
+    const invoiceId = idOf(payment?.invoice);
+    if (!invoiceId) return;
+    await new BillingRepository(this.db).endPaidPeriod(invoiceId, new Date());
+    await revokeLots(this.db, {
+      userId,
+      originPrefix: invoiceOrigin(invoiceId),
     });
-    const session = sessions.data[0];
-    if (session) await this.expirePack(session.id);
-  }
-
-  private async expirePack(checkoutSessionId: string) {
-    await new CreditsRepository(this.db).expireLot(
-      packOrigin(checkoutSessionId),
-      new Date()
-    );
   }
 }

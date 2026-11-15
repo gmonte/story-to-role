@@ -2,7 +2,7 @@ import type Stripe from "stripe";
 import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { spendableTotal } from "@repo/api/domains/credits/credit-ledger";
-import { subscriptionMonth } from "@repo/api/domains/credits/credit-plan";
+import { paidMonth } from "@repo/api/domains/credits/credit-plan";
 import { CreditsService } from "@repo/api/domains/credits/credits-service";
 import { createTestUser } from "@repo/api/test/create-test-user";
 import {
@@ -22,17 +22,28 @@ vi.mock("@clerk/nextjs/server", () => ({ clerkClient: vi.fn() }));
 const day = 24 * 3600;
 const nowSeconds = Math.floor(Date.now() / 1000);
 
-function subscription(status: Stripe.Subscription.Status = "active") {
+function subscription(
+  status: Stripe.Subscription.Status = "active",
+  invoiceStatus: Stripe.Invoice.Status = "paid"
+) {
+  const period = { start: nowSeconds - 2 * day, end: nowSeconds + 28 * day };
   return {
     id: "sub_1",
     status,
     cancel_at_period_end: false,
+    latest_invoice: {
+      id: "in_1",
+      status: invoiceStatus,
+      lines: {
+        data: [{ parent: { type: "subscription_item_details" }, period }],
+      },
+    },
     items: {
       data: [
         {
           price: { recurring: { interval: "month" } },
-          current_period_start: nowSeconds - 2 * day,
-          current_period_end: nowSeconds + 28 * day,
+          current_period_start: period.start,
+          current_period_end: period.end,
         },
       ],
     },
@@ -51,24 +62,36 @@ function packSession(id = "cs_pack_1") {
   } as unknown as Stripe.Checkout.Session;
 }
 
+/** A Stripe list: its first page, or every page. */
+const list = <T>(data: T[]) => ({
+  data,
+  autoPagingToArray: async () => data,
+});
+
 function fakeStripe(state: {
   subscription?: Stripe.Subscription;
   sessions?: Stripe.Checkout.Session[];
+  invoiceOfPayment?: string;
 }) {
   return {
     subscriptions: {
       retrieve: vi.fn(async () => state.subscription ?? subscription()),
-      list: vi.fn(async () => ({
-        data: state.subscription ? [state.subscription] : [],
-      })),
+      list: vi.fn(() => list(state.subscription ? [state.subscription] : [])),
     },
     checkout: {
       sessions: {
         retrieve: vi.fn(async (sessionId: string) =>
           state.sessions?.find((session) => session.id === sessionId)
         ),
-        list: vi.fn(async () => ({ data: state.sessions ?? [] })),
+        list: vi.fn(() => list(state.sessions ?? [])),
       },
+    },
+    invoicePayments: {
+      list: vi.fn(async () =>
+        list(
+          state.invoiceOfPayment ? [{ invoice: state.invoiceOfPayment }] : []
+        )
+      ),
     },
   } as unknown as StripeGateway;
 }
@@ -118,8 +141,8 @@ describe("billing service", () => {
     expect(summary.reserve).toBe(0);
   });
 
-  it("grants nothing while the subscription is unpaid", async () => {
-    const ctx = await setup({ subscription: subscription("past_due") });
+  it("grants nothing until the invoice is paid, yet keeps the paid plan", async () => {
+    const ctx = await setup({ subscription: subscription("past_due", "open") });
     await ctx.billing.handleEvent(
       event("invoice.payment_failed", {
         customer: "cus_ada",
@@ -131,6 +154,8 @@ describe("billing service", () => {
       "past_due"
     );
     expect(await ctx.spendable()).toBe(0);
+    const summary = await new CreditsService(ctx.db).summary(ctx.user.id);
+    expect(summary.plan).toBe("subscription");
   });
 
   it("grants a pack once, from the webhook or the return from Checkout", async () => {
@@ -187,6 +212,32 @@ describe("billing service", () => {
     expect(await ctx.spendable()).toBe(0);
   });
 
+  it("takes back a refunded invoice's monthly credits", async () => {
+    const ctx = await setup({
+      subscription: subscription(),
+      invoiceOfPayment: "in_1",
+    });
+    await ctx.billing.handleEvent(
+      event("customer.subscription.updated", {
+        id: "sub_1",
+        customer: "cus_ada",
+      })
+    );
+    expect(await ctx.spendable()).toBe(600);
+
+    await ctx.billing.handleEvent(
+      event("charge.refunded", {
+        customer: "cus_ada",
+        refunded: true,
+        payment_intent: "pi_sub",
+      })
+    );
+    // Syncing again doesn't bring them back.
+    await ctx.billing.reconcile();
+
+    expect(await ctx.spendable()).toBe(0);
+  });
+
   it("reconciles a missed webhook without duplicating grants", async () => {
     const ctx = await setup({
       subscription: subscription(),
@@ -203,20 +254,32 @@ describe("billing service", () => {
   });
 });
 
-describe("subscription month", () => {
-  it("splits an annual subscription into months from its start", () => {
-    const year = {
-      interval: "year" as const,
-      currentPeriodStart: new Date("2026-03-10T00:00:00Z"),
-      currentPeriodEnd: new Date("2027-03-10T00:00:00Z"),
-    };
-    expect(subscriptionMonth(year, new Date("2026-11-15T00:00:00Z"))).toEqual({
+describe("paid month", () => {
+  const year = {
+    start: new Date("2026-03-10T00:00:00Z"),
+    end: new Date("2027-03-10T00:00:00Z"),
+  };
+
+  it("splits an annual invoice into months from its start", () => {
+    expect(paidMonth(year, new Date("2026-11-15T00:00:00Z"))).toEqual({
       start: new Date("2026-11-10T00:00:00Z"),
       end: new Date("2026-12-10T00:00:00Z"),
     });
-    expect(subscriptionMonth(year, new Date("2027-03-01T00:00:00Z"))).toEqual({
+    expect(paidMonth(year, new Date("2027-03-01T00:00:00Z"))).toEqual({
       start: new Date("2027-02-10T00:00:00Z"),
       end: new Date("2027-03-10T00:00:00Z"),
+    });
+    expect(paidMonth(year, new Date("2027-03-11T00:00:00Z"))).toBeNull();
+  });
+
+  it("keeps month-end starts at the month's end", () => {
+    const fromJan31 = {
+      start: new Date("2027-01-31T00:00:00Z"),
+      end: new Date("2028-01-31T00:00:00Z"),
+    };
+    expect(paidMonth(fromJan31, new Date("2027-03-01T00:00:00Z"))).toEqual({
+      start: new Date("2027-02-28T00:00:00Z"),
+      end: new Date("2027-03-31T00:00:00Z"),
     });
   });
 });

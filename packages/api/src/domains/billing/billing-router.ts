@@ -58,7 +58,12 @@ export const billingRouter = createTRPCRouter({
       )
     )
     .input(z.object({ checkoutSessionId: z.string().startsWith("cs_") }))
-    .output(z.object({ product: z.string().nullable(), paid: z.boolean() }))
+    .output(
+      z.object({
+        product: checkoutProductSchema.nullable(),
+        paid: z.boolean(),
+      })
+    )
     .mutation(({ ctx, input }) =>
       new BillingService(db).completeCheckout({
         userId: ctx.userId,

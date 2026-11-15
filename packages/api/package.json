@@ -18,6 +18,7 @@
     "lint": "eslint . --max-warnings=0 --no-warn-ignored",
     "lint:fix": "eslint . --fix",
     "predeploy": "pnpm db:migrate",
+    "stripe:listen": "tsx scripts/stripe-listen.ts",
     "stripe:setup": "tsx scripts/stripe-setup.ts",
     "test": "vitest run --passWithNoTests",
     "trigger:deploy": "trigger deploy",
@@ -45,7 +46,6 @@
     "stripe": "catalog:api",
     "superjson": "catalog:common",
     "trpc-to-openapi": "catalog:web",
-    "tsx": "catalog:common",
     "unpdf": "catalog:api",
     "zod": "catalog:common"
   },

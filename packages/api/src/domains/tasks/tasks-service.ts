@@ -70,18 +70,20 @@ export class TasksService {
     await this.db
       .transaction(async (tx) => {
         await ensureMonthlyCredits(tx, input.userId, now);
+        const keep = await keptFor(tx, input.userId, input.type, now);
         const funding = await decideFunding(tx, {
           userId: input.userId,
           cap,
           scope,
           now,
+          keep,
         });
         // The user's key pays: credits don't limit them.
         if (funding === "key") return;
         assertFits({
           cap,
           available: await spendableTotal(tx, input.userId, scope, now),
-          keep: await keptFor(tx, input.userId, input.type, now),
+          keep,
           stored: await lockedStoredCredits(tx, input.userId, scope, now),
         });
       })
@@ -107,11 +109,13 @@ export class TasksService {
         await new CreditsRepository(tx).lockUser(input.userId);
         const cap = creditCap(input.type, input.hints);
         const scope = scopeOf(input.type);
+        const keep = await keptFor(tx, input.userId, input.type, now);
         const funding = await decideFunding(tx, {
           userId: input.userId,
           cap,
           scope,
           now,
+          keep,
         });
         const created = await new TasksRepository(tx).create({
           userId: input.userId,
@@ -126,7 +130,7 @@ export class TasksService {
             taskId: created.id,
             cap,
             scope,
-            keep: await keptFor(tx, input.userId, input.type, now),
+            keep,
           });
         }
         return created;

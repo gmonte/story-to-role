@@ -30,33 +30,44 @@ export function OwnKeySection({ paidPlan }: { paidPlan: boolean }) {
       queryClient.invalidateQueries({ queryKey: trpc.aiKeys.pathKey() }),
       queryClient.invalidateQueries({ queryKey: trpc.credits.pathKey() }),
     ]);
-  const keyError = (error: { message: string }) =>
+  const keyError = (error: {
+    message: string;
+    data?: { aiKey?: string | null } | null;
+  }) =>
     toast.error(
-      error.message === "refused"
+      error.data?.aiKey === "refused"
         ? t.formatMessage({
             defaultMessage:
               "Anthropic refused this key. Check it and try again.",
           })
-        : error.message === "out_of_credit"
-          ? t.formatMessage({
-              defaultMessage:
-                "This key has no credit left. Add credit in the Anthropic Console, or wait for it to renew.",
-            })
-          : error.message
+        : error.message
+    );
+  const noCredit = () =>
+    toast.warning(
+      t.formatMessage({
+        defaultMessage:
+          "Saved, but this key has no credit left. Add credit in the Anthropic Console, or check it again once it renews.",
+      })
     );
   const save = useMutation(
     trpc.aiKeys.save.mutationOptions({
-      onSuccess: async () => {
+      onSuccess: async ({ status }) => {
         setApiKey("");
         await refresh();
-        toast.success(t.formatMessage({ defaultMessage: "Key saved." }));
+        if (status === "out_of_credit") noCredit();
+        else toast.success(t.formatMessage({ defaultMessage: "Key saved." }));
       },
       onError: keyError,
     })
   );
   const recheck = useMutation(
     trpc.aiKeys.recheck.mutationOptions({
-      onSuccess: refresh,
+      onSuccess: async ({ status }) => {
+        await refresh();
+        if (status === "active") {
+          toast.success(t.formatMessage({ defaultMessage: "Your key works." }));
+        }
+      },
       onError: keyError,
     })
   );
@@ -76,9 +87,7 @@ export function OwnKeySection({ paidPlan }: { paidPlan: boolean }) {
         </h2>
         <Badge variant="outline" className="gap-1">
           <BadgeCheck className="size-3.5" />
-          {t.formatMessage({
-            defaultMessage: "Anthropic · tested integration",
-          })}
+          {t.formatMessage({ defaultMessage: "Anthropic · certified" })}
         </Badge>
       </div>
       <p className="text-muted-foreground">
@@ -91,7 +100,8 @@ export function OwnKeySection({ paidPlan }: { paidPlan: boolean }) {
       {!paidPlan ? (
         <p className="rounded-lg border border-dashed p-3">
           {t.formatMessage({
-            defaultMessage: "Your own key is part of the subscription.",
+            defaultMessage:
+              "Your own key comes with the paid plan: the subscription or a courtesy plan.",
           })}
         </p>
       ) : saved ? (

@@ -12,12 +12,7 @@ export class AiKeysRepository {
     return this.tx
       .select()
       .from(aiKeysTable)
-      .where(
-        and(
-          eq(aiKeysTable.userId, userId),
-          eq(aiKeysTable.provider, "anthropic")
-        )
-      )
+      .where(this.ofUser(userId))
       .then((rows) => rows[0] ?? null);
   }
 
@@ -26,12 +21,16 @@ export class AiKeysRepository {
     userId: string;
     encryptedKey: string;
     lastCharacters: string;
+    status: AiKeyStatus;
+    now: Date;
   }) {
     const values = {
-      ...row,
+      userId: row.userId,
+      encryptedKey: row.encryptedKey,
+      lastCharacters: row.lastCharacters,
       provider: "anthropic" as const,
-      status: "active" as const,
-      statusChangedAt: null,
+      status: row.status,
+      statusChangedAt: row.status === "active" ? null : row.now,
     };
     await this.tx
       .insert(aiKeysTable)
@@ -46,10 +45,17 @@ export class AiKeysRepository {
     await this.tx
       .update(aiKeysTable)
       .set({ status, statusChangedAt: now })
-      .where(eq(aiKeysTable.userId, userId));
+      .where(this.ofUser(userId));
   }
 
   async delete(userId: string) {
-    await this.tx.delete(aiKeysTable).where(eq(aiKeysTable.userId, userId));
+    await this.tx.delete(aiKeysTable).where(this.ofUser(userId));
+  }
+
+  private ofUser(userId: string) {
+    return and(
+      eq(aiKeysTable.userId, userId),
+      eq(aiKeysTable.provider, "anthropic")
+    );
   }
 }

@@ -20,7 +20,14 @@ import type { CreditScope } from "./schemas/credits";
  */
 export async function decideFunding(
   tx: DbClient,
-  input: { userId: string; cap: number; scope: CreditScope; now: Date }
+  input: {
+    userId: string;
+    cap: number;
+    scope: CreditScope;
+    now: Date;
+    // Credits the action may not touch (the credit reserve).
+    keep?: number;
+  }
 ): Promise<AiFunding> {
   if (input.cap <= 0) return "credits";
   const plan = await currentPlan(tx, input.userId, input.now);
@@ -36,5 +43,7 @@ export async function decideFunding(
     input.now,
     false
   );
-  return planCredits < input.cap && usableKey ? "key" : "credits";
+  return planCredits - (input.keep ?? 0) < input.cap && usableKey
+    ? "key"
+    : "credits";
 }

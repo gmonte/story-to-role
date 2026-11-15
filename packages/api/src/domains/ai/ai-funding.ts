@@ -38,8 +38,10 @@ export async function resolveAiFunding(input: {
     };
   }
   const key = await new AiKeysRepository(input.db).findByUserId(input.userId);
-  // Removed meanwhile: the task stops as with a refused key.
+  // Removed, or marked unusable by another task meanwhile: the task stops
+  // without calling the provider.
   if (!key) throw new KeyUnusableError("refused");
+  if (key.status !== "active") throw new KeyUnusableError(key.status);
   return {
     funding: "key",
     // Decrypted in memory for this task's calls only.

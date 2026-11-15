@@ -9,7 +9,7 @@ import {
 } from "@repo/api/tools/trpc";
 
 import { AiKeysService } from "./ai-keys-service";
-import { aiKeyViewSchema } from "./schemas/ai-keys";
+import { aiKeyStatusSchema, aiKeyViewSchema } from "./schemas/ai-keys";
 
 export const aiKeysRouter = createTRPCRouter({
   get: userProcedure
@@ -36,14 +36,10 @@ export const aiKeysRouter = createTRPCRouter({
       )
     )
     .input(z.object({ apiKey: z.string().trim().min(20).max(300) }))
-    .output(okSchema)
-    .mutation(async ({ ctx, input }) => {
-      await new AiKeysService(db).save({
-        userId: ctx.userId,
-        apiKey: input.apiKey,
-      });
-      return ok;
-    }),
+    .output(z.object({ status: aiKeyStatusSchema }))
+    .mutation(({ ctx, input }) =>
+      new AiKeysService(db).save({ userId: ctx.userId, apiKey: input.apiKey })
+    ),
 
   recheck: userProcedure
     .use(rateLimited("taskStart"))
@@ -56,11 +52,8 @@ export const aiKeysRouter = createTRPCRouter({
       )
     )
     .input(z.object({}))
-    .output(okSchema)
-    .mutation(async ({ ctx }) => {
-      await new AiKeysService(db).recheck(ctx.userId);
-      return ok;
-    }),
+    .output(z.object({ status: aiKeyStatusSchema }))
+    .mutation(({ ctx }) => new AiKeysService(db).recheck(ctx.userId)),
 
   remove: userProcedure
     .meta(

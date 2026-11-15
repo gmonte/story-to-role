@@ -3,6 +3,7 @@ import { TRPCError } from "@trpc/server";
 import type { DbClient } from "@repo/api/tools/db-client";
 import { AiKeysRepository } from "@repo/api/domains/ai/ai-keys-repository";
 import { AiUsageRepository } from "@repo/api/domains/ai/ai-usage-repository";
+import { TasksRepository } from "@repo/api/domains/tasks/tasks-repository";
 
 import { decideFunding } from "./credit-funding";
 import {
@@ -76,12 +77,13 @@ export class CreditsService {
 
   /**
    * "Finish with credits": on a paid plan, the user agrees to spend their
-   * stored credits (packs, welcome credits) once the plan's credits and
-   * their key run out, until the month ends.
+   * stored credits (packs, welcome credits) on the next task that needs
+   * them; the one after asks again.
    */
   async confirmStoredCredits(userId: string, now = new Date()) {
     await new CreditsRepository(this.db).confirmStoredCredits(
       userId,
+      now,
       billingMonth(now).next
     );
   }
@@ -89,15 +91,18 @@ export class CreditsService {
   private async keyFunding(tx: DbClient, userId: string, now: Date) {
     const key = await new AiKeysRepository(tx).findByUserId(userId);
     if (!key) return null;
-    const monthStart = new Date(
-      Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1)
-    );
+    const { start: monthStart } = billingMonth(now);
     const usage = await new AiUsageRepository(tx).keyFundedUsageSince(
       userId,
       monthStart
     );
+    const stopped =
+      key.status === "active"
+        ? null
+        : await new TasksRepository(tx).lastStoppedByKey(userId);
     return {
       status: key.status,
+      stoppedTaskEstimate: stopped ? creditCap(stopped.type) : null,
       paysNext:
         (await decideFunding(tx, { userId, cap: 1, scope: "any", now })) ===
         "key",

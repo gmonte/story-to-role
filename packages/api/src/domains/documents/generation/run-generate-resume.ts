@@ -1,7 +1,10 @@
 import { z } from "zod";
 
+import {
+  KeyUnusableError,
+  type AiUsage,
+} from "@repo/api/domains/ai/providers/provider-package";
 import type { AiClient } from "@repo/api/domains/ai/ai-client";
-import type { AiUsage } from "@repo/api/domains/ai/providers/provider-package";
 import { CareerRepository } from "@repo/api/domains/career/career-repository";
 import type { UserCipher } from "@repo/api/domains/encryption/user-cipher";
 import type { SensitiveFilter } from "@repo/api/domains/evidence/sensitive/sensitive-filter";
@@ -106,6 +109,9 @@ export async function runGenerateResume(deps: {
   }
 
   await documents.updateGeneration(generation.id, { status: "running" });
+  // A key that runs out mid-review stops at a safe point (guided interview
+  // spec): the best draft so far is saved, then the task stops.
+  let stoppedBy: KeyUnusableError | null = null;
   try {
     const brief: OpeningBrief = application
       ? await loadOpeningBrief({ db, cipher, openingId: application.openingId })
@@ -209,25 +215,31 @@ export async function runGenerateResume(deps: {
       const forbiddenTexts = resumeLines(previous.content)
         .filter((line) => previous.forbidden.includes(line.id))
         .map((line) => line.text);
-      const edited = await ai.generateObject({
-        purpose: "resume_editor",
-        role,
-        maxTokens: generationSettings.draftMaxTokens,
-        schema: resumeDraftSchema,
-        system: editorPrompt({
-          material,
-          draft: previous.draft,
-          gaps: previous.gaps,
-          dropped: previous.dropped,
-          forbiddenLines: forbiddenTexts,
-          pages: previous.pages,
-        }),
-        messages: [{ role: "user", content: "Apply the review." }],
-      });
-      if (!edited.object) break;
-      candidates.push(
-        await review(evaluate(edited.object), round, [edited.usage])
-      );
+      try {
+        const edited = await ai.generateObject({
+          purpose: "resume_editor",
+          role,
+          maxTokens: generationSettings.draftMaxTokens,
+          schema: resumeDraftSchema,
+          system: editorPrompt({
+            material,
+            draft: previous.draft,
+            gaps: previous.gaps,
+            dropped: previous.dropped,
+            forbiddenLines: forbiddenTexts,
+            pages: previous.pages,
+          }),
+          messages: [{ role: "user", content: "Apply the review." }],
+        });
+        if (!edited.object) break;
+        candidates.push(
+          await review(evaluate(edited.object), round, [edited.usage])
+        );
+      } catch (error) {
+        if (!(error instanceof KeyUnusableError)) throw error;
+        stoppedBy = error;
+        break;
+      }
     }
 
     // A draft within two pages beats a longer one; then the rating decides.
@@ -313,6 +325,8 @@ export async function runGenerateResume(deps: {
     });
     throw error;
   }
+  // Saved: the task still stops so the user sees why.
+  if (stoppedBy) throw stoppedBy;
 }
 
 /** Removes the given lines (and a forbidden title line) from content. */

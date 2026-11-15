@@ -78,6 +78,8 @@ export const creditSummarySchema = z.object({
       status: aiKeyStatusSchema,
       paysNext: z.boolean(),
       spentThisMonthUsd: z.number(),
+      // What finishing the task the key stopped may cost in credits.
+      stoppedTaskEstimate: z.number().int().nullable(),
     })
     .nullable(),
   // On a paid plan: stored credits waiting for "Finish with credits".

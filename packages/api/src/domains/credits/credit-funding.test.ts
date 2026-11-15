@@ -108,8 +108,25 @@ describe("own keys and funding", () => {
 
     await expect(
       ctx.keys.save({ userId: ctx.user.id, apiKey })
-    ).rejects.toMatchObject({ code: "BAD_REQUEST", message: "refused" });
+    ).rejects.toMatchObject({
+      code: "BAD_REQUEST",
+      cause: { reason: "refused" },
+    });
     expect(await ctx.keys.get(ctx.user.id)).toBeNull();
+  });
+
+  it("saves a key without credit, marked, so it can wait for its renewal", async () => {
+    const ctx = await setup();
+    await ctx.courtesy(0);
+    ctx.fake.validateKey.mockRejectedValueOnce(
+      new KeyUnusableError("out_of_credit")
+    );
+
+    expect(await ctx.keys.save({ userId: ctx.user.id, apiKey })).toEqual({
+      status: "out_of_credit",
+    });
+    expect((await ctx.keys.get(ctx.user.id))?.status).toBe("out_of_credit");
+    expect(await ctx.keys.recheck(ctx.user.id)).toEqual({ status: "active" });
   });
 
   it("funds a courtesy user's tasks with their key first, reserving nothing", async () => {
@@ -181,6 +198,11 @@ describe("own keys and funding", () => {
       type: "analyze_opening",
     });
     expect(await ctx.funding(task.id)).toBe("credits");
+
+    // The confirmation covered that task: the next one asks again.
+    await expect(
+      ctx.tasks.start({ userId: ctx.user.id, type: "analyze_opening" })
+    ).rejects.toMatchObject({ code: "PAYMENT_REQUIRED" });
   });
 
   it("stops a key-funded task whose key runs out, charging nothing", async () => {
@@ -208,6 +230,7 @@ describe("own keys and funding", () => {
     expect(summary.key).toMatchObject({
       status: "out_of_credit",
       paysNext: false,
+      stoppedTaskEstimate: 3,
     });
   });
 });

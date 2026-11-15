@@ -10,8 +10,18 @@ describe("maskSecrets", () => {
     expect(maskSecrets({ nested: [{ apiKey: key }] })).toEqual({
       nested: [{ apiKey: "sk-ant-…WXYZ" }],
     });
-    const masked = maskSecrets(new Error(`bad ${key}`)) as Error;
-    expect(masked.message).toBe("bad sk-ant-…WXYZ");
+    const error = Object.assign(new Error(`bad ${key}`), {
+      status: 401,
+      cause: new Error(key),
+    });
+    expect(maskSecrets(error)).toMatchObject({
+      message: "bad sk-ant-…WXYZ",
+      status: 401,
+      cause: { message: "sk-ant-…WXYZ" },
+    });
+    expect(maskSecrets(`sk-ant-api03-${"a".repeat(20)}-x_9Z`)).toBe(
+      "sk-ant-…x_9Z"
+    );
   });
 
   it("leaves other values alone", () => {

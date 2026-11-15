@@ -29,7 +29,7 @@ export function FinishWithCredits() {
         toast.success(
           t.formatMessage({
             defaultMessage:
-              "Done: this month, your stored credits pay once your plan’s credits and your key run out. Try the action again.",
+              "Done: your stored credits pay for the next task that needs them. Start it again to finish.",
           })
         );
       },
@@ -37,6 +37,7 @@ export function FinishWithCredits() {
     })
   );
   const locked = credits.data?.storedLocked ?? 0;
+  const estimate = credits.data?.key?.stoppedTaskEstimate;
   if (locked <= 0) return null;
 
   return (
@@ -51,11 +52,22 @@ export function FinishWithCredits() {
         {t.formatMessage(
           {
             defaultMessage:
-              "You have {credits, number} stored credits (packs and welcome credits). They are used only after your plan’s credits and your own key, and only once you agree.",
+              "You have {credits, number} stored credits (packs and welcome credits). They are used only after your plan’s credits and your own key, and only for a task you agree to.",
           },
           { credits: locked }
         )}
       </p>
+      {estimate && (
+        <p>
+          {t.formatMessage(
+            {
+              defaultMessage:
+                "Finishing what your key stopped costs up to {credits, number} credits.",
+            },
+            { credits: estimate }
+          )}
+        </p>
+      )}
       <Button
         className="self-start"
         disabled={confirm.isPending}

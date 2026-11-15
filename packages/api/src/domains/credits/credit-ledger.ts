@@ -25,13 +25,14 @@ export class InsufficientCreditsError extends Error {
   }
 }
 
-/** The month a date falls in ("2026-11") and the instant the next one starts. */
+/** The month a date falls in ("2026-11"), when it started and when it ends. */
 export function billingMonth(now: Date) {
   const key = now.toISOString().slice(0, 7);
+  const start = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
   const next = new Date(
     Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1)
   );
-  return { key, next };
+  return { key, start, next };
 }
 
 /**
@@ -302,6 +303,18 @@ export async function reserveCredits(
     left -= take;
   }
   await repository.insertEntries(entries);
+  // "Finish with credits" covered this task only (paid plans).
+  const stored = new Set(
+    lots
+      .filter((row) => !planSources.includes(row.lot.source))
+      .map((row) => row.lot.id)
+  );
+  if (
+    entries.some((entry) => stored.has(entry.lotId)) &&
+    (await currentPlan(tx, input.userId, now)).kind !== "free"
+  ) {
+    await repository.consumeStoredCreditConfirmation(input.userId);
+  }
 }
 
 /**

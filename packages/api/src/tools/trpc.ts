@@ -8,6 +8,7 @@ import { logger } from "@repo/common/tools/logger";
 import { getTranslation } from "@repo/intl/get-translation";
 import { parseHeaderCookie } from "@repo/common/tools/cookies/common";
 
+import { KeyUnusableError } from "../domains/ai/providers/provider-package";
 import { InsufficientCreditsError } from "../domains/credits/credit-ledger";
 import { UsersRepository } from "../domains/users/users-repository";
 import { db } from "./db";
@@ -56,6 +57,8 @@ const t = initTRPC
             error.cause instanceof ZodError
               ? z.treeifyError(error.cause)
               : null,
+          aiKey:
+            error.cause instanceof KeyUnusableError ? error.cause.reason : null,
           credits: shortfall && {
             needed: shortfall.needed,
             available: shortfall.available,

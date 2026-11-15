@@ -10,7 +10,7 @@ import {
   KeyUnusableError,
   type ProviderPackage,
 } from "./providers/provider-package";
-import type { AiKeyView } from "./schemas/ai-keys";
+import type { AiKeyStatus, AiKeyView } from "./schemas/ai-keys";
 
 type PackageFactory = (input: { apiKey: string }) => ProviderPackage;
 
@@ -46,13 +46,19 @@ export class AiKeysService {
     ) {
       throw new TRPCError({ code: "PRECONDITION_FAILED" });
     }
-    await this.validate(apiKey);
+    // A refused key isn't saved; one without credit is (a Claude Max or
+    // Team key waiting for its monthly credits), marked as such.
+    const status = await this.check(apiKey);
+    if (status === "refused") throw keyRefused(new KeyUnusableError(status));
     const cipher = await getUserCipher(this.db, input.userId);
     await new AiKeysRepository(this.db).upsert({
       userId: input.userId,
       encryptedKey: cipher.encrypt(apiKey),
       lastCharacters: apiKey.slice(-4),
+      status,
+      now: new Date(),
     });
+    return { status };
   }
 
   /** Checks a saved key again (its credit renewed, say) and records it. */
@@ -61,26 +67,27 @@ export class AiKeysService {
     const row = await repository.findByUserId(userId);
     if (!row) throw new TRPCError({ code: "NOT_FOUND" });
     const cipher = await getUserCipher(this.db, userId);
-    await this.validate(cipher.decrypt(row.encryptedKey));
-    await repository.setStatus(userId, "active", new Date());
+    const status = await this.check(cipher.decrypt(row.encryptedKey));
+    await repository.setStatus(userId, status, new Date());
+    return { status };
   }
 
   async remove(userId: string) {
     await new AiKeysRepository(this.db).delete(userId);
   }
 
-  private async validate(apiKey: string) {
+  /** What the provider says of the key: works, out of credit, refused. */
+  private async check(apiKey: string): Promise<AiKeyStatus> {
     try {
       await this.makePackage({ apiKey }).validateKey();
+      return "active";
     } catch (error) {
-      if (error instanceof KeyUnusableError) {
-        throw new TRPCError({
-          code: "BAD_REQUEST",
-          message: error.reason,
-          cause: error,
-        });
-      }
+      if (error instanceof KeyUnusableError) return error.reason;
       throw error;
     }
   }
 }
+
+/** The interface reads the reason from the error's data (tools/trpc). */
+const keyRefused = (error: KeyUnusableError) =>
+  new TRPCError({ code: "BAD_REQUEST", message: error.message, cause: error });

@@ -1,4 +1,4 @@
-import { and, eq, gt, inArray } from "drizzle-orm";
+import { and, desc, eq, gt, inArray, like } from "drizzle-orm";
 
 import type { AiFunding } from "@repo/api/domains/ai/ai-funding";
 import type { DbClient } from "@repo/api/tools/db-client";
@@ -31,6 +31,22 @@ export class TasksRepository {
       .values(input)
       .returning(taskColumns);
     return task;
+  }
+
+  /** The user's latest task their key stopped (out of credit, refused). */
+  async lastStoppedByKey(userId: string) {
+    const [row] = await this.tx
+      .select({ type: tasksTable.type, createdAt: tasksTable.createdAt })
+      .from(tasksTable)
+      .where(
+        and(
+          eq(tasksTable.userId, userId),
+          like(tasksTable.errorMessage, "key\\_%")
+        )
+      )
+      .orderBy(desc(tasksTable.createdAt))
+      .limit(1);
+    return row ?? null;
   }
 
   /** For the worker, which acts for whoever created the task. */

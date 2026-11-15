@@ -119,14 +119,21 @@ export class CreditsRepository {
     return !!row;
   }
 
-  async confirmStoredCredits(userId: string, expiresAt: Date) {
+  async confirmStoredCredits(userId: string, now: Date, expiresAt: Date) {
     await this.tx
       .insert(storedCreditConfirmationsTable)
-      .values({ userId, expiresAt })
+      .values({ userId, confirmedAt: now, expiresAt })
       .onConflictDoUpdate({
         target: storedCreditConfirmationsTable.userId,
-        set: { expiresAt, confirmedAt: new Date() },
+        set: { expiresAt, confirmedAt: now },
       });
+  }
+
+  /** A confirmation covers one task: once spent, the next task asks again. */
+  async consumeStoredCreditConfirmation(userId: string) {
+    await this.tx
+      .delete(storedCreditConfirmationsTable)
+      .where(eq(storedCreditConfirmationsTable.userId, userId));
   }
 
   /** Every courtesy grant, newest first, with whom it was granted to. */

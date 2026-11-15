@@ -9,6 +9,7 @@ import {
   sourceDocumentsTable,
 } from "@repo/api/domains/career/db/career-tables";
 import type { InterviewLanguage } from "@repo/api/domains/career/schemas/career";
+import { embeddingDimensions } from "@repo/api/tools/embeddings/embedding-model";
 import { createTable } from "@repo/api/utils/db/create-table";
 
 import type {
@@ -55,6 +56,8 @@ export const evidenceTable = createTable(
       .references(() => sourceDocumentsTable.id, { onDelete: "set null" }),
     lowDetail: d.boolean().notNull().default(false),
     approvedAt: d.timestamp({ withTimezone: true }).notNull(),
+    // Computed by the local model; retrieval for fit checks (ADR 0004).
+    embedding: d.vector({ dimensions: embeddingDimensions }),
   }),
   (t) => [
     index("evidence_profile_id_idx").on(t.profileId),

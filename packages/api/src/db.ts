@@ -7,6 +7,7 @@ export * from "./domains/chat/db/chat-tables";
 export * from "./domains/career/db/career-tables";
 export * from "./domains/evidence/db/evidence-tables";
 export * from "./domains/interview/db/interview-tables";
+export * from "./domains/openings/db/openings-tables";
 
 // Relations
 export * from "./domains/users/db/users-relations";

@@ -57,4 +57,32 @@ describe("sensitive filter", () => {
     );
     expect(() => filter.assertClean("Saved eight figures")).not.toThrow();
   });
+
+  it("matches whole words and figures only, never inside ids or numbers", () => {
+    const strict = createSensitiveFilter([
+      { original: "4", choice: "generalize", generalized: "several" },
+      { original: "Rio", choice: "exclude" },
+      { original: "30%", choice: "generalize", generalized: "a third" },
+    ]);
+    expect(
+      strict.apply(
+        "evidence 7b441bc9 in 2024: 4 people in Rio, Mario, 130% and 30%."
+      )
+    ).toBe(
+      "evidence 7b441bc9 in 2024: several people in [omitted], Mario, 130% and a third."
+    );
+    expect(
+      strict.findForbiddenTerms("Grew 40% with 14 engineers in Rioja")
+    ).toEqual([]);
+    expect(strict.findForbiddenTerms("Led 4 engineers")).toEqual(["4"]);
+    // A figure with a unit, and a name in the plural, still match.
+    const units = createSensitiveFilter([
+      { original: "1.5", choice: "generalize", generalized: "millions" },
+      { original: "Acme", choice: "exclude" },
+    ]);
+    expect(units.apply("Saved 1.5M at Acme's plants; Acmes")).toBe(
+      "Saved millionsM at [omitted]'s plants; [omitted]s"
+    );
+    expect(units.findForbiddenTerms("Saved 21.5M at AcmeCorp")).toEqual([]);
+  });
 });

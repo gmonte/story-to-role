@@ -1,4 +1,14 @@
-import { and, asc, count, desc, eq, inArray } from "drizzle-orm";
+import {
+  and,
+  asc,
+  count,
+  desc,
+  eq,
+  inArray,
+  isNull,
+  lt,
+  or,
+} from "drizzle-orm";
 
 import { applicationsTable } from "@repo/api/domains/applications/db/applications-tables";
 import { tasksTable } from "@repo/api/domains/tasks/db/tasks-tables";
@@ -9,6 +19,7 @@ import {
   documentsTable,
   documentVersionsTable,
   generationsTable,
+  positionTitleEquivalentsTable,
   reviewRoundsTable,
 } from "./db/documents-tables";
 import { resumeTemplatesTable, styleProfilesTable } from "./db/writing-tables";
@@ -200,6 +211,85 @@ export class DocumentsRepository {
     return row ?? null;
   }
 
+  /**
+   * A snapshot language sync recorded, or, when undo deleted it, the
+   * nearest remaining ancestor below it (resume spec, "Versions and
+   * snapshots"); null when none is left.
+   */
+  async snapshotOrAncestor(input: {
+    versionId: string;
+    snapshotId: string | null;
+    sequence: number | null;
+  }) {
+    if (!input.snapshotId || input.sequence === null) return null;
+    const exact = await this.findSnapshot(input.snapshotId);
+    if (exact?.versionId === input.versionId) return exact;
+    const [row] = await this.tx
+      .select()
+      .from(documentSnapshotsTable)
+      .where(
+        and(
+          eq(documentSnapshotsTable.versionId, input.versionId),
+          lt(documentSnapshotsTable.sequence, input.sequence)
+        )
+      )
+      .orderBy(desc(documentSnapshotsTable.sequence))
+      .limit(1);
+    return row ?? null;
+  }
+
+  /**
+   * The latest snapshot an adaptation or accepted sync wrote into either of
+   * two versions from the other one, with its generation: where the pair
+   * last met, which language sync uses as its base.
+   */
+  async latestLinkSnapshot(versionId: string, otherVersionId: string) {
+    const [row] = await this.tx
+      .select({
+        snapshot: documentSnapshotsTable,
+        generation: generationsTable,
+      })
+      .from(documentSnapshotsTable)
+      .innerJoin(
+        generationsTable,
+        eq(generationsTable.id, documentSnapshotsTable.generationId)
+      )
+      .where(
+        and(
+          inArray(generationsTable.kind, ["adapt", "sync"]),
+          or(
+            and(
+              eq(documentSnapshotsTable.versionId, versionId),
+              eq(generationsTable.sourceVersionId, otherVersionId)
+            ),
+            and(
+              eq(documentSnapshotsTable.versionId, otherVersionId),
+              eq(generationsTable.sourceVersionId, versionId)
+            )
+          )
+        )
+      )
+      .orderBy(desc(documentSnapshotsTable.createdAt))
+      .limit(1);
+    return row ?? null;
+  }
+
+  /** A document's sync proposal awaiting the user, if any. */
+  async pendingProposal(documentId: string) {
+    const [row] = await this.tx
+      .select()
+      .from(generationsTable)
+      .where(
+        and(
+          eq(generationsTable.documentId, documentId),
+          eq(generationsTable.status, "proposed")
+        )
+      )
+      .orderBy(desc(generationsTable.createdAt))
+      .limit(1);
+    return row ?? null;
+  }
+
   async insertSnapshot(snapshot: Insert<typeof documentSnapshotsTable>) {
     const [row] = await this.tx
       .insert(documentSnapshotsTable)
@@ -272,6 +362,45 @@ export class DocumentsRepository {
       .from(reviewRoundsTable)
       .where(eq(reviewRoundsTable.generationId, generationId))
       .orderBy(asc(reviewRoundsTable.round));
+  }
+
+  listTitleEquivalents(profileId: string) {
+    return this.tx
+      .select()
+      .from(positionTitleEquivalentsTable)
+      .where(eq(positionTitleEquivalentsTable.profileId, profileId));
+  }
+
+  /** A proposal never replaces an approved equivalent. */
+  async proposeTitleEquivalent(
+    row: Insert<typeof positionTitleEquivalentsTable>
+  ) {
+    await this.tx
+      .insert(positionTitleEquivalentsTable)
+      .values(row)
+      .onConflictDoUpdate({
+        target: [
+          positionTitleEquivalentsTable.positionId,
+          positionTitleEquivalentsTable.language,
+        ],
+        set: { encryptedTitle: row.encryptedTitle },
+        setWhere: isNull(positionTitleEquivalentsTable.approvedAt),
+      });
+  }
+
+  async approveTitleEquivalent(
+    row: Insert<typeof positionTitleEquivalentsTable>
+  ) {
+    await this.tx
+      .insert(positionTitleEquivalentsTable)
+      .values(row)
+      .onConflictDoUpdate({
+        target: [
+          positionTitleEquivalentsTable.positionId,
+          positionTitleEquivalentsTable.language,
+        ],
+        set: { encryptedTitle: row.encryptedTitle, approvedAt: row.approvedAt },
+      });
   }
 
   async findTemplate(profileId: string) {

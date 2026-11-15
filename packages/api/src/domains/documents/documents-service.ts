@@ -14,6 +14,9 @@ import { TasksService } from "@repo/api/domains/tasks/tasks-service";
 import type { DbClient } from "@repo/api/tools/db-client";
 
 import { DocumentsRepository } from "./documents-repository";
+import { outdatedVersions } from "./adaptation/sync-status";
+import { proposalDiff } from "./adaptation/three-way-merge";
+import { requireUserVersion } from "./require-version";
 import { applyUserEdit, LockedFactEditError } from "./editing/apply-user-edit";
 import { atsCheck } from "./generation/ats-check";
 import {
@@ -59,24 +62,6 @@ export class DocumentsService {
     const profile = await new CareerRepository(db).findProfileByUserId(userId);
     if (!profile) throw notFound();
     return profile;
-  }
-
-  /** A version of the user's, with its document. */
-  private async requireVersion(
-    tx: DbClient,
-    userId: string,
-    versionId: string,
-    { lock = false } = {}
-  ) {
-    const repository = new DocumentsRepository(tx);
-    const profile = await this.requireProfile(userId, tx);
-    const version = await repository.findVersion(versionId);
-    const document = version
-      ? await repository.findDocument(version.documentId)
-      : null;
-    if (!version || document?.profileId !== profile.id) throw notFound();
-    if (lock) await repository.lockVersion(version.id);
-    return { version, document, profile };
   }
 
   /**
@@ -206,6 +191,7 @@ export class DocumentsService {
     const repository = new DocumentsRepository(tx);
     const versions = await repository.listVersions([document.id]);
     const generation = await repository.latestGeneration(document.id);
+    const outdated = await outdatedVersions(repository, cipher, versions);
     const views: VersionView[] = [];
     for (const version of versions) {
       const latest = await repository.latestSnapshot(version.id);
@@ -227,8 +213,14 @@ export class DocumentsService {
         trace: trace.evidenceFor(content),
         instructionTrace: trace.instructionsFor(content),
         credentialApprovals: trace.credentialApprovals,
+        outdated: outdated.get(version.id) ?? [],
+        titleProposals: trace.titleProposalsFor(content, version.language),
       });
     }
+    const pending = await repository.pendingProposal(document.id);
+    const proposed =
+      pending?.targetSnapshotId &&
+      (await repository.findSnapshot(pending.targetSnapshotId));
     return {
       id: document.id,
       kind: document.kind,
@@ -236,7 +228,10 @@ export class DocumentsService {
       generation: generation
         ? {
             id: generation.id,
+            kind: generation.kind,
             status: generation.status,
+            versionId: generation.versionId,
+            sourceVersionId: generation.sourceVersionId,
             language: generation.language,
             reviewDepth: generation.reviewDepth,
             writingLevel: generation.writingLevel,
@@ -244,6 +239,17 @@ export class DocumentsService {
             createdAt: generation.createdAt,
           }
         : null,
+      proposal:
+        pending?.versionId && pending.encryptedProposal && proposed
+          ? {
+              generationId: pending.id,
+              versionId: pending.versionId,
+              lines: proposalDiff(
+                this.decryptContent(cipher, proposed.encryptedContent),
+                this.decryptContent(cipher, pending.encryptedProposal)
+              ),
+            }
+          : null,
     };
   }
 
@@ -285,6 +291,15 @@ export class DocumentsService {
     const positions = await career.listPositions(profileId);
     const credentials = await career.listCredentials(profileId);
     const evidence = await new EvidenceRepository(tx).listEvidence(profileId);
+    const equivalents = await new DocumentsRepository(tx).listTitleEquivalents(
+      profileId
+    );
+    const originalTitles = new Map(
+      positions.map((position) => [
+        position.id,
+        cipher.decrypt(position.encryptedTitle),
+      ])
+    );
     // Removed points keep their row, so old lines still trace to them.
     const instructions = new Map(
       (await new InstructionsRepository(tx).listPoints(openingId)).map(
@@ -342,6 +357,33 @@ export class DocumentsService {
           return text === undefined ? [] : [{ instructionId: id, text }];
         });
       },
+      titleProposalsFor(content: ResumeContent, language: OutputLanguage) {
+        return content.sections.flatMap((section) =>
+          section.kind === "experience"
+            ? section.entries.flatMap((entry) => {
+                const row = equivalents.find(
+                  (candidate) =>
+                    candidate.positionId === entry.positionId &&
+                    candidate.language === language &&
+                    !candidate.approvedAt
+                );
+                const proposed = row && cipher.decrypt(row.encryptedTitle);
+                // Only over the position's own title, never an override.
+                const printsOriginal =
+                  originalTitles.get(entry.positionId) === entry.title;
+                return proposed && printsOriginal && proposed !== entry.title
+                  ? [
+                      {
+                        positionId: entry.positionId,
+                        current: entry.title,
+                        proposed,
+                      },
+                    ]
+                  : [];
+              })
+            : []
+        );
+      },
       credentialApprovals: credentials.flatMap((row) =>
         row.approvedAt
           ? [{ credentialId: row.id, approvedAt: row.approvedAt }]
@@ -366,7 +408,7 @@ export class DocumentsService {
   }) {
     return this.db.transaction(async (tx) => {
       const repository = new DocumentsRepository(tx);
-      const { version } = await this.requireVersion(
+      const { version } = await requireUserVersion(
         tx,
         input.userId,
         input.versionId,
@@ -409,7 +451,7 @@ export class DocumentsService {
   async undo(input: { userId: string; versionId: string }) {
     return this.db.transaction(async (tx) => {
       const repository = new DocumentsRepository(tx);
-      const { version } = await this.requireVersion(
+      const { version } = await requireUserVersion(
         tx,
         input.userId,
         input.versionId,
@@ -430,7 +472,7 @@ export class DocumentsService {
     versionId: string;
   }): Promise<SnapshotSummary[]> {
     const repository = new DocumentsRepository(this.db);
-    const { version } = await this.requireVersion(
+    const { version } = await requireUserVersion(
       this.db,
       input.userId,
       input.versionId
@@ -443,7 +485,7 @@ export class DocumentsService {
     const repository = new DocumentsRepository(this.db);
     const snapshot = await repository.findSnapshot(input.snapshotId);
     if (!snapshot) throw notFound();
-    await this.requireVersion(this.db, input.userId, snapshot.versionId);
+    await requireUserVersion(this.db, input.userId, snapshot.versionId);
     const cipher = await getUserCipher(this.db, input.userId);
     return {
       ...summary(snapshot),
@@ -457,7 +499,7 @@ export class DocumentsService {
       const repository = new DocumentsRepository(tx);
       const old = await repository.findSnapshot(input.snapshotId);
       if (!old) throw notFound();
-      const { version } = await this.requireVersion(
+      const { version } = await requireUserVersion(
         tx,
         input.userId,
         old.versionId,
@@ -483,7 +525,7 @@ export class DocumentsService {
   async duplicate(input: { userId: string; versionId: string }) {
     return this.db.transaction(async (tx) => {
       const repository = new DocumentsRepository(tx);
-      const { version } = await this.requireVersion(
+      const { version } = await requireUserVersion(
         tx,
         input.userId,
         input.versionId
@@ -517,7 +559,7 @@ export class DocumentsService {
   }) {
     return this.db.transaction(async (tx) => {
       const repository = new DocumentsRepository(tx);
-      const { version } = await this.requireVersion(
+      const { version } = await requireUserVersion(
         tx,
         input.userId,
         input.versionId
@@ -534,7 +576,7 @@ export class DocumentsService {
   async deleteVersion(input: { userId: string; versionId: string }) {
     return this.db.transaction(async (tx) => {
       const repository = new DocumentsRepository(tx);
-      const { version } = await this.requireVersion(
+      const { version } = await requireUserVersion(
         tx,
         input.userId,
         input.versionId

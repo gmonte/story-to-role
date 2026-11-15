@@ -2,12 +2,16 @@ import { sql } from "drizzle-orm";
 import { index, unique } from "drizzle-orm/pg-core";
 
 import { applicationsTable } from "@repo/api/domains/applications/db/applications-tables";
-import { careerProfilesTable } from "@repo/api/domains/career/db/career-tables";
+import {
+  careerProfilesTable,
+  positionsTable,
+} from "@repo/api/domains/career/db/career-tables";
 import type { Tone } from "@repo/api/domains/openings/schemas/opening";
 import { createTable } from "@repo/api/utils/db/create-table";
 
 import type {
   DocumentKind,
+  GenerationKind,
   GenerationStatus,
   OutputLanguage,
   ReviewDepth,
@@ -62,8 +66,10 @@ export const documentVersionsTable = createTable(
       .references(() => documentsTable.id, { onDelete: "cascade" }),
     language: d.text().$type<OutputLanguage>().notNull(),
     encryptedLabel: d.text(),
+    // Language sync (resume spec): the version this one was adapted from.
+    // The base of each sync is read from the snapshots adaptations and
+    // syncs produced, so undo moves it back on its own.
     adaptedFromVersionId: d.uuid(),
-    syncBaseSnapshotId: d.uuid(),
   }),
   (t) => [index("document_versions_document_id_idx").on(t.documentId)]
 );
@@ -114,7 +120,20 @@ export const generationsTable = createTable(
     versionId: d
       .uuid()
       .references(() => documentVersionsTable.id, { onDelete: "set null" }),
+    kind: d.text().$type<GenerationKind>().notNull().default("generate"),
     language: d.text().$type<OutputLanguage>().notNull(),
+    // Adapt and sync: the source version and the snapshot read from it.
+    sourceVersionId: d
+      .uuid()
+      .references(() => documentVersionsTable.id, { onDelete: "set null" }),
+    sourceSnapshotId: d.uuid(),
+    // Finds the nearest remaining ancestor when undo deleted the source.
+    sourceSnapshotSequence: d.integer(),
+    // Sync: the target's snapshot the proposal starts from, the user's
+    // selection, and the proposal awaiting acceptance.
+    targetSnapshotId: d.uuid(),
+    encryptedSyncPlan: d.text(),
+    encryptedProposal: d.text(),
     reviewDepth: d.text().$type<ReviewDepth>().notNull(),
     writingLevel: d.text().$type<WritingLevel>().notNull(),
     tone: d.text().$type<Tone>().notNull(),
@@ -148,4 +167,34 @@ export const reviewRoundsTable = createTable(
     encryptedReview: d.text(),
   }),
   (t) => [index("review_rounds_generation_id_idx").on(t.generationId)]
+);
+
+/**
+ * A position's title in another output language, proposed by the first
+ * adaptation into it; once approved it is a locked fact in that language.
+ */
+export const positionTitleEquivalentsTable = createTable(
+  "position_title_equivalents",
+  (d) => ({
+    id: d.uuid().defaultRandom().primaryKey(),
+    createdAt: createdAt(d),
+    profileId: d
+      .uuid()
+      .notNull()
+      .references(() => careerProfilesTable.id, { onDelete: "cascade" }),
+    positionId: d
+      .uuid()
+      .notNull()
+      .references(() => positionsTable.id, { onDelete: "cascade" }),
+    language: d.text().$type<OutputLanguage>().notNull(),
+    encryptedTitle: d.text().notNull(),
+    approvedAt: d.timestamp({ withTimezone: true }),
+  }),
+  (t) => [
+    unique("position_title_equivalents_language_unique").on(
+      t.positionId,
+      t.language
+    ),
+    index("position_title_equivalents_profile_id_idx").on(t.profileId),
+  ]
 );

@@ -30,13 +30,23 @@ export type ReviewDepth = z.infer<typeof reviewDepthSchema>;
 export const writingLevelSchema = z.enum(["standard", "maximum"]);
 export type WritingLevel = z.infer<typeof writingLevelSchema>;
 
+/** A sync ends as a proposal the user accepts or discards. */
 export const generationStatusSchema = z.enum([
   "pending",
   "running",
   "completed",
   "failed",
+  "proposed",
+  "discarded",
 ]);
 export type GenerationStatus = z.infer<typeof generationStatusSchema>;
+
+/**
+ * What a generation does: write from the evidence, adapt a version into
+ * another language, or carry one version's changes into another (sync).
+ */
+export const generationKindSchema = z.enum(["generate", "adapt", "sync"]);
+export type GenerationKind = z.infer<typeof generationKindSchema>;
 
 /**
  * Where a line came from, shown in the editor's trace: approved evidence

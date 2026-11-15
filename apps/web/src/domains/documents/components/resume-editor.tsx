@@ -7,6 +7,7 @@ import {
   Copy,
   CopyPlus,
   Highlighter,
+  Languages,
   Pencil,
   Plus,
   RotateCcw,
@@ -66,7 +67,9 @@ import {
   updateTitleLine,
 } from "../utils/edit-content";
 import { sectionText } from "../utils/section-text";
+import { AdaptVersionDialog } from "./adapt-version-dialog";
 import { GenerateResumeDialog } from "./generate-resume-dialog";
+import { TitleProposals } from "./title-proposals";
 import { VersionHistorySheet } from "./version-history-sheet";
 
 const originTone: Record<LineOrigin["kind"], string> = {
@@ -207,6 +210,20 @@ export function ResumeEditor({
             <CopyPlus />
             {t.formatMessage({ defaultMessage: "Duplicate" })}
           </Button>
+          {versions.some((row) => row.language !== version.language) && (
+            <AdaptVersionDialog
+              // Its choices belong to the version open in the editor.
+              key={version.id}
+              versions={versions}
+              target={version}
+              trigger={
+                <Button size="sm" variant="ghost">
+                  <Languages />
+                  {t.formatMessage({ defaultMessage: "Recreate from…" })}
+                </Button>
+              }
+            />
+          )}
           <GenerateResumeDialog
             openingId={openingId}
             defaultLanguage={language}
@@ -271,6 +288,8 @@ export function ResumeEditor({
           </Legend>
         </div>
       )}
+
+      <TitleProposals version={version} />
 
       {draft && (
         <div className="bg-background sticky top-0 z-10 flex items-center justify-between gap-2 rounded-lg border p-2 text-sm shadow-sm">

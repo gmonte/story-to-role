@@ -2,7 +2,10 @@
 
 import { FileText, Loader2, Plus } from "lucide-react";
 
-import type { OutputLanguage } from "@repo/api/domains/documents/schemas/document";
+import type {
+  GenerationKind,
+  OutputLanguage,
+} from "@repo/api/domains/documents/schemas/document";
 import type { VersionView } from "@repo/api/domains/documents/schemas/document-view";
 import type { Tone } from "@repo/api/domains/openings/schemas/opening";
 import type { TaskProgress } from "@repo/api/domains/tasks/schemas/task";
@@ -14,7 +17,9 @@ import { cn } from "@repo/web/lib/utils";
 import { useDocumentLabels } from "../hooks/use-document-labels";
 import { useOpeningDocuments } from "../hooks/use-opening-documents";
 import { useSelectedVersion } from "../hooks/use-selected-version";
+import { AdaptVersionDialog } from "./adapt-version-dialog";
 import { GenerateResumeDialog } from "./generate-resume-dialog";
+import { OutdatedNotice, SyncProposal } from "./language-sync";
 
 /**
  * The side panel's Documents block (workspace spec): the resume with a row
@@ -49,18 +54,28 @@ export function DocumentsPanel({
           {t.formatMessage({ defaultMessage: "Documents" })}
         </h3>
         {versions.length > 0 && (
-          <GenerateResumeDialog
-            openingId={openingId}
-            defaultLanguage={defaultLanguage}
-            defaultTone={documents.data?.application?.tone ?? defaultTone}
-            pendingGaps={pendingGaps}
-            existingLanguages={versions.map((version) => version.language)}
-            application={documents.data?.application ?? null}
+          <AdaptVersionDialog
+            versions={versions}
             trigger={
               <Button size="sm" variant="ghost" disabled={running}>
                 <Plus />
                 {t.formatMessage({ defaultMessage: "New version" })}
               </Button>
+            }
+            scratch={
+              <GenerateResumeDialog
+                openingId={openingId}
+                defaultLanguage={defaultLanguage}
+                defaultTone={documents.data?.application?.tone ?? defaultTone}
+                pendingGaps={pendingGaps}
+                existingLanguages={versions.map((version) => version.language)}
+                application={documents.data?.application ?? null}
+                trigger={
+                  <Button>
+                    {t.formatMessage({ defaultMessage: "Continue" })}
+                  </Button>
+                }
+              />
             }
           />
         )}
@@ -69,7 +84,7 @@ export function DocumentsPanel({
       {running && (
         <div className="bg-background flex items-center gap-2 rounded-lg border p-2.5 text-xs">
           <Loader2 className="size-3.5 animate-spin" />
-          <GenerationProgressLabel progress={generation.progress} />
+          <GenerationProgressLabel generation={generation} />
         </div>
       )}
       {generation?.status === "failed" && (
@@ -138,17 +153,26 @@ export function DocumentsPanel({
         </ul>
       )}
 
+      {resume && <SyncProposal document={resume} versions={versions} />}
+      {selected && <OutdatedNotice version={selected} versions={versions} />}
       {selected && <VersionChecks version={selected} />}
     </section>
   );
 }
 
 function GenerationProgressLabel({
-  progress,
+  generation,
 }: {
-  progress: TaskProgress | null;
+  generation: { kind: GenerationKind; progress: TaskProgress | null };
 }) {
   const t = useTranslation();
+  const { progress } = generation;
+  if (generation.kind === "adapt") {
+    return t.formatMessage({ defaultMessage: "Adapting resume…" });
+  }
+  if (generation.kind === "sync") {
+    return t.formatMessage({ defaultMessage: "Syncing languages…" });
+  }
   switch (progress?.label) {
     case "review_round":
       // Step 1 drafts and the last step saves; the ones between are rounds.

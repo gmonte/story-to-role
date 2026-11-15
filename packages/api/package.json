@@ -17,7 +17,7 @@
     "db:studio": "drizzle-kit studio",
     "lint": "eslint . --max-warnings=0 --no-warn-ignored",
     "lint:fix": "eslint . --fix",
-    "predeploy": "pnpm db:migrate && case \"$REDIS_KEY_PREFIX\" in pr-*) echo 'PR preview: tasks come from staging, skipping trigger:deploy' ;; *) pnpm trigger:deploy ;; esac",
+    "predeploy": "pnpm db:migrate && if [ -z \"$DATABASE_BRANCH\" ]; then pnpm trigger:deploy; else echo 'DATABASE_BRANCH is set (branched preview) — skipping trigger:deploy'; fi",
     "test": "vitest run --passWithNoTests",
     "typecheck": "tsc --noEmit",
     "trigger:dev": "trigger dev --profile storytorole",

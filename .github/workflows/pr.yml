@@ -162,7 +162,9 @@ jobs:
 
           if [ -n "$DATABASE_URL" ]; then
             echo "Deploying against the PR's own Neon branch"
-            set -- "$@" -b "DATABASE_URL=$DATABASE_URL" -e "DATABASE_URL=$DATABASE_URL"
+            # DATABASE_BRANCH tells predeploy to skip trigger:deploy: the shared
+            # Trigger.dev worker reads staging's database, not this branch.
+            set -- "$@" -b "DATABASE_URL=$DATABASE_URL" -e "DATABASE_URL=$DATABASE_URL" -b "DATABASE_BRANCH=preview/pr-${{ github.event.pull_request.number }}"
           fi
 
           DEPLOY_URL=$(vercel deploy --token $VERCEL_TOKEN --target preview "$@")

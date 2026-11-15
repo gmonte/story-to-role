@@ -104,6 +104,21 @@ Acceptance:
 - Account export and deletion (privacy spec).
 - Onboarding paths (workspace spec).
 
+## Final pass
+
+After slice 7, before calling the MVP done. Raised by the owner while testing slices 1 to 4.
+
+- Interface translations: switching the interface language today changes only date and number formats; translate every `@repo/intl` message into Brazilian Portuguese.
+- Import of the owner's own files (a resume plus a truth file): confidentiality rules written in the truth file ("names of people, colleagues and clients included", "salary and billing figures") became sensitive items instead of being applied to the real names; annotations such as "[medido]" leak into evidence text; facts in two languages (resume in English, truth file in Portuguese) make review confusing.
+- Per-application sensitive-item overrides (guided-interview spec, "Per-application overrides"; listed in the workspace Context block): in the specs but in no slice yet.
+- A guided walkthrough of every flow with the owner, using the product as a user.
+- Evaluate an optional product tour that teaches new users the system.
+
+Acceptance:
+- [ ] Switching the interface to Brazilian Portuguese translates every screen.
+- [ ] Importing a resume and a truth file yields sensitive items that are real names or figures, and evidence without annotations.
+- [ ] A sensitive item can be kept, generalized or excluded for one application only.
+
 ## Not in the MVP
 
 Hiring interview prep, team or recruiter accounts, email reminders, OpenAI package and "Sign in with ChatGPT", languages beyond English and Brazilian Portuguese, final prices.

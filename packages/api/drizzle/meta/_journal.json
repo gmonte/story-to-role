@@ -85,6 +85,13 @@
       "when": 1794766873620,
       "tag": "0011_add_document_vectors",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1794769522904,
+      "tag": "0012_add_company_research",
+      "breakpoints": true
     }
   ]
 }

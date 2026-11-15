@@ -17,6 +17,9 @@ const models: Record<AiRole, string> = {
   maximum: "claude-opus-5-5",
 };
 
+// How many times a paused server-side search turn is sent back.
+const maxSearchResumes = 3;
+
 // Classification wants a quick verdict; writing and the maximum level think
 // as the model sees fit.
 const effortByRole = {
@@ -145,6 +148,56 @@ export function createAnthropicPackage({
       }
 
       throw new Error("The agent did not finish within its iteration limit");
+    },
+
+    async searchWeb(request) {
+      const messages: Anthropic.MessageParam[] = [...request.messages];
+      const usages: AiUsage[] = [];
+      const sources = new Map<string, string>();
+      // A long server-side search pauses; sending the turn back resumes it.
+      for (let resume = 0; resume <= maxSearchResumes; resume++) {
+        const response = await client.messages.create({
+          ...toParams(request),
+          messages,
+          tools: [
+            {
+              type: "web_search_20260209",
+              name: "web_search",
+              max_uses: request.maxSearches,
+            },
+          ],
+        });
+        usages.push(toUsage(response.model, response.usage));
+        for (const block of response.content) {
+          if (
+            block.type === "web_search_tool_result" &&
+            Array.isArray(block.content)
+          ) {
+            block.content.forEach((result) =>
+              sources.set(result.url, result.title)
+            );
+          }
+          if (block.type === "text") {
+            for (const citation of block.citations ?? []) {
+              if (citation.type === "web_search_result_location") {
+                sources.set(citation.url, citation.title ?? citation.url);
+              }
+            }
+          }
+        }
+        if (response.stop_reason !== "pause_turn") {
+          const text = response.content
+            .flatMap((block) => (block.type === "text" ? [block.text] : []))
+            .join("");
+          return {
+            text,
+            sources: [...sources].map(([url, title]) => ({ url, title })),
+            usages,
+          };
+        }
+        messages.push({ role: "assistant", content: response.content });
+      }
+      throw new Error("The web search did not finish within its resumes");
     },
 
     async generateObject(request) {

@@ -5,17 +5,22 @@ import { useEffect, useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { ExternalLink, Loader2 } from "lucide-react";
 import Link from "next/link";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
 import { useTranslation } from "@repo/intl/use-translation";
 import { Badge } from "@repo/web/components/ui/badge";
 import { Button } from "@repo/web/components/ui/button";
 import { toast } from "@repo/web/components/ui/sonner";
+import { Tabs, TabsList, TabsTrigger } from "@repo/web/components/ui/tabs";
 import { Textarea } from "@repo/web/components/ui/textarea";
 
+import { ResumeEditor } from "~/domains/documents/components/resume-editor";
+import { useOpeningDocuments } from "~/domains/documents/hooks/use-opening-documents";
 import { useTRPC } from "~/tools/trpc/client";
 
 import { useOpening, useRefreshOpenings } from "../hooks/use-opening";
 import { useOpeningLabels } from "../hooks/use-opening-labels";
+import { pendingGaps } from "./fit-check-panel";
 
 /** The opening itself: its status, description and the gap questions. */
 export function OpeningView({ openingId }: { openingId: string }) {
@@ -24,6 +29,16 @@ export function OpeningView({ openingId }: { openingId: string }) {
   const trpc = useTRPC();
   const refresh = useRefreshOpenings();
   const opening = useOpening(openingId);
+  const documents = useOpeningDocuments(openingId);
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  const pathname = usePathname();
+  const view = searchParams.get("view") === "resume" ? "resume" : "opening";
+  const setView = (next: string) => {
+    const params = new URLSearchParams(searchParams);
+    params.set("view", next);
+    router.replace(`${pathname}?${params.toString()}`, { scroll: false });
+  };
   const setClosed = useMutation(
     trpc.openings.setClosed.mutationOptions({
       onSuccess: refresh,
@@ -55,6 +70,9 @@ export function OpeningView({ openingId }: { openingId: string }) {
   }
 
   const gaps = data.fitCheck?.items.filter((item) => item.gapQuestion) ?? [];
+  const resumeVersions =
+    documents.data?.documents.find((document) => document.kind === "resume")
+      ?.versions ?? [];
 
   return (
     <div className="h-full overflow-y-auto">
@@ -111,55 +129,83 @@ export function OpeningView({ openingId }: { openingId: string }) {
           </div>
         )}
 
-        {gaps.length > 0 && (
-          <section className="flex flex-col gap-3">
-            <div>
-              <h3 className="font-medium">
-                {t.formatMessage({
-                  defaultMessage: "Before writing for this opening",
-                })}
-              </h3>
-              <p className="text-muted-foreground text-sm">
-                {t.formatMessage({
-                  defaultMessage:
-                    "The opening asks for things your evidence doesn't show yet. Tell us if you really lack them, or share a story.",
-                })}
-              </p>
-            </div>
-            {gaps.map((item) => (
-              <GapQuestion
-                key={item.id}
-                fitCheckItemId={item.id}
-                question={item.gapQuestion ?? ""}
-                answer={item.gapAnswer}
-              />
-            ))}
-          </section>
+        {resumeVersions.length > 0 && (
+          <Tabs value={view} onValueChange={setView}>
+            <TabsList>
+              <TabsTrigger value="opening">
+                {t.formatMessage({ defaultMessage: "Opening" })}
+              </TabsTrigger>
+              <TabsTrigger value="resume">
+                {t.formatMessage({ defaultMessage: "Resume" })}
+              </TabsTrigger>
+            </TabsList>
+          </Tabs>
         )}
 
-        {data.sourceUrl && (
-          <a
-            href={data.sourceUrl}
-            target="_blank"
-            rel="noreferrer noopener"
-            className="text-muted-foreground inline-flex items-center gap-1 text-sm underline"
-          >
-            <ExternalLink className="size-3.5" />
-            {t.formatMessage({ defaultMessage: "Opening text" })}
-          </a>
-        )}
+        {view === "resume" && resumeVersions.length > 0 ? (
+          <ResumeEditor
+            openingId={openingId}
+            versions={resumeVersions}
+            defaultTone={
+              documents.data?.application?.tone ??
+              data.suggestedTone ??
+              "your_style"
+            }
+            pendingGaps={pendingGaps(data)}
+          />
+        ) : (
+          <>
+            {gaps.length > 0 && (
+              <section className="flex flex-col gap-3">
+                <div>
+                  <h3 className="font-medium">
+                    {t.formatMessage({
+                      defaultMessage: "Before writing for this opening",
+                    })}
+                  </h3>
+                  <p className="text-muted-foreground text-sm">
+                    {t.formatMessage({
+                      defaultMessage:
+                        "The opening asks for things your evidence doesn't show yet. Tell us if you really lack them, or share a story.",
+                    })}
+                  </p>
+                </div>
+                {gaps.map((item) => (
+                  <GapQuestion
+                    key={item.id}
+                    fitCheckItemId={item.id}
+                    question={item.gapQuestion ?? ""}
+                    answer={item.gapAnswer}
+                  />
+                ))}
+              </section>
+            )}
 
-        {(data.description ?? data.notes) && (
-          <section className="flex flex-col gap-2">
-            <h3 className="font-medium">
-              {data.description
-                ? t.formatMessage({ defaultMessage: "Description" })
-                : t.formatMessage({ defaultMessage: "Notes" })}
-            </h3>
-            <p className="text-muted-foreground text-sm whitespace-pre-wrap">
-              {data.description ?? data.notes}
-            </p>
-          </section>
+            {data.sourceUrl && (
+              <a
+                href={data.sourceUrl}
+                target="_blank"
+                rel="noreferrer noopener"
+                className="text-muted-foreground inline-flex items-center gap-1 text-sm underline"
+              >
+                <ExternalLink className="size-3.5" />
+                {t.formatMessage({ defaultMessage: "Opening text" })}
+              </a>
+            )}
+
+            {(data.description ?? data.notes) && (
+              <section className="flex flex-col gap-2">
+                <h3 className="font-medium">
+                  {data.description
+                    ? t.formatMessage({ defaultMessage: "Description" })
+                    : t.formatMessage({ defaultMessage: "Notes" })}
+                </h3>
+                <p className="text-muted-foreground text-sm whitespace-pre-wrap">
+                  {data.description ?? data.notes}
+                </p>
+              </section>
+            )}
+          </>
         )}
       </div>
     </div>

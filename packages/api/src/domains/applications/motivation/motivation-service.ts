@@ -264,7 +264,12 @@ export class MotivationService {
   }
 
   /** Skipping: the letter is then marked "could improve with your motivation". */
-  async skip(input: { userId: string; openingId: string }) {
+  async skip(input: {
+    userId: string;
+    openingId: string;
+    // The story still matters: the letter tells it without the interview.
+    storyId: string | null;
+  }) {
     const { profile, opening } = await this.requireOpening(
       input.userId,
       input.openingId
@@ -272,13 +277,26 @@ export class MotivationService {
     await this.db.transaction(async (tx) => {
       const repository = new MotivationRepository(tx);
       const interview = await repository.findInterviewByOpening(opening.id);
+      if (
+        input.storyId &&
+        !(await new EvidenceRepository(tx).findStory({
+          profileId: profile.id,
+          storyId: input.storyId,
+        }))
+      ) {
+        throw notFound();
+      }
       if (interview) {
-        await repository.updateInterview(interview.id, { status: "skipped" });
+        await repository.updateInterview(interview.id, {
+          status: "skipped",
+          storyId: input.storyId ?? interview.storyId,
+        });
       } else {
         await repository.replaceInterview({
           profileId: profile.id,
           openingId: opening.id,
           status: "skipped",
+          storyId: input.storyId,
         });
       }
     });

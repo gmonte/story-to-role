@@ -3,10 +3,10 @@ import type { UserCipher } from "@repo/api/domains/encryption/user-cipher";
 import type { DbClient } from "@repo/api/tools/db-client";
 import type { Storage } from "@repo/api/tools/storage/storage";
 
-import { decryptSnapshot } from "../snapshot-content";
+import { decryptDocument } from "../snapshot-content";
 import { DocumentsRepository } from "../documents-repository";
 import { pdfTemplate } from "./pdf-template";
-import { renderResumePdf } from "./resume-pdf";
+import { renderDocumentPdf } from "./render-document-pdf";
 import { storeRenderedPdf } from "./store-rendered-pdf";
 
 /**
@@ -35,14 +35,10 @@ export async function runRenderPdf(deps: {
   if (!version || profile?.userId !== deps.userId) {
     throw new Error(`Snapshot ${snapshot.id} belongs to another user`);
   }
-  // One layout in the MVP: the cover letter's comes with the letters.
-  if (document.kind !== "resume") {
-    throw new Error(`No PDF layout for ${document.kind} yet`);
-  }
   if (await documents.findRenderedFile(snapshot.id, pdfTemplate)) return;
 
-  const { bytes, pages } = await renderResumePdf({
-    content: decryptSnapshot(cipher, snapshot),
+  const { bytes, pages } = await renderDocumentPdf({
+    content: decryptDocument(cipher, snapshot),
     language: version.language,
   });
   await storeRenderedPdf({

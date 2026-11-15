@@ -1,17 +1,22 @@
 import { z } from "zod";
 
 import type { Line } from "../schemas/document";
+import type { DocumentContent } from "../schemas/document-content";
 import type { ResumeContent, ResumeSection } from "../schemas/resume-content";
 
 /** A line with the list it lives in ("summary", "experience:<id>"…). */
 type Placed = { line: Line; container: string; index: number };
 
-function placedLines(content: ResumeContent): Map<string, Placed> {
+function placedLines(content: DocumentContent): Map<string, Placed> {
   const placed = new Map<string, Placed>();
   const put = (container: string, lines: Line[]) =>
     lines.forEach((line, index) =>
       placed.set(line.id, { line, container, index })
     );
+  if (content.kind === "cover_letter") {
+    put("letter", content.paragraphs);
+    return placed;
+  }
   for (const section of content.sections) {
     switch (section.kind) {
       case "summary":
@@ -200,8 +205,8 @@ export function mergeSync(input: {
   };
 }
 
-/** What a sync proposal changes in its target, line by line, to review. */
-export function proposalDiff(before: ResumeContent, after: ResumeContent) {
+/** What a proposal changes in its target, line by line, to review. */
+export function proposalDiff(before: DocumentContent, after: DocumentContent) {
   const old = placedLines(before);
   const proposed = placedLines(after);
   const changed = [...proposed.values()]

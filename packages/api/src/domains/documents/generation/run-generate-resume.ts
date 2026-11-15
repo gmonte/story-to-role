@@ -10,7 +10,7 @@ import type { TaskProgress } from "@repo/api/domains/tasks/schemas/task";
 import type { DbClient } from "@repo/api/tools/db-client";
 import type { Storage } from "@repo/api/tools/storage/storage";
 
-import { decryptSnapshot } from "../snapshot-content";
+import { decryptResume } from "../snapshot-content";
 import { DocumentsRepository } from "../documents-repository";
 import { fitToPages } from "../rendering/fit-to-pages";
 import { storeRenderedPdf } from "../rendering/store-rendered-pdf";
@@ -136,7 +136,7 @@ export async function runGenerateResume(deps: {
       language: generation.language,
       tone: generation.tone,
       style: setup.style,
-      reference: reference && decryptSnapshot(cipher, reference),
+      reference: reference && decryptResume(cipher, reference),
     });
     const role = generation.writingLevel === "maximum" ? "maximum" : "writing";
     const totalRounds = generationSettings.reviewRounds[generation.reviewDepth];

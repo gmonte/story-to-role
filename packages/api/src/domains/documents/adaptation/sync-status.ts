@@ -2,7 +2,7 @@ import type { UserCipher } from "@repo/api/domains/encryption/user-cipher";
 
 import type { DocumentsRepository } from "../documents-repository";
 import type { OutputLanguage } from "../schemas/document";
-import { decryptSnapshot } from "../snapshot-content";
+import { decryptResume } from "../snapshot-content";
 import { areLinked, syncBases } from "./sync-link";
 import { syncChanges } from "./three-way-merge";
 
@@ -38,10 +38,10 @@ export async function outdatedVersions(
     const changes =
       bases.base && bases.targetBase
         ? syncChanges({
-            base: decryptSnapshot(cipher, bases.base),
-            source: decryptSnapshot(cipher, source),
-            targetBase: decryptSnapshot(cipher, bases.targetBase),
-            target: decryptSnapshot(cipher, current),
+            base: decryptResume(cipher, bases.base),
+            source: decryptResume(cipher, source),
+            targetBase: decryptResume(cipher, bases.targetBase),
+            target: decryptResume(cipher, current),
           }).length
         : null;
     if (changes === null || changes > 0) {

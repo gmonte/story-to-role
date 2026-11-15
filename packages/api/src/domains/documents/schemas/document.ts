@@ -45,7 +45,13 @@ export type GenerationStatus = z.infer<typeof generationStatusSchema>;
  * What a generation does: write from the evidence, adapt a version into
  * another language, or carry one version's changes into another (sync).
  */
-export const generationKindSchema = z.enum(["generate", "adapt", "sync"]);
+export const generationKindSchema = z.enum([
+  "generate",
+  "adapt",
+  "sync",
+  // A cover letter adjusted to what changed in its resume (a proposal).
+  "letter_update",
+]);
 export type GenerationKind = z.infer<typeof generationKindSchema>;
 
 /**
@@ -65,6 +71,15 @@ export const lineOriginSchema = z.discriminatedUnion("kind", [
     evidenceIds: z.array(z.uuid()),
   }),
   z.object({ kind: z.literal("manual") }),
+  // A cover letter paragraph: evidence, approved company facts, the
+  // motivation interview's points and career goals.
+  z.object({
+    kind: z.literal("letter"),
+    evidenceIds: z.array(z.uuid()),
+    companyFactIds: z.array(z.uuid()),
+    motivationPointIds: z.array(z.uuid()),
+    careerGoalIds: z.array(z.uuid()),
+  }),
   z.object({ kind: z.literal("credential"), credentialId: z.uuid() }),
   z.object({ kind: z.literal("skill"), evidenceIds: z.array(z.uuid()) }),
 ]);

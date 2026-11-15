@@ -14,7 +14,8 @@ import {
   snapshotOriginSchema,
   writingLevelSchema,
 } from "./document";
-import { resumeContentSchema, resumeSectionKindSchema } from "./resume-content";
+import { documentContentSchema } from "./document-content";
+import { resumeSectionKindSchema } from "./resume-content";
 
 /** Where an evidence line came from, for the editor's trace. */
 export const evidenceTraceSchema = z.object({
@@ -57,7 +58,7 @@ export const versionViewSchema = z.object({
   label: z.string().nullable(),
   snapshot: snapshotSummarySchema,
   snapshotCount: z.number().int(),
-  content: resumeContentSchema,
+  content: documentContentSchema,
   pages: z.number(),
   pdf: z.object({
     // Rendered from the official snapshot; `pages` is then measured.
@@ -84,6 +85,25 @@ export const versionViewSchema = z.object({
       baseMissing: z.boolean(),
     })
   ),
+  // A cover letter's sources besides evidence, for its trace.
+  letterTrace: z
+    .object({
+      companyFacts: z.array(
+        z.object({ id: z.uuid(), text: z.string(), sourceUrl: z.string() })
+      ),
+      motivationPoints: z.array(z.object({ id: z.uuid(), text: z.string() })),
+      careerGoals: z.array(z.object({ id: z.uuid(), text: z.string() })),
+    })
+    .nullable(),
+  // A cover letter and its resume (resume spec, "Cover letter and its
+  // resume"): outdated once that resume version got a new snapshot.
+  letter: z
+    .object({
+      resumeVersionId: z.uuid().nullable(),
+      outdated: z.boolean(),
+      motivationSkipped: z.boolean(),
+    })
+    .nullable(),
   // Titles proposed for this language and not approved yet.
   titleProposals: z.array(
     z.object({

@@ -12,7 +12,7 @@ import { loadSensitiveFilter } from "@repo/api/domains/evidence/sensitive/load-s
 import { DocumentsRepository } from "../documents-repository";
 import { loadCareerContext } from "../generation/load-career-context";
 import { relockFacts } from "../generation/resume-checks";
-import { decryptSnapshot } from "../snapshot-content";
+import { decryptResume } from "../snapshot-content";
 import { requireUserVersion } from "../require-version";
 import type {
   OutputLanguage,
@@ -285,7 +285,7 @@ export class LibraryService {
         author: "user",
         encryptedContent: cipher.encrypt(
           JSON.stringify(
-            relockFacts(decryptSnapshot(cipher, latest), context.positions)
+            relockFacts(decryptResume(cipher, latest), context.positions)
           )
         ),
       });

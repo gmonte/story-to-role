@@ -12,7 +12,7 @@ import { TasksService } from "@repo/api/domains/tasks/tasks-service";
 import type { DbClient } from "@repo/api/tools/db-client";
 import { getStorage, type Storage } from "@repo/api/tools/storage/storage";
 
-import { decryptSnapshot } from "../snapshot-content";
+import { decryptDocument } from "../snapshot-content";
 import { DocumentsRepository } from "../documents-repository";
 import { requireUserVersion } from "../require-version";
 import { fileNamer } from "./file-namer";
@@ -120,7 +120,7 @@ export class PdfService {
     const nameFor = await fileNamer(this.db, cipher, document);
     return {
       bytes: Buffer.from(cipher.decrypt(stored.toString()), "base64"),
-      fileName: nameFor(version, decryptSnapshot(cipher, latest)),
+      fileName: nameFor(version, decryptDocument(cipher, latest)),
       label: version.encryptedLabel
         ? cipher.decrypt(version.encryptedLabel)
         : null,

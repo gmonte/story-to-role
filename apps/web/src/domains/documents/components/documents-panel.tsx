@@ -155,7 +155,13 @@ export function DocumentsPanel({
       )}
 
       {versions.length > 0 && (
-        <DownloadZipButton openingId={openingId} versions={versions} />
+        <DownloadZipButton
+          openingId={openingId}
+          // Every document of the application goes in the ZIP.
+          versions={(documents.data?.documents ?? []).flatMap(
+            (document) => document.versions
+          )}
+        />
       )}
       {resume && <SyncProposal document={resume} versions={versions} />}
       {selected && <OutdatedNotice version={selected} versions={versions} />}
@@ -260,6 +266,7 @@ export function VersionChecks({ version }: { version: VersionView }) {
 
 /** Where trimming costs least: the oldest position that still has bullets. */
 function oldestWithBullets(version: VersionView) {
+  if (version.content.kind !== "resume") return null;
   const entries = version.content.sections.flatMap((section) =>
     section.kind === "experience" ? section.entries : []
   );

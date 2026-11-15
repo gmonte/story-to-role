@@ -261,10 +261,15 @@ export function SyncProposal({
   return (
     <div className="bg-background flex flex-col gap-2 rounded-lg border border-sky-500/40 p-2.5 text-xs">
       <p className="text-sm font-medium">
-        {t.formatMessage(
-          { defaultMessage: "Sync proposal for {version}" },
-          { version: target ? labels.version(target) : "" }
-        )}
+        {document.kind === "cover_letter"
+          ? t.formatMessage({
+              defaultMessage:
+                "Proposed update of the cover letter, from what changed in its resume",
+            })
+          : t.formatMessage(
+              { defaultMessage: "Sync proposal for {version}" },
+              { version: target ? labels.version(target) : "" }
+            )}
       </p>
       <ul className="grid gap-1.5">
         {proposal.lines.map((row) => (

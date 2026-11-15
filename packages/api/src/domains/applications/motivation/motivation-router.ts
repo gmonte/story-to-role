@@ -93,10 +93,10 @@ export const motivationRouter = createTRPCRouter({
         "motivation",
         "POST",
         "/openings/by-id/{openingId}/motivation/skip",
-        "Skips the motivation interview"
+        "Skips the motivation interview, keeping the chosen story"
       )
     )
-    .input(z.object({ openingId: z.uuid() }))
+    .input(z.object({ openingId: z.uuid(), storyId: z.uuid().nullable() }))
     .output(okSchema)
     .mutation(async ({ ctx, input }) => {
       await new MotivationService(db).skip({ userId: ctx.userId, ...input });

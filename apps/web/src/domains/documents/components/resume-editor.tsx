@@ -46,7 +46,6 @@ import {
 import { Input } from "@repo/web/components/ui/input";
 import { toast } from "@repo/web/components/ui/sonner";
 import { Tabs, TabsList, TabsTrigger } from "@repo/web/components/ui/tabs";
-import { Textarea } from "@repo/web/components/ui/textarea";
 import {
   Tooltip,
   TooltipContent,
@@ -66,18 +65,11 @@ import {
   updateTitleLine,
 } from "../utils/edit-content";
 import { sectionText } from "../utils/section-text";
+import { EditableText, originTone } from "./editing";
 import { AdaptVersionDialog } from "./adapt-version-dialog";
 import { DownloadPdfDialog } from "./download-pdf-dialog";
 import { TitleProposals } from "./title-proposals";
 import { VersionHistorySheet } from "./version-history-sheet";
-
-const originTone: Record<LineOrigin["kind"], string> = {
-  evidence: "border-l-emerald-500 bg-emerald-500/5",
-  skill: "border-l-emerald-500 bg-emerald-500/5",
-  credential: "border-l-emerald-500 bg-emerald-500/5",
-  instruction: "border-l-sky-500 bg-sky-500/5",
-  manual: "border-l-amber-500 bg-amber-500/5",
-};
 
 /**
  * The resume edited in place (workspace spec): a tab per version, every
@@ -143,7 +135,8 @@ export function ResumeEditor({
     })
   );
 
-  if (!version) return null;
+  // This editor shows resumes; cover letters have their own.
+  if (version?.content.kind !== "resume") return null;
   const draft =
     edits?.snapshotId === version.snapshot.id ? edits.content : null;
   const setDraft = (content: ResumeContent | null) =>
@@ -737,45 +730,5 @@ function CopyButton({ text }: { text: string }) {
     >
       <Copy className="size-3.5" />
     </Button>
-  );
-}
-
-/** Text that turns into a textarea when clicked. */
-function EditableText({
-  value,
-  onChange,
-  className,
-}: {
-  value: string;
-  onChange: (value: string) => void;
-  className?: string;
-}) {
-  const t = useTranslation();
-  const [editing, setEditing] = useState(value === "");
-  if (editing) {
-    return (
-      <Textarea
-        autoFocus
-        defaultValue={value}
-        className="min-h-0 text-sm"
-        rows={Math.max(1, Math.ceil(value.length / 90))}
-        onBlur={(event) => {
-          setEditing(false);
-          if (event.target.value !== value) onChange(event.target.value);
-        }}
-      />
-    );
-  }
-  return (
-    <p
-      className={cn("cursor-text whitespace-pre-wrap", className)}
-      onClick={() => setEditing(true)}
-    >
-      {value || (
-        <span className="text-muted-foreground">
-          {t.formatMessage({ defaultMessage: "Empty line" })}
-        </span>
-      )}
-    </p>
   );
 }

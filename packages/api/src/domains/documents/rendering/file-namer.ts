@@ -4,7 +4,7 @@ import type { DbClient } from "@repo/api/tools/db-client";
 
 import { DocumentsRepository } from "../documents-repository";
 import type { DocumentKind, OutputLanguage } from "../schemas/document";
-import type { ResumeContent } from "../schemas/resume-content";
+import type { DocumentContent } from "../schemas/document-content";
 import { documentFileName } from "./file-names";
 
 /**
@@ -29,7 +29,7 @@ export async function fileNamer(
     : null;
   const encrypted = opening?.encryptedTitle ?? document.encryptedFocus;
   const title = encrypted ? cipher.decrypt(encrypted) : null;
-  return (version: { language: OutputLanguage }, content: ResumeContent) =>
+  return (version: { language: OutputLanguage }, content: DocumentContent) =>
     documentFileName({
       kind: document.kind,
       language: version.language,

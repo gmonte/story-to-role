@@ -4,7 +4,7 @@ import type { z } from "zod";
  * The AI roles of the pipeline. A provider package maps each role to one of
  * its models; nothing else in the app names a model.
  */
-export type AiRole = "classification" | "writing" | "maximum";
+export type AiRole = "classification" | "writing" | "maximum" | "research";
 
 export type AiMessage = { role: "user" | "assistant"; content: string };
 
@@ -46,6 +46,12 @@ export type AiAgentRequest = AiTextRequest & {
 
 export class ToolRefusal extends Error {}
 
+/** A web search turn: the provider's own search tool, within a limit. */
+export type AiSearchRequest = AiTextRequest & { maxSearches: number };
+
+/** A page the search returned or the answer cited. */
+export type AiSource = { url: string; title: string };
+
 /** A certified mapping of every AI role to one provider's models. */
 export type ProviderPackage = {
   provider: "anthropic";
@@ -64,4 +70,11 @@ export type ProviderPackage = {
   runAgent(
     request: AiAgentRequest
   ): Promise<{ text: string; usages: AiUsage[] }>;
+  /**
+   * Answers with the provider's web search tool (company research only;
+   * no other role has web access), reporting every page it found.
+   */
+  searchWeb(
+    request: AiSearchRequest
+  ): Promise<{ text: string; sources: AiSource[]; usages: AiUsage[] }>;
 };

@@ -7,6 +7,8 @@ import type {
   AiAgentRequest,
   AiObjectRequest,
   AiRole,
+  AiSearchRequest,
+  AiSource,
   AiTextRequest,
   AiUsage,
   ProviderPackage,
@@ -22,6 +24,9 @@ export type AiClient = {
   runAgent(
     request: AiAgentRequest & { purpose: string }
   ): Promise<{ text: string; usages: AiUsage[] }>;
+  searchWeb(
+    request: AiSearchRequest & { purpose: string }
+  ): Promise<{ text: string; sources: AiSource[]; usages: AiUsage[] }>;
 };
 
 /**
@@ -79,6 +84,14 @@ export function createAiClient({
 
     async runAgent({ purpose, ...request }) {
       const result = await providerPackage.runAgent(guard(request));
+      for (const usage of result.usages) {
+        await recordUsage(purpose, request.role, usage);
+      }
+      return result;
+    },
+
+    async searchWeb({ purpose, ...request }) {
+      const result = await providerPackage.searchWeb(guard(request));
       for (const usage of result.usages) {
         await recordUsage(purpose, request.role, usage);
       }

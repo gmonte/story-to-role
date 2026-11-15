@@ -26,6 +26,10 @@ export function fakeProviderPackage(script: {
     request: AiAgentRequest,
     callTool: (name: string, input: unknown) => Promise<string>
   ) => Promise<string>;
+  search?: (request: { system: string }) => {
+    text: string;
+    sources: Array<{ url: string; title: string }>;
+  };
 }) {
   const generateObject = vi.fn(async (request: { system: string }) => ({
     object: (await script.object?.(request)) as never,
@@ -45,16 +49,23 @@ export function fakeProviderPackage(script: {
     return { text, usages: [fakeUsage("claude-sonnet-5-5")] };
   });
 
+  const searchWeb = vi.fn(async (request: { system: string }) => ({
+    ...(script.search?.(request) ?? { text: "", sources: [] }),
+    usages: [fakeUsage("claude-sonnet-5-5")],
+  }));
+
   const providerPackage: ProviderPackage = {
     provider: "anthropic",
     models: {
       classification: "claude-haiku-5-5",
       writing: "claude-sonnet-5-5",
       maximum: "claude-opus-5-5",
+      research: "claude-sonnet-5-5",
     },
     generateObject,
     generateText,
     runAgent,
+    searchWeb,
   };
-  return { providerPackage, generateObject, generateText, runAgent };
+  return { providerPackage, generateObject, generateText, runAgent, searchWeb };
 }

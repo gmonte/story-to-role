@@ -9,6 +9,7 @@ import { Badge } from "@repo/web/components/ui/badge";
 import { cn } from "@repo/web/lib/utils";
 
 import { ApplicationContext } from "~/domains/applications/components/application-context";
+import { CompanyResearch } from "~/domains/applications/components/company-research";
 import { DocumentsPanel } from "~/domains/documents/components/documents-panel";
 import { SimilarDocuments } from "~/domains/documents/components/similar-documents";
 
@@ -103,6 +104,10 @@ export function FitCheckPanel({ openingId }: { openingId: string }) {
             pendingGaps={pendingGaps(opening.data)}
           />
           <ApplicationContext openingId={openingId} />
+          <CompanyResearch
+            openingId={openingId}
+            hasCompany={!!opening.data.company}
+          />
         </>
       )}
     </div>

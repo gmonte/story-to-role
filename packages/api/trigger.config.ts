@@ -3,6 +3,8 @@ import { syncEnvVars } from "@trigger.dev/build/extensions/core";
 
 /* eslint-disable no-console -- deploy build extension: logs show up in deploy output. */
 
+const BUILD_ONLY_VARS = ["REDIS_KEY_PREFIX", "APP_URL"];
+
 type VercelEnvVar = {
   key: string;
   value?: string;
@@ -84,6 +86,15 @@ const syncVercelEnvForCurrentTarget = syncEnvVars(
         value: process.env[envVar.key] ?? envVar.value ?? "",
       }))
       .filter((variable) => variable.value !== "");
+
+    // Values CI passes to the build itself (`vercel deploy -b`), which the
+    // Vercel API doesn't list: staging's REDIS_KEY_PREFIX ("stg:") and APP_URL.
+    for (const name of BUILD_ONLY_VARS) {
+      const value = process.env[name];
+      if (value && !variables.some((variable) => variable.name === name)) {
+        variables.push({ name, value });
+      }
+    }
 
     // Names only — never log values.
     console.log(

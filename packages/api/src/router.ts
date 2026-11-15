@@ -3,6 +3,8 @@ import type { inferRouterInputs, inferRouterOutputs } from "@trpc/server";
 import { createTRPCRouter } from "./tools/trpc";
 import { careerRouter } from "./domains/career/career-router";
 import { chatRouter } from "./domains/chat/chat-router";
+import { documentsRouter } from "./domains/documents/documents-router";
+import { writingRouter } from "./domains/documents/writing/writing-router";
 import { interviewRouter } from "./domains/interview/interview-router";
 import { openingsRouter } from "./domains/openings/openings-router";
 import { tasksRouter } from "./domains/tasks/tasks-router";
@@ -11,10 +13,12 @@ import { usersRouter } from "./domains/users/users-router";
 export const appRouter = createTRPCRouter({
   career: careerRouter,
   chat: chatRouter,
+  documents: documentsRouter,
   interview: interviewRouter,
   openings: openingsRouter,
   tasks: tasksRouter,
   users: usersRouter,
+  writing: writingRouter,
 });
 
 export type AppRouter = typeof appRouter;

@@ -10,6 +10,7 @@ import {
   positionConflictsTable,
   positionSummariesTable,
   positionsTable,
+  projectsTable,
   sourceDocumentsTable,
   timelineProposalsTable,
 } from "./db/career-tables";
@@ -193,6 +194,22 @@ export class CareerRepository {
 
   async insertSummary(summary: Insert<typeof positionSummariesTable>) {
     await this.tx.insert(positionSummariesTable).values(summary);
+  }
+
+  /** Projects of the profile's positions. */
+  listProjects(profileId: string) {
+    return this.tx
+      .select({
+        id: projectsTable.id,
+        positionId: projectsTable.positionId,
+        encryptedName: projectsTable.encryptedName,
+      })
+      .from(projectsTable)
+      .innerJoin(
+        positionsTable,
+        eq(projectsTable.positionId, positionsTable.id)
+      )
+      .where(eq(positionsTable.profileId, profileId));
   }
 
   listCredentials(profileId: string) {

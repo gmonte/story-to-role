@@ -8,6 +8,9 @@ export * from "./domains/career/db/career-tables";
 export * from "./domains/evidence/db/evidence-tables";
 export * from "./domains/interview/db/interview-tables";
 export * from "./domains/openings/db/openings-tables";
+export * from "./domains/applications/db/applications-tables";
+export * from "./domains/documents/db/documents-tables";
+export * from "./domains/documents/db/writing-tables";
 
 // Relations
 export * from "./domains/users/db/users-relations";

@@ -28,6 +28,7 @@ export async function createTaskAi(input: {
   return {
     cipher,
     profileId: profile?.id,
+    sensitiveFilter,
     ai: createAiClient({
       db: input.db,
       userId: input.userId,

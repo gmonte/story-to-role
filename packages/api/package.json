@@ -35,10 +35,12 @@
     "@vercel/blob": "catalog:api",
     "drizzle-orm": "catalog:api",
     "drizzle-zod": "catalog:api",
+    "mammoth": "catalog:api",
     "postgres": "catalog:api",
     "superjson": "catalog:common",
     "trpc-to-openapi": "catalog:web",
     "tsx": "catalog:common",
+    "unpdf": "catalog:api",
     "zod": "catalog:common"
   },
   "devDependencies": {

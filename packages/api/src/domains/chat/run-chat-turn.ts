@@ -59,7 +59,8 @@ export async function runChatTurn({
     userId,
     context: message.context,
     author: "assistant",
-    kind: reply.kind === "off_topic" ? "off_topic" : "text",
+    // A chat shows the same fixed reply for off-topic and override attempts.
+    kind: reply.kind === "answer" ? "text" : "off_topic",
     encryptedContent:
       reply.kind === "answer" ? cipher.encrypt(reply.text) : null,
   });

@@ -6,8 +6,11 @@ import type { UserCipher } from "@repo/api/domains/encryption/user-cipher";
 import type { SensitiveFilter } from "@repo/api/domains/evidence/sensitive/sensitive-filter";
 import type { TaskProgress } from "@repo/api/domains/tasks/schemas/task";
 import type { DbClient } from "@repo/api/tools/db-client";
+import type { Storage } from "@repo/api/tools/storage/storage";
 
 import { DocumentsRepository } from "../documents-repository";
+import { fitToPages } from "../rendering/fit-to-pages";
+import { storeRenderedPdf } from "../rendering/store-rendered-pdf";
 import { generationSettings } from "../generation/generation-settings";
 import { loadCareerContext } from "../generation/load-career-context";
 import { outputLanguageNames } from "../generation/resume-prompts";
@@ -68,6 +71,8 @@ export async function runAdaptDocument(deps: {
   userId: string;
   generationId: string;
   reportProgress?: (progress: TaskProgress) => Promise<void>;
+  /** Where the final PDF is kept; without it, it is only measured. */
+  storage?: Storage;
 }) {
   const { db, cipher } = deps;
   const documents = new DocumentsRepository(db);
@@ -112,14 +117,19 @@ export async function runAdaptDocument(deps: {
       return;
     }
 
-    const content = await adaptVersion({
-      ...deps,
-      profileId: profile.id,
-      generation,
-      source,
+    // An adaptation runs longer in some languages: it fits the real PDF too.
+    const fitted = await fitToPages({
+      content: await adaptVersion({
+        ...deps,
+        profileId: profile.id,
+        generation,
+        source,
+      }),
+      language: generation.language,
     });
+    const { content } = fitted;
     await deps.reportProgress?.({ step: 2, totalSteps: 2, label: "saving" });
-    await db.transaction(async (tx) => {
+    const snapshotId = await db.transaction(async (tx) => {
       const repository = new DocumentsRepository(tx);
       const existing = generation.versionId
         ? await repository.findVersion(generation.versionId)
@@ -161,7 +171,20 @@ export async function runAdaptDocument(deps: {
         snapshotId: snapshot.id,
         finishedAt: new Date(),
       });
+      return snapshot.id;
     });
+    if (deps.storage) {
+      await storeRenderedPdf({
+        db,
+        cipher,
+        storage: deps.storage,
+        userId: deps.userId,
+        profileId: profile.id,
+        snapshotId,
+        bytes: fitted.bytes,
+        pages: fitted.pages,
+      });
+    }
   } catch (error) {
     await documents.updateGeneration(generation.id, {
       status: "failed",

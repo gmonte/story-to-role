@@ -68,6 +68,7 @@ import {
 } from "../utils/edit-content";
 import { sectionText } from "../utils/section-text";
 import { AdaptVersionDialog } from "./adapt-version-dialog";
+import { DownloadPdfDialog } from "./download-pdf-dialog";
 import { GenerateResumeDialog } from "./generate-resume-dialog";
 import { TitleProposals } from "./title-proposals";
 import { VersionHistorySheet } from "./version-history-sheet";
@@ -201,6 +202,7 @@ export function ResumeEditor({
             onRenamed={refresh}
           />
           <VersionHistorySheet versionId={version.id} />
+          <DownloadPdfDialog key={version.id} version={version} />
           <Button
             size="sm"
             variant="ghost"

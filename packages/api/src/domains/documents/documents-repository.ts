@@ -20,6 +20,7 @@ import {
   documentVersionsTable,
   generationsTable,
   positionTitleEquivalentsTable,
+  renderedFilesTable,
   reviewRoundsTable,
 } from "./db/documents-tables";
 import { resumeTemplatesTable, styleProfilesTable } from "./db/writing-tables";
@@ -401,6 +402,50 @@ export class DocumentsRepository {
         ],
         set: { encryptedTitle: row.encryptedTitle, approvedAt: row.approvedAt },
       });
+  }
+
+  async findRenderedFile(snapshotId: string, template: string) {
+    const [row] = await this.tx
+      .select()
+      .from(renderedFilesTable)
+      .where(
+        and(
+          eq(renderedFilesTable.snapshotId, snapshotId),
+          eq(renderedFilesTable.template, template)
+        )
+      );
+    return row ?? null;
+  }
+
+  async insertRenderedFile(row: Insert<typeof renderedFilesTable>) {
+    await this.tx
+      .insert(renderedFilesTable)
+      .values(row)
+      .onConflictDoNothing({
+        target: [renderedFilesTable.snapshotId, renderedFilesTable.template],
+      });
+  }
+
+  /** Storage keys of the files rendered from one snapshot. */
+  async renderedKeysOfSnapshot(snapshotId: string) {
+    const rows = await this.tx
+      .select({ storageKey: renderedFilesTable.storageKey })
+      .from(renderedFilesTable)
+      .where(eq(renderedFilesTable.snapshotId, snapshotId));
+    return rows.map((row) => row.storageKey);
+  }
+
+  /** Storage keys of the files rendered from any of a version's snapshots. */
+  async renderedKeysOfVersion(versionId: string) {
+    const rows = await this.tx
+      .select({ storageKey: renderedFilesTable.storageKey })
+      .from(renderedFilesTable)
+      .innerJoin(
+        documentSnapshotsTable,
+        eq(documentSnapshotsTable.id, renderedFilesTable.snapshotId)
+      )
+      .where(eq(documentSnapshotsTable.versionId, versionId));
+    return rows.map((row) => row.storageKey);
   }
 
   async findTemplate(profileId: string) {

@@ -71,6 +71,13 @@
       "when": 1794761144491,
       "tag": "0009_add_adaptation_and_sync",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1794765331737,
+      "tag": "0010_add_rendered_files",
+      "breakpoints": true
     }
   ]
 }

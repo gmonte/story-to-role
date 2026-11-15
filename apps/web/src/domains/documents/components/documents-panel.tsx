@@ -18,6 +18,7 @@ import { useDocumentLabels } from "../hooks/use-document-labels";
 import { useOpeningDocuments } from "../hooks/use-opening-documents";
 import { useSelectedVersion } from "../hooks/use-selected-version";
 import { AdaptVersionDialog } from "./adapt-version-dialog";
+import { DownloadZipButton } from "./download-zip-button";
 import { GenerateResumeDialog } from "./generate-resume-dialog";
 import { OutdatedNotice, SyncProposal } from "./language-sync";
 
@@ -153,6 +154,9 @@ export function DocumentsPanel({
         </ul>
       )}
 
+      {versions.length > 0 && (
+        <DownloadZipButton openingId={openingId} versions={versions} />
+      )}
       {resume && <SyncProposal document={resume} versions={versions} />}
       {selected && <OutdatedNotice version={selected} versions={versions} />}
       {selected && <VersionChecks version={selected} />}
@@ -200,9 +204,13 @@ function VersionChecks({ version }: { version: VersionView }) {
           {t.formatMessage(
             {
               defaultMessage:
-                "About {pages} pages: over the two-page limit. Trim old positions' bullets or turn off an optional section.",
+                "{measured, select, yes {{pages} pages in the PDF} other {About {pages} pages}}: over the two-page limit. {position, select, none {Turn off an optional section.} other {Trim the bullets of {position}, your oldest position, or turn off an optional section.}}",
             },
-            { pages: t.formatNumber(version.pages) }
+            {
+              measured: version.pdf.ready ? "yes" : "no",
+              pages: t.formatNumber(version.pages),
+              position: oldestWithBullets(version) ?? "none",
+            }
           )}
         </p>
       )}
@@ -248,4 +256,12 @@ function VersionChecks({ version }: { version: VersionView }) {
       )}
     </div>
   );
+}
+
+/** Where trimming costs least: the oldest position that still has bullets. */
+function oldestWithBullets(version: VersionView) {
+  const entries = version.content.sections.flatMap((section) =>
+    section.kind === "experience" ? section.entries : []
+  );
+  return entries.findLast((entry) => entry.lines.length > 0)?.employer ?? null;
 }

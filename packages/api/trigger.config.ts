@@ -127,8 +127,15 @@ export default defineConfig({
   ],
   build: {
     extensions: [syncVercelEnvForCurrentTarget],
-    // Native runtime of the local embedding model: installed, not bundled.
-    external: ["@huggingface/transformers", "onnxruntime-node", "sharp"],
+    // Installed, not bundled: the local embedding model's native runtime,
+    // and the PDF renderer, whose font files load through package imports
+    // ("#standard-fonts/…") a bundle can't resolve.
+    external: [
+      "@huggingface/transformers",
+      "onnxruntime-node",
+      "sharp",
+      "@react-pdf/renderer",
+    ],
   },
   // Generous ceiling: resume generation with review rounds takes minutes.
   maxDuration: 3600,

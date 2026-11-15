@@ -59,6 +59,13 @@ export const versionViewSchema = z.object({
   snapshotCount: z.number().int(),
   content: resumeContentSchema,
   pages: z.number(),
+  pdf: z.object({
+    // Rendered from the official snapshot; `pages` is then measured.
+    ready: z.boolean(),
+    rendering: z.boolean(),
+    // The suggested name, which the user can edit before downloading.
+    fileName: z.string(),
+  }),
   atsCheck: atsCheckSchema.nullable(),
   trace: z.array(evidenceTraceSchema),
   instructionTrace: z.array(

@@ -10,12 +10,16 @@ import { EvidenceRepository } from "@repo/api/domains/evidence/evidence-reposito
 import { OpeningsRepository } from "@repo/api/domains/openings/openings-repository";
 import type { Tone } from "@repo/api/domains/openings/schemas/opening";
 import type { RealtimeSubscription } from "@repo/api/domains/tasks/schemas/task";
+import { TasksRepository } from "@repo/api/domains/tasks/tasks-repository";
 import { TasksService } from "@repo/api/domains/tasks/tasks-service";
 import type { DbClient } from "@repo/api/tools/db-client";
+import { getStorage, type Storage } from "@repo/api/tools/storage/storage";
 
 import { DocumentsRepository } from "./documents-repository";
 import { outdatedVersions } from "./adaptation/sync-status";
 import { proposalDiff } from "./adaptation/three-way-merge";
+import { fileNamer } from "./rendering/file-namer";
+import { pdfTemplate } from "./rendering/pdf-template";
 import { requireUserVersion } from "./require-version";
 import { applyUserEdit, LockedFactEditError } from "./editing/apply-user-edit";
 import { atsCheck } from "./generation/ats-check";
@@ -55,7 +59,8 @@ type TraceSource = Awaited<ReturnType<DocumentsService["traceSource"]>>;
 export class DocumentsService {
   constructor(
     private readonly db: DbClient,
-    private readonly tasks = new TasksService(db)
+    private readonly tasks = new TasksService(db),
+    private readonly storage?: Storage
   ) {}
 
   private async requireProfile(userId: string, db: DbClient = this.db) {
@@ -184,10 +189,11 @@ export class DocumentsService {
   private async documentView(
     tx: DbClient,
     cipher: UserCipher,
-    document: { id: string; kind: "resume" | "cover_letter" },
+    document: Parameters<typeof fileNamer>[2] & { id: string },
     keywords: Array<{ term: string; backedByEvidence: boolean }> | null,
     trace: TraceSource
   ): Promise<DocumentView> {
+    const nameFor = await fileNamer(tx, cipher, document);
     const repository = new DocumentsRepository(tx);
     const versions = await repository.listVersions([document.id]);
     const generation = await repository.latestGeneration(document.id);
@@ -197,6 +203,10 @@ export class DocumentsService {
       const latest = await repository.latestSnapshot(version.id);
       if (!latest) continue;
       const content = this.decryptContent(cipher, latest.encryptedContent);
+      const rendered = await repository.findRenderedFile(
+        latest.id,
+        pdfTemplate
+      );
       views.push({
         id: version.id,
         language: version.language,
@@ -206,7 +216,18 @@ export class DocumentsService {
         snapshot: summary(latest),
         snapshotCount: await repository.countSnapshots(version.id),
         content,
-        pages: estimatePages(content),
+        // The rendered PDF's real length once it exists; an estimate before.
+        pages: rendered?.pages ?? estimatePages(content),
+        pdf: {
+          ready: !!rendered,
+          rendering:
+            !rendered &&
+            !!(await new TasksRepository(tx).activeTask(
+              latest.id,
+              "render_pdf"
+            )),
+          fileName: nameFor(version, content),
+        },
         atsCheck: keywords
           ? atsCheck({ text: resumeText(content), keywords })
           : null,
@@ -449,7 +470,7 @@ export class DocumentsService {
    * the way to drop it.
    */
   async undo(input: { userId: string; versionId: string }) {
-    return this.db.transaction(async (tx) => {
+    const { result, renderedKeys } = await this.db.transaction(async (tx) => {
       const repository = new DocumentsRepository(tx);
       const { version } = await requireUserVersion(
         tx,
@@ -461,9 +482,19 @@ export class DocumentsService {
       if (!latest || !previous) {
         throw new TRPCError({ code: "PRECONDITION_FAILED" });
       }
+      const renderedKeys = await repository.renderedKeysOfSnapshot(latest.id);
       await repository.deleteSnapshot(latest.id);
-      return { snapshotId: previous.id };
+      return { result: { snapshotId: previous.id }, renderedKeys };
     });
+    await this.deleteFiles(renderedKeys);
+    return result;
+  }
+
+  /** Cached PDFs go with their snapshots, after the rows are gone. */
+  private async deleteFiles(keys: string[]) {
+    if (keys.length === 0) return;
+    const storage = this.storage ?? getStorage();
+    await Promise.all(keys.map((key) => storage.delete(key)));
   }
 
   /** The change history of a version, newest first. */
@@ -574,15 +605,18 @@ export class DocumentsService {
 
   /** Deletes a version and all its snapshots; final, so the UI confirms. */
   async deleteVersion(input: { userId: string; versionId: string }) {
-    return this.db.transaction(async (tx) => {
+    const renderedKeys = await this.db.transaction(async (tx) => {
       const repository = new DocumentsRepository(tx);
       const { version } = await requireUserVersion(
         tx,
         input.userId,
         input.versionId
       );
+      const keys = await repository.renderedKeysOfVersion(version.id);
       await repository.deleteVersion(version.id);
+      return keys;
     });
+    await this.deleteFiles(renderedKeys);
   }
 }
 

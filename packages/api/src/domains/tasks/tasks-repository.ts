@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { and, eq, gt, inArray } from "drizzle-orm";
 
 import type { DbClient } from "@repo/api/tools/db-client";
 
@@ -81,5 +81,25 @@ export class TasksRepository {
         errorMessage: input.errorMessage,
       })
       .where(eq(tasksTable.id, input.taskId));
+  }
+  /**
+   * A task of this type still pending or running for a subject. One older
+   * than `staleAfterMs` counts as dead (a worker that crashed never marks
+   * its task), so a new one may start.
+   */
+  async activeTask(subjectId: string, type: TaskType, staleAfterMs = 300_000) {
+    const [row] = await this.tx
+      .select({ id: tasksTable.id })
+      .from(tasksTable)
+      .where(
+        and(
+          eq(tasksTable.subjectId, subjectId),
+          eq(tasksTable.type, type),
+          inArray(tasksTable.status, ["pending", "processing"]),
+          gt(tasksTable.createdAt, new Date(Date.now() - staleAfterMs))
+        )
+      )
+      .limit(1);
+    return row ?? null;
   }
 }

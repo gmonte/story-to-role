@@ -1,6 +1,10 @@
 import { randomBytes } from "node:crypto";
+import { mkdtemp, readdir, readFile, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import path from "node:path";
 
 import { eq } from "drizzle-orm";
+import { unzipSync } from "fflate";
 import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { createAiClient } from "@repo/api/domains/ai/ai-client";
@@ -28,6 +32,7 @@ import { InstructionsRepository } from "@repo/api/domains/applications/instructi
 import { InstructionsService } from "@repo/api/domains/applications/instructions-service";
 import type { InstructionDecision } from "@repo/api/domains/applications/schemas/instructions";
 import { runSplitInstructions } from "@repo/api/domains/applications/run-split-instructions";
+import { createLocalStorage } from "@repo/api/tools/storage/local-storage";
 
 import { AdaptationService } from "./adaptation/adaptation-service";
 import { runAdaptDocument } from "./adaptation/run-adapt-document";
@@ -35,6 +40,8 @@ import { DocumentsRepository } from "./documents-repository";
 import { DocumentsService } from "./documents-service";
 import type { ResumeDraft } from "./generation/assemble-resume";
 import { runGenerateResume } from "./generation/run-generate-resume";
+import { PdfService } from "./rendering/pdf-service";
+import { runRenderPdf } from "./rendering/run-render-pdf";
 import type { ResumeContent } from "./schemas/resume-content";
 
 vi.mock("@repo/common/env/web.env", () => ({
@@ -1097,5 +1104,111 @@ describe("resume generation and snapshots", () => {
         language: "en-US",
       })
     ).rejects.toMatchObject({ code: "BAD_REQUEST" });
+  });
+
+  it("renders PDFs once per snapshot, serves them and the ZIP, and drops them on undo", async () => {
+    const ctx = await setup();
+    const line = {
+      text: "Led a team of 5 engineers.",
+      evidence_ids: [ctx.evidence[1].id],
+    };
+    await ctx.generate("quick", {
+      drafts: [ctx.draft([line]), ctx.draft([line])],
+      ratings: [8, 5],
+    });
+    const rootDir = await mkdtemp(path.join(tmpdir(), "pdfs-"));
+    const storage = createLocalStorage({ rootDir });
+    const tasks = new TasksService(ctx.db, ctx.trigger);
+    const pdfs = new PdfService(ctx.db, tasks, storage);
+    const documents = new DocumentsService(ctx.db, tasks, storage);
+    const view = async () =>
+      (
+        await documents.forOpening({
+          userId: ctx.user.id,
+          openingId: ctx.opening.id,
+        })
+      ).documents[0].versions[0];
+    const version = await view();
+    expect(version.pdf).toEqual({
+      ready: false,
+      rendering: false,
+      fileName: "Platform_Engineer_Resume.pdf",
+    });
+
+    expect(
+      await pdfs.request({ userId: ctx.user.id, versionId: version.id })
+    ).toEqual({ ready: false });
+    expect(ctx.trigger.trigger).toHaveBeenLastCalledWith(
+      "render_pdf",
+      expect.anything()
+    );
+    expect((await view()).pdf.rendering).toBe(true);
+    // Asking again while it renders starts nothing new.
+    const calls = ctx.trigger.trigger.mock.calls.length;
+    await pdfs.request({ userId: ctx.user.id, versionId: version.id });
+    expect(ctx.trigger.trigger.mock.calls.length).toBe(calls);
+
+    await runRenderPdf({
+      db: ctx.db,
+      cipher: ctx.cipher,
+      storage,
+      userId: ctx.user.id,
+      snapshotId: version.snapshot.id,
+    });
+    const rendered = await view();
+    expect(rendered.pdf.ready).toBe(true);
+    expect(rendered.pages).toBe(1);
+    const file = await pdfs.read({
+      userId: ctx.user.id,
+      versionId: version.id,
+    });
+    expect(file?.bytes.subarray(0, 5).toString()).toBe("%PDF-");
+    // Stored encrypted: the driver never sees the PDF.
+    const [stored] = await readdir(
+      path.join(rootDir, "users", ctx.user.id, "pdfs")
+    );
+    expect(
+      (await readFile(path.join(rootDir, "users", ctx.user.id, "pdfs", stored)))
+        .subarray(0, 5)
+        .toString()
+    ).not.toBe("%PDF-");
+
+    const zip = await pdfs.readApplicationZip({
+      userId: ctx.user.id,
+      openingId: ctx.opening.id,
+    });
+    expect(zip?.fileName).toBe("Hooli_Platform_Engineer.zip");
+    expect(Object.keys(unzipSync(new Uint8Array(zip!.bytes)))).toEqual([
+      "Platform_Engineer_Resume.pdf",
+    ]);
+
+    // A new snapshot needs its own PDF; undoing it deletes that file.
+    await documents.saveEdit({
+      userId: ctx.user.id,
+      versionId: version.id,
+      baseSnapshotId: version.snapshot.id,
+      content: {
+        ...version.content,
+        header: { ...version.content.header, titleLine: "Platform Engineer" },
+      },
+    });
+    const edited = await view();
+    expect(edited.pdf.ready).toBe(false);
+    await runRenderPdf({
+      db: ctx.db,
+      cipher: ctx.cipher,
+      storage,
+      userId: ctx.user.id,
+      snapshotId: edited.snapshot.id,
+    });
+    expect(
+      await readdir(path.join(rootDir, "users", ctx.user.id, "pdfs"))
+    ).toHaveLength(2);
+    await documents.undo({ userId: ctx.user.id, versionId: version.id });
+    expect(
+      await readdir(path.join(rootDir, "users", ctx.user.id, "pdfs"))
+    ).toEqual([stored]);
+    expect((await view()).pdf.ready).toBe(true);
+    await rm(rootDir, { recursive: true, force: true });
   });
 });

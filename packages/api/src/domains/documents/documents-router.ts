@@ -11,6 +11,7 @@ import {
 } from "@repo/api/tools/trpc";
 
 import { DocumentsService } from "./documents-service";
+import { PdfService } from "./rendering/pdf-service";
 import {
   outputLanguageSchema,
   reviewDepthSchema,
@@ -205,4 +206,36 @@ export const documentsRouter = createTRPCRouter({
       });
       return ok;
     }),
+
+  requestPdf: userProcedure
+    .use(rateLimited("taskStart"))
+    .meta(
+      openApiMeta(
+        "documents",
+        "POST",
+        "/document-versions/by-id/{versionId}/pdf",
+        "Renders the version's official snapshot as a PDF, unless it is ready"
+      )
+    )
+    .input(z.object({ versionId: z.uuid() }))
+    .output(z.object({ ready: z.boolean() }))
+    .mutation(({ ctx, input }) =>
+      new PdfService(db).request({ userId: ctx.userId, ...input })
+    ),
+
+  prepareApplicationZip: userProcedure
+    .use(rateLimited("taskStart"))
+    .meta(
+      openApiMeta(
+        "documents",
+        "POST",
+        "/openings/by-id/{openingId}/documents-zip",
+        "Renders whatever the application's ZIP still lacks"
+      )
+    )
+    .input(z.object({ openingId: z.uuid() }))
+    .output(z.object({ ready: z.boolean() }))
+    .mutation(({ ctx, input }) =>
+      new PdfService(db).prepareApplication({ userId: ctx.userId, ...input })
+    ),
 });

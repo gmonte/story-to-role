@@ -198,3 +198,35 @@ export const positionTitleEquivalentsTable = createTable(
     index("position_title_equivalents_profile_id_idx").on(t.profileId),
   ]
 );
+
+/**
+ * A PDF rendered from a snapshot (resume spec, "Download"): snapshots are
+ * immutable, so the file never goes stale. The bytes live encrypted in
+ * storage; the row goes with its snapshot, and the file with the row.
+ */
+export const renderedFilesTable = createTable(
+  "rendered_files",
+  (d) => ({
+    id: d.uuid().defaultRandom().primaryKey(),
+    createdAt: createdAt(d),
+    profileId: d
+      .uuid()
+      .notNull()
+      .references(() => careerProfilesTable.id, { onDelete: "cascade" }),
+    snapshotId: d
+      .uuid()
+      .notNull()
+      .references(() => documentSnapshotsTable.id, { onDelete: "cascade" }),
+    // The layout it was rendered with; a new layout renders anew.
+    template: d.text().notNull(),
+    storageKey: d.text().notNull(),
+    // Measured from the rendered file, not estimated.
+    pages: d.integer().notNull(),
+  }),
+  (t) => [
+    unique("rendered_files_snapshot_template_unique").on(
+      t.snapshotId,
+      t.template
+    ),
+  ]
+);

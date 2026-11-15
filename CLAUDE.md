@@ -66,4 +66,5 @@ Secrets live in `.env.local` (git-ignored); `.env.example` lists every variable.
 - **Clerk webhooks:** `ngrok http --url=greatly-central-ladybird.ngrok-free.app 3000`; the dev endpoint is `https://greatly-central-ladybird.ngrok-free.app/api/clerk/webhooks` (`user.created`, `user.updated`, `user.deleted`).
 - **Stripe (sandbox):** `stripe listen --forward-to localhost:3000/api/webhooks/stripe` prints the local `STRIPE_WEBHOOK_SECRET`.
 - **Storage:** `STORAGE_DRIVER=local` writes to `.storage/`.
+- **Encryption:** the local `ENCRYPTION_MASTER_KEY` lives in Vercel's Development environment, so `vercel env pull` keeps it. Never change it by hand: every data key in the local database is wrapped by it, and a different value makes all local career content unreadable (to rotate, move the old value to `ENCRYPTION_PREVIOUS_MASTER_KEYS`).
 - **AI:** `ANTHROPIC_API_KEY` is StoryToRole's own key (the default provider package, and the topic gate for credit-funded users).

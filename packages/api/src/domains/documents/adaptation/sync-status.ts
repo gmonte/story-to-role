@@ -1,6 +1,14 @@
+import type { UserCipher } from "@repo/api/domains/encryption/user-cipher";
+
 import type { DocumentsRepository } from "../documents-repository";
 import type { OutputLanguage } from "../schemas/document";
-import { syncBases } from "./adaptation-service";
+import { decryptSnapshot } from "./adaptation-service";
+import { areLinked, syncBases } from "./sync-link";
+import { syncChanges } from "./three-way-merge";
+
+type Version = NonNullable<
+  Awaited<ReturnType<DocumentsRepository["findVersion"]>>
+>;
 
 type Outdated = {
   versionId: string;
@@ -11,43 +19,46 @@ type Outdated = {
 
 /**
  * Outdated markers (resume spec, "Language sync"): for each pair of linked
- * versions, the changes each side has not received from the other, counted
- * as snapshots after the last one carried across. Nothing changes on its own.
+ * versions, the line changes each side has not received from the other.
+ * Nothing changes on its own.
  */
 export async function outdatedVersions(
   repository: DocumentsRepository,
-  versions: Array<
-    NonNullable<Awaited<ReturnType<DocumentsRepository["findVersion"]>>>
-  >
+  cipher: UserCipher,
+  versions: Version[]
 ) {
   const outdated = new Map<string, Outdated[]>(
     versions.map((version) => [version.id, []])
   );
-  const behind = async (
-    target: (typeof versions)[number],
-    from: (typeof versions)[number]
-  ) => {
+  const behind = async (target: Version, from: Version) => {
     const bases = await syncBases(repository, target, from);
-    if (!bases) return;
-    const changes = bases.base
-      ? await repository.countSnapshotsAfter(from.id, bases.base.sequence)
-      : await repository.countSnapshots(from.id);
-    if (changes > 0 || !bases.base) {
+    const source = await repository.latestSnapshot(from.id);
+    const current = await repository.latestSnapshot(target.id);
+    if (!bases || !source || !current) return;
+    const changes =
+      bases.base && bases.targetBase
+        ? syncChanges({
+            base: decryptSnapshot(cipher, bases.base),
+            source: decryptSnapshot(cipher, source),
+            targetBase: decryptSnapshot(cipher, bases.targetBase),
+            target: decryptSnapshot(cipher, current),
+          }).length
+        : null;
+    if (changes === null || changes > 0) {
       outdated.get(target.id)!.push({
         versionId: from.id,
         language: from.language,
-        changes,
-        baseMissing: !bases.base || !bases.targetBase,
+        changes: changes ?? 0,
+        baseMissing: changes === null,
       });
     }
   };
-  for (const version of versions) {
-    const from = versions.find(
-      (row) => row.id === version.adaptedFromVersionId
-    );
-    if (!from) continue;
-    await behind(version, from);
-    await behind(from, version);
+  for (const [index, version] of versions.entries()) {
+    for (const other of versions.slice(index + 1)) {
+      if (!areLinked(version, other)) continue;
+      await behind(version, other);
+      await behind(other, version);
+    }
   }
   return outdated;
 }

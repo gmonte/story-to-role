@@ -94,16 +94,6 @@ export const generationViewSchema = z.object({
   status: generationStatusSchema,
   versionId: z.uuid().nullable(),
   sourceVersionId: z.uuid().nullable(),
-  // A sync awaiting the user's review: its changes to the target.
-  proposal: z
-    .array(
-      z.object({
-        lineId: z.string(),
-        before: z.string().nullable(),
-        after: z.string().nullable(),
-      })
-    )
-    .nullable(),
   language: outputLanguageSchema,
   reviewDepth: reviewDepthSchema,
   writingLevel: writingLevelSchema,
@@ -116,6 +106,20 @@ export const documentViewSchema = z.object({
   kind: documentKindSchema,
   versions: z.array(versionViewSchema),
   generation: generationViewSchema.nullable(),
+  // A sync awaiting the user's review, and its changes to the target.
+  proposal: z
+    .object({
+      generationId: z.uuid(),
+      versionId: z.uuid(),
+      lines: z.array(
+        z.object({
+          lineId: z.string(),
+          before: z.string().nullable(),
+          after: z.string().nullable(),
+        })
+      ),
+    })
+    .nullable(),
 });
 export type DocumentView = z.infer<typeof documentViewSchema>;
 

@@ -1,3 +1,5 @@
+import { z } from "zod";
+
 import type { Line } from "../schemas/document";
 import type { ResumeContent, ResumeSection } from "../schemas/resume-content";
 
@@ -34,16 +36,17 @@ function placedLines(content: ResumeContent): Map<string, Placed> {
 }
 
 /** One change found in the source since the base (resume spec, "Language sync"). */
-export type SyncChange = {
-  lineId: string;
-  kind: "changed" | "added" | "removed";
-  before: string | null;
-  after: string | null;
+export const syncChangeSchema = z.object({
+  lineId: z.string(),
+  kind: z.enum(["changed", "added", "removed"]),
+  before: z.string().nullable(),
+  after: z.string().nullable(),
   // The target's current wording of that line, if it has one.
-  targetText: string | null;
+  targetText: z.string().nullable(),
   // The target changed the same line since it last received changes.
-  conflict: boolean;
-};
+  conflict: z.boolean(),
+});
+export type SyncChange = z.infer<typeof syncChangeSchema>;
 
 /**
  * The three-way comparison of language sync, line by line: what the source
@@ -61,14 +64,19 @@ export function syncChanges(input: {
   const source = placedLines(input.source);
   const targetBase = placedLines(input.targetBase);
   const target = placedLines(input.target);
+  const containers = new Set([...target.values()].map((row) => row.container));
+  // An entry the target lacks (say, a position left out there) cannot take
+  // the line; the summary always can.
+  const placeable = (container: string) =>
+    container === "summary" || containers.has(container);
   const targetChanged = (lineId: string) =>
     target.get(lineId)?.line.text !== targetBase.get(lineId)?.line.text;
   const changes: SyncChange[] = [];
 
-  for (const [lineId, { line }] of source) {
+  for (const [lineId, { line, container }] of source) {
     const before = base.get(lineId)?.line;
     if (!before) {
-      if (!target.has(lineId)) {
+      if (!target.has(lineId) && placeable(container)) {
         changes.push({
           lineId,
           kind: "added",
@@ -154,32 +162,39 @@ export function mergeSync(input: {
 
   return {
     ...input.target,
-    sections: input.target.sections.map((section): ResumeSection => {
+    sections: input.target.sections.flatMap((section): ResumeSection[] => {
       switch (section.kind) {
         case "summary": {
           const [line] = mergeLines("summary", [section.line]);
-          return line ? { ...section, line } : section;
+          return line ? [{ ...section, line }] : [];
         }
         case "skills":
-          return { ...section, groups: mergeLines("skills", section.groups) };
+          return [{ ...section, groups: mergeLines("skills", section.groups) }];
         case "experience":
-          return {
-            ...section,
-            entries: section.entries.map((entry) => ({
-              ...entry,
-              lines: mergeLines(`experience:${entry.positionId}`, entry.lines),
-            })),
-          };
+          return [
+            {
+              ...section,
+              entries: section.entries.map((entry) => ({
+                ...entry,
+                lines: mergeLines(
+                  `experience:${entry.positionId}`,
+                  entry.lines
+                ),
+              })),
+            },
+          ];
         case "projects":
-          return {
-            ...section,
-            entries: section.entries.map((entry) => ({
-              ...entry,
-              lines: mergeLines(`projects:${entry.projectId}`, entry.lines),
-            })),
-          };
+          return [
+            {
+              ...section,
+              entries: section.entries.map((entry) => ({
+                ...entry,
+                lines: mergeLines(`projects:${entry.projectId}`, entry.lines),
+              })),
+            },
+          ];
         default:
-          return section;
+          return [section];
       }
     }),
   };

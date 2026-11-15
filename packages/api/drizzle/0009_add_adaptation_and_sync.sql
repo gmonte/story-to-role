@@ -9,12 +9,10 @@ CREATE TABLE IF NOT EXISTS "position_title_equivalents" (
 	CONSTRAINT "position_title_equivalents_language_unique" UNIQUE("positionId","language")
 );
 --> statement-breakpoint
-ALTER TABLE "document_versions" ADD COLUMN IF NOT EXISTS "syncBaseSequence" integer;--> statement-breakpoint
-ALTER TABLE "document_versions" ADD COLUMN IF NOT EXISTS "syncTargetSnapshotId" uuid;--> statement-breakpoint
-ALTER TABLE "document_versions" ADD COLUMN IF NOT EXISTS "syncTargetSequence" integer;--> statement-breakpoint
 ALTER TABLE "generations" ADD COLUMN IF NOT EXISTS "kind" text DEFAULT 'generate' NOT NULL;--> statement-breakpoint
 ALTER TABLE "generations" ADD COLUMN IF NOT EXISTS "sourceVersionId" uuid;--> statement-breakpoint
 ALTER TABLE "generations" ADD COLUMN IF NOT EXISTS "sourceSnapshotId" uuid;--> statement-breakpoint
+ALTER TABLE "generations" ADD COLUMN IF NOT EXISTS "sourceSnapshotSequence" integer;--> statement-breakpoint
 ALTER TABLE "generations" ADD COLUMN IF NOT EXISTS "targetSnapshotId" uuid;--> statement-breakpoint
 ALTER TABLE "generations" ADD COLUMN IF NOT EXISTS "encryptedSyncPlan" text;--> statement-breakpoint
 ALTER TABLE "generations" ADD COLUMN IF NOT EXISTS "encryptedProposal" text;--> statement-breakpoint
@@ -26,7 +24,9 @@ DO $$ BEGIN
  ALTER TABLE "position_title_equivalents" ADD CONSTRAINT "position_title_equivalents_positionId_positions_id_fk" FOREIGN KEY ("positionId") REFERENCES "public"."positions"("id") ON DELETE cascade ON UPDATE no action;
 EXCEPTION WHEN duplicate_object THEN null;
 END $$;--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "position_title_equivalents_profile_id_idx" ON "position_title_equivalents" USING btree ("profileId");--> statement-breakpoint
 DO $$ BEGIN
  ALTER TABLE "generations" ADD CONSTRAINT "generations_sourceVersionId_document_versions_id_fk" FOREIGN KEY ("sourceVersionId") REFERENCES "public"."document_versions"("id") ON DELETE set null ON UPDATE no action;
 EXCEPTION WHEN duplicate_object THEN null;
-END $$;
+END $$;--> statement-breakpoint
+ALTER TABLE "document_versions" DROP COLUMN IF EXISTS "syncBaseSnapshotId";

@@ -53,13 +53,21 @@ export function OutdatedNotice({
         className="flex items-center justify-between gap-2 rounded-lg border border-amber-500/40 bg-amber-500/10 p-2.5 text-xs"
       >
         <span>
-          {t.formatMessage(
-            {
-              defaultMessage:
-                "Outdated relative to {version}: {changes, plural, one {# change} other {# changes}}",
-            },
-            { version: labels.version(from), changes: outdated.changes }
-          )}
+          {outdated.baseMissing
+            ? t.formatMessage(
+                {
+                  defaultMessage:
+                    "No common change left with {version}: recreate this version to sync again.",
+                },
+                { version: labels.version(from) }
+              )
+            : t.formatMessage(
+                {
+                  defaultMessage:
+                    "Outdated relative to {version}: {changes, plural, one {# change} other {# changes}}",
+                },
+                { version: labels.version(from), changes: outdated.changes }
+              )}
         </span>
         {outdated.baseMissing ? (
           <AdaptVersionDialog
@@ -111,6 +119,7 @@ function SyncDialog({
     })
   );
   const changes = preview.data?.changes ?? [];
+  const sourceSnapshotId = preview.data?.sourceSnapshotId;
   const selected = changes
     .map((change) => change.lineId)
     .filter((lineId) => !unselected.includes(lineId));
@@ -193,11 +202,15 @@ function SyncDialog({
         )}
         <DialogFooter>
           <Button
-            disabled={start.isPending || selected.length === 0}
+            disabled={
+              start.isPending || !sourceSnapshotId || selected.length === 0
+            }
             onClick={() =>
+              sourceSnapshotId &&
               start.mutate({
                 versionId: version.id,
                 fromVersionId: from.id,
+                sourceSnapshotId,
                 lineIds: selected,
               })
             }
@@ -240,9 +253,9 @@ export function SyncProposal({
   const discard = useMutation(
     trpc.adaptation.discardSync.mutationOptions({ onSuccess: refresh, onError })
   );
-  const generation = document.generation;
-  if (generation?.kind !== "sync" || !generation.proposal) return null;
-  const target = versions.find((row) => row.id === generation.versionId);
+  const proposal = document.proposal;
+  if (!proposal) return null;
+  const target = versions.find((row) => row.id === proposal.versionId);
   const busy = accept.isPending || discard.isPending;
 
   return (
@@ -254,7 +267,7 @@ export function SyncProposal({
         )}
       </p>
       <ul className="grid gap-1.5">
-        {generation.proposal.map((row) => (
+        {proposal.lines.map((row) => (
           <li key={row.lineId} className="grid gap-0.5">
             {row.before && (
               <span className="line-through opacity-60">{row.before}</span>
@@ -268,14 +281,16 @@ export function SyncProposal({
           size="sm"
           variant="ghost"
           disabled={busy}
-          onClick={() => discard.mutate({ generationId: generation.id })}
+          onClick={() =>
+            discard.mutate({ generationId: proposal.generationId })
+          }
         >
           {t.formatMessage({ defaultMessage: "Discard" })}
         </Button>
         <Button
           size="sm"
           disabled={busy}
-          onClick={() => accept.mutate({ generationId: generation.id })}
+          onClick={() => accept.mutate({ generationId: proposal.generationId })}
         >
           {t.formatMessage({ defaultMessage: "Accept" })}
         </Button>

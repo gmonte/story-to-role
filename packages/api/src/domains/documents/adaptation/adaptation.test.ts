@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import { lockedFactViolations } from "../generation/resume-checks";
 import type { ResumeContent } from "../schemas/resume-content";
 import { adaptContent, type AdaptationDraft } from "./adapt-content";
+import { keepsFigures } from "./figures";
 import { mergeSync, syncChanges } from "./three-way-merge";
 
 const P1 = "00000000-0000-4000-8000-000000000001";
@@ -263,5 +264,53 @@ describe("language sync", () => {
       ["n1", "Orientou 3 estagiários.", "manual"],
       ["b2", "Liderou 5 engenheiros.", "evidence"],
     ]);
+  });
+
+  it("never offers a line whose entry the target lacks", () => {
+    const other = "00000000-0000-4000-8000-000000000002";
+    const source: ResumeContent = {
+      ...english,
+      sections: [
+        ...english.sections,
+        {
+          kind: "experience",
+          entries: [
+            {
+              positionId: other,
+              employer: "Acme",
+              title: "Dev",
+              startDate: null,
+              endDate: null,
+              context: null,
+              lines: [{ id: "x1", text: "Built APIs.", origin: evidence(E2) }],
+            },
+          ],
+        },
+      ],
+    };
+    expect(
+      syncChanges({
+        base: english,
+        source,
+        targetBase: portuguese,
+        target: portuguese,
+      })
+    ).toEqual([]);
+  });
+});
+
+describe("figures across languages", () => {
+  it("keeps the same figures and currency, in either notation", () => {
+    expect(keepsFigures("Cut costs by 1.5M", "Reduziu custos em 1,5M")).toBe(
+      true
+    );
+    expect(keepsFigures("Served 2,000 users", "Atendeu 2.000 usuários")).toBe(
+      true
+    );
+    expect(keepsFigures("Cut costs by 1.5M", "Reduziu custos em 15M")).toBe(
+      false
+    );
+    expect(keepsFigures("Cut 40% in 2022", "Reduziu 40%")).toBe(false);
+    expect(keepsFigures("Saved $2M", "Economizou R$2M")).toBe(false);
   });
 });

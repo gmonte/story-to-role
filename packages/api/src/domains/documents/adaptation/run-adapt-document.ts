@@ -32,21 +32,14 @@ import {
   loadTitleEquivalents,
   titlesForAdaptation,
 } from "./title-equivalents";
-import { mergeSync, type SyncChange } from "./three-way-merge";
+import {
+  mergeSync,
+  type SyncChange,
+  syncChangeSchema,
+} from "./three-way-merge";
 
 /** The changes the user selected for a sync, stored with its generation. */
-export const syncPlanSchema = z.object({
-  changes: z.array(
-    z.object({
-      lineId: z.string(),
-      kind: z.enum(["changed", "added", "removed"]),
-      before: z.string().nullable(),
-      after: z.string().nullable(),
-      targetText: z.string().nullable(),
-      conflict: z.boolean(),
-    })
-  ),
-});
+export const syncPlanSchema = z.object({ changes: z.array(syncChangeSchema) });
 
 const syncDraftSchema = z.object({
   items: z.array(z.object({ id: z.string(), text: z.string() })),
@@ -128,9 +121,6 @@ export async function runAdaptDocument(deps: {
     await deps.reportProgress?.({ step: 2, totalSteps: 2, label: "saving" });
     await db.transaction(async (tx) => {
       const repository = new DocumentsRepository(tx);
-      const sourceSnapshot = await repository.findSnapshot(
-        generation.sourceSnapshotId!
-      );
       const existing = generation.versionId
         ? await repository.findVersion(generation.versionId)
         : null;
@@ -152,12 +142,18 @@ export async function runAdaptDocument(deps: {
         encryptedContent: cipher.encrypt(JSON.stringify(content)),
         generationId: generation.id,
       });
+      // One link per pair: recreating a version from the one adapted from
+      // it turns the link around instead of making a cycle.
+      const source = generation.sourceVersionId
+        ? await repository.findVersion(generation.sourceVersionId)
+        : null;
+      if (source?.adaptedFromVersionId === version.id) {
+        await repository.updateVersion(source.id, {
+          adaptedFromVersionId: null,
+        });
+      }
       await repository.updateVersion(version.id, {
         adaptedFromVersionId: generation.sourceVersionId,
-        syncBaseSnapshotId: sourceSnapshot?.id ?? null,
-        syncBaseSequence: sourceSnapshot?.sequence ?? null,
-        syncTargetSnapshotId: snapshot.id,
-        syncTargetSequence: snapshot.sequence,
       });
       await repository.updateGeneration(generation.id, {
         status: "completed",
@@ -309,7 +305,13 @@ async function adaptVersion(input: {
             title_line: forbidden.has("title_line")
               ? source.header.titleLine
               : draft.title_line,
-            items: draft.items.filter((item) => !forbidden.has(item.id)),
+            items: draft.items
+              .filter((item) => !forbidden.has(item.id))
+              .map((item) =>
+                forbidden.has(`label:${item.id}`)
+                  ? { ...item, label: null }
+                  : item
+              ),
             contexts: draft.contexts.filter(
               (row) => !forbidden.has(`context:${row.position_id}`)
             ),

@@ -64,6 +64,14 @@ export function findForbiddenLines(
     { id: "title_line", text: content.header.titleLine },
     ...resumeLines(content),
     ...content.sections.flatMap((section) =>
+      section.kind === "skills"
+        ? section.groups.map((group) => ({
+            id: `label:${group.id}`,
+            text: group.label,
+          }))
+        : []
+    ),
+    ...content.sections.flatMap((section) =>
       section.kind === "experience"
         ? section.entries.flatMap((entry) =>
             entry.context

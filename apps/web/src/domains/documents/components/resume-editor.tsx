@@ -210,7 +210,7 @@ export function ResumeEditor({
             <CopyPlus />
             {t.formatMessage({ defaultMessage: "Duplicate" })}
           </Button>
-          {versions.length > 1 && (
+          {versions.some((row) => row.language !== version.language) && (
             <AdaptVersionDialog
               // Its choices belong to the version open in the editor.
               key={version.id}

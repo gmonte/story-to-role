@@ -306,7 +306,14 @@ function withoutLines(
         case "summary":
           return keep(section.line) ? [section] : [];
         case "skills":
-          return [{ ...section, groups: section.groups.filter(keep) }];
+          return [
+            {
+              ...section,
+              groups: section.groups.filter(
+                (group) => keep(group) && !lineIds.includes(`label:${group.id}`)
+              ),
+            },
+          ];
         case "experience":
           return [
             {

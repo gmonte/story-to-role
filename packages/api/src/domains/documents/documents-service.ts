@@ -191,7 +191,7 @@ export class DocumentsService {
     const repository = new DocumentsRepository(tx);
     const versions = await repository.listVersions([document.id]);
     const generation = await repository.latestGeneration(document.id);
-    const outdated = await outdatedVersions(repository, versions);
+    const outdated = await outdatedVersions(repository, cipher, versions);
     const views: VersionView[] = [];
     for (const version of versions) {
       const latest = await repository.latestSnapshot(version.id);
@@ -217,12 +217,10 @@ export class DocumentsService {
         titleProposals: trace.titleProposalsFor(content, version.language),
       });
     }
-    const proposal =
-      generation?.status === "proposed" &&
-      generation.encryptedProposal &&
-      generation.targetSnapshotId
-        ? await repository.findSnapshot(generation.targetSnapshotId)
-        : null;
+    const pending = await repository.pendingProposal(document.id);
+    const proposed =
+      pending?.targetSnapshotId &&
+      (await repository.findSnapshot(pending.targetSnapshotId));
     return {
       id: document.id,
       kind: document.kind,
@@ -234,12 +232,6 @@ export class DocumentsService {
             status: generation.status,
             versionId: generation.versionId,
             sourceVersionId: generation.sourceVersionId,
-            proposal: proposal
-              ? proposalDiff(
-                  this.decryptContent(cipher, proposal.encryptedContent),
-                  this.decryptContent(cipher, generation.encryptedProposal!)
-                )
-              : null,
             language: generation.language,
             reviewDepth: generation.reviewDepth,
             writingLevel: generation.writingLevel,
@@ -247,6 +239,17 @@ export class DocumentsService {
             createdAt: generation.createdAt,
           }
         : null,
+      proposal:
+        pending?.versionId && pending.encryptedProposal && proposed
+          ? {
+              generationId: pending.id,
+              versionId: pending.versionId,
+              lines: proposalDiff(
+                this.decryptContent(cipher, proposed.encryptedContent),
+                this.decryptContent(cipher, pending.encryptedProposal)
+              ),
+            }
+          : null,
     };
   }
 
@@ -290,6 +293,12 @@ export class DocumentsService {
     const evidence = await new EvidenceRepository(tx).listEvidence(profileId);
     const equivalents = await new DocumentsRepository(tx).listTitleEquivalents(
       profileId
+    );
+    const originalTitles = new Map(
+      positions.map((position) => [
+        position.id,
+        cipher.decrypt(position.encryptedTitle),
+      ])
     );
     // Removed points keep their row, so old lines still trace to them.
     const instructions = new Map(
@@ -360,12 +369,8 @@ export class DocumentsService {
                 );
                 const proposed = row && cipher.decrypt(row.encryptedTitle);
                 // Only over the position's own title, never an override.
-                const original = positions.find(
-                  (position) => position.id === entry.positionId
-                );
                 const printsOriginal =
-                  !!original &&
-                  cipher.decrypt(original.encryptedTitle) === entry.title;
+                  originalTitles.get(entry.positionId) === entry.title;
                 return proposed && printsOriginal && proposed !== entry.title
                   ? [
                       {

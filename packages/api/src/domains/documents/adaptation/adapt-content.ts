@@ -66,10 +66,14 @@ export function adaptContent(input: {
       case "skills":
         return {
           ...section,
-          groups: section.groups.map((group) => ({
-            ...reword(group),
-            label: items.get(group.id)?.label?.trim() ?? group.label,
-          })),
+          groups: section.groups.map((group) => {
+            const label = items.get(group.id)?.label?.trim();
+            return {
+              ...reword(group),
+              label:
+                label && keepsFigures(group.label, label) ? label : group.label,
+            };
+          }),
         };
       case "experience":
         return {

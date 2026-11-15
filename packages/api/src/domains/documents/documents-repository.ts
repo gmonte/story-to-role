@@ -4,10 +4,10 @@ import {
   count,
   desc,
   eq,
-  gt,
   inArray,
   isNull,
   lt,
+  or,
 } from "drizzle-orm";
 
 import { applicationsTable } from "@repo/api/domains/applications/db/applications-tables";
@@ -238,18 +238,56 @@ export class DocumentsRepository {
     return row ?? null;
   }
 
-  /** Snapshots of a version above a sequence: changes not carried yet. */
-  async countSnapshotsAfter(versionId: string, sequence: number) {
+  /**
+   * The latest snapshot an adaptation or accepted sync wrote into either of
+   * two versions from the other one, with its generation: where the pair
+   * last met, which language sync uses as its base.
+   */
+  async latestLinkSnapshot(versionId: string, otherVersionId: string) {
     const [row] = await this.tx
-      .select({ count: count() })
+      .select({
+        snapshot: documentSnapshotsTable,
+        generation: generationsTable,
+      })
       .from(documentSnapshotsTable)
+      .innerJoin(
+        generationsTable,
+        eq(generationsTable.id, documentSnapshotsTable.generationId)
+      )
       .where(
         and(
-          eq(documentSnapshotsTable.versionId, versionId),
-          gt(documentSnapshotsTable.sequence, sequence)
+          inArray(generationsTable.kind, ["adapt", "sync"]),
+          or(
+            and(
+              eq(documentSnapshotsTable.versionId, versionId),
+              eq(generationsTable.sourceVersionId, otherVersionId)
+            ),
+            and(
+              eq(documentSnapshotsTable.versionId, otherVersionId),
+              eq(generationsTable.sourceVersionId, versionId)
+            )
+          )
         )
-      );
-    return row?.count ?? 0;
+      )
+      .orderBy(desc(documentSnapshotsTable.createdAt))
+      .limit(1);
+    return row ?? null;
+  }
+
+  /** A document's sync proposal awaiting the user, if any. */
+  async pendingProposal(documentId: string) {
+    const [row] = await this.tx
+      .select()
+      .from(generationsTable)
+      .where(
+        and(
+          eq(generationsTable.documentId, documentId),
+          eq(generationsTable.status, "proposed")
+        )
+      )
+      .orderBy(desc(generationsTable.createdAt))
+      .limit(1);
+    return row ?? null;
   }
 
   async insertSnapshot(snapshot: Insert<typeof documentSnapshotsTable>) {

@@ -1020,7 +1020,7 @@ describe("resume generation and snapshots", () => {
       versionId: portuguese.id,
       fromVersionId: english.id,
     });
-    expect(preview).toEqual({
+    expect(preview).toMatchObject({
       baseMissing: false,
       changes: [
         {
@@ -1037,6 +1037,7 @@ describe("resume generation and snapshots", () => {
       userId: ctx.user.id,
       versionId: portuguese.id,
       fromVersionId: english.id,
+      sourceSnapshotId: preview.sourceSnapshotId,
       lineIds: [lead.id],
     });
     await runWith(started.generationId, () => ({
@@ -1047,11 +1048,12 @@ describe("resume generation and snapshots", () => {
         },
       ],
     }));
-    const { generation } = (await view()).documents[0];
-    expect(generation).toMatchObject({
-      kind: "sync",
-      status: "proposed",
-      proposal: [
+    const { generation, proposal } = (await view()).documents[0];
+    expect(generation).toMatchObject({ kind: "sync", status: "proposed" });
+    expect(proposal).toEqual({
+      generationId: started.generationId,
+      versionId: portuguese.id,
+      lines: [
         {
           lineId: lead.id,
           before: "Liderou uma equipe de 5 engenheiros.",
@@ -1075,5 +1077,25 @@ describe("resume generation and snapshots", () => {
         generationId: started.generationId,
       })
     ).rejects.toMatchObject({ code: "PRECONDITION_FAILED" });
+
+    // Undoing the sync moves its base back: the change is missing again.
+    await ctx.documents.undo({ userId: ctx.user.id, versionId: portuguese.id });
+    versions = (await view()).documents[0].versions;
+    expect(versions.find((v) => v.id === portuguese.id)!.outdated).toEqual([
+      {
+        versionId: english.id,
+        language: "en-US",
+        changes: 1,
+        baseMissing: false,
+      },
+    ]);
+    // An adaptation is always into another language.
+    await expect(
+      adaptation.adapt({
+        userId: ctx.user.id,
+        versionId: english.id,
+        language: "en-US",
+      })
+    ).rejects.toMatchObject({ code: "BAD_REQUEST" });
   });
 });

@@ -66,15 +66,10 @@ export const documentVersionsTable = createTable(
       .references(() => documentsTable.id, { onDelete: "cascade" }),
     language: d.text().$type<OutputLanguage>().notNull(),
     encryptedLabel: d.text(),
-    // Language sync (resume spec): the version this one was adapted from,
-    // that version's snapshot last carried here (the base), and this
-    // version's snapshot that carrying produced. Sequences find the nearest
-    // remaining ancestor when undo deleted one of them.
+    // Language sync (resume spec): the version this one was adapted from.
+    // The base of each sync is read from the snapshots adaptations and
+    // syncs produced, so undo moves it back on its own.
     adaptedFromVersionId: d.uuid(),
-    syncBaseSnapshotId: d.uuid(),
-    syncBaseSequence: d.integer(),
-    syncTargetSnapshotId: d.uuid(),
-    syncTargetSequence: d.integer(),
   }),
   (t) => [index("document_versions_document_id_idx").on(t.documentId)]
 );
@@ -132,6 +127,8 @@ export const generationsTable = createTable(
       .uuid()
       .references(() => documentVersionsTable.id, { onDelete: "set null" }),
     sourceSnapshotId: d.uuid(),
+    // Finds the nearest remaining ancestor when undo deleted the source.
+    sourceSnapshotSequence: d.integer(),
     // Sync: the target's snapshot the proposal starts from, the user's
     // selection, and the proposal awaiting acceptance.
     targetSnapshotId: d.uuid(),
@@ -198,5 +195,6 @@ export const positionTitleEquivalentsTable = createTable(
       t.positionId,
       t.language
     ),
+    index("position_title_equivalents_profile_id_idx").on(t.profileId),
   ]
 );

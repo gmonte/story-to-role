@@ -15,59 +15,22 @@ import {
   type ResumeContent,
   resumeContentSchema,
 } from "../schemas/resume-content";
-import { syncChanges, type SyncChange } from "./three-way-merge";
+import { syncBases } from "./sync-link";
+import { type SyncChange, syncChanges } from "./three-way-merge";
 
 const notFound = () => new TRPCError({ code: "NOT_FOUND" });
 
-type Version = NonNullable<
-  Awaited<ReturnType<DocumentsRepository["findVersion"]>>
->;
 type Snapshot = NonNullable<
   Awaited<ReturnType<DocumentsRepository["findSnapshot"]>>
 >;
 
-/**
- * The two snapshots a sync compares against, for a target and the version
- * it receives changes from: the source snapshot last carried into the
- * target (the base), and the target's snapshot that carrying produced.
- * The link goes either way: the target was adapted from the source, or the
- * source from the target. Null when the versions are not linked.
- */
-export async function syncBases(
-  repository: DocumentsRepository,
-  target: Version,
-  from: Version
-): Promise<{ base: Snapshot | null; targetBase: Snapshot | null } | null> {
-  if (target.adaptedFromVersionId === from.id) {
-    return {
-      base: await repository.snapshotOrAncestor({
-        versionId: from.id,
-        snapshotId: target.syncBaseSnapshotId,
-        sequence: target.syncBaseSequence,
-      }),
-      targetBase: await repository.snapshotOrAncestor({
-        versionId: target.id,
-        snapshotId: target.syncTargetSnapshotId,
-        sequence: target.syncTargetSequence,
-      }),
-    };
-  }
-  if (from.adaptedFromVersionId === target.id) {
-    return {
-      base: await repository.snapshotOrAncestor({
-        versionId: from.id,
-        snapshotId: from.syncTargetSnapshotId,
-        sequence: from.syncTargetSequence,
-      }),
-      targetBase: await repository.snapshotOrAncestor({
-        versionId: target.id,
-        snapshotId: from.syncBaseSnapshotId,
-        sequence: from.syncBaseSequence,
-      }),
-    };
-  }
-  return null;
-}
+export const decryptSnapshot = (
+  cipher: UserCipher,
+  snapshot: Snapshot
+): ResumeContent =>
+  resumeContentSchema.parse(
+    JSON.parse(cipher.decrypt(snapshot.encryptedContent))
+  );
 
 /**
  * Adaptations and language sync from the user's side (resume spec,
@@ -81,23 +44,42 @@ export class AdaptationService {
     private readonly tasks = new TasksService(db)
   ) {}
 
-  private decrypt(cipher: UserCipher, snapshot: Snapshot): ResumeContent {
-    return resumeContentSchema.parse(
-      JSON.parse(cipher.decrypt(snapshot.encryptedContent))
-    );
+  /** Starts an adapt or sync generation for a document, in a task. */
+  private async start(
+    userId: string,
+    insert: (tx: DbClient) => Promise<{ id: string }>
+  ): Promise<{ generationId: string; realtime: RealtimeSubscription }> {
+    const generation = await this.db.transaction(insert);
+    const { realtime } = await this.tasks.start({
+      userId,
+      type: "adapt_document",
+      subjectId: generation.id,
+    });
+    return { generationId: generation.id, realtime };
+  }
+
+  private async toneOf(
+    repository: DocumentsRepository,
+    applicationId: string | null
+  ) {
+    const application = applicationId
+      ? await repository.findApplication(applicationId)
+      : null;
+    return application?.tone ?? "your_style";
   }
 
   /**
    * Adapts a version's latest snapshot into another language: a new
-   * version linked for sync, or, with a target, its recreation.
+   * version linked for sync, or, with a target, its recreation. An
+   * adaptation is always into another language.
    */
-  async adapt(input: {
+  adapt(input: {
     userId: string;
     versionId: string;
     language: OutputLanguage;
     targetVersionId?: string;
-  }): Promise<{ generationId: string; realtime: RealtimeSubscription }> {
-    const generation = await this.db.transaction(async (tx) => {
+  }) {
+    return this.start(input.userId, async (tx) => {
       const repository = new DocumentsRepository(tx);
       const { version, document, profile } = await requireUserVersion(
         tx,
@@ -107,36 +89,29 @@ export class AdaptationService {
       const target = input.targetVersionId
         ? await repository.findVersion(input.targetVersionId)
         : null;
-      if (
-        input.targetVersionId &&
-        (target?.documentId !== document.id || target.id === version.id)
-      ) {
+      if (input.targetVersionId && target?.documentId !== document.id) {
         throw notFound();
+      }
+      const language = target?.language ?? input.language;
+      if (language === version.language) {
+        throw new TRPCError({ code: "BAD_REQUEST" });
       }
       const source = await repository.latestSnapshot(version.id);
       if (!source) throw notFound();
-      const application = document.applicationId
-        ? await repository.findApplication(document.applicationId)
-        : null;
       return repository.insertGeneration({
         profileId: profile.id,
         documentId: document.id,
         kind: "adapt",
         versionId: target?.id ?? null,
-        language: target?.language ?? input.language,
+        language,
         sourceVersionId: version.id,
         sourceSnapshotId: source.id,
+        sourceSnapshotSequence: source.sequence,
         reviewDepth: "quick",
         writingLevel: "standard",
-        tone: application?.tone ?? "your_style",
+        tone: await this.toneOf(repository, document.applicationId),
       });
     });
-    const { realtime } = await this.tasks.start({
-      userId: input.userId,
-      type: "adapt_document",
-      subjectId: generation.id,
-    });
-    return { generationId: generation.id, realtime };
   }
 
   /** The source's changes the target has not received, one by one. */
@@ -144,10 +119,18 @@ export class AdaptationService {
     userId: string;
     versionId: string;
     fromVersionId: string;
-  }): Promise<{ changes: SyncChange[]; baseMissing: boolean }> {
+  }): Promise<{
+    changes: SyncChange[];
+    baseMissing: boolean;
+    sourceSnapshotId: string;
+  }> {
     return this.db.transaction(async (tx) => {
-      const { changes } = await this.planSync(tx, input);
-      return { changes: changes ?? [], baseMissing: changes === null };
+      const plan = await this.planSync(tx, input);
+      return {
+        changes: plan.changes ?? [],
+        baseMissing: plan.changes === null,
+        sourceSnapshotId: plan.source.id,
+      };
     });
   }
 
@@ -173,10 +156,10 @@ export class AdaptationService {
     const changes =
       bases.base && bases.targetBase
         ? syncChanges({
-            base: this.decrypt(cipher, bases.base),
-            source: this.decrypt(cipher, source),
-            targetBase: this.decrypt(cipher, bases.targetBase),
-            target: this.decrypt(cipher, current),
+            base: decryptSnapshot(cipher, bases.base),
+            source: decryptSnapshot(cipher, source),
+            targetBase: decryptSnapshot(cipher, bases.targetBase),
+            target: decryptSnapshot(cipher, current),
           })
         : null;
     return {
@@ -193,26 +176,27 @@ export class AdaptationService {
 
   /**
    * Carries the selected changes in a task; a conflict the user resolved
-   * for the target's wording is simply not selected.
+   * for the target's wording is simply not selected. The source must still
+   * be the snapshot the user previewed, so nothing unseen is carried.
    */
-  async startSync(input: {
+  startSync(input: {
     userId: string;
     versionId: string;
     fromVersionId: string;
+    sourceSnapshotId: string;
     lineIds: string[];
-  }): Promise<{ generationId: string; realtime: RealtimeSubscription }> {
-    const generation = await this.db.transaction(async (tx) => {
+  }) {
+    return this.start(input.userId, async (tx) => {
       const plan = await this.planSync(tx, input);
+      if (plan.source.id !== input.sourceSnapshotId) {
+        throw new TRPCError({ code: "CONFLICT" });
+      }
       const selected = (plan.changes ?? []).filter((change) =>
         input.lineIds.includes(change.lineId)
       );
       if (selected.length === 0) throw new TRPCError({ code: "BAD_REQUEST" });
-      const application = plan.document.applicationId
-        ? await new DocumentsRepository(tx).findApplication(
-            plan.document.applicationId
-          )
-        : null;
-      return new DocumentsRepository(tx).insertGeneration({
+      const repository = new DocumentsRepository(tx);
+      return repository.insertGeneration({
         profileId: plan.profile.id,
         documentId: plan.document.id,
         kind: "sync",
@@ -220,38 +204,35 @@ export class AdaptationService {
         language: plan.target.language,
         sourceVersionId: plan.from.id,
         sourceSnapshotId: plan.source.id,
+        sourceSnapshotSequence: plan.source.sequence,
         targetSnapshotId: plan.current.id,
         encryptedSyncPlan: plan.cipher.encrypt(
           JSON.stringify({ changes: selected })
         ),
         reviewDepth: "quick",
         writingLevel: "standard",
-        tone: application?.tone ?? "your_style",
+        tone: await this.toneOf(repository, plan.document.applicationId),
       });
     });
-    const { realtime } = await this.tasks.start({
-      userId: input.userId,
-      type: "adapt_document",
-      subjectId: generation.id,
-    });
-    return { generationId: generation.id, realtime };
   }
 
+  /** The proposal, read again once its target version is locked. */
   private async requireProposal(
     tx: DbClient,
     userId: string,
     generationId: string
   ) {
     const repository = new DocumentsRepository(tx);
-    const generation = await repository.findGeneration(generationId);
-    if (generation?.kind !== "sync" || !generation.versionId) throw notFound();
+    const found = await repository.findGeneration(generationId);
+    if (found?.kind !== "sync" || !found.versionId) throw notFound();
     const { version, profile } = await requireUserVersion(
       tx,
       userId,
-      generation.versionId,
+      found.versionId,
       { lock: true }
     );
-    if (generation.profileId !== profile.id) throw notFound();
+    const generation = await repository.findGeneration(generationId);
+    if (generation?.profileId !== profile.id) throw notFound();
     if (generation.status !== "proposed" || !generation.encryptedProposal) {
       throw new TRPCError({ code: "PRECONDITION_FAILED" });
     }
@@ -259,8 +240,8 @@ export class AdaptationService {
   }
 
   /**
-   * Accepting a sync proposal makes it the target's new latest snapshot
-   * and records the source snapshot as the pair's new base. The target
+   * Accepting a sync proposal makes it the target's new latest snapshot;
+   * written by the sync's generation, it is the pair's new base. The target
    * must not have changed since the proposal was made.
    */
   async acceptSync(input: { userId: string; generationId: string }) {
@@ -284,27 +265,6 @@ export class AdaptationService {
         encryptedContent: generation.encryptedProposal!,
         generationId: generation.id,
       });
-      const source = generation.sourceSnapshotId
-        ? await repository.findSnapshot(generation.sourceSnapshotId)
-        : null;
-      const sourceVersion = generation.sourceVersionId
-        ? await repository.findVersion(generation.sourceVersionId)
-        : null;
-      if (version.adaptedFromVersionId === generation.sourceVersionId) {
-        await repository.updateVersion(version.id, {
-          syncBaseSnapshotId: source?.id ?? null,
-          syncBaseSequence: source?.sequence ?? null,
-          syncTargetSnapshotId: snapshot.id,
-          syncTargetSequence: snapshot.sequence,
-        });
-      } else if (sourceVersion?.adaptedFromVersionId === version.id) {
-        await repository.updateVersion(sourceVersion.id, {
-          syncBaseSnapshotId: snapshot.id,
-          syncBaseSequence: snapshot.sequence,
-          syncTargetSnapshotId: source?.id ?? null,
-          syncTargetSequence: source?.sequence ?? null,
-        });
-      }
       await repository.updateGeneration(generation.id, {
         status: "completed",
         snapshotId: snapshot.id,
@@ -331,7 +291,7 @@ export class AdaptationService {
   /**
    * Approves a position's title in the version's language (edited or as
    * proposed): from now on it is a locked fact there. The version gets a
-   * new snapshot printing it.
+   * new snapshot printing it; a title is never carried by sync.
    */
   async approveTitle(input: {
     userId: string;
@@ -350,14 +310,14 @@ export class AdaptationService {
       const latest = await repository.latestSnapshot(version.id);
       if (!latest) throw notFound();
       const cipher = await getUserCipher(tx, input.userId);
-      const content = this.decrypt(cipher, latest);
+      const content = decryptSnapshot(cipher, latest);
       const title = input.title.trim();
       const printed = content.sections.some(
         (section) =>
           section.kind === "experience" &&
           section.entries.some((entry) => entry.positionId === input.positionId)
       );
-      if (!printed || !title) throw new TRPCError({ code: "BAD_REQUEST" });
+      if (!printed) throw new TRPCError({ code: "BAD_REQUEST" });
       await repository.approveTitleEquivalent({
         profileId: profile.id,
         positionId: input.positionId,
@@ -388,31 +348,6 @@ export class AdaptationService {
         author: "user",
         encryptedContent: cipher.encrypt(JSON.stringify(titled)),
       });
-      // A title is a locked fact, never carried by sync: a pair that was in
-      // sync stays in sync.
-      const moved = { snapshotId: snapshot.id, sequence: snapshot.sequence };
-      for (const linked of await repository.listVersions([
-        version.documentId,
-      ])) {
-        if (
-          linked.id === version.id &&
-          linked.syncTargetSnapshotId === latest.id
-        ) {
-          await repository.updateVersion(linked.id, {
-            syncTargetSnapshotId: moved.snapshotId,
-            syncTargetSequence: moved.sequence,
-          });
-        }
-        if (
-          linked.adaptedFromVersionId === version.id &&
-          linked.syncBaseSnapshotId === latest.id
-        ) {
-          await repository.updateVersion(linked.id, {
-            syncBaseSnapshotId: moved.snapshotId,
-            syncBaseSequence: moved.sequence,
-          });
-        }
-      }
       return { snapshotId: snapshot.id };
     });
   }

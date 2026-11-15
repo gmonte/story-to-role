@@ -11,19 +11,11 @@ import {
 
 import { outputLanguageSchema } from "../schemas/document";
 import { AdaptationService } from "./adaptation-service";
+import { syncChangeSchema } from "./three-way-merge";
 
 const started = z.object({
   generationId: z.uuid(),
   realtime: realtimeSubscriptionSchema,
-});
-
-const syncChangeSchema = z.object({
-  lineId: z.string(),
-  kind: z.enum(["changed", "added", "removed"]),
-  before: z.string().nullable(),
-  after: z.string().nullable(),
-  targetText: z.string().nullable(),
-  conflict: z.boolean(),
 });
 
 export const adaptationRouter = createTRPCRouter({
@@ -60,7 +52,12 @@ export const adaptationRouter = createTRPCRouter({
     )
     .input(z.object({ versionId: z.uuid(), fromVersionId: z.uuid() }))
     .output(
-      z.object({ changes: z.array(syncChangeSchema), baseMissing: z.boolean() })
+      z.object({
+        changes: z.array(syncChangeSchema),
+        baseMissing: z.boolean(),
+        // Passed back to start the sync, so nothing unseen is carried.
+        sourceSnapshotId: z.uuid(),
+      })
     )
     .query(({ ctx, input }) =>
       new AdaptationService(db).syncPreview({ userId: ctx.userId, ...input })
@@ -80,6 +77,7 @@ export const adaptationRouter = createTRPCRouter({
       z.object({
         versionId: z.uuid(),
         fromVersionId: z.uuid(),
+        sourceSnapshotId: z.uuid(),
         lineIds: z.array(z.string()).min(1),
       })
     )
@@ -127,7 +125,7 @@ export const adaptationRouter = createTRPCRouter({
       openApiMeta(
         "adaptation",
         "PUT",
-        "/document-versions/by-id/{versionId}/titles/by-id/{positionId}",
+        "/positions/by-id/{positionId}/title-equivalent",
         "Approves a position's title in the version's language"
       )
     )

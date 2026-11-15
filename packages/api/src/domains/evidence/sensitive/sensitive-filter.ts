@@ -26,13 +26,27 @@ export function createSensitiveFilter(rules: SensitiveRule[]) {
     .filter((rule) => rule.choice !== "use" && rule.original.trim())
     .sort((a, b) => b.original.length - a.original.length);
 
-  // Accent-insensitive matching on folded text, keeping positions. Whole
-  // words only: "4" never matches inside "2024" or an id, nor "Rio" "Mario".
-  const patternFor = (original: string) =>
-    new RegExp(
-      `(?<![\\p{L}\\p{N}])${escapeRegExp(foldAccents(original.trim()))}(?![\\p{L}\\p{N}])`,
-      "giu"
-    );
+  // Accent-insensitive matching on folded text, keeping positions. The
+  // boundaries depend on how the term starts and ends: a figure never
+  // matches inside another number or an id ("4" in "2024" or "7b441bc9")
+  // but does with a unit ("1.5M", "40k"); a name never matches inside a
+  // word ("Rio" in "Mario") but does in the plural.
+  const patternFor = (original: string) => {
+    const term = foldAccents(original.trim());
+    const startsWith = (pattern: RegExp) => pattern.test(term.slice(0, 1));
+    const endsWith = (pattern: RegExp) => pattern.test(term.slice(-1));
+    const before = startsWith(/\p{N}/u)
+      ? String.raw`(?<![\p{L}\p{N}]|\p{N}[.,])`
+      : startsWith(/\p{L}/u)
+        ? String.raw`(?<!\p{L})`
+        : "";
+    const after = endsWith(/\p{N}/u)
+      ? String.raw`(?![.,]?\p{N})(?=[kmbx%]?(?![\p{L}\p{N}]))`
+      : endsWith(/\p{L}/u)
+        ? String.raw`(?=(?:s|'s)?(?!\p{L}))`
+        : "";
+    return new RegExp(`${before}${escapeRegExp(term)}${after}`, "giu");
+  };
 
   function replaceAll(text: string, rule: SensitiveRule, replacement: string) {
     const folded = foldAccents(text);

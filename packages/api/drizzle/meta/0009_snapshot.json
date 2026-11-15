@@ -1,5 +1,5 @@
 {
-  "id": "9f04f597-fb51-44ce-aa7d-4b09ac06f328",
+  "id": "366536e6-a79d-4f91-b172-135430d7fcc2",
   "prevId": "ea0ccc31-313a-4981-aa17-d6ace740e734",
   "version": "7",
   "dialect": "postgresql",
@@ -3526,30 +3526,6 @@
           "type": "uuid",
           "primaryKey": false,
           "notNull": false
-        },
-        "syncBaseSnapshotId": {
-          "name": "syncBaseSnapshotId",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "syncBaseSequence": {
-          "name": "syncBaseSequence",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "syncTargetSnapshotId": {
-          "name": "syncTargetSnapshotId",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "syncTargetSequence": {
-          "name": "syncTargetSequence",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false
         }
       },
       "indexes": {
@@ -3739,6 +3715,12 @@
           "primaryKey": false,
           "notNull": false
         },
+        "sourceSnapshotSequence": {
+          "name": "sourceSnapshotSequence",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
         "targetSnapshotId": {
           "name": "targetSnapshotId",
           "type": "uuid",
@@ -3911,7 +3893,23 @@
           "notNull": false
         }
       },
-      "indexes": {},
+      "indexes": {
+        "position_title_equivalents_profile_id_idx": {
+          "name": "position_title_equivalents_profile_id_idx",
+          "columns": [
+            {
+              "expression": "profileId",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
       "foreignKeys": {
         "position_title_equivalents_profileId_career_profiles_id_fk": {
           "name": "position_title_equivalents_profileId_career_profiles_id_fk",

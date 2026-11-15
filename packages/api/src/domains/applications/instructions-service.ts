@@ -132,6 +132,10 @@ export class InstructionsService {
       input.userId,
       input.openingId
     );
+    await this.tasks.assertAffordable({
+      userId: input.userId,
+      type: "split_instructions",
+    });
     const instructions = await this.db.transaction(async (tx) => {
       const repository = new InstructionsRepository(tx);
       const latest = await repository.latestInstructions(opening.id);
@@ -155,11 +159,20 @@ export class InstructionsService {
         encryptedText: cipher.encrypt(text),
       });
     });
-    const { realtime } = await this.tasks.start({
-      userId: input.userId,
-      type: "split_instructions",
-      subjectId: instructions.id,
-    });
+    const { realtime } = await this.tasks.startOrUndo(
+      {
+        userId: input.userId,
+        type: "split_instructions",
+        subjectId: instructions.id,
+      },
+      () =>
+        new InstructionsRepository(this.db).updateInstructions(
+          instructions.id,
+          {
+            status: "failed",
+          }
+        )
+    );
     return { realtime };
   }
 

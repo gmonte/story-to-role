@@ -51,6 +51,8 @@ export class OpeningsService {
     ) => Omit<typeof openingsTable.$inferInsert, "profileId">
   ): Promise<{ openingId: string; realtime: RealtimeSubscription }> {
     const profile = await this.requireProfile(userId);
+    // Checked before the opening exists, so none waits on a refused analysis.
+    await this.tasks.assertAffordable({ userId, type: "analyze_opening" });
     const opening = await this.db.transaction(async (tx) => {
       const cipher = await getUserCipher(tx, userId);
       return new OpeningsRepository(tx).insertOpening({

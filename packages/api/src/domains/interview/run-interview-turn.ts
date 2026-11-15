@@ -1,6 +1,8 @@
 import type { AiClient } from "@repo/api/domains/ai/ai-client";
 import { checkTopic } from "@repo/api/domains/ai/topic-gate";
 import { CareerRepository } from "@repo/api/domains/career/career-repository";
+import { spendableTotal } from "@repo/api/domains/credits/credit-ledger";
+import { nearReserve } from "@repo/api/domains/credits/credit-reserve";
 import type { UserCipher } from "@repo/api/domains/encryption/user-cipher";
 import { EvidenceRepository } from "@repo/api/domains/evidence/evidence-repository";
 import type { DbClient } from "@repo/api/tools/db-client";
@@ -99,7 +101,15 @@ export async function runInterviewTurn(
     return block(verdict === "override" ? "blocked_override" : "off_topic");
   }
 
-  const promptInput = await loadPromptInput({ db, cipher, session });
+  const now = new Date();
+  const promptInput = {
+    ...(await loadPromptInput({ db, cipher, session })),
+    wrapUp: await nearReserve(db, {
+      userId: deps.userId,
+      available: await spendableTotal(db, deps.userId, "any", now),
+      now,
+    }),
+  };
   const tools = createInterviewTools({
     db,
     cipher,

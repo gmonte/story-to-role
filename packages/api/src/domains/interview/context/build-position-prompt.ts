@@ -32,6 +32,8 @@ export type PositionPromptInput = {
   // Titles or dates that disagree between the user's files.
   conflicts: Array<{ id: string; field: string; options: string[] }>;
   currentProject: string | null;
+  // The credits left approach the reserve kept for the user's resume.
+  wrapUp?: boolean;
 };
 
 const languageNames: Record<InterviewLanguage, string> = {
@@ -135,6 +137,9 @@ export function buildPositionPrompt(input: PositionPromptInput) {
       ? `Current project (subsession): ${input.currentProject}.`
       : "",
     `Current stage: ${input.stage}.`,
+    input.wrapUp
+      ? "The user's credits are nearly down to what their resume needs. Wrap up this position with what was said: ask nothing new, call propose_extraction and tell the user their summary is ready to review."
+      : "",
   ]
     .filter(Boolean)
     .join("\n\n");

@@ -31,6 +31,8 @@ import {
 } from "@repo/web/components/ui/select";
 import { toast } from "@repo/web/components/ui/sonner";
 
+import { CreditCost } from "~/domains/credits/components/credit-cost";
+import { useCredits } from "~/domains/credits/hooks/use-credits";
 import { useTRPC } from "~/tools/trpc/client";
 
 import { useDocumentLabels } from "../hooks/use-document-labels";
@@ -94,6 +96,7 @@ function AdaptForm({
     (version) =>
       version.id !== target?.id && version.language !== target?.language
   );
+  const credits = useCredits();
   const [mode, setMode] = useState<"adapt" | "scratch">("adapt");
   const [sourceId, setSourceId] = useState(sources[0]?.id ?? "");
   const source = sources.find((version) => version.id === sourceId);
@@ -214,24 +217,27 @@ function AdaptForm({
         </div>
       )}
 
-      <DialogFooter>
+      <DialogFooter className="items-center">
         {mode === "scratch" ? (
           scratch
         ) : (
-          <Button
-            disabled={adapt.isPending || !source}
-            onClick={() =>
-              adapt.mutate({
-                versionId: sourceId,
-                language,
-                targetVersionId: target?.id,
-              })
-            }
-          >
-            {target
-              ? t.formatMessage({ defaultMessage: "Recreate" })
-              : t.formatMessage({ defaultMessage: "Adapt" })}
-          </Button>
+          <>
+            <CreditCost credits={credits.data?.estimates.adaptation} />
+            <Button
+              disabled={adapt.isPending || !source}
+              onClick={() =>
+                adapt.mutate({
+                  versionId: sourceId,
+                  language,
+                  targetVersionId: target?.id,
+                })
+              }
+            >
+              {target
+                ? t.formatMessage({ defaultMessage: "Recreate" })
+                : t.formatMessage({ defaultMessage: "Adapt" })}
+            </Button>
+          </>
         )}
       </DialogFooter>
     </>

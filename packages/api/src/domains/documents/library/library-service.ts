@@ -10,6 +10,7 @@ import type { DbClient } from "@repo/api/tools/db-client";
 import { loadSensitiveFilter } from "@repo/api/domains/evidence/sensitive/load-sensitive-filter";
 
 import { DocumentsRepository } from "../documents-repository";
+import { failGeneration } from "../documents-service";
 import { loadCareerContext } from "../generation/load-career-context";
 import { relockFacts } from "../generation/resume-checks";
 import { decryptResume } from "../snapshot-content";
@@ -92,6 +93,18 @@ export class LibraryService {
     realtime: RealtimeSubscription;
   }> {
     const profile = await this.requireProfile(input.userId);
+    const hints = {
+      positions: (
+        await new CareerRepository(this.db).listPositions(profile.id)
+      ).filter((position) => position.status === "approved").length,
+      thorough: input.reviewDepth === "thorough",
+      maximum: input.writingLevel === "maximum",
+    };
+    await this.tasks.assertAffordable({
+      userId: input.userId,
+      type: "generate_document",
+      hints,
+    });
     const generation = await this.db.transaction(async (tx) => {
       const repository = new DocumentsRepository(tx);
       const existing = input.versionId
@@ -118,11 +131,15 @@ export class LibraryService {
         tone: input.tone,
       });
     });
-    const { realtime } = await this.tasks.start({
-      userId: input.userId,
-      type: "generate_document",
-      subjectId: generation.id,
-    });
+    const { realtime } = await this.tasks.startOrUndo(
+      {
+        userId: input.userId,
+        type: "generate_document",
+        subjectId: generation.id,
+        hints,
+      },
+      () => failGeneration(this.db, generation.id)
+    );
     return {
       documentId: generation.documentId,
       generationId: generation.id,

@@ -69,6 +69,10 @@ export class WritingService {
     samples: string[];
   }): Promise<{ realtime: RealtimeSubscription }> {
     const profile = await this.requireProfile(input.userId);
+    await this.tasks.assertAffordable({
+      userId: input.userId,
+      type: "extract_style_profile",
+    });
     await this.db.transaction(async (tx) => {
       const cipher = await getUserCipher(tx, input.userId);
       await new DocumentsRepository(tx).saveStyleSamples({

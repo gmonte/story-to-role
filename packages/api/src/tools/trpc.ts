@@ -1,4 +1,4 @@
-import { auth } from "@clerk/nextjs/server";
+import { auth, clerkClient } from "@clerk/nextjs/server";
 import { initTRPC, TRPCError } from "@trpc/server";
 import SuperJSON from "superjson";
 import type { OpenApiMeta } from "trpc-to-openapi";
@@ -8,6 +8,7 @@ import { logger } from "@repo/common/tools/logger";
 import { getTranslation } from "@repo/intl/get-translation";
 import { parseHeaderCookie } from "@repo/common/tools/cookies/common";
 
+import { InsufficientCreditsError } from "../domains/credits/credit-ledger";
 import { UsersRepository } from "../domains/users/users-repository";
 import { db } from "./db";
 import { getLocaleForContext } from "./intl/get-locale-for-context";
@@ -41,9 +42,13 @@ const t = initTRPC
   .context<typeof createTRPCContext>()
   .create({
     transformer: SuperJSON,
-    errorFormatter({ shape, error }) {
+    errorFormatter({ shape, error, ctx }) {
+      const credits =
+        error.cause instanceof InsufficientCreditsError ? error.cause : null;
       return {
         ...shape,
+        message:
+          credits && ctx ? creditsMessage(ctx.t, credits) : shape.message,
         data: {
           ...shape.data,
           zodError:
@@ -54,6 +59,30 @@ const t = initTRPC
       };
     },
   });
+
+/** "Not enough credits", in the user's language, for any task's start. */
+function creditsMessage(
+  intl: TRPCContext["t"],
+  error: InsufficientCreditsError
+) {
+  const needed = intl.formatNumber(error.needed);
+  const available = intl.formatNumber(error.available);
+  return error.kept > 0
+    ? intl.formatMessage(
+        {
+          defaultMessage:
+            "This needs up to {needed} credits; {available} available, {kept} kept for your resume.",
+        },
+        { needed, available, kept: intl.formatNumber(error.kept) }
+      )
+    : intl.formatMessage(
+        {
+          defaultMessage:
+            "This needs up to {needed} credits; {available} available.",
+        },
+        { needed, available }
+      );
+}
 
 export const createTRPCRouter = t.router;
 export const createCallerFactory = t.createCallerFactory;
@@ -110,6 +139,22 @@ export const userProcedure = protectedProcedure.use(async ({ ctx, next }) => {
 
   return next({ ctx: { user, userId: user.id } });
 });
+
+/**
+ * The owner's admin pages (billing spec, "Courtesy plan"): only users whose
+ * Clerk public metadata carries the admin role.
+ */
+export const adminProcedure = userProcedure.use(async ({ ctx, next }) => {
+  if (!(await isAdmin(ctx.session.userId))) {
+    throw new TRPCError({ code: "FORBIDDEN" });
+  }
+  return next();
+});
+
+export async function isAdmin(clerkUserId: string) {
+  const clerkUser = await (await clerkClient()).users.getUser(clerkUserId);
+  return clerkUser.publicMetadata.role === "admin";
+}
 
 /**
  * Rejects the call with TOO_MANY_REQUESTS once the user exceeds `name`'s

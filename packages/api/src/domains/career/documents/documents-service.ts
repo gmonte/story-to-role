@@ -39,6 +39,10 @@ export class DocumentsService {
     ) {
       throw new TRPCError({ code: "BAD_REQUEST" });
     }
+    await this.tasks.assertAffordable({
+      userId: input.userId,
+      type: "import_document",
+    });
 
     const profile = await new CareerRepository(this.db).findProfileByUserId(
       input.userId

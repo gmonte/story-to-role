@@ -1,0 +1,153 @@
+import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
+
+import { CareerRepository } from "@repo/api/domains/career/career-repository";
+import { TasksService } from "@repo/api/domains/tasks/tasks-service";
+import { createTestUser } from "@repo/api/test/create-test-user";
+import {
+  clearTestDatabase,
+  closeTestDatabase,
+  getTestDatabase,
+} from "@repo/api/test/pglite";
+
+import { grantCredits } from "./credit-ledger";
+import { creditCap } from "./credit-pricing";
+import { CreditsService } from "./credits-service";
+import { creditLotsTable } from "./db/credits-tables";
+
+vi.mock("@repo/api/tools/trigger/trigger-client", () => ({
+  triggerClient: { trigger: vi.fn() },
+}));
+
+const now = new Date("2026-11-15T12:00:00Z");
+const fakeTrigger = () => ({
+  trigger: vi.fn(async () => ({ runId: "run_1", accessToken: "token" })),
+});
+
+async function setup(credits = 0) {
+  const db = await getTestDatabase();
+  const user = await createTestUser("ada@example.com", { credits });
+  return { db, user, credits: new CreditsService(db) };
+}
+
+describe("credits service", () => {
+  beforeEach(async () => {
+    await clearTestDatabase();
+  });
+
+  afterAll(async () => {
+    await closeTestDatabase();
+  });
+
+  it("shows the balance by source and expiry, with the month's fit-check credits", async () => {
+    const ctx = await setup();
+    await grantCredits(ctx.db, {
+      userId: ctx.user.id,
+      source: "welcome",
+      amount: 200,
+      origin: `welcome:${ctx.user.id}`,
+      expiresAt: null,
+    });
+
+    const summary = await ctx.credits.summary(ctx.user.id, now);
+
+    expect(summary.available).toBe(210);
+    expect(summary.lots).toEqual([
+      {
+        source: "monthly_free",
+        scope: "fit_check",
+        remaining: 10,
+        expiresAt: new Date("2026-12-01T00:00:00Z"),
+      },
+      { source: "welcome", scope: "any", remaining: 200, expiresAt: null },
+    ]);
+    // Free, no resume yet: the resume is kept.
+    expect(summary.reserve).toBe(
+      creditCap("generate_document", { positions: 0 })
+    );
+    expect(summary.courtesy).toBeNull();
+  });
+
+  it("never lets the interview spend the credits kept for the resume", async () => {
+    const ctx = await setup();
+    const reserve = creditCap("generate_document", { positions: 0 });
+    await grantCredits(ctx.db, {
+      userId: ctx.user.id,
+      source: "welcome",
+      amount: reserve + 2,
+      origin: `welcome:${ctx.user.id}`,
+      expiresAt: null,
+    });
+    await new CareerRepository(ctx.db).insertProfileIfMissing({
+      userId: ctx.user.id,
+      interviewLanguage: "en-US",
+    });
+    const tasks = new TasksService(ctx.db, fakeTrigger());
+
+    await expect(
+      tasks.start({ userId: ctx.user.id, type: "interview_turn" })
+    ).rejects.toMatchObject({
+      code: "PAYMENT_REQUIRED",
+      cause: { needed: 3, available: 2, kept: reserve },
+    });
+    // The resume itself may use them.
+    await expect(
+      tasks.start({
+        userId: ctx.user.id,
+        type: "generate_document",
+        hints: { positions: 0 },
+      })
+    ).resolves.toBeDefined();
+  });
+
+  it("grants a courtesy plan, replaces it, and ends it with its credits", async () => {
+    const ctx = await setup();
+    const admin = await createTestUser("owner@example.com", { credits: 0 });
+
+    await ctx.credits.grantCourtesy({
+      adminUserId: admin.id,
+      email: "ADA@example.com",
+      monthlyCredits: 300,
+      endsAt: null,
+      now,
+    });
+    let summary = await ctx.credits.summary(ctx.user.id, now);
+    expect(summary.courtesy).toEqual({ monthlyCredits: 300, endsAt: null });
+    expect(summary.reserve).toBe(0);
+    expect(summary.available).toBe(300);
+
+    await ctx.credits.grantCourtesy({
+      adminUserId: admin.id,
+      email: "ada@example.com",
+      monthlyCredits: 50,
+      endsAt: new Date("2027-01-01T00:00:00Z"),
+      now,
+    });
+    const grants = await ctx.credits.listCourtesyGrants();
+    expect(grants).toHaveLength(2);
+    expect(grants.filter((grant) => !grant.endedAt)).toHaveLength(1);
+    summary = await ctx.credits.summary(ctx.user.id, now);
+    // The replaced grant's credits ended with it.
+    expect(summary.available).toBe(50);
+
+    const active = grants.find((grant) => !grant.endedAt)!;
+    await ctx.credits.endCourtesy({ courtesyGrantId: active.id, now });
+    summary = await ctx.credits.summary(ctx.user.id, now);
+    // Back to Free: only its fit-check credits.
+    expect(summary.courtesy).toBeNull();
+    expect(summary.available).toBe(10);
+  });
+
+  it("reconciles without duplicating a grant and restores a missing one", async () => {
+    const ctx = await setup();
+    await createTestUser("grace@example.com", { credits: 0 });
+
+    expect(await ctx.credits.reconcile(now)).toEqual({ users: 2, granted: 2 });
+    expect(await ctx.credits.reconcile(now)).toEqual({ users: 2, granted: 0 });
+    expect(await ctx.credits.spendable(ctx.user.id, now)).toBe(200);
+
+    // A restore that lost a grant: reconciliation brings it back.
+    await ctx.db.delete(creditLotsTable);
+    expect(await ctx.credits.reconcile(now)).toEqual({ users: 2, granted: 2 });
+    expect(await ctx.credits.spendable(ctx.user.id, now)).toBe(200);
+  });
+});

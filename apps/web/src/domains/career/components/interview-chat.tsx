@@ -15,6 +15,7 @@ import { toast } from "@repo/web/components/ui/sonner";
 import { Textarea } from "@repo/web/components/ui/textarea";
 import { cn } from "@repo/web/lib/utils";
 
+import { useCredits } from "~/domains/credits/hooks/use-credits";
 import { useTRPC } from "~/tools/trpc/client";
 
 import { useCareerLabels } from "../hooks/use-career-labels";
@@ -40,6 +41,7 @@ export function InterviewChat({
   const trpc = useTRPC();
   const queryClient = useQueryClient();
   const refresh = useRefreshCareer();
+  const credits = useCredits();
   const [draft, setDraft] = useState("");
   const [pendingTurn, setPendingTurn] = useState<RealtimeSubscription>();
 
@@ -110,6 +112,17 @@ export function InterviewChat({
           {t.formatMessage({ defaultMessage: "I'm done with this position" })}
         </Button>
       </div>
+      {credits.data?.nearReserve && (
+        <p className="border-b border-amber-500/40 bg-amber-500/10 px-4 py-2 text-xs">
+          {t.formatMessage(
+            {
+              defaultMessage:
+                "Your credits are close to the {credits, number} kept for your resume. The interviewer will wrap up this position with what you said; subscribing unlocks more.",
+            },
+            { credits: credits.data.reserve }
+          )}
+        </p>
+      )}
 
       <div className="flex-1 overflow-y-auto">
         <ol className="mx-auto flex w-full max-w-3xl flex-col gap-4 p-6">

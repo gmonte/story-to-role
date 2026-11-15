@@ -212,6 +212,10 @@ export class MotivationService {
       input.userId,
       input.openingId
     );
+    await this.tasks.assertAffordable({
+      userId: input.userId,
+      type: "motivation_turn",
+    });
     const interview = await this.db.transaction(async (tx) => {
       if (input.storyId) {
         const stories = await new EvidenceRepository(tx).listStories(
@@ -240,6 +244,11 @@ export class MotivationService {
       input.userId,
       input.openingId
     );
+    // Before the answer is stored: none is left without a next question.
+    await this.tasks.assertAffordable({
+      userId: input.userId,
+      type: "motivation_turn",
+    });
     const interviewId = await this.db.transaction(async (tx) => {
       const repository = new MotivationRepository(tx);
       const found = await repository.findInterviewByOpening(opening.id);

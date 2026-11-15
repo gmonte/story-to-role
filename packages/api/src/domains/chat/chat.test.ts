@@ -6,7 +6,7 @@ import { createAiClient } from "@repo/api/domains/ai/ai-client";
 import { aiUsageTable } from "@repo/api/domains/ai/db/ai-tables";
 import { TasksService } from "@repo/api/domains/tasks/tasks-service";
 import { fakeProviderPackage } from "@repo/api/test/fake-provider-package";
-import { usersTable } from "@repo/api/domains/users/db/users-tables";
+import { createTestUser } from "@repo/api/test/create-test-user";
 import {
   clearTestDatabase,
   closeTestDatabase,
@@ -25,16 +25,7 @@ vi.mock("@repo/common/env/web.env", () => ({
 
 async function setup() {
   const db = await getTestDatabase();
-  const [user] = await db
-    .insert(usersTable)
-    .values({
-      clerkUserId: "clerk_ada",
-      email: "ada@example.com",
-      firstName: "",
-      lastName: "",
-      fullName: "",
-    })
-    .returning();
+  const user = await createTestUser();
   const trigger = {
     trigger: vi.fn(async () => ({ runId: "run_1", accessToken: "token" })),
   };

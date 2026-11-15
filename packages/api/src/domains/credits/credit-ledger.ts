@@ -1,0 +1,267 @@
+import type { DbClient } from "@repo/api/tools/db-client";
+
+import { creditSettings } from "./credit-pricing";
+import { CreditsRepository } from "./credits-repository";
+import {
+  type CreditScope,
+  type CreditSource,
+  planSources,
+} from "./schemas/credits";
+
+/**
+ * Not enough credits for what an action may cost (its cap); `kept` is what
+ * the credit reserve holds back from it.
+ */
+export class InsufficientCreditsError extends Error {
+  constructor(
+    readonly needed: number,
+    readonly available: number,
+    readonly kept = 0
+  ) {
+    super(`Needs up to ${needed} credits, ${available} available`);
+  }
+}
+
+/** The month a date falls in ("2026-11") and the instant the next one starts. */
+export function billingMonth(now: Date) {
+  const key = now.toISOString().slice(0, 7);
+  const next = new Date(
+    Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1)
+  );
+  return { key, next };
+}
+
+/**
+ * Grants a lot of credits once per origin (billing spec: "Every grant
+ * points to its origin"): granting the same origin again changes nothing.
+ */
+export async function grantCredits(
+  tx: DbClient,
+  input: {
+    userId: string;
+    source: CreditSource;
+    amount: number;
+    origin: string;
+    expiresAt: Date | null;
+    scope?: CreditScope;
+  }
+) {
+  const repository = new CreditsRepository(tx);
+  const lot = await repository.insertLot({
+    userId: input.userId,
+    source: input.source,
+    scope: input.scope ?? "any",
+    amount: input.amount,
+    expiresAt: input.expiresAt,
+    origin: input.origin,
+  });
+  if (lot && input.amount > 0) {
+    await repository.insertEntries([
+      {
+        userId: input.userId,
+        lotId: lot.id,
+        kind: "grant",
+        amount: input.amount,
+      },
+    ]);
+  }
+  return lot;
+}
+
+/**
+ * This month's plan credits, granted when first needed: a courtesy grant's
+ * monthly credits, or Free's monthly credits for fit checks. Idempotent
+ * per month; they expire when the month ends.
+ */
+export async function ensureMonthlyCredits(
+  tx: DbClient,
+  userId: string,
+  now: Date
+) {
+  const { key, next } = billingMonth(now);
+  const courtesy = await new CreditsRepository(tx).activeCourtesy(userId, now);
+  if (courtesy) {
+    await grantCredits(tx, {
+      userId,
+      source: "courtesy",
+      amount: courtesy.monthlyCredits,
+      origin: `courtesy:${courtesy.id}:${key}`,
+      expiresAt:
+        courtesy.endsAt && courtesy.endsAt < next ? courtesy.endsAt : next,
+    });
+    return;
+  }
+  await grantCredits(tx, {
+    userId,
+    source: "monthly_free",
+    scope: "fit_check",
+    amount: creditSettings.monthlyFreeCredits,
+    origin: `monthly_free:${userId}:${key}`,
+    expiresAt: next,
+  });
+}
+
+/**
+ * The lots a payment may draw on, in the funding order (billing spec):
+ * plan credits first, those expiring first; then stored credits (packs and
+ * welcome credits), those expiring first. Fit-check lots pay fit checks.
+ */
+export async function spendableLots(
+  tx: DbClient,
+  userId: string,
+  scope: CreditScope,
+  now: Date
+) {
+  const lots = await new CreditsRepository(tx).liveLots(userId, now);
+  const order = (source: CreditSource) =>
+    planSources.includes(source) ? 0 : 1;
+  const time = (date: Date | null) =>
+    date?.getTime() ?? Number.MAX_SAFE_INTEGER;
+  return lots
+    .filter(
+      (row) =>
+        row.remaining > 0 &&
+        (row.lot.scope === "any" || row.lot.scope === scope)
+    )
+    .sort(
+      (a, b) =>
+        order(a.lot.source) - order(b.lot.source) ||
+        time(a.lot.expiresAt) - time(b.lot.expiresAt)
+    );
+}
+
+/** What the user can spend now on an action of this scope. */
+export async function spendableTotal(
+  tx: DbClient,
+  userId: string,
+  scope: CreditScope,
+  now: Date
+) {
+  return (await spendableLots(tx, userId, scope, now)).reduce(
+    (total, row) => total + row.remaining,
+    0
+  );
+}
+
+/**
+ * Throws unless `cap` fits in what is spendable once `keep` (the credit
+ * reserve) is held back.
+ */
+export function assertFits(input: {
+  cap: number;
+  available: number;
+  keep: number;
+}) {
+  const usable = Math.max(0, input.available - input.keep);
+  if (usable < input.cap) {
+    throw new InsufficientCreditsError(
+      input.cap,
+      usable,
+      Math.min(input.keep, input.available)
+    );
+  }
+}
+
+/**
+ * Reserves an action's cap when its task starts, in the same transaction
+ * (billing spec: "a balance can never be overspent and two concurrent
+ * tasks cannot spend the same credits"). The user's row is locked, so
+ * reservations run one at a time.
+ */
+export async function reserveCredits(
+  tx: DbClient,
+  input: {
+    userId: string;
+    taskId: string;
+    cap: number;
+    scope: CreditScope;
+    // Credits the action may not touch (the credit reserve).
+    keep?: number;
+    now?: Date;
+  }
+) {
+  if (input.cap <= 0) return;
+  const now = input.now ?? new Date();
+  const repository = new CreditsRepository(tx);
+  await repository.lockUser(input.userId);
+  await ensureMonthlyCredits(tx, input.userId, now);
+  const lots = await spendableLots(tx, input.userId, input.scope, now);
+  const available = lots.reduce((total, row) => total + row.remaining, 0);
+  assertFits({ cap: input.cap, available, keep: input.keep ?? 0 });
+  let left = input.cap;
+  const entries = [];
+  for (const row of lots) {
+    if (left === 0) break;
+    const take = Math.min(left, row.remaining);
+    entries.push({
+      userId: input.userId,
+      lotId: row.lot.id,
+      kind: "reserve" as const,
+      amount: -take,
+      taskId: input.taskId,
+    });
+    left -= take;
+  }
+  await repository.insertEntries(entries);
+}
+
+/**
+ * Settles a task to its actual cost, never above the cap: the reservation
+ * is released and the cost debited from the same lots, in order. A failed
+ * task settles at zero, releasing everything. Settling twice does nothing.
+ */
+export async function settleCredits(
+  tx: DbClient,
+  input: { userId: string; taskId: string; actual: number }
+) {
+  const repository = new CreditsRepository(tx);
+  await repository.lockUser(input.userId);
+  const entries = await repository.taskEntries(input.taskId);
+  if (entries.some((entry) => entry.kind === "release")) return;
+  const reservations = entries.filter((entry) => entry.kind === "reserve");
+  if (reservations.length === 0) return;
+  let cost = Math.max(0, input.actual);
+  const rows = [];
+  for (const reservation of reservations) {
+    const reserved = -reservation.amount;
+    rows.push({
+      userId: input.userId,
+      lotId: reservation.lotId,
+      kind: "release" as const,
+      amount: reserved,
+      taskId: input.taskId,
+    });
+    const debit = Math.min(cost, reserved);
+    if (debit > 0) {
+      rows.push({
+        userId: input.userId,
+        lotId: reservation.lotId,
+        kind: "debit" as const,
+        amount: -debit,
+        taskId: input.taskId,
+      });
+      cost -= debit;
+    }
+  }
+  await repository.insertEntries(rows);
+}
+
+/**
+ * Ends what is left of lots whose origin ended early (a courtesy grant
+ * ended by the owner): an expiry entry takes their remaining balance.
+ */
+export async function expireLots(
+  tx: DbClient,
+  lots: Array<{ lot: { id: string; userId: string }; remaining: number }>
+) {
+  await new CreditsRepository(tx).insertEntries(
+    lots
+      .filter((row) => row.remaining > 0)
+      .map((row) => ({
+        userId: row.lot.userId,
+        lotId: row.lot.id,
+        kind: "expire" as const,
+        amount: -row.remaining,
+      }))
+  );
+}

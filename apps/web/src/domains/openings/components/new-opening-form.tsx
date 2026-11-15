@@ -18,6 +18,8 @@ import {
 } from "@repo/web/components/ui/tabs";
 import { Textarea } from "@repo/web/components/ui/textarea";
 
+import { CreditCost } from "~/domains/credits/components/credit-cost";
+import { useCredits } from "~/domains/credits/hooks/use-credits";
 import { useTRPC } from "~/tools/trpc/client";
 
 import { useRefreshOpenings } from "../hooks/use-opening";
@@ -29,6 +31,7 @@ import { useRefreshOpenings } from "../hooks/use-opening";
 export function NewOpeningForm() {
   const t = useTranslation();
   const trpc = useTRPC();
+  const credits = useCredits();
   const router = useRouter();
   const [description, setDescription] = useState("");
 
@@ -96,6 +99,7 @@ export function NewOpeningForm() {
           >
             {t.formatMessage({ defaultMessage: "Analyze" })}
           </Button>
+          <CreditCost credits={credits.data?.estimates.fitCheck} />
         </TabsContent>
 
         <TabsContent value="link" className="pt-2">
@@ -117,6 +121,7 @@ export function NewOpeningForm() {
             <Button type="submit" disabled={pending}>
               {t.formatMessage({ defaultMessage: "Analyze" })}
             </Button>
+            <CreditCost credits={credits.data?.estimates.fitCheck} />
           </form>
         </TabsContent>
 

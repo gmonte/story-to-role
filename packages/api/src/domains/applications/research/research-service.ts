@@ -79,6 +79,10 @@ export class ResearchService {
       input.openingId
     );
     if (!opening.encryptedCompany) throw new TRPCError({ code: "BAD_REQUEST" });
+    await this.tasks.assertAffordable({
+      userId: input.userId,
+      type: "research_company",
+    });
     const research = await this.db.transaction(async (tx) => {
       const repository = new ResearchRepository(tx);
       // Locked: two starts at once can't both find no run in progress.

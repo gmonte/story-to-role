@@ -110,6 +110,7 @@ export async function runGenerateResume(deps: {
       profileId: generation.profileId,
       filter,
       openingId: application.openingId,
+      language: generation.language,
     });
     const sections = resolveSections({
       template: setup.templateSections,

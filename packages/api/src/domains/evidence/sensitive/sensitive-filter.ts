@@ -26,9 +26,13 @@ export function createSensitiveFilter(rules: SensitiveRule[]) {
     .filter((rule) => rule.choice !== "use" && rule.original.trim())
     .sort((a, b) => b.original.length - a.original.length);
 
-  // Accent-insensitive matching: compare on folded text, keep positions.
+  // Accent-insensitive matching on folded text, keeping positions. Whole
+  // words only: "4" never matches inside "2024" or an id, nor "Rio" "Mario".
   const patternFor = (original: string) =>
-    new RegExp(escapeRegExp(foldAccents(original)), "gi");
+    new RegExp(
+      `(?<![\\p{L}\\p{N}])${escapeRegExp(foldAccents(original.trim()))}(?![\\p{L}\\p{N}])`,
+      "giu"
+    );
 
   function replaceAll(text: string, rule: SensitiveRule, replacement: string) {
     const folded = foldAccents(text);

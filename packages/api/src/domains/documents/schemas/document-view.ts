@@ -6,6 +6,7 @@ import { taskProgressSchema } from "@repo/api/domains/tasks/schemas/task";
 
 import {
   documentKindSchema,
+  generationKindSchema,
   generationStatusSchema,
   outputLanguageSchema,
   reviewDepthSchema,
@@ -66,12 +67,43 @@ export const versionViewSchema = z.object({
   credentialApprovals: z.array(
     z.object({ credentialId: z.uuid(), approvedAt: z.date() })
   ),
+  // Linked versions with changes this one has not received (language sync).
+  outdated: z.array(
+    z.object({
+      versionId: z.uuid(),
+      language: outputLanguageSchema,
+      changes: z.number().int(),
+      // No common ancestor left: only recreating links them again.
+      baseMissing: z.boolean(),
+    })
+  ),
+  // Titles proposed for this language and not approved yet.
+  titleProposals: z.array(
+    z.object({
+      positionId: z.uuid(),
+      current: z.string(),
+      proposed: z.string(),
+    })
+  ),
 });
 export type VersionView = z.infer<typeof versionViewSchema>;
 
 export const generationViewSchema = z.object({
   id: z.uuid(),
+  kind: generationKindSchema,
   status: generationStatusSchema,
+  versionId: z.uuid().nullable(),
+  sourceVersionId: z.uuid().nullable(),
+  // A sync awaiting the user's review: its changes to the target.
+  proposal: z
+    .array(
+      z.object({
+        lineId: z.string(),
+        before: z.string().nullable(),
+        after: z.string().nullable(),
+      })
+    )
+    .nullable(),
   language: outputLanguageSchema,
   reviewDepth: reviewDepthSchema,
   writingLevel: writingLevelSchema,

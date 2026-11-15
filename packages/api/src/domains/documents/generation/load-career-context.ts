@@ -11,6 +11,12 @@ import type { EvidenceKind } from "@repo/api/domains/evidence/schemas/evidence";
 import type { SensitiveFilter } from "@repo/api/domains/evidence/sensitive/sensitive-filter";
 import type { DbClient } from "@repo/api/tools/db-client";
 
+import {
+  approvedTitles,
+  loadTitleEquivalents,
+} from "../adaptation/title-equivalents";
+import type { OutputLanguage } from "../schemas/document";
+
 export type ContextPosition = {
   id: string;
   employer: string;
@@ -99,6 +105,8 @@ export async function loadCareerContext(input: {
   profileId: string;
   filter: SensitiveFilter;
   openingId?: string;
+  /** Prints each position's approved title equivalent in this language. */
+  language?: OutputLanguage;
 }): Promise<CareerContext> {
   const { db, cipher, profileId, filter } = input;
   const career = new CareerRepository(db);
@@ -209,8 +217,19 @@ export async function loadCareerContext(input: {
         })
     : [];
 
+  const equivalents = input.language
+    ? approvedTitles(
+        await loadTitleEquivalents({ db, cipher, profileId, filter }),
+        input.language
+      )
+    : new Map<string, string>();
+  const titled = positions.map((position) => ({
+    ...position,
+    title: equivalents.get(position.id) ?? position.title,
+  }));
+
   return {
-    positions: applyLockedFactOverrides(positions, overrides),
+    positions: applyLockedFactOverrides(titled, overrides),
     evidence,
     credentials,
     skills,

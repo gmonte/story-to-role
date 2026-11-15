@@ -29,6 +29,8 @@ import { InstructionsService } from "@repo/api/domains/applications/instructions
 import type { InstructionDecision } from "@repo/api/domains/applications/schemas/instructions";
 import { runSplitInstructions } from "@repo/api/domains/applications/run-split-instructions";
 
+import { AdaptationService } from "./adaptation/adaptation-service";
+import { runAdaptDocument } from "./adaptation/run-adapt-document";
 import { DocumentsRepository } from "./documents-repository";
 import { DocumentsService } from "./documents-service";
 import type { ResumeDraft } from "./generation/assemble-resume";
@@ -853,5 +855,225 @@ describe("resume generation and snapshots", () => {
     expect(
       await instructions.get({ userId: ctx.user.id, openingId: ctx.opening.id })
     ).toMatchObject({ overrides: [] });
+  });
+
+  it("adapts into another language, approves a title and syncs changes", async () => {
+    const ctx = await setup();
+    const [kubernetes, team] = ctx.evidence;
+    const line = (text: string, id: string) => ({ text, evidence_ids: [id] });
+    await ctx.generate("quick", {
+      drafts: [
+        ctx.draft([
+          line("Cut deploy time by 40% with Kubernetes.", kubernetes.id),
+          line("Led a team of 5 engineers.", team.id),
+        ]),
+        ctx.draft([line("Led a team of 5 engineers.", team.id)]),
+      ],
+      ratings: [8, 5],
+    });
+    const view = () =>
+      ctx.documents.forOpening({
+        userId: ctx.user.id,
+        openingId: ctx.opening.id,
+      });
+    const [english] = (await view()).documents[0].versions;
+    const [deploy, lead] = experienceOf(english.content).lines;
+
+    const tasks = new TasksService(ctx.db, ctx.trigger);
+    const adaptation = new AdaptationService(ctx.db, tasks);
+    const filter = await loadSensitiveFilter({
+      db: ctx.db,
+      cipher: ctx.cipher,
+      profileId: ctx.profile.id,
+    });
+    const runWith = async (
+      generationId: string,
+      object: (system: string) => unknown
+    ) => {
+      const fake = fakeProviderPackage({
+        object: ({ system }) => object(system),
+      });
+      await runAdaptDocument({
+        db: ctx.db,
+        ai: createAiClient({
+          db: ctx.db,
+          userId: ctx.user.id,
+          funding: "credits",
+          providerPackage: fake.providerPackage,
+          sensitiveFilter: filter,
+        }),
+        cipher: ctx.cipher,
+        filter,
+        userId: ctx.user.id,
+        generationId,
+      });
+      return fake;
+    };
+
+    const adapted = await adaptation.adapt({
+      userId: ctx.user.id,
+      versionId: english.id,
+      language: "pt-BR",
+    });
+    const items = (team: string) => [
+      {
+        id: deploy.id,
+        text: "Reduziu o tempo de deploy em 40% com Kubernetes.",
+        label: null,
+      },
+      { id: lead.id, text: team, label: null },
+    ];
+    const fake = await runWith(adapted.generationId, (system) =>
+      system.startsWith("These items")
+        ? {
+            title_line: "",
+            items: items("Liderou uma equipe de 5 engenheiros."),
+            contexts: [],
+            title_equivalents: [],
+          }
+        : {
+            title_line: "Engenheiro de Plataforma | Kubernetes",
+            // A converted figure: refused, then fixed on the retry.
+            items: items("Liderou uma equipe de 6 engenheiros."),
+            contexts: [],
+            title_equivalents: [
+              { position_id: ctx.positionId, title: "Líder Técnico" },
+            ],
+          }
+    );
+    expect(fake.generateObject).toHaveBeenCalledTimes(2);
+
+    let versions = (await view()).documents[0].versions;
+    const portuguese = versions.find((v) => v.language === "pt-BR")!;
+    expect(experienceOf(portuguese.content)).toMatchObject({
+      title: "Tech Lead",
+      lines: [
+        {
+          id: deploy.id,
+          text: "Reduziu o tempo de deploy em 40% com Kubernetes.",
+          origin: deploy.origin,
+        },
+        {
+          id: lead.id,
+          text: "Liderou uma equipe de 5 engenheiros.",
+          origin: lead.origin,
+        },
+      ],
+    });
+    expect(portuguese.snapshot.origin).toBe("adapted");
+    expect(portuguese.outdated).toEqual([]);
+    expect(portuguese.titleProposals).toEqual([
+      {
+        positionId: ctx.positionId,
+        current: "Tech Lead",
+        proposed: "Líder Técnico",
+      },
+    ]);
+
+    await adaptation.approveTitle({
+      userId: ctx.user.id,
+      versionId: portuguese.id,
+      positionId: ctx.positionId,
+      title: "Líder Técnico",
+    });
+    // The English version edits a line; the Portuguese one falls behind.
+    await ctx.documents.saveEdit({
+      userId: ctx.user.id,
+      versionId: english.id,
+      baseSnapshotId: english.snapshot.id,
+      content: {
+        ...english.content,
+        sections: english.content.sections.map((section) =>
+          section.kind === "experience"
+            ? {
+                ...section,
+                entries: section.entries.map((entry) => ({
+                  ...entry,
+                  lines: entry.lines.map((row) =>
+                    row.id === lead.id
+                      ? { ...row, text: "Led and hired a team of 5 engineers." }
+                      : row
+                  ),
+                })),
+              }
+            : section
+        ),
+      },
+    });
+    versions = (await view()).documents[0].versions;
+    const behind = versions.find((v) => v.id === portuguese.id)!;
+    expect(experienceOf(behind.content).title).toBe("Líder Técnico");
+    expect(behind.titleProposals).toEqual([]);
+    expect(behind.outdated).toEqual([
+      {
+        versionId: english.id,
+        language: "en-US",
+        changes: 1,
+        baseMissing: false,
+      },
+    ]);
+    // The title approval is a locked fact, not a change to carry back.
+    expect(versions.find((v) => v.id === english.id)!.outdated).toEqual([]);
+
+    const preview = await adaptation.syncPreview({
+      userId: ctx.user.id,
+      versionId: portuguese.id,
+      fromVersionId: english.id,
+    });
+    expect(preview).toEqual({
+      baseMissing: false,
+      changes: [
+        {
+          lineId: lead.id,
+          kind: "changed",
+          before: "Led a team of 5 engineers.",
+          after: "Led and hired a team of 5 engineers.",
+          targetText: "Liderou uma equipe de 5 engenheiros.",
+          conflict: false,
+        },
+      ],
+    });
+    const started = await adaptation.startSync({
+      userId: ctx.user.id,
+      versionId: portuguese.id,
+      fromVersionId: english.id,
+      lineIds: [lead.id],
+    });
+    await runWith(started.generationId, () => ({
+      items: [
+        {
+          id: lead.id,
+          text: "Liderou e contratou uma equipe de 5 engenheiros.",
+        },
+      ],
+    }));
+    const { generation } = (await view()).documents[0];
+    expect(generation).toMatchObject({
+      kind: "sync",
+      status: "proposed",
+      proposal: [
+        {
+          lineId: lead.id,
+          before: "Liderou uma equipe de 5 engenheiros.",
+          after: "Liderou e contratou uma equipe de 5 engenheiros.",
+        },
+      ],
+    });
+    await adaptation.acceptSync({
+      userId: ctx.user.id,
+      generationId: started.generationId,
+    });
+    versions = (await view()).documents[0].versions;
+    const synced = versions.find((v) => v.id === portuguese.id)!;
+    expect(experienceOf(synced.content).lines[1].text).toBe(
+      "Liderou e contratou uma equipe de 5 engenheiros."
+    );
+    expect(synced.outdated).toEqual([]);
+    await expect(
+      adaptation.acceptSync({
+        userId: ctx.user.id,
+        generationId: started.generationId,
+      })
+    ).rejects.toMatchObject({ code: "PRECONDITION_FAILED" });
   });
 });

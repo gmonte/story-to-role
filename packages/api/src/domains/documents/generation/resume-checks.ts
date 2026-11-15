@@ -84,7 +84,10 @@ export function findForbiddenLines(
  */
 export function lockedFactViolations(
   content: ResumeContent,
-  positions: ContextPosition[]
+  positions: ContextPosition[],
+  // Approved title equivalents in the content's language (resume spec,
+  // "Adaptations"): code accepts the original title or one of these.
+  acceptedTitles = new Map<string, string[]>()
 ) {
   return content.sections.flatMap((section) =>
     section.kind === "experience"
@@ -92,7 +95,8 @@ export function lockedFactViolations(
           const position = positions.find((row) => row.id === entry.positionId);
           const intact =
             position?.employer === entry.employer &&
-            position.title === entry.title &&
+            (position.title === entry.title ||
+              !!acceptedTitles.get(position.id)?.includes(entry.title)) &&
             position.startDate === entry.startDate &&
             position.endDate === entry.endDate;
           return intact ? [] : [entry.positionId];

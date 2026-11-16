@@ -153,8 +153,10 @@ function Conversation({
       { id: `catch-up-${Date.now()}`, role: "assistant", parts: [] },
     ]);
     void sendAction({ type: "catch_up" }).finally(async () => {
-      // The stored transcript has the last word, whatever the stream showed.
-      setMessages((await loadCareerChat()).messages);
+      // The stored transcript catches up what the stream may have missed;
+      // what the stream showed stays, as the store may not have it yet.
+      const stored = (await loadCareerChat()).messages;
+      setMessages((current) => withStored(current, stored));
       asking.current = false;
       void refresh();
     });
@@ -433,4 +435,19 @@ function AiAtWork({
       </span>
     </li>
   );
+}
+
+/**
+ * The stored messages, then the local ones the store doesn't have yet (just
+ * streamed, saved a moment later); an empty one the answer never filled
+ * goes.
+ */
+function withStored(local: UIMessage[], stored: UIMessage[]) {
+  const ids = new Set(stored.map((message) => message.id));
+  return [
+    ...stored,
+    ...local.filter(
+      (message) => !ids.has(message.id) && message.parts.length > 0
+    ),
+  ];
 }

@@ -15,6 +15,7 @@ import {
 } from "drizzle-orm";
 
 import { applicationsTable } from "@repo/api/domains/applications/db/applications-tables";
+import { applicationSubmissionsTable } from "@repo/api/domains/applications/db/tracker-tables";
 import { tasksTable } from "@repo/api/domains/tasks/db/tasks-tables";
 import type { DbClient } from "@repo/api/tools/db-client";
 
@@ -33,6 +34,20 @@ type Insert<T extends { $inferInsert: unknown }> = T["$inferInsert"];
 
 export class DocumentsRepository {
   constructor(private readonly tx: DbClient) {}
+
+  /** The snapshots sent with applications, latest first, per version. */
+  async submissionsForVersions(versionIds: string[]) {
+    if (versionIds.length === 0) return [];
+    return this.tx
+      .select({
+        versionId: applicationSubmissionsTable.versionId,
+        snapshotId: applicationSubmissionsTable.snapshotId,
+        sentAt: applicationSubmissionsTable.createdAt,
+      })
+      .from(applicationSubmissionsTable)
+      .where(inArray(applicationSubmissionsTable.versionId, versionIds))
+      .orderBy(desc(applicationSubmissionsTable.createdAt));
+  }
 
   async findApplicationByOpening(openingId: string) {
     const [row] = await this.tx
@@ -300,6 +315,27 @@ export class DocumentsRepository {
       .insert(documentSnapshotsTable)
       .values(snapshot)
       .returning();
+    // A document now exists for its application: an external one isn't
+    // external anymore (tracker spec).
+    await this.tx
+      .update(applicationsTable)
+      .set({ external: false })
+      .where(
+        and(
+          eq(applicationsTable.external, true),
+          inArray(
+            applicationsTable.id,
+            this.tx
+              .select({ id: documentsTable.applicationId })
+              .from(documentsTable)
+              .innerJoin(
+                documentVersionsTable,
+                eq(documentVersionsTable.documentId, documentsTable.id)
+              )
+              .where(eq(documentVersionsTable.id, snapshot.versionId))
+          )
+        )
+      );
     return row;
   }
 

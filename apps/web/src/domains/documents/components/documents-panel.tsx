@@ -140,13 +140,19 @@ export function DocumentsPanel({
                   )}
                 </span>
                 <span className="text-muted-foreground text-[11px]">
-                  {t.formatMessage(
-                    {
-                      defaultMessage:
-                        "{count, plural, one {# change} other {# changes}}",
-                    },
-                    { count: version.snapshotCount }
-                  )}
+                  {version.sent
+                    ? version.sent.snapshotId === version.snapshot.id
+                      ? t.formatMessage({ defaultMessage: "Sent as it is" })
+                      : t.formatMessage({
+                          defaultMessage: "Sent; edited since",
+                        })
+                    : t.formatMessage(
+                        {
+                          defaultMessage:
+                            "{count, plural, one {# change} other {# changes}}",
+                        },
+                        { count: version.snapshotCount }
+                      )}
                 </span>
               </button>
             </li>

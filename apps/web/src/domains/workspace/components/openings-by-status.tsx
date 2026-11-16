@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
+import { closedStatuses } from "@repo/api/domains/applications/schemas/application";
 import type { OpeningSummary } from "@repo/api/domains/openings/schemas/opening-view";
 import { useTranslation } from "@repo/intl/use-translation";
 import {
@@ -15,9 +16,9 @@ import {
 import { useTRPC } from "~/tools/trpc/client";
 
 /**
- * The openings grouped by status. Applications (slice 4) add "in
- * preparation", "applied" and "in process"; until then openings are being
- * analyzed, analyzed, refused or closed.
+ * The openings grouped by status (workspace spec): analyzed, in
+ * preparation, applied, in process, closed; the tracker's status places
+ * an opening once it has an application.
  */
 export function OpeningsByStatus() {
   const t = useTranslation();
@@ -35,24 +36,45 @@ export function OpeningsByStatus() {
     );
   }
 
-  const byStatus = (status: OpeningSummary["status"]) =>
-    openings.data.filter((opening) => opening.status === status);
+  // With an application, the tracker's status places it; without one,
+  // the opening's own.
+  const inGroup = (opening: OpeningSummary) => {
+    const status = opening.applicationStatus;
+    if (!status) return opening.status;
+    if (status === "offer") return "in_process";
+    if (closedStatuses.includes(status)) return "closed";
+    return status;
+  };
+  const byGroup = (group: string) =>
+    openings.data.filter((opening) => inGroup(opening) === group);
   const groups: Array<{ label: string; items: OpeningSummary[] }> = [
     {
       label: t.formatMessage({ defaultMessage: "Being analyzed" }),
-      items: byStatus("processing"),
+      items: byGroup("processing"),
     },
     {
       label: t.formatMessage({ defaultMessage: "Analyzed" }),
-      items: byStatus("analyzed"),
+      items: byGroup("analyzed"),
+    },
+    {
+      label: t.formatMessage({ defaultMessage: "In preparation" }),
+      items: byGroup("in_preparation"),
+    },
+    {
+      label: t.formatMessage({ defaultMessage: "Applied" }),
+      items: byGroup("applied"),
+    },
+    {
+      label: t.formatMessage({ defaultMessage: "In process" }),
+      items: byGroup("in_process"),
     },
     {
       label: t.formatMessage({ defaultMessage: "Couldn't be analyzed" }),
-      items: byStatus("rejected"),
+      items: byGroup("rejected"),
     },
     {
       label: t.formatMessage({ defaultMessage: "Closed" }),
-      items: byStatus("closed"),
+      items: byGroup("closed"),
     },
   ];
 

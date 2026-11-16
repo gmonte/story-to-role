@@ -49,6 +49,8 @@ export const snapshotSummarySchema = z.object({
   origin: snapshotOriginSchema,
   author: snapshotAuthorSchema,
   createdAt: z.date(),
+  // Marked applied with this snapshot (tracker spec): shows as "sent".
+  sentAt: z.date().nullable(),
 });
 export type SnapshotSummary = z.infer<typeof snapshotSummarySchema>;
 
@@ -58,6 +60,9 @@ export const versionViewSchema = z.object({
   label: z.string().nullable(),
   snapshot: snapshotSummarySchema,
   snapshotCount: z.number().int(),
+  // The snapshot sent with the application, when it was marked applied
+  // (workspace spec: the Documents block shows which one was sent).
+  sent: z.object({ snapshotId: z.uuid(), sentAt: z.date() }).nullable(),
   content: documentContentSchema,
   pages: z.number(),
   pdf: z.object({

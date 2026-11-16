@@ -11,6 +11,7 @@ import {
   or,
 } from "drizzle-orm";
 
+import { applicationsTable } from "@repo/api/domains/applications/db/applications-tables";
 import { positionsTable } from "@repo/api/domains/career/db/career-tables";
 import { evidenceTable } from "@repo/api/domains/evidence/db/evidence-tables";
 import type { DbClient } from "@repo/api/tools/db-client";
@@ -21,6 +22,7 @@ import {
   openingTermsTable,
   openingsTable,
 } from "./db/openings-tables";
+import type { OpeningStatus } from "./schemas/opening";
 
 type Insert<T extends { $inferInsert: unknown }> = T["$inferInsert"];
 
@@ -65,12 +67,43 @@ export class OpeningsRepository {
     return row;
   }
 
+  /** The application of each opening that has one, with its status. */
+  async applicationStatuses(openingIds: string[]) {
+    if (openingIds.length === 0) return [];
+    return this.tx
+      .select({
+        id: applicationsTable.id,
+        openingId: applicationsTable.openingId,
+        status: applicationsTable.status,
+      })
+      .from(applicationsTable)
+      .where(inArray(applicationsTable.openingId, openingIds));
+  }
+
   listOpenings(profileId: string) {
     return this.tx
       .select()
       .from(openingsTable)
       .where(eq(openingsTable.profileId, profileId))
       .orderBy(desc(openingsTable.createdAt));
+  }
+
+  /** Moves the status only if it is still `from`. Whether it moved. */
+  async moveStatus(
+    openingId: string,
+    input: { from: OpeningStatus; to: OpeningStatus }
+  ) {
+    const moved = await this.tx
+      .update(openingsTable)
+      .set({ status: input.to })
+      .where(
+        and(
+          eq(openingsTable.id, openingId),
+          eq(openingsTable.status, input.from)
+        )
+      )
+      .returning({ id: openingsTable.id });
+    return moved.length > 0;
   }
 
   async updateOpening(

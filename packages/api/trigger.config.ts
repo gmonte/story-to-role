@@ -124,6 +124,7 @@ export default defineConfig({
     "./src/domains/openings/tasks",
     "./src/domains/documents/tasks",
     "./src/domains/applications/tasks",
+    "./src/domains/applications/tracker/tasks",
     "./src/domains/credits/tasks",
     "./src/domains/billing/tasks",
   ],

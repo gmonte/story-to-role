@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 import { interviewLanguageSchema } from "@repo/api/domains/career/schemas/career";
+import { applicationStatusSchema } from "@repo/api/domains/applications/schemas/application";
 import { evidenceKindSchema } from "@repo/api/domains/evidence/schemas/evidence";
 
 import {
@@ -21,6 +22,9 @@ export const openingSummarySchema = z.object({
   company: z.string().nullable(),
   title: z.string().nullable(),
   band: fitBandSchema.nullable(),
+  // The tracker's application, once the opening has one.
+  applicationId: z.uuid().nullable(),
+  applicationStatus: applicationStatusSchema.nullable(),
   createdAt: z.date(),
 });
 export type OpeningSummary = z.infer<typeof openingSummarySchema>;

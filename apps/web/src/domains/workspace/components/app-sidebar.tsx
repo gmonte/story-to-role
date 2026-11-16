@@ -1,7 +1,13 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { BriefcaseBusiness, Library, Plus, ShieldCheck } from "lucide-react";
+import {
+  BriefcaseBusiness,
+  KanbanSquare,
+  Library,
+  Plus,
+  ShieldCheck,
+} from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
@@ -15,6 +21,7 @@ import {
   SidebarGroupLabel,
   SidebarHeader,
   SidebarMenu,
+  SidebarMenuBadge,
   SidebarMenuButton,
   SidebarMenuItem,
 } from "@repo/web/components/ui/sidebar";
@@ -22,6 +29,7 @@ import {
 import { BrandLockup } from "~/domains/brand/components/brand-lockup";
 import { BrandMark } from "~/domains/brand/components/brand-mark";
 import { CreditMeter } from "~/domains/credits/components/credit-meter";
+import { useReminders } from "~/domains/applications/hooks/use-tracker";
 import { UserButton } from "~/domains/user/components/user-button";
 import { useTRPC } from "~/tools/trpc/client";
 
@@ -33,6 +41,7 @@ export function AppSidebar() {
   const pathname = usePathname();
   const trpc = useTRPC();
   const { data: isAdmin } = useQuery(trpc.credits.isAdmin.queryOptions({}));
+  const reminders = useReminders();
 
   const items = [
     {
@@ -44,6 +53,12 @@ export function AppSidebar() {
       href: "/app/library",
       label: t.formatMessage({ defaultMessage: "Library" }),
       icon: Library,
+    },
+    {
+      href: "/app/tracker",
+      label: t.formatMessage({ defaultMessage: "Tracker" }),
+      icon: KanbanSquare,
+      count: reminders.data?.length,
     },
     {
       href: "/app/openings/new",
@@ -86,6 +101,9 @@ export function AppSidebar() {
                       <span>{item.label}</span>
                     </Link>
                   </SidebarMenuButton>
+                  {"count" in item && !!item.count && (
+                    <SidebarMenuBadge>{item.count}</SidebarMenuBadge>
+                  )}
                 </SidebarMenuItem>
               ))}
             </SidebarMenu>

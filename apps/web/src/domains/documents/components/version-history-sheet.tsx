@@ -81,6 +81,18 @@ export function VersionHistorySheet({ versionId }: { versionId: string }) {
                       {t.formatMessage({ defaultMessage: "Official" })}
                     </Badge>
                   )}
+                  {snapshot.sentAt && (
+                    <Badge variant="outline">
+                      {t.formatMessage(
+                        { defaultMessage: "Sent {date}" },
+                        {
+                          date: t.formatDate(snapshot.sentAt, {
+                            dateStyle: "medium",
+                          }),
+                        }
+                      )}
+                    </Badge>
+                  )}
                 </span>
                 <span className="text-muted-foreground text-xs">
                   {t.formatMessage(

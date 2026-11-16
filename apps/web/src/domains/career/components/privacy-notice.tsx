@@ -43,7 +43,7 @@ export function PrivacyNotice({
     }),
     t.formatMessage({
       defaultMessage:
-        "Voice input runs on your device: audio never leaves it. Your interview answers are encrypted and deleted 7 days after you approve what was extracted.",
+        "Voice input uses your browser's speech recognition (Google's in Chrome and Edge, Apple's in Safari); StoryToRole never receives the audio. Your interview answers are encrypted and deleted 7 days after you approve what was extracted.",
     }),
   ];
 

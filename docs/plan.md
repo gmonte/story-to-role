@@ -53,7 +53,7 @@ Goal: the guided interview spec, end to end, for one user.
 - Guided interview per position: orchestrator plus position agent, the six-stage script and the short script, sessions with token-measured checkpoints, agent tools from the spec, timeline proposal cards.
 - Extraction approval screen showing the user's words beside each extracted line; evidence with encrypted source quotes; sensitive items with use, generalize or exclude; credentials with optional stories; depth levels.
 - Transcripts deleted 7 days after approval.
-- Interview and interface languages, on-device voice input (Web Speech API with `processLocally`, OS dictation hint otherwise).
+- Interview and interface languages, browser voice input (Web Speech API, transcribed by Google in Chrome and Edge and by Apple in Safari; OS dictation hint otherwise).
 
 Acceptance: the acceptance criteria listed in `docs/specs/guided-interview.md`, plus credentials and depth.
 

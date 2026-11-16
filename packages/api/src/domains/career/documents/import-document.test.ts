@@ -28,7 +28,11 @@ import { createLocalStorage } from "@repo/api/tools/storage/local-storage";
 
 import { CareerService } from "../career-service";
 import { DocumentsService } from "./documents-service";
-import { runImportDocument } from "./run-import-document";
+import {
+  isConcreteItem,
+  runImportDocument,
+  withoutAuthorNotes,
+} from "./run-import-document";
 
 vi.mock("@repo/common/env/web.env", () => ({
   env: { ENCRYPTION_MASTER_KEY: `v1:${randomBytes(32).toString("base64")}` },
@@ -49,8 +53,10 @@ Languages: Portuguese (native), English (fluent).`;
 const truthFile = `# My career facts
 Acme — Senior Engineer — 2020-01 to 2023-06
 Led the Phoenix migration for Banco X.
+Cut monthly cloud costs by 30% [medido].
 ## DO NOT INCLUDE
-❌ Banco X`;
+❌ Banco X
+❌ Names of people, colleagues and clients included`;
 
 let rootDir: string;
 
@@ -298,5 +304,112 @@ describe("document import", () => {
         reviewed: false,
       }),
     ]);
+  });
+
+  it("applies a truth file's rules to names, never keeping a rule as an item", async () => {
+    const ctx = await setup();
+    await ctx.importFile(
+      truthFile.repeat(2),
+      {
+        positions: [],
+        credentials: [],
+        exclusion_rules: ["Names of people, colleagues and clients included"],
+        exclusions: [
+          { kind: "client", original: "Banco X" },
+          {
+            kind: "person",
+            original: "Names of people, colleagues and clients included",
+          },
+        ],
+      },
+      "truth_file"
+    );
+
+    const interview = new InterviewService(
+      ctx.db,
+      new TasksService(ctx.db, { trigger: vi.fn() })
+    );
+    expect(
+      (await interview.listSensitiveItems(ctx.user.id)).map(
+        (item) => item.original
+      )
+    ).toEqual(["Banco X"]);
+  });
+
+  it("leaves the author's notes out of a fact, in the user's language", async () => {
+    const ctx = await setup();
+    await ctx.importFile(
+      truthFile,
+      {
+        language: "pt-BR",
+        positions: [
+          {
+            employer: "Acme",
+            title: "Senior Engineer",
+            start_date: "2020-01",
+            end_date: "2023-06",
+            facts: [
+              {
+                kind: "metric",
+                text: "Cut monthly cloud costs by 30% [medido]",
+                quote: "Cut monthly cloud costs by 30% [medido]",
+              },
+            ],
+          },
+        ],
+        credentials: [],
+        exclusion_rules: [],
+        exclusions: [],
+      },
+      "truth_file"
+    );
+    const interview = new InterviewService(
+      ctx.db,
+      new TasksService(ctx.db, { trigger: vi.fn() })
+    );
+    await ctx.career.acceptPrivacyNotice(ctx.user.id);
+    const [position] = (await ctx.timeline()).positions;
+    const { sessionId } = await interview.openSession({
+      userId: ctx.user.id,
+      positionId: position.id,
+    });
+    const session = await interview.getSession({
+      userId: ctx.user.id,
+      sessionId,
+    });
+    expect(session.drafts).toEqual([
+      expect.objectContaining({
+        text: "Cut monthly cloud costs by 30%",
+        quote: "Cut monthly cloud costs by 30% [medido]",
+        // The profile's interview language, not the document's.
+        language: "en-US",
+      }),
+    ]);
+  });
+});
+
+describe("import helpers", () => {
+  it("strip author notes and keep everything else", () => {
+    expect(withoutAuthorNotes("Reduziu custos em 30% [medido]")).toBe(
+      "Reduziu custos em 30%"
+    );
+    expect(withoutAuthorNotes("Grew revenue 2x [Estimated, Q3]")).toBe(
+      "Grew revenue 2x"
+    );
+    expect(withoutAuthorNotes("Wrote the [C++] engine")).toBe(
+      "Wrote the [C++] engine"
+    );
+  });
+
+  it("tell a concrete name from a rule's wording", () => {
+    expect(isConcreteItem("Banco X")).toBe(true);
+    expect(isConcreteItem("R$ 25.000")).toBe(true);
+    expect(
+      isConcreteItem("Names of people, colleagues and clients included")
+    ).toBe(false);
+    expect(isConcreteItem("nomes de colegas e clientes")).toBe(false);
+    expect(
+      isConcreteItem("salary and billing figures of any project or client")
+    ).toBe(false);
   });
 });

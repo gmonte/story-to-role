@@ -5,7 +5,7 @@ import { intlMiddleware } from "./tools/intl/middleware/intl-middleware";
 
 const isPublicRoute = createRouteMatcher([
   "/",
-  "/api/clerk/webhooks(.*)",
+  "/api/webhooks/clerk",
   "/api/webhooks/stripe",
   "/sign-in(.*)",
   "/sign-up(.*)",

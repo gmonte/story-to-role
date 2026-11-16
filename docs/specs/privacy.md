@@ -12,6 +12,7 @@ StoryToRole handles the most personal professional data a person has. It keeps o
 - They are deleted 7 days after the session's extraction is approved; the window allows undoing or redoing a just-approved extraction.
 - What remains is the approved evidence, each item with the exact quote of the user's words (or the document passage) it came from, so traceability survives.
 - Closed sessions are never read back by any AI call, so nothing depends on keeping transcripts.
+- Voice input never reaches StoryToRole as audio: the browser's speech recognition transcribes it (Google's service in Chrome and Edge, Apple's in Safari) and only the text the user confirms becomes a turn. The privacy notice states which vendor hears the audio.
 
 ## Encryption and logs
 

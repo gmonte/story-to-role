@@ -375,9 +375,8 @@ function Interview({
           />
           <VoiceInputButton
             language={timeline.data?.profile.interviewLanguage ?? "en-US"}
-            onTranscript={(spoken) =>
-              setText((current) => (current ? `${current} ${spoken}` : spoken))
-            }
+            value={text}
+            onValueChange={setText}
           />
           <Button
             size="icon"

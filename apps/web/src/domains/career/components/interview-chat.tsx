@@ -201,9 +201,8 @@ export function InterviewChat({
           <div className="absolute right-2 bottom-2 flex items-center gap-1">
             <VoiceInputButton
               language={interviewLanguage}
-              onTranscript={(text) =>
-                setDraft((current) => (current ? `${current} ${text}` : text))
-              }
+              value={draft}
+              onValueChange={setDraft}
             />
             <Button
               type="submit"

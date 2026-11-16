@@ -2,44 +2,41 @@
 
 import { useEffect, useRef, useState } from "react";
 
-import { Mic, MicOff } from "lucide-react";
+import { Mic } from "lucide-react";
 
 import type { InterviewLanguage } from "@repo/api/domains/career/schemas/career";
 import { useTranslation } from "@repo/intl/use-translation";
 import { Button } from "@repo/web/components/ui/button";
+import { toast } from "@repo/web/components/ui/sonner";
 import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
 } from "@repo/web/components/ui/tooltip";
+import { cn } from "@repo/web/lib/utils";
 
-// The Web Speech API's on-device recognition isn't in TypeScript's DOM lib.
-type Availability =
-  | "available"
-  | "downloadable"
-  | "downloading"
-  | "unavailable";
-type RecognitionOptions = { langs: string[]; processLocally: boolean };
+// The Web Speech API isn't in TypeScript's DOM lib.
 type Recognition = {
   lang: string;
   continuous: boolean;
   interimResults: boolean;
-  processLocally: boolean;
   start(): void;
   stop(): void;
+  abort(): void;
+  onspeechstart: (() => void) | null;
   onresult:
     | ((event: {
-        results: ArrayLike<ArrayLike<{ transcript: string }>>;
+        results: ArrayLike<
+          ArrayLike<{ transcript: string }> & { isFinal: boolean }
+        >;
       }) => void)
     | null;
   onend: (() => void) | null;
-  onerror: (() => void) | null;
+  onerror: ((event: { error: string }) => void) | null;
 };
-type RecognitionClass = {
-  new (): Recognition;
-  available?: (options: RecognitionOptions) => Promise<Availability>;
-  install?: (options: RecognitionOptions) => Promise<boolean>;
-};
+type RecognitionClass = new () => Recognition;
+
+const SILENT_RECOGNIZER_MS = 6000;
 
 function getRecognitionClass(): RecognitionClass | undefined {
   const scope = globalThis as unknown as {
@@ -50,69 +47,125 @@ function getRecognitionClass(): RecognitionClass | undefined {
 }
 
 /**
- * Speech to text on the user's device only (guided interview spec): the
- * transcript lands in the input box to edit before sending, and audio never
- * leaves the device. Without on-device recognition, the button becomes a
- * hint on using the operating system's own dictation.
+ * Speech to text by the browser's own recognition (guided interview spec):
+ * Chrome, Edge and Safari transcribe with Google's or Apple's service, and
+ * StoryToRole never receives the audio. The transcript lands in the input box
+ * live, words appearing while the user speaks, to edit before sending. Where
+ * the browser can't transcribe (Firefox has no recognition, Brave blocks it),
+ * the button becomes a hint on using the operating system's own dictation,
+ * shown on hover and as a toast on tap (a tooltip alone never reaches touch
+ * screens).
  */
 export function VoiceInputButton({
   language,
-  onTranscript,
+  value,
+  onValueChange,
 }: {
   language: InterviewLanguage;
-  onTranscript: (text: string) => void;
+  /** The input box's text: what is spoken is appended to it. */
+  value: string;
+  onValueChange: (value: string) => void;
 }) {
   const t = useTranslation();
   const [state, setState] = useState<
     "checking" | "ready" | "listening" | "unavailable"
   >("checking");
   const recognition = useRef<Recognition | null>(null);
+  // The input box's text when listening started: every result rewrites what
+  // follows it, so a guess the recognizer revises never piles up.
+  const typedBefore = useRef("");
+  // A browser may hear speech and still never return a word: past this long
+  // without text, recognition counts as unavailable.
+  const silentRecognizer = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const systemDictationHint = t.formatMessage({
+    defaultMessage:
+      "Use your system's dictation to speak: Fn Fn on macOS, Win+H on Windows, or the keyboard microphone on your phone.",
+  });
 
-  // Feature detection only: availability is asked when the user taps the
-  // microphone, never on load (the check itself can be heavy for a browser).
+  function showUnavailable() {
+    setState("unavailable");
+    toast.info(
+      t.formatMessage({
+        defaultMessage: "This browser can't transcribe your voice",
+      }),
+      { description: systemDictationHint }
+    );
+  }
+
+  // Decided after mount: the server render can't know the browser.
   useEffect(() => {
     void Promise.resolve(
-      getRecognitionClass()?.available
-        ? ("ready" as const)
-        : ("unavailable" as const)
+      getRecognitionClass() ? ("ready" as const) : ("unavailable" as const)
     ).then(setState);
   }, []);
 
-  async function toggle() {
+  useEffect(
+    () => () => {
+      clearTimeout(silentRecognizer.current);
+      recognition.current?.abort();
+    },
+    []
+  );
+
+  function toggle() {
     if (state === "listening") {
+      // Chrome doesn't always fire "end" after a stop, so the button doesn't
+      // wait for it.
+      clearTimeout(silentRecognizer.current);
       recognition.current?.stop();
+      setState("ready");
       return;
     }
     const RecognitionClass = getRecognitionClass();
     if (!RecognitionClass) return;
-    const options = { langs: [language], processLocally: true };
-    setState("checking");
-    const availability = await RecognitionClass.available?.(options).catch(
-      () => "unavailable" as const
-    );
-    // The language pack downloads once, on the first tap.
-    const ready =
-      availability === "available" ||
-      ((availability === "downloadable" || availability === "downloading") &&
-        (await RecognitionClass.install?.(options).catch(() => false)));
-    if (!ready) {
-      setState("unavailable");
-      return;
-    }
     const instance = new RecognitionClass();
     instance.lang = language;
-    instance.processLocally = true;
     instance.continuous = true;
-    instance.interimResults = false;
-    instance.onresult = (event) => {
-      const text = Array.from(event.results)
-        .map((result) => result[0]?.transcript ?? "")
-        .join(" ")
-        .trim();
-      if (text) onTranscript(text);
+    instance.interimResults = true;
+    typedBefore.current = value.trim();
+    instance.onspeechstart = () => {
+      silentRecognizer.current ??= setTimeout(() => {
+        instance.onend = null;
+        instance.onerror = null;
+        instance.abort();
+        showUnavailable();
+      }, SILENT_RECOGNIZER_MS);
     };
-    instance.onend = () => setState("ready");
-    instance.onerror = () => setState("ready");
+    instance.onresult = (event) => {
+      clearTimeout(silentRecognizer.current);
+      instance.onspeechstart = null;
+      // In continuous mode the results hold the whole session, final phrases
+      // followed by the one still being guessed.
+      const spoken = Array.from(event.results)
+        .map((result) => result[0]?.transcript.trim() ?? "")
+        .filter(Boolean)
+        .join(" ");
+      if (!spoken) return;
+      onValueChange(
+        typedBefore.current ? `${typedBefore.current} ${spoken}` : spoken
+      );
+    };
+    instance.onend = () => {
+      clearTimeout(silentRecognizer.current);
+      setState("ready");
+    };
+    instance.onerror = (event) => {
+      // "aborted" and "no-speech" are a stop or a silence, not a failure.
+      if (event.error === "aborted" || event.error === "no-speech") return;
+      if (event.error === "not-allowed") {
+        setState("ready");
+        toast.error(
+          t.formatMessage({
+            defaultMessage:
+              "Allow microphone access for this site in your browser to speak your answer.",
+          })
+        );
+        return;
+      }
+      showUnavailable();
+    };
+    clearTimeout(silentRecognizer.current);
+    silentRecognizer.current = undefined;
     recognition.current = instance;
     instance.start();
     setState("listening");
@@ -126,17 +179,17 @@ export function VoiceInputButton({
             type="button"
             size="icon"
             variant="ghost"
-            className="size-8"
-            aria-label={t.formatMessage({ defaultMessage: "Dictation" })}
+            className="text-muted-foreground size-8"
+            onClick={showUnavailable}
+            aria-label={t.formatMessage({
+              defaultMessage: "Dictation unavailable in this browser",
+            })}
           >
-            <MicOff />
+            <Mic />
           </Button>
         </TooltipTrigger>
         <TooltipContent className="max-w-xs">
-          {t.formatMessage({
-            defaultMessage:
-              "Use your system's dictation to speak: Fn Fn on macOS, Win+H on Windows, or the keyboard microphone on your phone.",
-          })}
+          {systemDictationHint}
         </TooltipContent>
       </Tooltip>
     );
@@ -147,9 +200,9 @@ export function VoiceInputButton({
       type="button"
       size="icon"
       variant={state === "listening" ? "default" : "ghost"}
-      className="size-8"
+      className={cn("size-8", state === "listening" && "animate-pulse")}
       disabled={state === "checking"}
-      onClick={() => void toggle()}
+      onClick={toggle}
       aria-label={
         state === "listening"
           ? t.formatMessage({ defaultMessage: "Stop dictation" })

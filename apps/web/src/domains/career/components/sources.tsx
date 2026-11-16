@@ -3,7 +3,6 @@
 import { useRef, useState, type DragEvent } from "react";
 
 import { useMutation } from "@tanstack/react-query";
-import { useRealtimeRun } from "@trigger.dev/react-hooks";
 import { FileUp, Trash2 } from "lucide-react";
 
 import {
@@ -24,6 +23,7 @@ import {
   type CreditsShortfall,
   useOutOfCreditsToast,
 } from "~/domains/credits/components/out-of-credits-notice";
+import { RunWatcher } from "~/domains/tasks/components/run-watcher";
 import { useTRPC } from "~/tools/trpc/client";
 
 import { useRefreshCareer } from "../hooks/use-career-queries";
@@ -271,13 +271,4 @@ export function Sources({
       ))}
     </section>
   );
-}
-
-function RunWatcher({
-  runId,
-  accessToken,
-  onDone,
-}: RealtimeSubscription & { onDone: () => void }) {
-  useRealtimeRun(runId, { accessToken, onComplete: () => onDone() });
-  return null;
 }

@@ -155,6 +155,13 @@
       "when": 1794814165075,
       "tag": "0021_add_career_chat",
       "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1794818582307,
+      "tag": "0022_add_session_understanding",
+      "breakpoints": true
     }
   ]
 }

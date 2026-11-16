@@ -142,7 +142,7 @@ export function GuidedOpeningStart() {
                     { count: waiting.length }
                   )}
                 </p>
-                <ApproveImportedButton />
+                <ApproveImportedButton positions={positions} />
                 {approved.length > 0 && (
                   <p className="text-muted-foreground text-xs">
                     {t.formatMessage({

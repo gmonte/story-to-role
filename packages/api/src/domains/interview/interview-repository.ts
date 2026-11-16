@@ -142,6 +142,25 @@ export class InterviewRepository {
       .orderBy(asc(draftFactsTable.createdAt));
   }
 
+  /** How many drafts still wait for review, per open session. */
+  async countPendingDrafts(sessionIds: string[]) {
+    if (sessionIds.length === 0) return new Map<string, number>();
+    const rows = await this.tx
+      .select({
+        sessionId: draftFactsTable.sessionId,
+        count: sql<number>`count(*)::int`,
+      })
+      .from(draftFactsTable)
+      .where(
+        and(
+          inArray(draftFactsTable.sessionId, sessionIds),
+          eq(draftFactsTable.status, "draft")
+        )
+      )
+      .groupBy(draftFactsTable.sessionId);
+    return new Map(rows.map((row) => [row.sessionId, row.count]));
+  }
+
   async insertDraft(draft: Insert<typeof draftFactsTable>) {
     const [row] = await this.tx
       .insert(draftFactsTable)

@@ -3,6 +3,7 @@
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { ListChecks, MessageSquare, MoreHorizontal } from "lucide-react";
 
+import type { DepthLevel } from "@repo/api/domains/career/depth";
 import type { PositionView } from "@repo/api/domains/career/schemas/timeline";
 import { useTranslation } from "@repo/intl/use-translation";
 import { Badge } from "@repo/web/components/ui/badge";
@@ -17,6 +18,11 @@ import {
   DropdownMenuTrigger,
 } from "@repo/web/components/ui/dropdown-menu";
 import { toast } from "@repo/web/components/ui/sonner";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@repo/web/components/ui/tooltip";
 
 import { useTRPC } from "~/tools/trpc/client";
 
@@ -52,12 +58,7 @@ export function PositionCard({
   const session = openSessions.data?.find(
     (candidate) => candidate.positionId === position.id
   );
-  const review = useMutation(
-    trpc.interview.proposeExtraction.mutationOptions({
-      onSuccess: (_, { sessionId }) => setActiveSessionId(sessionId),
-      onError,
-    })
-  );
+
   const remove = useMutation(
     trpc.career.removePosition.mutationOptions({ onSuccess: refresh, onError })
   );
@@ -159,9 +160,20 @@ export function PositionCard({
 
       {!removed && (
         <div className="flex flex-wrap items-center gap-1.5">
-          <Badge variant="outline">
-            {labels.positionStatus(position.status)}
-          </Badge>
+          {/* The workflow status, apart from how deep the story goes. */}
+          <span
+            className={
+              position.status === "approved"
+                ? "text-xs text-emerald-600 dark:text-emerald-400"
+                : "text-muted-foreground text-xs"
+            }
+          >
+            {position.status === "approved"
+              ? t.formatMessage({ defaultMessage: "Approved" })
+              : position.status === "in_progress"
+                ? t.formatMessage({ defaultMessage: "Interview in progress" })
+                : t.formatMessage({ defaultMessage: "Not started" })}
+          </span>
           {position.origin === "truth_file" && (
             <Badge variant="outline">
               {t.formatMessage({ defaultMessage: "From your truth file" })}
@@ -171,16 +183,28 @@ export function PositionCard({
             languages={position.languages}
             bilingual={bilingual}
           />
-          {position.depth.level && (
-            <Badge variant="secondary">
-              {labels.depth(position.depth.level)}
-            </Badge>
+          {position.depth.level && <DepthBadge level={position.depth.level} />}
+        </div>
+      )}
+
+      {!removed && (
+        <p className="flex flex-wrap gap-x-2 text-xs">
+          {position.draftsToReview > 0 && (
+            <span className="font-medium text-amber-600 dark:text-amber-400">
+              {t.formatMessage(
+                {
+                  defaultMessage:
+                    "{count, plural, one {# fact to review} other {# facts to review}}",
+                },
+                { count: position.draftsToReview }
+              )}
+            </span>
           )}
-          <span className="text-muted-foreground text-xs">
+          <span className="text-muted-foreground">
             {t.formatMessage(
               {
                 defaultMessage:
-                  "{evidence, plural, one {# fact} other {# facts}}, {numbers} with numbers",
+                  "{evidence, plural, =0 {No approved facts yet} one {# approved fact} other {# approved facts}}, {numbers} with numbers",
               },
               {
                 evidence: position.depth.counts.evidence,
@@ -188,7 +212,7 @@ export function PositionCard({
               }
             )}
           </span>
-        </div>
+        </p>
       )}
 
       {!removed && position.depth.nudge && !position.depth.done && (
@@ -265,15 +289,80 @@ export function PositionCard({
               size="sm"
               variant="outline"
               className="flex-1"
-              disabled={review.isPending}
-              onClick={() => review.mutate({ sessionId: session.sessionId })}
+              onClick={() => setActiveSessionId(session.sessionId)}
             >
               <ListChecks />
-              {t.formatMessage({ defaultMessage: "Review what was found" })}
+              {t.formatMessage({ defaultMessage: "What the AI understood" })}
             </Button>
           )}
         </div>
       )}
     </div>
+  );
+}
+
+/** How deep the story goes, with what each level means. */
+function DepthBadge({ level }: { level: DepthLevel }) {
+  const t = useTranslation();
+  const labels = useCareerLabels();
+  const levels: Array<[DepthLevel, string]> = [
+    [
+      "confirmed",
+      t.formatMessage({
+        defaultMessage: "employer, title and dates confirmed",
+      }),
+    ],
+    [
+      "contextualized",
+      t.formatMessage({
+        defaultMessage:
+          "the company, team and scale are clear; projects are listed",
+      }),
+    ],
+    [
+      "with_stories",
+      t.formatMessage({
+        defaultMessage: "at least one story with problem, action and result",
+      }),
+    ],
+    [
+      "evidenced",
+      t.formatMessage({
+        defaultMessage: "results with numbers or scope; tools actually used",
+      }),
+    ],
+    [
+      "complete",
+      t.formatMessage({
+        defaultMessage: "every stage, including the sensitive-data review",
+      }),
+    ],
+  ];
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <Badge variant="secondary" className="cursor-help">
+          {t.formatMessage(
+            { defaultMessage: "Depth: {level}" },
+            { level: labels.depth(level) }
+          )}
+        </Badge>
+      </TooltipTrigger>
+      <TooltipContent className="max-w-64">
+        <ul className="flex flex-col gap-1 text-xs">
+          {levels.map(([name, meaning]) => (
+            <li
+              key={name}
+              className={name === level ? "font-semibold" : undefined}
+            >
+              {t.formatMessage(
+                { defaultMessage: "{level}: {meaning}" },
+                { level: labels.depth(name), meaning }
+              )}
+            </li>
+          ))}
+        </ul>
+      </TooltipContent>
+    </Tooltip>
   );
 }

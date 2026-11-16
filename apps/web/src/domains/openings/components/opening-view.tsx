@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 
 import { useMutation } from "@tanstack/react-query";
-import { ExternalLink, Loader2 } from "lucide-react";
+import { ExternalLink } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
@@ -20,6 +20,7 @@ import { useCredits } from "~/domains/credits/hooks/use-credits";
 import { GenerateResumeDialog } from "~/domains/documents/components/generate-resume-dialog";
 import { ResumeEditor } from "~/domains/documents/components/resume-editor";
 import { useOpeningDocuments } from "~/domains/documents/hooks/use-opening-documents";
+import { AiAtWork } from "~/domains/workspace/components/ai-at-work";
 import { useTRPC } from "~/tools/trpc/client";
 
 import { useOpening, useRefreshOpenings } from "../hooks/use-opening";
@@ -70,14 +71,55 @@ export function OpeningView({ openingId }: { openingId: string }) {
   const data = opening.data;
 
   if (data.status === "processing") {
+    const found = data.progress?.counts;
     return (
-      <div className="flex h-full flex-col items-center justify-center gap-3 p-6 text-center">
-        <Loader2 className="text-muted-foreground size-6 animate-spin" />
-        <p className="text-muted-foreground text-sm">
-          {t.formatMessage({
-            defaultMessage: "Reading the opening and checking your fit…",
+      <div className="mx-auto flex h-full w-full max-w-md flex-col justify-center p-6">
+        <AiAtWork
+          title={t.formatMessage({
+            defaultMessage: "Reading the opening and checking your fit",
           })}
-        </p>
+          current={data.progress?.label ?? "reading"}
+          steps={[
+            {
+              key: "reading",
+              label: t.formatMessage({ defaultMessage: "Reading the opening" }),
+            },
+            {
+              key: "requirements",
+              label: t.formatMessage({
+                defaultMessage: "Listing what it asks for",
+              }),
+            },
+            {
+              key: "matching",
+              label: t.formatMessage({
+                defaultMessage: "Looking for your evidence on each point",
+              }),
+            },
+            {
+              key: "judging",
+              label: t.formatMessage({
+                defaultMessage: "Weighing what you have against each one",
+              }),
+            },
+          ]}
+          detail={
+            found?.requirements !== undefined &&
+            t.formatMessage(
+              {
+                defaultMessage:
+                  "It asks for {keywords, plural, =0 {no listed skills} one {# skill} other {# skills}} and {requirements, plural, =0 {no other requirements} one {# requirement} other {# requirements}}.",
+              },
+              {
+                keywords: found.keywords ?? 0,
+                requirements: found.requirements,
+              }
+            )
+          }
+          note={t.formatMessage({
+            defaultMessage: "You can leave this page; the result will be here.",
+          })}
+        />
       </div>
     );
   }

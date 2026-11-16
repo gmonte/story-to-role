@@ -16,9 +16,9 @@ export const importDocumentTask = task({
       { db, taskId, type: "import_document" },
       async ({ userId, subjectId, reportProgress }) => {
         if (!subjectId) throw new Error(`Task ${taskId} has no document`);
-        await reportProgress({ step: 1, totalSteps: 2 });
         const { ai, cipher } = await createTaskAi({ db, userId, taskId });
         await runImportDocument({
+          reportProgress,
           db,
           ai,
           cipher,
@@ -26,7 +26,6 @@ export const importDocumentTask = task({
           userId,
           sourceDocumentId: subjectId,
         });
-        await reportProgress({ step: 2, totalSteps: 2 });
       }
     );
   },

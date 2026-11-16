@@ -3,7 +3,7 @@
 import { useState } from "react";
 
 import { useMutation } from "@tanstack/react-query";
-import { ArrowRight, Loader2 } from "lucide-react";
+import { ArrowRight } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 
@@ -125,12 +125,6 @@ export function GuidedOpeningStart() {
               </p>
             </div>
             <Sources documents={documents} />
-            {reading && (
-              <p className="text-muted-foreground flex items-center gap-2 text-sm">
-                <Loader2 className="size-4 animate-spin" />
-                {t.formatMessage({ defaultMessage: "Reading your file…" })}
-              </p>
-            )}
             {!reading && waiting.length > 0 && (
               <div className="flex flex-col gap-2 rounded-lg border p-3 text-sm">
                 <p>

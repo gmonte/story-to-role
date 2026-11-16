@@ -13,6 +13,7 @@ import { toast } from "@repo/web/components/ui/sonner";
 
 import { CreditCost } from "~/domains/credits/components/credit-cost";
 import { useCredits } from "~/domains/credits/hooks/use-credits";
+import { AiAtWork } from "~/domains/workspace/components/ai-at-work";
 import { useTRPC } from "~/tools/trpc/client";
 
 /**
@@ -78,11 +79,37 @@ export function CompanyResearch({
         </p>
       )}
       {researching && (
-        <p className="text-muted-foreground text-xs">
-          {t.formatMessage({
-            defaultMessage: "Searching the web for facts about the company…",
+        <AiAtWork
+          title={t.formatMessage({
+            defaultMessage: "Researching the company",
           })}
-        </p>
+          current={data.progress?.label ?? "searching"}
+          steps={[
+            {
+              key: "searching",
+              label: t.formatMessage({
+                defaultMessage:
+                  "Searching the web for what it builds and stands for",
+              }),
+            },
+            {
+              key: "picking_facts",
+              label: t.formatMessage({
+                defaultMessage: "Keeping only facts with a source",
+              }),
+            },
+          ]}
+          detail={
+            data.progress?.counts?.sources !== undefined &&
+            t.formatMessage(
+              {
+                defaultMessage:
+                  "{count, plural, =0 {No pages found} one {Read # page} other {Read # pages}}.",
+              },
+              { count: data.progress.counts.sources }
+            )
+          }
+        />
       )}
       {data.status === "failed" && (
         <p className="text-xs text-red-600">

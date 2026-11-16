@@ -1,5 +1,6 @@
 import { z } from "zod";
 
+import { taskProgressSchema } from "@repo/api/domains/tasks/schemas/task";
 import { interviewLanguageSchema } from "@repo/api/domains/career/schemas/career";
 import { applicationStatusSchema } from "@repo/api/domains/applications/schemas/application";
 import { evidenceKindSchema } from "@repo/api/domains/evidence/schemas/evidence";
@@ -45,6 +46,8 @@ export const fitCheckItemViewSchema = z.object({
 export type FitCheckItemView = z.infer<typeof fitCheckItemViewSchema>;
 
 export const openingDetailSchema = openingSummarySchema.extend({
+  // The analysis' live step while it runs (keys and counts, no content).
+  progress: taskProgressSchema.nullable(),
   description: z.string().nullable(),
   notes: z.string().nullable(),
   sourceUrl: z.string().nullable(),

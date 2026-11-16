@@ -9,6 +9,7 @@ import { EvidenceRepository } from "@repo/api/domains/evidence/evidence-reposito
 import type { RealtimeSubscription } from "@repo/api/domains/tasks/schemas/task";
 import { TasksService } from "@repo/api/domains/tasks/tasks-service";
 import type { DbClient } from "@repo/api/tools/db-client";
+import { TasksRepository } from "@repo/api/domains/tasks/tasks-repository";
 
 import type { openingsTable } from "./db/openings-tables";
 import { OpeningsRepository } from "./openings-repository";
@@ -211,6 +212,13 @@ export class OpeningsService {
         description: open(cipher, row.encryptedDescription),
         notes: open(cipher, row.encryptedNotes),
         sourceUrl: open(cipher, row.encryptedSourceUrl),
+        progress:
+          row.status === "processing"
+            ? await new TasksRepository(tx).latestProgress(
+                row.id,
+                "analyze_opening"
+              )
+            : null,
         rejectionReason: row.rejectionReason,
         language: row.language,
         suggestedTone: row.suggestedTone,

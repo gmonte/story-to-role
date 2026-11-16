@@ -2,6 +2,8 @@ import type { AiClient } from "@repo/api/domains/ai/ai-client";
 import { CareerRepository } from "@repo/api/domains/career/career-repository";
 import type { UserCipher } from "@repo/api/domains/encryption/user-cipher";
 import { OpeningsRepository } from "@repo/api/domains/openings/openings-repository";
+import { createNarrator } from "@repo/api/domains/tasks/narrate";
+import type { TaskProgress } from "@repo/api/domains/tasks/schemas/task";
 import type { DbClient } from "@repo/api/tools/db-client";
 
 import { companyFactsDraftSchema } from "../schemas/research";
@@ -22,6 +24,9 @@ export function isWebUrl(value: string) {
   }
 }
 
+/** Company research's narrated steps, in order. */
+export const researchSteps = ["searching", "picking_facts"] as const;
+
 /**
  * Company research (resume spec, "Cover letter inputs"): a search with the
  * provider's web search tool, within a limit, then a short list of facts,
@@ -35,6 +40,7 @@ export async function runResearchCompany(deps: {
   cipher: UserCipher;
   userId: string;
   researchId: string;
+  reportProgress?: (progress: TaskProgress) => Promise<void>;
 }) {
   const { db, cipher } = deps;
   const repository = new ResearchRepository(db);
@@ -57,6 +63,9 @@ export async function runResearchCompany(deps: {
   }
   const role = decryptOptional(opening.encryptedTitle);
 
+  const step = createNarrator(researchSteps, deps.reportProgress);
+
+  await step("searching");
   const found = await deps.ai.searchWeb({
     purpose: "company_research",
     role: "research",
@@ -71,6 +80,7 @@ export async function runResearchCompany(deps: {
     messages: [{ role: "user", content: `Research ${company}.` }],
   });
 
+  await step("picking_facts", { sources: found.sources.length });
   const { object } = await deps.ai.generateObject({
     purpose: "company_facts",
     role: "classification",

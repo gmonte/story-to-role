@@ -120,6 +120,19 @@ export class TasksRepository {
    * than `staleAfterMs` counts as dead (a worker that crashed never marks
    * its task), so a new one may start.
    */
+  /** The live progress of the latest task of `type` on a row. */
+  async latestProgress(subjectId: string, type: TaskType) {
+    const [row] = await this.tx
+      .select({ progress: tasksTable.progress })
+      .from(tasksTable)
+      .where(
+        and(eq(tasksTable.subjectId, subjectId), eq(tasksTable.type, type))
+      )
+      .orderBy(desc(tasksTable.createdAt))
+      .limit(1);
+    return row?.progress ?? null;
+  }
+
   async activeTask(subjectId: string, type: TaskType, staleAfterMs = 300_000) {
     const [row] = await this.tx
       .select({ id: tasksTable.id })

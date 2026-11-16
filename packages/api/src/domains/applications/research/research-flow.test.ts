@@ -87,7 +87,7 @@ describe("company research", () => {
     const ctx = await setup();
     const read = () =>
       ctx.research.get({ userId: ctx.user.id, openingId: ctx.opening.id });
-    expect(await read()).toEqual({ status: null, facts: [] });
+    expect(await read()).toEqual({ status: null, progress: null, facts: [] });
 
     await ctx.research.start({
       userId: ctx.user.id,

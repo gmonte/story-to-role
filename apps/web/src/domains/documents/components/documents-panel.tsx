@@ -1,6 +1,6 @@
 "use client";
 
-import { FileText, Loader2, Plus } from "lucide-react";
+import { FileText, Plus } from "lucide-react";
 
 import type {
   GenerationKind,
@@ -13,6 +13,8 @@ import { useTranslation } from "@repo/intl/use-translation";
 import { Badge } from "@repo/web/components/ui/badge";
 import { Button } from "@repo/web/components/ui/button";
 import { cn } from "@repo/web/lib/utils";
+
+import { AiAtWork } from "~/domains/workspace/components/ai-at-work";
 
 import { useDocumentLabels } from "../hooks/use-document-labels";
 import { useOpeningDocuments } from "../hooks/use-opening-documents";
@@ -82,12 +84,7 @@ export function DocumentsPanel({
         )}
       </div>
 
-      {running && (
-        <div className="bg-background flex items-center gap-2 rounded-lg border p-2.5 text-xs">
-          <Loader2 className="size-3.5 animate-spin" />
-          <GenerationProgressLabel generation={generation} />
-        </div>
-      )}
+      {running && <GenerationProgress generation={generation} />}
       {generation?.status === "failed" && (
         <p className="rounded-lg border border-red-500/40 bg-red-500/10 p-2.5 text-xs">
           {t.formatMessage({
@@ -176,33 +173,61 @@ export function DocumentsPanel({
   );
 }
 
-export function GenerationProgressLabel({
+/** A generation at work: its steps, the review round under way. */
+export function GenerationProgress({
   generation,
 }: {
   generation: { kind: GenerationKind; progress: TaskProgress | null };
 }) {
   const t = useTranslation();
   const { progress } = generation;
-  if (generation.kind === "adapt") {
-    return t.formatMessage({ defaultMessage: "Adapting resume…" });
+  if (generation.kind === "adapt" || generation.kind === "sync") {
+    return (
+      <AiAtWork
+        title={
+          generation.kind === "adapt"
+            ? t.formatMessage({ defaultMessage: "Adapting the resume" })
+            : t.formatMessage({ defaultMessage: "Syncing the languages" })
+        }
+      />
+    );
   }
-  if (generation.kind === "sync") {
-    return t.formatMessage({ defaultMessage: "Syncing languages…" });
-  }
-  switch (progress?.label) {
-    case "review_round":
-      // Step 1 drafts and the last step saves; the ones between are rounds.
-      return t.formatMessage(
+  // Step 1 drafts and the last step saves; the ones between are rounds.
+  const rounds = progress ? progress.totalSteps - 2 : 0;
+  const round = progress?.label === "review_round" ? progress.step - 1 : 0;
+  return (
+    <AiAtWork
+      title={t.formatMessage({ defaultMessage: "Writing your resume" })}
+      current={progress?.label ?? "drafting"}
+      steps={[
         {
-          defaultMessage: "Generating resume: review round {round} of {total}",
+          key: "drafting",
+          label: t.formatMessage({
+            defaultMessage: "Drafting from your approved evidence",
+          }),
         },
-        { round: progress.step - 1, total: progress.totalSteps - 2 }
-      );
-    case "saving":
-      return t.formatMessage({ defaultMessage: "Generating resume: saving" });
-    default:
-      return t.formatMessage({ defaultMessage: "Generating resume: drafting" });
-  }
+        {
+          key: "review_round",
+          label:
+            rounds > 0
+              ? t.formatMessage(
+                  {
+                    defaultMessage:
+                      "Reviewing and tightening (round {round} of {total})",
+                  },
+                  { round: Math.max(round, 1), total: rounds }
+                )
+              : t.formatMessage({ defaultMessage: "Reviewing and tightening" }),
+        },
+        {
+          key: "saving",
+          label: t.formatMessage({
+            defaultMessage: "Checking facts and saving the version",
+          }),
+        },
+      ]}
+    />
+  );
 }
 
 export function VersionChecks({ version }: { version: VersionView }) {

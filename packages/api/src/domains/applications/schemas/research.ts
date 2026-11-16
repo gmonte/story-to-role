@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+import { taskProgressSchema } from "@repo/api/domains/tasks/schemas/task";
+
 export const researchStatusSchema = z.enum(["researching", "done", "failed"]);
 export type ResearchStatus = z.infer<typeof researchStatusSchema>;
 
@@ -19,6 +21,8 @@ export type CompanyFactView = z.infer<typeof companyFactViewSchema>;
 
 export const companyResearchSchema = z.object({
   status: researchStatusSchema.nullable(),
+  // The research' live step while it runs (keys and counts, no content).
+  progress: taskProgressSchema.nullable(),
   facts: z.array(companyFactViewSchema),
 });
 export type CompanyResearch = z.infer<typeof companyResearchSchema>;

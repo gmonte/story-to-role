@@ -1,6 +1,6 @@
 "use client";
 
-import { Loader2, Plus } from "lucide-react";
+import { Plus } from "lucide-react";
 
 import { useTranslation } from "@repo/intl/use-translation";
 import { Button } from "@repo/web/components/ui/button";
@@ -8,7 +8,7 @@ import { Button } from "@repo/web/components/ui/button";
 import { useLibraryDocument } from "../hooks/use-library";
 import { useSelectedVersion } from "../hooks/use-selected-version";
 import { AdaptVersionDialog } from "./adapt-version-dialog";
-import { GenerationProgressLabel, VersionChecks } from "./documents-panel";
+import { GenerationProgress, VersionChecks } from "./documents-panel";
 import { OutdatedNotice, SyncProposal } from "./language-sync";
 import { LibraryResumeDialog } from "./library-resume-dialog";
 import { ResumeEditor } from "./resume-editor";
@@ -24,12 +24,7 @@ export function LibraryDocumentView({ documentId }: { documentId: string }) {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto p-6">
-      {running && (
-        <div className="bg-background flex items-center gap-2 self-start rounded-lg border p-2.5 text-xs">
-          <Loader2 className="size-3.5 animate-spin" />
-          <GenerationProgressLabel generation={generation} />
-        </div>
-      )}
+      {running && <GenerationProgress generation={generation} />}
       {generation?.status === "failed" && versions.length === 0 && (
         <p className="rounded-lg border border-red-500/40 bg-red-500/10 p-2.5 text-xs">
           {t.formatMessage({

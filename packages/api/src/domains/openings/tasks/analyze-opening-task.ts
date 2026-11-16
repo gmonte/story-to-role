@@ -16,9 +16,9 @@ export const analyzeOpeningTask = task({
       { db, taskId, type: "analyze_opening" },
       async ({ userId, subjectId, reportProgress }) => {
         if (!subjectId) throw new Error(`Task ${taskId} has no opening`);
-        await reportProgress({ step: 1, totalSteps: 2 });
         const { ai, cipher } = await createTaskAi({ db, userId, taskId });
         await runAnalyzeOpening({
+          reportProgress,
           db,
           ai,
           cipher,
@@ -32,7 +32,6 @@ export const analyzeOpeningTask = task({
           userId,
           openingId: subjectId,
         });
-        await reportProgress({ step: 2, totalSteps: 2 });
       }
     );
   },

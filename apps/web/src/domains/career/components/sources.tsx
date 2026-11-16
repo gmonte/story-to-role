@@ -3,7 +3,7 @@
 import { useRef, useState, type DragEvent } from "react";
 
 import { useMutation } from "@tanstack/react-query";
-import { FileUp, Trash2 } from "lucide-react";
+import { FileUp, Sparkles, Trash2 } from "lucide-react";
 
 import {
   acceptedDocumentTypes,
@@ -23,10 +23,10 @@ import {
   type CreditsShortfall,
   useOutOfCreditsToast,
 } from "~/domains/credits/components/out-of-credits-notice";
-import { RunWatcher } from "~/domains/tasks/components/run-watcher";
 import { useTRPC } from "~/tools/trpc/client";
 
 import { useRefreshCareer } from "../hooks/use-career-queries";
+import { ImportProgress } from "./import-progress";
 
 const extensions = Object.keys(typesByExtension);
 const ACCEPT = [
@@ -57,7 +57,9 @@ export function Sources({
   const refresh = useRefreshCareer();
   const showOutOfCredits = useOutOfCreditsToast();
   const input = useRef<HTMLInputElement>(null);
-  const [running, setRunning] = useState<RealtimeSubscription[]>([]);
+  const [running, setRunning] = useState<
+    Array<RealtimeSubscription & { fileName: string }>
+  >([]);
   const [dragging, setDragging] = useState(false);
 
   const remove = useMutation(
@@ -103,7 +105,7 @@ export function Sources({
     const { realtime } = (await response.json()) as {
       realtime: RealtimeSubscription;
     };
-    setRunning((current) => [...current, realtime]);
+    setRunning((current) => [...current, { ...realtime, fileName: file.name }]);
     await refresh();
   }
 
@@ -152,7 +154,7 @@ export function Sources({
     switch (document.status) {
       case "pending":
       case "processing":
-        return t.formatMessage({ defaultMessage: "Reading…" });
+        return t.formatMessage({ defaultMessage: "Reading" });
       case "processed":
         return document.kind === "truth_file"
           ? t.formatMessage({ defaultMessage: "Truth file" })
@@ -185,8 +187,15 @@ export function Sources({
               variant={
                 document.status === "rejected" ? "destructive" : "outline"
               }
+              className={reading(document) ? "gap-1" : undefined}
             >
-              {statusLabel(document)}
+              {/* Being read: the AI at work, not a still label. */}
+              {reading(document) && (
+                <Sparkles className="text-primary size-3 animate-pulse" />
+              )}
+              <span className={reading(document) ? "animate-pulse" : undefined}>
+                {statusLabel(document)}
+              </span>
             </Badge>
             {/* An import still reads its file. */}
             {!reading(document) && (
@@ -258,9 +267,10 @@ export function Sources({
         }}
       />
       {running.map((run) => (
-        <RunWatcher
+        <ImportProgress
           key={run.runId}
           {...run}
+          fileName={run.fileName}
           onDone={() => {
             setRunning((current) =>
               current.filter((r) => r.runId !== run.runId)

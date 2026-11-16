@@ -14,6 +14,7 @@ import { toast } from "@repo/web/components/ui/sonner";
 import { Textarea } from "@repo/web/components/ui/textarea";
 import { cn } from "@repo/web/lib/utils";
 
+import { AiAtWork } from "~/domains/workspace/components/ai-at-work";
 import { useTRPC } from "~/tools/trpc/client";
 
 /**
@@ -147,8 +148,8 @@ function PendingTurn({
   });
 
   return (
-    <li className="text-muted-foreground animate-pulse self-start px-4 text-sm">
-      {t.formatMessage({ defaultMessage: "Thinking…" })}
+    <li className="self-start">
+      <AiAtWork title={t.formatMessage({ defaultMessage: "Thinking" })} />
     </li>
   );
 }

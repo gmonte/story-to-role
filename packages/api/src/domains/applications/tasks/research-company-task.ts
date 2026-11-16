@@ -14,12 +14,13 @@ export const researchCompanyTask = task({
   run: async ({ taskId }: { taskId: string }) => {
     await runTask(
       { db, taskId, type: "research_company" },
-      async ({ userId, subjectId }) => {
+      async ({ userId, subjectId, reportProgress }) => {
         if (!subjectId) throw new Error(`Task ${taskId} has no research`);
         // Whatever fails, the run ends as failed: never left researching.
         try {
           const { ai, cipher } = await createTaskAi({ db, userId, taskId });
           await runResearchCompany({
+            reportProgress,
             db,
             ai,
             cipher,

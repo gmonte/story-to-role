@@ -185,6 +185,7 @@ Acceptance:
 
 - One shared "AI at work" component: live, specific narration of each step ("Found 6 positions", "Extracting achievements at Initech…"), results appearing as they are found, and motion. No static "Reading…" label.
 - Used by import (prominent in the center, saying the user can leave), fit check, company research, generation and adaptation. Tasks report meaningful steps.
+- Built: steps and counts for import, fit check, research and resume generation (keys and numbers only in Realtime metadata, worded by the interface); the shared component for every other AI wait. Later: results appearing one by one (position names, requirements) read from the database while the task runs, the import card in the chat column, and steps for adaptation and the cover letter.
 
 ### W5: Career language
 

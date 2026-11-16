@@ -16,7 +16,6 @@ import type { Storage } from "@repo/api/tools/storage/storage";
 import { CareerRepository } from "../career-repository";
 import { CareerService } from "../career-service";
 import {
-  interviewLanguageSchema,
   interviewLanguages,
   credentialKindSchema,
   credentialStatusSchema,
@@ -29,9 +28,6 @@ import { extractDocumentText } from "./extract-text";
 const contentCheckSchema = z.object({
   is_career_document: z.boolean(),
   has_confidentiality_rules: z.boolean(),
-  language: interviewLanguageSchema.describe(
-    "The language the document is written in"
-  ),
 });
 
 const yearMonth = z
@@ -213,11 +209,9 @@ export async function runImportDocument(
   if (kind !== document.kind)
     await career.updateDocument(document.id, { kind });
 
-  // Until the user chooses, the career is kept in the language of the first
-  // file they import, so its facts need no translation.
-  const language = owner.interviewLanguageSource
-    ? owner.interviewLanguage
-    : await career.adoptLanguage(owner.id, check.language, "file");
+  // Facts are kept in the career's language (the interface's when the
+  // profile was made), whatever the file's: documents can be in any.
+  const language = owner.interviewLanguage;
 
   await step("extracting");
   const known = await loadKnownFacts(deps, document.profileId);

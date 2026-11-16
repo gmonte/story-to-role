@@ -140,7 +140,7 @@ async function setup() {
       mimeType: "text/markdown",
       bytes: Buffer.from(content),
     });
-  return { db, user, career, documents, importFile, upload, timeline };
+  return { db, user, career, documents, importFile, upload, timeline, trigger };
 }
 
 const acmeA = {
@@ -431,11 +431,12 @@ describe("document import", () => {
 });
 
 describe("career language", () => {
-  it("adopts the first file's language until something set one", async () => {
+  it("keeps facts in the career's language, whatever the file's", async () => {
     const ctx = await setup();
+    // The profile took the interface's language (English here).
     await ctx.importFile(
       resumeA,
-      { positions: [], credentials: [], exclusions: [] },
+      { positions: [acmeA], credentials: [], exclusions: [] },
       "resume",
       true,
       undefined,
@@ -443,18 +444,14 @@ describe("career language", () => {
     );
 
     const timeline = await ctx.timeline();
-    expect(timeline.profile.interviewLanguage).toBe("pt-BR");
-
-    // A second file in another language doesn't move it again.
-    await ctx.importFile(
-      resumeB,
-      { positions: [], credentials: [], exclusions: [] },
-      "resume",
-      true,
-      undefined,
-      "en-US"
+    expect(timeline.profile.interviewLanguage).toBe("en-US");
+    const profile = await new CareerRepository(ctx.db).findProfileByUserId(
+      ctx.user.id
     );
-    expect((await ctx.timeline()).profile.interviewLanguage).toBe("pt-BR");
+    const interview = new InterviewRepository(ctx.db);
+    const [session] = await interview.listSessions(profile.id);
+    const drafts = await interview.listDrafts(session.id);
+    expect(drafts.map((draft) => draft.language)).toEqual(["en-US"]);
   });
 
   it("keeps the language the user chose", async () => {
@@ -477,6 +474,17 @@ describe("career language", () => {
 });
 
 describe("facts stated again", () => {
+  it("queues a user's imports one at a time", async () => {
+    const ctx = await setup();
+    await ctx.upload();
+    // The import task caps one run per key: the user's.
+    const [type, , options] = ctx.trigger.trigger.mock.calls.at(
+      -1
+    ) as unknown as [string, unknown, unknown];
+    expect(type).toBe("import_document");
+    expect(options).toEqual({ concurrencyKey: ctx.user.id });
+  });
+
   it("folds a fact another file already brought into its draft", async () => {
     const ctx = await setup();
     await ctx.importFile(resumeA, {

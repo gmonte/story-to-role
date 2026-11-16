@@ -77,17 +77,9 @@ export async function runCareerChatTurn(
   const userId = profile.userId;
   const message = lastText(input.messages, "user")?.trim() ?? "";
   // The conversation follows the user's language; the facts stay in the
-  // career's, which the first message sets when nothing has.
-  const written = detectLanguage(message);
-  const language =
-    written && !profile.interviewLanguageSource
-      ? await new CareerRepository(db).adoptLanguage(
-          profile.id,
-          written,
-          "message"
-        )
-      : profile.interviewLanguage;
-  const replyLanguage = written ?? language;
+  // career's.
+  const language = profile.interviewLanguage;
+  const replyLanguage = detectLanguage(message) ?? language;
 
   const fixed = (text: string) => ({
     result: deps.streamText({

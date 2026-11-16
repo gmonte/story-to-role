@@ -7,8 +7,13 @@ import type { TaskProgress } from "@repo/api/domains/tasks/schemas/task";
  * instead of the SDK. Payloads are task row ids, never content (ADR 0003).
  */
 export const triggerClient = {
-  async trigger(taskIdentifier: string, payload: { taskId: string }) {
-    const handle = await tasks.trigger(taskIdentifier, payload);
+  async trigger(
+    taskIdentifier: string,
+    payload: { taskId: string },
+    // Runs sharing a key queue behind each other where the task caps it.
+    options?: { concurrencyKey?: string }
+  ) {
+    const handle = await tasks.trigger(taskIdentifier, payload, options);
     // The handle carries a token that reads only this run, which even a
     // trigger-only API key can hand out.
     return { runId: handle.id, accessToken: handle.publicAccessToken };

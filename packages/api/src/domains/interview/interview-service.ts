@@ -2,6 +2,7 @@ import { TRPCError } from "@trpc/server";
 
 import { currentPlan } from "@repo/api/domains/credits/credit-plan";
 import { CareerRepository } from "@repo/api/domains/career/career-repository";
+import { passageAround } from "@repo/api/domains/career/documents/run-import-document";
 import { recordCareerEvent } from "@repo/api/domains/career/record-career-event";
 import type { ScriptKind } from "@repo/api/domains/career/schemas/career";
 import { getUserCipher } from "@repo/api/domains/encryption/user-cipher";
@@ -604,10 +605,25 @@ export class InterviewService {
       const items = await new EvidenceRepository(tx).listSensitiveItems(
         profile.id
       );
+      // An item imported before passages were kept finds its own in the
+      // files' stored text.
+      const texts = items.every((item) => item.encryptedContext)
+        ? []
+        : (await new CareerRepository(tx).listDocuments(profile.id)).flatMap(
+            (row) =>
+              row.encryptedText ? [cipher.decrypt(row.encryptedText)] : []
+          );
+      const passageOf = (original: string) =>
+        texts
+          .map((text) => passageAround(text, original))
+          .find((passage) => passage !== null) ?? null;
       return items.map((item) => ({
         id: item.id,
         kind: item.kind,
         original: cipher.decrypt(item.encryptedOriginal),
+        context: item.encryptedContext
+          ? cipher.decrypt(item.encryptedContext)
+          : passageOf(cipher.decrypt(item.encryptedOriginal)),
         choice: item.choice,
         generalized: item.encryptedGeneralized
           ? cipher.decrypt(item.encryptedGeneralized)

@@ -85,6 +85,8 @@ export const sensitiveItemViewSchema = z.object({
   id: z.uuid(),
   kind: sensitiveItemKindSchema,
   original: z.string(),
+  // The passage it appears in, when known.
+  context: z.string().nullable(),
   choice: sensitivityChoiceSchema.nullable(),
   generalized: z.string().nullable(),
   reviewed: z.boolean(),

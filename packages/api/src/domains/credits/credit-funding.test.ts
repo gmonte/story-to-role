@@ -145,6 +145,27 @@ describe("own keys and funding", () => {
     );
   });
 
+  it("takes no credit for what no one asked for: the user's key, else ours", async () => {
+    const ctx = await setup();
+    // No credits at all: still runs, on StoryToRole's key.
+    const free = await ctx.tasks.start({
+      userId: ctx.user.id,
+      type: "understand_session",
+    });
+    expect(await ctx.funding(free.task.id)).toBe("credits");
+
+    await ctx.courtesy(100);
+    await ctx.keys.save({ userId: ctx.user.id, apiKey });
+    const keyed = await ctx.tasks.start({
+      userId: ctx.user.id,
+      type: "understand_session",
+    });
+    expect(await ctx.funding(keyed.task.id)).toBe("key");
+    expect(await spendableTotal(ctx.db, ctx.user.id, "any", new Date())).toBe(
+      100
+    );
+  });
+
   it("spends a subscriber's plan credits before their key", async () => {
     const ctx = await setup();
     await ctx.subscribe();

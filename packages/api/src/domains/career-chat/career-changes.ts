@@ -6,7 +6,6 @@ import type {
 } from "ai";
 
 import { resolveAiFunding } from "@repo/api/domains/ai/ai-funding";
-import { AiKeysRepository } from "@repo/api/domains/ai/ai-keys-repository";
 import { AiUsageRepository } from "@repo/api/domains/ai/ai-usage-repository";
 import { anthropicModels } from "@repo/api/domains/ai/providers/anthropic-package";
 import { CareerEventsRepository } from "@repo/api/domains/career/career-events-repository";
@@ -14,7 +13,7 @@ import { CareerRepository } from "@repo/api/domains/career/career-repository";
 import { CareerService } from "@repo/api/domains/career/career-service";
 import { describeTimelineForPrompt } from "@repo/api/domains/career/describe-timeline";
 import { detectLanguage } from "@repo/api/domains/career/detect-language";
-import { currentPlan } from "@repo/api/domains/credits/credit-plan";
+import { decideFunding } from "@repo/api/domains/credits/credit-funding";
 import { getUserCipher } from "@repo/api/domains/encryption/user-cipher";
 import { loadSensitiveFilter } from "@repo/api/domains/evidence/sensitive/load-sensitive-filter";
 import type { DbClient } from "@repo/api/tools/db-client";
@@ -88,18 +87,19 @@ export async function reactToCareerChanges(
   const { db } = deps;
   const { pending } = input;
   const cipher = await getUserCipher(db, pending.userId);
-  const now = new Date();
-  const [key, plan] = await Promise.all([
-    new AiKeysRepository(db).findByUserId(pending.userId),
-    currentPlan(db, pending.userId, now),
-  ]);
   const { funding, languageModel } = await resolveAiFunding({
     db,
     userId: pending.userId,
     cipher,
-    funding:
-      key?.status === "active" && plan.kind !== "free" ? "key" : "credits",
+    // Free to the user: no cap, so their key or StoryToRole's.
+    funding: await decideFunding(db, {
+      userId: pending.userId,
+      cap: 0,
+      scope: "any",
+      now: new Date(),
+    }),
   });
+
   const sensitiveFilter = await loadSensitiveFilter({
     db,
     cipher,

@@ -25,6 +25,8 @@ A user's **plan** (what they can use) is separate from their **AI funding** (who
 2. The user's own key, when there is one.
 3. Stored credits (packs and welcome credits), only once both of the above are exhausted, and only after the user confirms ("Finish with credits"); never silently.
 
+Calls the user didn't ask for cost them nothing: the "What I understood" summary of a review and the career chat's own reactions (to an import ending or a change on the side panel; an import's reaction is part of the import). They run on the user's key on a paid plan when there is one, otherwise StoryToRole pays; no credit is reserved or taken.
+
 A subscriber who adds a key mid-month keeps spending that month's credits first; the key takes over when they run out. The subscription switches to the key price at the next renewal, when no new monthly credits are granted; removing the key switches back at the next renewal as well.
 
 ## Subscription

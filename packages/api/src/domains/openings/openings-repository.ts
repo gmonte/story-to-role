@@ -22,6 +22,7 @@ import {
   openingTermsTable,
   openingsTable,
 } from "./db/openings-tables";
+import type { OpeningStatus } from "./schemas/opening";
 
 type Insert<T extends { $inferInsert: unknown }> = T["$inferInsert"];
 
@@ -66,11 +67,12 @@ export class OpeningsRepository {
     return row;
   }
 
-  /** The tracker's status of the openings that have an application. */
+  /** The application of each opening that has one, with its status. */
   async applicationStatuses(openingIds: string[]) {
     if (openingIds.length === 0) return [];
     return this.tx
       .select({
+        id: applicationsTable.id,
         openingId: applicationsTable.openingId,
         status: applicationsTable.status,
       })
@@ -84,6 +86,24 @@ export class OpeningsRepository {
       .from(openingsTable)
       .where(eq(openingsTable.profileId, profileId))
       .orderBy(desc(openingsTable.createdAt));
+  }
+
+  /** Moves the status only if it is still `from`. Whether it moved. */
+  async moveStatus(
+    openingId: string,
+    input: { from: OpeningStatus; to: OpeningStatus }
+  ) {
+    const moved = await this.tx
+      .update(openingsTable)
+      .set({ status: input.to })
+      .where(
+        and(
+          eq(openingsTable.id, openingId),
+          eq(openingsTable.status, input.from)
+        )
+      )
+      .returning({ id: openingsTable.id });
+    return moved.length > 0;
   }
 
   async updateOpening(

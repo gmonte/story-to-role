@@ -37,12 +37,11 @@ import { toast } from "@repo/web/components/ui/sonner";
 import { useDocumentLabels } from "~/domains/documents/hooks/use-document-labels";
 import { useOpeningDocuments } from "~/domains/documents/hooks/use-opening-documents";
 import { useTRPC } from "~/tools/trpc/client";
+import { useOpening } from "~/domains/openings/hooks/use-opening";
 
-import { useRefreshTracker, useTracker } from "../hooks/use-tracker";
+import { useRefreshTracker } from "../hooks/use-tracker";
 import { useTrackerLabels } from "../hooks/use-tracker-labels";
-
-/** Today as an `<input type="date">` value, in the user's time zone. */
-const today = () => new Date().toLocaleDateString("en-CA");
+import { dayToDate, today } from "../utils/dates";
 
 /**
  * The opening's application in the tracker (tracker spec): its status,
@@ -50,15 +49,12 @@ const today = () => new Date().toLocaleDateString("en-CA");
  */
 export function ApplicationTracker({ openingId }: { openingId: string }) {
   const trpc = useTRPC();
-  const tracker = useTracker();
-  const summary = tracker.data?.find(
-    (application) => application.openingId === openingId
-  );
+  const applicationId = useOpening(openingId).data?.applicationId;
   const detail = useQuery({
-    ...trpc.tracker.get.queryOptions({ applicationId: summary?.id ?? "" }),
-    enabled: !!summary,
+    ...trpc.tracker.get.queryOptions({ applicationId: applicationId ?? "" }),
+    enabled: !!applicationId,
   });
-  if (!summary || !detail.data) return null;
+  if (!applicationId || !detail.data) return null;
   return (
     <TrackerBlock
       key={detail.data.id}
@@ -87,9 +83,12 @@ function TrackerBlock({
   const deleteEvent = useMutation(
     trpc.tracker.deleteEvent.mutationOptions({ onSuccess: refresh, onError })
   );
-  // "Applied" with documents goes through the dialog that records them.
+  // "No response" only comes with time; "Applied" with documents goes
+  // through the dialog that records what was sent.
   const statuses = applicationStatusSchema.options.filter(
-    (status) => detail.external || status !== "applied"
+    (status) =>
+      status === detail.status ||
+      (status !== "no_response" && (detail.external || status !== "applied"))
   );
 
   return (
@@ -336,7 +335,7 @@ function MarkAppliedForm({
         <DialogDescription>
           {t.formatMessage({
             defaultMessage:
-              "Check what you sent. Each one is recorded exactly as it is now; you can keep editing the documents.",
+              "Check what you sent. Each one is recorded as it was on that day; you can keep editing the documents.",
           })}
         </DialogDescription>
       </DialogHeader>
@@ -385,8 +384,7 @@ function MarkAppliedForm({
             mark.mutate({
               applicationId,
               versionIds: selected,
-              appliedAt:
-                date === today() ? new Date() : new Date(`${date}T12:00:00`),
+              appliedAt: dayToDate(date),
             })
           }
         >

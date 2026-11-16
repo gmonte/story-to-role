@@ -22,7 +22,8 @@ export const openingSummarySchema = z.object({
   company: z.string().nullable(),
   title: z.string().nullable(),
   band: fitBandSchema.nullable(),
-  // The tracker's status once the opening has an application.
+  // The tracker's application, once the opening has one.
+  applicationId: z.uuid().nullable(),
   applicationStatus: applicationStatusSchema.nullable(),
   createdAt: z.date(),
 });

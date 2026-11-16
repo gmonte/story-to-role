@@ -29,7 +29,7 @@ import {
 import { BrandLockup } from "~/domains/brand/components/brand-lockup";
 import { BrandMark } from "~/domains/brand/components/brand-mark";
 import { CreditMeter } from "~/domains/credits/components/credit-meter";
-import { useReminders } from "~/domains/tracker/hooks/use-tracker";
+import { useReminders } from "~/domains/applications/hooks/use-tracker";
 import { UserButton } from "~/domains/user/components/user-button";
 import { useTRPC } from "~/tools/trpc/client";
 

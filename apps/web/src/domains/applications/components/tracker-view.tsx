@@ -7,7 +7,7 @@ import { Plus } from "lucide-react";
 import Link from "next/link";
 
 import {
-  type ApplicationStatus,
+  applicationStatusSchema,
   closedStatuses,
 } from "@repo/api/domains/applications/schemas/application";
 import type {
@@ -29,12 +29,9 @@ import { useTrackerLabels } from "../hooks/use-tracker-labels";
 import { ExternalApplicationDialog } from "./external-application-dialog";
 import { ReminderList } from "./reminder-list";
 
-const openStatuses: ApplicationStatus[] = [
-  "in_preparation",
-  "applied",
-  "in_process",
-  "offer",
-];
+const openStatuses = applicationStatusSchema.options.filter(
+  (status) => !closedStatuses.includes(status)
+);
 
 /**
  * The tracker (tracker spec): every application from its first document

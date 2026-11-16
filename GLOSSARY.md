@@ -33,8 +33,16 @@ A target the user may apply to at one company: a posted vacancy, or a company th
 _Avoid_: Job, vacancy, role, posting, target
 
 **Application**:
-The user's pursuit of one opening, which starts when its first document is generated or copied and ends hired, rejected or withdrawn.
+The user's pursuit of one opening, which starts when its first document is generated or copied (or is registered by hand as an external application) and closes hired, rejected, withdrawn or with no response.
 _Avoid_: Candidacy, job, tracker entry
+
+**External application**:
+An application the user made outside StoryToRole and registered by hand, with no documents and no credits spent; it stops being external once a document exists for it.
+_Avoid_: Manual entry, imported application
+
+**Event**:
+A dated entry on an application's timeline ("HR interview on Nov 20"), recorded instead of adding statuses.
+_Avoid_: Step, stage, activity
 
 **Fit check**:
 A quick analysis, run automatically when an opening is added and shown as a hint, of whether the opening makes sense for the user's skills.

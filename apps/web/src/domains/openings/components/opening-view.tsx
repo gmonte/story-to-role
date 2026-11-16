@@ -147,7 +147,7 @@ export function OpeningView({ openingId }: { openingId: string }) {
                 className="text-primary flex items-center gap-1 self-start hover:underline"
               >
                 <ExternalLink className="size-3.5" />
-                {t.formatMessage({ defaultMessage: "Open the posting" })}
+                {t.formatMessage({ defaultMessage: "Open the opening’s page" })}
               </a>
             )}
             {data.description || data.sourceUrl ? (

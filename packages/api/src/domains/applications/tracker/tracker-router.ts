@@ -142,7 +142,7 @@ export const trackerRouter = createTRPCRouter({
       z.object({
         company: z.string().trim().min(1).max(200),
         title: z.string().trim().min(1).max(200),
-        link: z.url().max(2000).optional(),
+        link: z.url().max(2000),
         description: z.string().max(20_000).optional(),
         status: applicationStatusSchema,
         appliedAt: z.coerce.date().optional(),

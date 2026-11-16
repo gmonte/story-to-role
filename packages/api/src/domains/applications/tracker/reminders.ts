@@ -5,8 +5,9 @@ import {
 import type { Reminder, TrackerSettings } from "../schemas/tracker";
 
 const day = 24 * 3600 * 1000;
-// "Your interview is tomorrow": events within this window are reminded.
-const upcomingWindow = day;
+// "Your interview is tomorrow": events within this window are reminded,
+// so a morning interview shows the evening before.
+const upcomingWindow = 1.5 * day;
 // The warning comes this many days before "No response" closes it.
 const noResponseWarningDays = 3;
 

@@ -139,6 +139,8 @@ export class OpeningsService {
         title: open(cipher, row.encryptedTitle),
         band:
           fitChecks.find((check) => check.openingId === row.id)?.band ?? null,
+        applicationId:
+          applications.find((item) => item.openingId === row.id)?.id ?? null,
         applicationStatus:
           applications.find((item) => item.openingId === row.id)?.status ??
           null,
@@ -204,8 +206,7 @@ export class OpeningsService {
         company: open(cipher, row.encryptedCompany),
         title: open(cipher, row.encryptedTitle),
         band: fitCheck?.band ?? null,
-        applicationStatus:
-          (await openings.applicationStatuses([row.id]))[0]?.status ?? null,
+        ...(await applicationOf(openings, row.id)),
         createdAt: row.createdAt,
         description: open(cipher, row.encryptedDescription),
         notes: open(cipher, row.encryptedNotes),
@@ -236,21 +237,21 @@ export class OpeningsService {
       userId: input.userId,
       type: "analyze_opening",
     });
-    await new OpeningsRepository(this.db).updateOpening(row.id, {
-      status: "processing",
+    // Only one request moves it on: a second click analyzes nothing twice.
+    const claimed = await new OpeningsRepository(this.db).moveStatus(row.id, {
+      from: "external",
+      to: "processing",
     });
-    try {
-      return await this.tasks.start({
-        userId: input.userId,
-        type: "analyze_opening",
-        subjectId: row.id,
-      });
-    } catch (error) {
-      await new OpeningsRepository(this.db).updateOpening(row.id, {
-        status: "external",
-      });
-      throw error;
-    }
+    if (!claimed) throw new TRPCError({ code: "CONFLICT" });
+    return this.tasks.startOrUndo(
+      { userId: input.userId, type: "analyze_opening", subjectId: row.id },
+      async () => {
+        await new OpeningsRepository(this.db).moveStatus(row.id, {
+          from: "processing",
+          to: "external",
+        });
+      }
+    );
   }
 
   /** The user can close an opening (the company has no vacancies…) and reopen it. */
@@ -333,4 +334,13 @@ export class OpeningsService {
       });
     });
   }
+}
+
+/** The opening's application in the tracker, if it has one. */
+async function applicationOf(openings: OpeningsRepository, openingId: string) {
+  const [application] = await openings.applicationStatuses([openingId]);
+  return {
+    applicationId: application?.id ?? null,
+    applicationStatus: application?.status ?? null,
+  };
 }

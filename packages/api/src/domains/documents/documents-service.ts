@@ -252,6 +252,9 @@ export class DocumentsService {
     const versions = await repository.listVersions([document.id]);
     const generation = await repository.latestGeneration(document.id);
     const outdated = await outdatedVersions(repository, cipher, versions);
+    const sent = await repository.submissionsForVersions(
+      versions.map((version) => version.id)
+    );
     const views: VersionView[] = [];
     for (const version of versions) {
       const latest = await repository.latestSnapshot(version.id);
@@ -270,6 +273,7 @@ export class DocumentsService {
           : null,
         snapshot: summary(latest),
         snapshotCount: await repository.countSnapshots(version.id),
+        sent: sent.find((row) => row.versionId === version.id) ?? null,
         content,
         // The rendered PDF's real length once it exists; an estimate before.
         pages:
@@ -623,7 +627,13 @@ export class DocumentsService {
       input.userId,
       input.versionId
     );
-    return (await repository.listSnapshots(version.id)).map(summary);
+    const sent = await repository.submissionsForVersions([version.id]);
+    return (await repository.listSnapshots(version.id)).map((snapshot) =>
+      summary(
+        snapshot,
+        sent.find((row) => row.snapshotId === snapshot.id)?.sentAt ?? null
+      )
+    );
   }
 
   /** One snapshot's content, to show or compare an old change. */
@@ -738,14 +748,18 @@ export class DocumentsService {
   }
 }
 
-function summary(snapshot: {
-  id: string;
-  sequence: number;
-  origin: SnapshotSummary["origin"];
-  author: SnapshotSummary["author"];
-  createdAt: Date;
-}): SnapshotSummary {
+function summary(
+  snapshot: {
+    id: string;
+    sequence: number;
+    origin: SnapshotSummary["origin"];
+    author: SnapshotSummary["author"];
+    createdAt: Date;
+  },
+  sentAt: Date | null = null
+): SnapshotSummary {
   return {
+    sentAt,
     id: snapshot.id,
     sequence: snapshot.sequence,
     origin: snapshot.origin,

@@ -33,8 +33,8 @@ import { useTRPC } from "~/tools/trpc/client";
 
 import { useRefreshTracker } from "../hooks/use-tracker";
 import { useTrackerLabels } from "../hooks/use-tracker-labels";
+import { dayToDate, today } from "../utils/dates";
 
-const today = () => new Date().toLocaleDateString("en-CA");
 const statuses: ApplicationStatus[] = [
   "applied",
   "in_process",
@@ -54,7 +54,7 @@ export function ExternalApplicationDialog({ trigger }: { trigger: ReactNode }) {
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>{trigger}</DialogTrigger>
       <DialogContent>
-        {/* Mounted per opening: the form starts empty each time. */}
+        {/* Mounted each time it opens: the form starts empty. */}
         <ExternalApplicationForm onDone={() => setOpen(false)} />
       </DialogContent>
     </Dialog>
@@ -92,11 +92,10 @@ function ExternalApplicationForm({ onDone }: { onDone: () => void }) {
         create.mutate({
           company,
           title,
-          link: link.trim() ? link.trim() : undefined,
+          link: link.trim(),
           description: description.trim() ? description : undefined,
           status,
-          appliedAt:
-            date === today() ? new Date() : new Date(`${date}T12:00:00`),
+          appliedAt: dayToDate(date),
         });
       }}
     >
@@ -141,11 +140,12 @@ function ExternalApplicationForm({ onDone }: { onDone: () => void }) {
       </div>
       <div className="grid gap-1.5">
         <Label htmlFor="external-link">
-          {t.formatMessage({ defaultMessage: "Link (optional)" })}
+          {t.formatMessage({ defaultMessage: "Link" })}
         </Label>
         <Input
           id="external-link"
           type="url"
+          required
           value={link}
           onChange={(event) => setLink(event.target.value)}
         />

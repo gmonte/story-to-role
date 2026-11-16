@@ -15,7 +15,10 @@ import {
   dismissedRemindersTable,
   trackerSettingsTable,
 } from "../db/tracker-tables";
-import { awaitingStatuses } from "../schemas/application";
+import {
+  type ApplicationStatus,
+  awaitingStatuses,
+} from "../schemas/application";
 
 type Insert<T extends { $inferInsert: unknown }> = T["$inferInsert"];
 
@@ -64,6 +67,33 @@ export class TrackerRepository {
       .values(row)
       .returning();
     return inserted;
+  }
+
+  /**
+   * Changes the status only if it is still `from` (and, for the automatic
+   * close, nothing happened since `quietBefore`): a concurrent change wins
+   * instead of being overwritten. Whether it changed.
+   */
+  async transitionStatus(input: {
+    applicationId: string;
+    from: ApplicationStatus;
+    changes: Partial<Insert<typeof applicationsTable>>;
+    quietBefore?: Date;
+  }) {
+    const changed = await this.tx
+      .update(applicationsTable)
+      .set(input.changes)
+      .where(
+        and(
+          eq(applicationsTable.id, input.applicationId),
+          eq(applicationsTable.status, input.from),
+          input.quietBefore
+            ? lt(applicationsTable.lastActivityAt, input.quietBefore)
+            : undefined
+        )
+      )
+      .returning({ id: applicationsTable.id });
+    return changed.length > 0;
   }
 
   async updateApplication(
@@ -137,12 +167,19 @@ export class TrackerRepository {
     return deleted.length > 0;
   }
 
-  /** The application's versions with their latest snapshot. */
-  applicationVersions(applicationId: string) {
+  /**
+   * The application's versions with the snapshot each had at `asOf` (the
+   * day it was sent); a version born later offers its first one.
+   */
+  applicationVersions(applicationId: string, asOf: Date) {
+    const asOfText = asOf.toISOString();
     return this.tx
       .select({
         versionId: documentVersionsTable.id,
-        snapshotId: sql<string>`(select ${documentSnapshotsTable.id} from ${documentSnapshotsTable} where ${documentSnapshotsTable.versionId} = ${documentVersionsTable.id} order by ${documentSnapshotsTable.sequence} desc limit 1)`,
+        snapshotId: sql<string>`coalesce(
+          (select ${documentSnapshotsTable.id} from ${documentSnapshotsTable} where ${documentSnapshotsTable.versionId} = ${documentVersionsTable.id} and ${documentSnapshotsTable.createdAt} <= ${asOfText}::timestamptz order by ${documentSnapshotsTable.sequence} desc limit 1),
+          (select ${documentSnapshotsTable.id} from ${documentSnapshotsTable} where ${documentSnapshotsTable.versionId} = ${documentVersionsTable.id} order by ${documentSnapshotsTable.sequence} asc limit 1)
+        )`,
       })
       .from(documentVersionsTable)
       .innerJoin(
@@ -157,6 +194,13 @@ export class TrackerRepository {
   ) {
     if (rows.length === 0) return;
     await this.tx.insert(applicationSubmissionsTable).values(rows);
+  }
+
+  /** "Applied" undone: nothing was sent after all. */
+  async deleteSubmissions(applicationId: string) {
+    await this.tx
+      .delete(applicationSubmissionsTable)
+      .where(eq(applicationSubmissionsTable.applicationId, applicationId));
   }
 
   listSubmissions(applicationId: string) {
@@ -222,6 +266,7 @@ export class TrackerRepository {
       .select({
         id: applicationsTable.id,
         status: applicationsTable.status,
+        noResponseDays: sql<number>`coalesce(${trackerSettingsTable.noResponseDays}, 30)::int`,
       })
       .from(applicationsTable)
       .leftJoin(

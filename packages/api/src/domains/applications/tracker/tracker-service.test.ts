@@ -78,16 +78,63 @@ describe("tracker", () => {
     });
   });
 
-  it("stops being external once a document is made for it", async () => {
+  it("stops being external once a document exists, not when one starts", async () => {
     const ctx = await setup();
     const { openingId } = await ctx.external();
-
-    await new DocumentsRepository(ctx.db).findOrInsertApplication({
+    const documents = new DocumentsRepository(ctx.db);
+    const application = await documents.findOrInsertApplication({
       profileId: ctx.profile.id,
       openingId,
     });
+    expect((await ctx.tracker.list(ctx.user.id, now))[0].external).toBe(true);
+
+    const document = await documents.findOrInsertApplicationDocument({
+      profileId: ctx.profile.id,
+      applicationId: application.id,
+      kind: "resume",
+    });
+    const version = await documents.insertVersion({
+      documentId: document.id,
+      language: "en-US",
+    });
+    await documents.insertSnapshot({
+      versionId: version.id,
+      sequence: 1,
+      origin: "generated",
+      author: "ai",
+      encryptedContent: "x",
+    });
 
     expect((await ctx.tracker.list(ctx.user.id, now))[0].external).toBe(false);
+  });
+
+  it("never sets No response by hand", async () => {
+    const ctx = await setup();
+    const { applicationId } = await ctx.external();
+    await expect(
+      ctx.tracker.setStatus({
+        userId: ctx.user.id,
+        applicationId,
+        status: "no_response",
+      })
+    ).rejects.toMatchObject({ code: "BAD_REQUEST" });
+  });
+
+  it("keeps an application with an interview booked ahead open", async () => {
+    const ctx = await setup();
+    const { applicationId } = await ctx.external({
+      appliedAt: new Date(now.getTime() - 20 * day),
+    });
+    await ctx.tracker.addEvent({
+      userId: ctx.user.id,
+      applicationId,
+      occurredAt: new Date(now.getTime() + 25 * day),
+      text: "Final interview",
+      now,
+    });
+
+    const later = new Date(now.getTime() + 40 * day);
+    expect(await ctx.tracker.closeUnanswered(later)).toEqual({ closed: 0 });
   });
 
   it("records the exact snapshot of each version sent", async () => {
@@ -135,6 +182,14 @@ describe("tracker", () => {
       versionIds: [version.id],
       now,
     });
+    // Applied already: it can't be marked again.
+    await expect(
+      ctx.tracker.markApplied({
+        userId: ctx.user.id,
+        applicationId: application.id,
+        versionIds: [version.id],
+      })
+    ).rejects.toMatchObject({ code: "BAD_REQUEST" });
     // Editing afterwards adds a snapshot; the sent one stays recorded.
     await documents.insertSnapshot({
       versionId: version.id,
@@ -156,6 +211,19 @@ describe("tracker", () => {
         documentKind: "resume",
       }),
     ]);
+
+    // Marked by mistake: going back to preparation forgets what was sent.
+    await ctx.tracker.setStatus({
+      userId: ctx.user.id,
+      applicationId: application.id,
+      status: "in_preparation",
+    });
+    const undone = await ctx.tracker.get({
+      userId: ctx.user.id,
+      applicationId: application.id,
+    });
+    expect(undone.submissions).toEqual([]);
+    expect(undone.appliedAt).toBeNull();
   });
 
   it("closes as No response after the set days and reopens with any event", async () => {

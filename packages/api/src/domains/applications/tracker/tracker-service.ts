@@ -18,6 +18,41 @@ import type {
 import { computeReminders } from "./reminders";
 import { TrackerRepository } from "./tracker-repository";
 
+const day = 24 * 3600 * 1000;
+
+const latest = (a: Date, b: Date) => (a > b ? a : b);
+
+/** The end of a sent day, or now when it is today. */
+const endOfDay = (date: Date, now: Date) => {
+  const end = new Date(date);
+  end.setUTCHours(23, 59, 59, 999);
+  return end < now ? end : now;
+};
+
+/** What an external application can start as: it was already sent. */
+const externalStatuses: ApplicationStatus[] = [
+  "applied",
+  "in_process",
+  "offer",
+  "hired",
+  "rejected",
+  "withdrawn",
+];
+
+/**
+ * Whether the user may move an application to a status by hand: "No
+ * response" is only set by time (tracker spec), and "Applied" with
+ * documents goes through markApplied, which records what was sent.
+ */
+function manualStatus(
+  application: { external: boolean },
+  status: ApplicationStatus
+) {
+  if (status === "no_response") return false;
+  if (status === "applied") return application.external;
+  return true;
+}
+
 const defaultSettings: TrackerSettings = {
   remindersEnabled: true,
   followUpDays: 10,
@@ -120,10 +155,18 @@ export class TrackerService {
     const profile = await this.requireProfile(input.userId);
     await this.db.transaction(async (tx) => {
       const row = await this.requireApplication(tx, profile.id, input);
-      if (input.status === "applied" && !row.application.external) {
+      const { application } = row;
+      if (input.status === application.status) return;
+      if (!manualStatus(application, input.status)) {
         throw new TRPCError({ code: "BAD_REQUEST" });
       }
-      if (input.status === row.application.status) return;
+      // "Marking applied by mistake is undone by changing the status back"
+      // (resume spec): nothing was sent after all.
+      if (input.status === "in_preparation") {
+        const repository = new TrackerRepository(tx);
+        await repository.deleteSubmissions(application.id);
+        await repository.updateApplication(application.id, { appliedAt: null });
+      }
       const cipher = await getUserCipher(tx, input.userId);
       await this.changeStatus(tx, {
         applicationId: row.application.id,
@@ -143,7 +186,7 @@ export class TrackerService {
 
   /**
    * "Applied" (tracker spec): records the exact snapshot of each version
-   * sent, as it is now; the documents stay editable.
+   * sent (the one it had that day); the documents stay editable.
    */
   async markApplied(input: {
     userId: string;
@@ -159,7 +202,14 @@ export class TrackerService {
     await this.db.transaction(async (tx) => {
       const repository = new TrackerRepository(tx);
       const row = await this.requireApplication(tx, profile.id, input);
-      const versions = await repository.applicationVersions(row.application.id);
+      if (row.application.status !== "in_preparation") {
+        throw new TRPCError({ code: "BAD_REQUEST" });
+      }
+      // The snapshot each version had that day: what was sent.
+      const versions = await repository.applicationVersions(
+        row.application.id,
+        endOfDay(appliedAt, now)
+      );
       const sent = versions.filter(
         (version) =>
           input.versionIds.includes(version.versionId) && version.snapshotId
@@ -167,14 +217,7 @@ export class TrackerService {
       if (sent.length !== input.versionIds.length || sent.length === 0) {
         throw new TRPCError({ code: "BAD_REQUEST" });
       }
-      await repository.insertSubmissions(
-        sent.map((version) => ({
-          applicationId: row.application.id,
-          versionId: version.versionId,
-          snapshotId: version.snapshotId,
-        }))
-      );
-      await this.changeStatus(tx, {
+      const changed = await this.changeStatus(tx, {
         applicationId: row.application.id,
         from: row.application.status,
         to: "applied",
@@ -182,6 +225,14 @@ export class TrackerService {
         occurredAt: appliedAt,
         appliedAt,
       });
+      if (!changed) throw new TRPCError({ code: "CONFLICT" });
+      await repository.insertSubmissions(
+        sent.map((version) => ({
+          applicationId: row.application.id,
+          versionId: version.versionId,
+          snapshotId: version.snapshotId,
+        }))
+      );
     });
   }
 
@@ -217,11 +268,12 @@ export class TrackerService {
           from: "no_response",
           to: before,
           now,
+          activityAt: latest(now, input.occurredAt),
         });
         return;
       }
       await repository.updateApplication(row.application.id, {
-        lastActivityAt: now,
+        lastActivityAt: latest(now, input.occurredAt),
       });
     });
   }
@@ -250,7 +302,7 @@ export class TrackerService {
     userId: string;
     company: string;
     title: string;
-    link?: string;
+    link: string;
     description?: string;
     status: ApplicationStatus;
     appliedAt?: Date;
@@ -258,7 +310,7 @@ export class TrackerService {
   }) {
     const now = input.now ?? new Date();
     const appliedAt = input.appliedAt ?? now;
-    if (appliedAt > now || input.status === "in_preparation") {
+    if (appliedAt > now || !externalStatuses.includes(input.status)) {
       throw new TRPCError({ code: "BAD_REQUEST" });
     }
     const profile = await this.requireProfile(input.userId);
@@ -333,19 +385,29 @@ export class TrackerService {
    */
   async closeUnanswered(now = new Date()) {
     const stale = await new TrackerRepository(this.db).unanswered(now);
+    let closed = 0;
     for (const application of stale) {
-      await this.db.transaction((tx) =>
+      const changed = await this.db.transaction((tx) =>
         this.changeStatus(tx, {
           applicationId: application.id,
           from: application.status,
           to: "no_response",
           now,
+          // Something that happened meanwhile keeps it open.
+          quietBefore: new Date(
+            now.getTime() - application.noResponseDays * day
+          ),
         })
       );
+      if (changed) closed += 1;
     }
-    return { closed: stale.length };
+    return { closed };
   }
 
+  /**
+   * Moves the status if it is still `from` and records it on the timeline;
+   * a concurrent change wins. Whether it moved.
+   */
   private async changeStatus(
     tx: DbClient,
     input: {
@@ -356,9 +418,29 @@ export class TrackerService {
       occurredAt?: Date;
       encryptedText?: string | null;
       appliedAt?: Date;
+      // When activity counts from (a scheduled event ahead keeps it open).
+      activityAt?: Date;
+      quietBefore?: Date;
     }
   ) {
     const repository = new TrackerRepository(tx);
+    const changed = await repository.transitionStatus({
+      applicationId: input.applicationId,
+      from: input.from,
+      quietBefore: input.quietBefore,
+      changes: {
+        status: input.to,
+        statusChangedAt: input.now,
+        // Closing isn't activity: reopening counts from the event that did it.
+        ...(closedStatuses.includes(input.to)
+          ? {}
+          : {
+              lastActivityAt: input.activityAt ?? input.occurredAt ?? input.now,
+            }),
+        ...(input.appliedAt ? { appliedAt: input.appliedAt } : {}),
+      },
+    });
+    if (!changed) return false;
     await repository.insertEvent({
       applicationId: input.applicationId,
       kind: "status_change",
@@ -367,15 +449,7 @@ export class TrackerService {
       toStatus: input.to,
       encryptedText: input.encryptedText ?? null,
     });
-    await repository.updateApplication(input.applicationId, {
-      status: input.to,
-      statusChangedAt: input.now,
-      // Closing isn't activity: reopening counts from the event that did it.
-      ...(closedStatuses.includes(input.to)
-        ? {}
-        : { lastActivityAt: input.occurredAt ?? input.now }),
-      ...(input.appliedAt ? { appliedAt: input.appliedAt } : {}),
-    });
+    return true;
   }
 
   private summary(

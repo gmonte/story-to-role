@@ -71,8 +71,10 @@ export const reminderSchema = z.object({
   openingId: z.uuid(),
   company: z.string().nullable(),
   title: z.string().nullable(),
-  // Days since applying (follow-up), the event's date, or the closing date.
+  // Follow-up: days since applying; "No response" soon: days left until it
+  // closes; an upcoming event: 0 (its time is `date`).
   days: z.number().int(),
+  // The event's time, or when "No response" closes the application.
   date: z.date().nullable(),
   text: z.string().nullable(),
 });

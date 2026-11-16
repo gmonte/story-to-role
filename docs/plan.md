@@ -189,8 +189,8 @@ Acceptance:
 
 ### W5: Career language
 
-- The interview language leaves the privacy notice and the empty state. It is asked at the right moment (first import or first message), explained as the language the evidence is stored in, and defaults to the language of the imported files, else the interface language; it stays changeable in the chat. No schema change.
-- Check that generation uses a fact's original quote when the document's language matches it, instead of the translated fact.
+- The interview language leaves the privacy notice and the empty state. It is asked at the right moment (first import or first message), explained as the language the evidence is stored in, and defaults to the language of the imported files, else the interface language; it stays changeable in the chat. A column records who set it (`interviewLanguageSource`: the first file or the user), so two files imported at once can't both switch it; profiles that went through the privacy notice count as chosen.
+- Generation gets each file fact's original wording (author notes removed, sensitive filter applied), to prefer when the document is in that language; it also backs the line's figures. Resumes and cover letters.
 
 ## Not in the MVP
 

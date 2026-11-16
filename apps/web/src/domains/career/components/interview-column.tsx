@@ -30,7 +30,7 @@ export function InterviewColumn() {
   const { profile, positions } = timeline.data;
 
   if (!profile.privacyNoticeAccepted) {
-    return <PrivacyNotice interviewLanguage={profile.interviewLanguage} />;
+    return <PrivacyNotice />;
   }
 
   if (activeSessionId) return <SessionReview sessionId={activeSessionId} />;
@@ -38,6 +38,7 @@ export function InterviewColumn() {
   return (
     <CareerChat
       interviewLanguage={profile.interviewLanguage}
+      languageSource={profile.interviewLanguageSource}
       hasPositions={positions.length > 0}
     />
   );

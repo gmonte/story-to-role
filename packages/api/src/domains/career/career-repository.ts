@@ -8,9 +8,11 @@ import {
   sql,
 } from "drizzle-orm";
 
+import { evidenceTable } from "@repo/api/domains/evidence/db/evidence-tables";
 import { openingsTable } from "@repo/api/domains/openings/db/openings-tables";
 import type { DbClient } from "@repo/api/tools/db-client";
 
+import type { InterviewLanguage } from "./schemas/career";
 import { slotStatuses } from "./documents/document-limits";
 import {
   careerNarrativesTable,
@@ -110,6 +112,28 @@ export class CareerRepository {
       .insert(careerProfilesTable)
       .values(profile)
       .onConflictDoNothing({ target: careerProfilesTable.userId });
+  }
+
+  /**
+   * Sets the career language from an imported file, only while nobody has
+   * set it and the profile has no evidence, in one statement: of two files
+   * imported at once, one wins. Returns the language the career is in.
+   */
+  async adoptFileLanguage(profileId: string, language: InterviewLanguage) {
+    const [adopted] = await this.tx
+      .update(careerProfilesTable)
+      .set({ interviewLanguage: language, interviewLanguageSource: "file" })
+      .where(
+        and(
+          eq(careerProfilesTable.id, profileId),
+          isNull(careerProfilesTable.interviewLanguageSource),
+          sql`not exists (select 1 from ${evidenceTable} where ${evidenceTable.profileId} = ${profileId})`
+        )
+      )
+      .returning({ language: careerProfilesTable.interviewLanguage });
+    if (adopted) return adopted.language;
+    const profile = await this.findProfileById(profileId);
+    return profile?.interviewLanguage ?? language;
   }
 
   async updateProfile(

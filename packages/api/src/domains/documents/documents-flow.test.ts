@@ -19,7 +19,9 @@ import {
   sensitiveItemsTable,
   storiesTable,
 } from "@repo/api/domains/evidence/db/evidence-tables";
+import { CareerRepository } from "@repo/api/domains/career/career-repository";
 import { loadSensitiveFilter } from "@repo/api/domains/evidence/sensitive/load-sensitive-filter";
+import { loadCareerContext } from "@repo/api/domains/documents/generation/load-career-context";
 import { OpeningsRepository } from "@repo/api/domains/openings/openings-repository";
 import { TasksService } from "@repo/api/domains/tasks/tasks-service";
 import { createTestUser } from "@repo/api/test/create-test-user";
@@ -344,6 +346,51 @@ describe("resume generation and snapshots", () => {
       [0, 6, false],
       [1, 8, true],
     ]);
+  });
+
+  it("gives the writer a file fact's original wording", async () => {
+    const ctx = await setup();
+    const document = await new CareerRepository(ctx.db).insertDocument({
+      profileId: ctx.profile.id,
+      kind: "resume",
+      encryptedFileName: ctx.cipher.encrypt("resume.pdf"),
+      mimeType: "application/pdf",
+      storageKey: "users/x/documents/y",
+    });
+    const [fromFile] = await ctx.db
+      .insert(evidenceTable)
+      .values({
+        profileId: ctx.profile.id,
+        positionId: ctx.positionId,
+        kind: "achievement",
+        encryptedText: ctx.cipher.encrypt("Reduziu o tempo de deploy em 40%"),
+        encryptedSourceQuote: ctx.cipher.encrypt(
+          "cut deploy time by 40% [medido] with blue-green releases"
+        ),
+        language: "pt-BR",
+        sourceDocumentId: document.id,
+        approvedAt: new Date(),
+      })
+      .returning();
+
+    const context = await loadCareerContext({
+      db: ctx.db,
+      cipher: ctx.cipher,
+      profileId: ctx.profile.id,
+      filter: await loadSensitiveFilter({
+        db: ctx.db,
+        cipher: ctx.cipher,
+        profileId: ctx.profile.id,
+      }),
+    });
+
+    const wording = (id: string) =>
+      context.evidence.find((row) => row.id === id)?.sourceWording;
+    expect(wording(fromFile.id)).toBe(
+      "cut deploy time by 40% with blue-green releases"
+    );
+    // Interview facts quote the user's own message: nothing to add.
+    expect(wording(ctx.evidence[0].id)).toBeNull();
   });
 
   it("stops Thorough early once the target rating is reached", async () => {

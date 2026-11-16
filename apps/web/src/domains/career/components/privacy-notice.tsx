@@ -3,24 +3,18 @@
 import { useMutation } from "@tanstack/react-query";
 import { ShieldCheck } from "lucide-react";
 
-import type { InterviewLanguage } from "@repo/api/domains/career/schemas/career";
 import { useTranslation } from "@repo/intl/use-translation";
 import { Button } from "@repo/web/components/ui/button";
 
 import { useTRPC } from "~/tools/trpc/client";
 
 import { useRefreshCareer } from "../hooks/use-career-queries";
-import { InterviewLanguageSelect } from "./interview-language-select";
 
 /**
  * Shown before the first question (guided interview spec): what goes to the
  * AI provider, what to avoid saying, and that sensitive items can be hidden.
  */
-export function PrivacyNotice({
-  interviewLanguage,
-}: {
-  interviewLanguage: InterviewLanguage;
-}) {
+export function PrivacyNotice() {
   const t = useTranslation();
   const trpc = useTRPC();
   const refresh = useRefreshCareer();
@@ -64,12 +58,6 @@ export function PrivacyNotice({
           <li key={point}>{point}</li>
         ))}
       </ul>
-      <div className="flex flex-col gap-2">
-        <span className="text-sm font-medium">
-          {t.formatMessage({ defaultMessage: "Interview language" })}
-        </span>
-        <InterviewLanguageSelect value={interviewLanguage} />
-      </div>
       <Button disabled={accept.isPending} onClick={() => accept.mutate({})}>
         {t.formatMessage({ defaultMessage: "I understand, let's start" })}
       </Button>

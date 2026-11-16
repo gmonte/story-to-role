@@ -113,7 +113,11 @@ export function assembleResume(input: {
       return null;
     }
     const texts = [
-      ...evidenceIds.map((id) => evidenceById.get(id)!.text),
+      // A file fact's own words back its figures too: the writer may use them.
+      ...evidenceIds.map((id) => {
+        const row = evidenceById.get(id)!;
+        return [row.text, row.sourceWording].filter(Boolean).join(" ");
+      }),
       ...instructionIds.map((id) => instructionById.get(id)!.text),
     ];
     if (!figuresBackedBy(text, texts)) {

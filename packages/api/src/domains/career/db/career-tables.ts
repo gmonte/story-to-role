@@ -6,6 +6,7 @@ import { createTable } from "@repo/api/utils/db/create-table";
 
 import type {
   InterviewLanguage,
+  InterviewLanguageSource,
   ConflictField,
   CredentialKind,
   CredentialStatus,
@@ -40,6 +41,9 @@ export const careerProfilesTable = createTable(
       .notNull()
       .references(() => usersTable.id, { onDelete: "cascade" }),
     interviewLanguage: d.text().$type<InterviewLanguage>().notNull(),
+    // Who set the career language: still nobody (the interface's), the
+    // first imported file, or the user. A file sets it only while nobody has.
+    interviewLanguageSource: d.text().$type<InterviewLanguageSource>(),
     privacyNoticeAcceptedAt: d.timestamp({ withTimezone: true }),
     // How the user chose to start (workspace spec, "Onboarding").
     startPath: d.text().$type<StartPath>(),

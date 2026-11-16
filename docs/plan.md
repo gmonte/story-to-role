@@ -189,7 +189,7 @@ Acceptance:
 
 ### W5: Career language
 
-- The interview language leaves the privacy notice and the empty state. It is asked at the right moment (first import or first message), explained as the language the evidence is stored in, and defaults to the language of the imported files, else the interface language; it stays changeable in the chat. A column records who set it (`interviewLanguageSource`: the first file or the user), so two files imported at once can't both switch it; profiles that went through the privacy notice count as chosen.
+- The interview language leaves the privacy notice and the screen: no control at all. The conversation follows the language the user writes in; the career language (the one facts are kept in) is set once, by the first imported file, else the first chat message, else the interface language, and locks once there is evidence, so facts never mix languages. A column records what set it (`interviewLanguageSource`: file, message or user), so two files imported at once can't both switch it; profiles that went through the privacy notice count as set.
 - Generation gets each file fact's original wording (author notes removed, sensitive filter applied), to prefer when the document is in that language; it also backs the line's figures. Resumes and cover letters.
 
 ## Not in the MVP

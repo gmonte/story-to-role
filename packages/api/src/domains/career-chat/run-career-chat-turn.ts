@@ -13,6 +13,7 @@ import { createTaskAi } from "@repo/api/domains/ai/create-task-ai";
 import { anthropicModels } from "@repo/api/domains/ai/providers/anthropic-package";
 import { checkTopic } from "@repo/api/domains/ai/topic-gate";
 import { CareerRepository } from "@repo/api/domains/career/career-repository";
+import { detectLanguage } from "@repo/api/domains/career/detect-language";
 import type { InterviewLanguage } from "@repo/api/domains/career/schemas/career";
 import { fixedReply } from "@repo/api/domains/interview/fixed-replies";
 import { interviewSettings } from "@repo/api/domains/interview/interview-settings";
@@ -99,8 +100,19 @@ export async function runCareerChatTurn(
     chat && (await new CareerRepository(db).findProfileById(chat.profileId));
   if (!chat || !profile) throw new Error("Unknown career chat");
   const userId = profile.userId;
-  const language = profile.interviewLanguage;
   const message = lastText(input.messages, "user")?.trim() ?? "";
+  // The conversation follows the user's language; the facts stay in the
+  // career's, which the first message sets when nothing has.
+  const written = detectLanguage(message);
+  const language =
+    written && !profile.interviewLanguageSource
+      ? await new CareerRepository(db).adoptLanguage(
+          profile.id,
+          written,
+          "message"
+        )
+      : profile.interviewLanguage;
+  const replyLanguage = written ?? language;
 
   const fixed = (text: string) => ({
     result: deps.streamText({
@@ -111,7 +123,7 @@ export async function runCareerChatTurn(
   });
 
   if (!message || message.length > interviewSettings.maxMessageCharacters) {
-    return fixed(fixedReply("off_topic", language));
+    return fixed(fixedReply("off_topic", replyLanguage));
   }
 
   let task;
@@ -123,7 +135,7 @@ export async function runCareerChatTurn(
     });
   } catch (error) {
     if (error instanceof TRPCError && error.code === "PAYMENT_REQUIRED") {
-      return fixed(outOfCredits[language]);
+      return fixed(outOfCredits[replyLanguage]);
     }
     throw error;
   }

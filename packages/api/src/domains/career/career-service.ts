@@ -92,10 +92,17 @@ export class CareerService {
     interviewLanguage: InterviewLanguage;
   }) {
     const profile = await this.requireProfile(input.userId);
-    await new CareerRepository(this.db).updateProfile(profile.id, {
-      interviewLanguage: input.interviewLanguage,
-      interviewLanguageSource: "user",
-    });
+    const chosen = await new CareerRepository(this.db).chooseLanguage(
+      profile.id,
+      input.interviewLanguage
+    );
+    if (!chosen && input.interviewLanguage !== profile.interviewLanguage) {
+      throw new TRPCError({
+        code: "CONFLICT",
+        message:
+          "The career language can't change once there is evidence: facts are kept in one language.",
+      });
+    }
   }
 
   /**
@@ -235,7 +242,6 @@ export class CareerService {
           : null,
         profile: {
           interviewLanguage: profile.interviewLanguage,
-          interviewLanguageSource: profile.interviewLanguageSource,
           privacyNoticeAccepted: !!profile.privacyNoticeAcceptedAt,
         },
         positions: sorted.filter((r) => r.status !== "removed").map(toView),

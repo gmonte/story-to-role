@@ -10,11 +10,11 @@
   },
   "scripts": {
     "intl:compile": "formatjs compile-folder extracted compiled --ast --format lokalise",
-    "intl:extract": "tsx scripts/extract-messages.ts",
+    "intl:extract": "tsx scripts/extract-messages.ts && pnpm intl:compile",
     "intl:types": "tsx scripts/make-types.ts",
     "lint": "eslint . --max-warnings=0 --no-warn-ignored",
     "lint:fix": "eslint . --fix",
-    "postinstall": "pnpm intl:types && pnpm intl:extract && pnpm intl:compile",
+    "postinstall": "pnpm intl:types && pnpm intl:extract",
     "test": "vitest run --passWithNoTests",
     "typecheck": "tsc --noEmit"
   },

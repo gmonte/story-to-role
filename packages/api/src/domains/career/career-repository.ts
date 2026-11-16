@@ -12,7 +12,10 @@ import { evidenceTable } from "@repo/api/domains/evidence/db/evidence-tables";
 import { openingsTable } from "@repo/api/domains/openings/db/openings-tables";
 import type { DbClient } from "@repo/api/tools/db-client";
 
-import type { InterviewLanguage } from "./schemas/career";
+import type {
+  InterviewLanguage,
+  InterviewLanguageSource,
+} from "./schemas/career";
 import { slotStatuses } from "./documents/document-limits";
 import {
   careerNarrativesTable,
@@ -115,25 +118,51 @@ export class CareerRepository {
   }
 
   /**
-   * Sets the career language from an imported file, only while nobody has
-   * set it and the profile has no evidence, in one statement: of two files
-   * imported at once, one wins. Returns the language the career is in.
+   * Sets the career language from the first file or chat message, only while
+   * nothing has set it and the profile has no evidence, in one statement: of
+   * two imported at once, one wins. Returns the language the career is in.
    */
-  async adoptFileLanguage(profileId: string, language: InterviewLanguage) {
+  async adoptLanguage(
+    profileId: string,
+    language: InterviewLanguage,
+    source: Exclude<InterviewLanguageSource, "user">
+  ) {
     const [adopted] = await this.tx
       .update(careerProfilesTable)
-      .set({ interviewLanguage: language, interviewLanguageSource: "file" })
+      .set({ interviewLanguage: language, interviewLanguageSource: source })
       .where(
         and(
           eq(careerProfilesTable.id, profileId),
           isNull(careerProfilesTable.interviewLanguageSource),
-          sql`not exists (select 1 from ${evidenceTable} where ${evidenceTable.profileId} = ${profileId})`
+          this.hasNoEvidence(profileId)
         )
       )
       .returning({ language: careerProfilesTable.interviewLanguage });
     if (adopted) return adopted.language;
     const profile = await this.findProfileById(profileId);
     return profile?.interviewLanguage ?? language;
+  }
+
+  /**
+   * Sets the career language the user asked for, only while the profile has
+   * no evidence: facts are kept in one language. Whether it was set.
+   */
+  async chooseLanguage(profileId: string, language: InterviewLanguage) {
+    const rows = await this.tx
+      .update(careerProfilesTable)
+      .set({ interviewLanguage: language, interviewLanguageSource: "user" })
+      .where(
+        and(
+          eq(careerProfilesTable.id, profileId),
+          this.hasNoEvidence(profileId)
+        )
+      )
+      .returning({ id: careerProfilesTable.id });
+    return rows.length > 0;
+  }
+
+  private hasNoEvidence(profileId: string) {
+    return sql`not exists (select 1 from ${evidenceTable} where ${evidenceTable.profileId} = ${profileId})`;
   }
 
   async updateProfile(

@@ -99,7 +99,7 @@ export function buildPositionPrompt(input: PositionPromptInput) {
       ? shortScript
       : fullScript,
     rules,
-    `Converse in ${languageNames[input.language]}.`,
+    `Converse in the language the user writes in (${languageNames[input.language]} when it doesn't tell), but always write the facts you record in ${languageNames[input.language]}.`,
     section(
       "Career timeline (most recent first)",
       input.timeline.map(

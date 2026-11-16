@@ -38,7 +38,6 @@ export function InterviewColumn() {
   return (
     <CareerChat
       interviewLanguage={profile.interviewLanguage}
-      languageSource={profile.interviewLanguageSource}
       hasPositions={positions.length > 0}
     />
   );

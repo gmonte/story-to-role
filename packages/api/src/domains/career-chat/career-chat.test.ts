@@ -6,6 +6,8 @@ import { MockLanguageModelV3 } from "ai/test";
 import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { CareerService } from "@repo/api/domains/career/career-service";
+import { EvidenceRepository } from "@repo/api/domains/evidence/evidence-repository";
+import { CareerRepository } from "@repo/api/domains/career/career-repository";
 import { getUserCipher } from "@repo/api/domains/encryption/user-cipher";
 import { InterviewRepository } from "@repo/api/domains/interview/interview-repository";
 import { creditEntriesTable } from "@repo/api/domains/credits/db/credits-tables";
@@ -214,6 +216,48 @@ describe("career chat", () => {
     expect(ctx.reported.at(-1)).toEqual([]);
     // The turn holds a reservation, settled when the agent completes it.
     expect(turn?.funding).toBe("credits");
+  });
+
+  it("keeps the career in the first message's language, then locks it", async () => {
+    const ctx = await setup();
+    const career = new CareerService(ctx.db);
+    const language = async () =>
+      (await new CareerRepository(ctx.db).findProfileByUserId(ctx.user.id))
+        ?.interviewLanguage;
+
+    await ctx.say(
+      "Eu trabalhei na Acme por três anos",
+      orchestrator([], "Conte mais.")
+    );
+    expect(await language()).toBe("pt-BR");
+
+    // A later message in another language only changes the conversation's.
+    await ctx.say("I worked at Globex too", orchestrator([], "Tell me more."));
+    expect(await language()).toBe("pt-BR");
+
+    // Before any evidence the user may still pick another one; after, no.
+    await career.updateSettings({
+      userId: ctx.user.id,
+      interviewLanguage: "en-US",
+    });
+    expect(await language()).toBe("en-US");
+    const profile = await new CareerRepository(ctx.db).findProfileByUserId(
+      ctx.user.id
+    );
+    await new EvidenceRepository(ctx.db).insertEvidence([
+      {
+        profileId: profile.id,
+        positionId: ctx.acme,
+        kind: "achievement",
+        encryptedText: "x",
+        language: "en-US",
+        encryptedSourceQuote: "x",
+        approvedAt: new Date(),
+      },
+    ]);
+    await expect(
+      career.updateSettings({ userId: ctx.user.id, interviewLanguage: "pt-BR" })
+    ).rejects.toMatchObject({ code: "CONFLICT" });
   });
 
   it("answers an off-topic message from code, calling no interviewer", async () => {

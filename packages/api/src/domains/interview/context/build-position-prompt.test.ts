@@ -62,7 +62,9 @@ describe("position agent prompt", () => {
       "p1: Engineer at Globex (2017-03 to 2020-12) [approved]"
     );
     expect(prompt).toContain("Engineer at Globex: Built the billing system.");
-    expect(prompt).toContain("Converse in Brazilian Portuguese.");
+    expect(prompt).toContain(
+      "Converse in the language the user writes in (Brazilian Portuguese when it doesn't tell), but always write the facts you record in Brazilian Portuguese."
+    );
     expect(prompt).toContain("Current stage: stories.");
     expect(prompt).toContain("- c1: startDate: 2021-01 or 2020-11");
     expect(prompt).toContain(

@@ -176,7 +176,7 @@ export function PositionCard({
           </span>
           {position.origin === "truth_file" && (
             <Badge variant="outline">
-              {t.formatMessage({ defaultMessage: "From your truth file" })}
+              {t.formatMessage({ defaultMessage: "From your career notes" })}
             </Badge>
           )}
           <LanguageBadges

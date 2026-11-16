@@ -54,7 +54,7 @@ export const careerRouter = createTRPCRouter({
         "career",
         "PUT",
         "/career/settings",
-        "Sets the interview language"
+        "Sets the career language, while there is no evidence yet"
       )
     )
     .input(z.object({ interviewLanguage: interviewLanguageSchema }))

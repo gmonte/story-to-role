@@ -12,6 +12,7 @@ import { Badge } from "@repo/web/components/ui/badge";
 import { Button } from "@repo/web/components/ui/button";
 import { toast } from "@repo/web/components/ui/sonner";
 
+import { AiAtWork } from "~/domains/workspace/components/ai-at-work";
 import { useTRPC } from "~/tools/trpc/client";
 
 import { useRefreshCareer } from "../hooks/use-career-queries";
@@ -71,13 +72,20 @@ export function NarrativeCard({
         </div>
       )}
       {running && (
-        <NarrativeRun
-          {...running}
-          onDone={() => {
-            setRunning(undefined);
-            void refresh();
-          }}
-        />
+        <>
+          <AiAtWork
+            title={t.formatMessage({
+              defaultMessage: "Drafting the story that links your positions",
+            })}
+          />
+          <NarrativeRun
+            {...running}
+            onDone={() => {
+              setRunning(undefined);
+              void refresh();
+            }}
+          />
+        </>
       )}
       <Button
         size="sm"
@@ -85,11 +93,9 @@ export function NarrativeCard({
         disabled={draft.isPending || !!running}
         onClick={() => draft.mutate({})}
       >
-        {running
-          ? t.formatMessage({ defaultMessage: "Drafting…" })
-          : narrative
-            ? t.formatMessage({ defaultMessage: "Draft again" })
-            : t.formatMessage({ defaultMessage: "Draft my narrative" })}
+        {narrative
+          ? t.formatMessage({ defaultMessage: "Draft again" })
+          : t.formatMessage({ defaultMessage: "Draft my narrative" })}
       </Button>
     </section>
   );

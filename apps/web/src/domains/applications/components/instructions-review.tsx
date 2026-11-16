@@ -3,7 +3,7 @@
 import { useState } from "react";
 
 import { useMutation } from "@tanstack/react-query";
-import { Loader2, X } from "lucide-react";
+import { X } from "lucide-react";
 
 import type {
   ApplicationInstructions,
@@ -25,6 +25,7 @@ import {
 import { toast } from "@repo/web/components/ui/sonner";
 import { Textarea } from "@repo/web/components/ui/textarea";
 
+import { AiAtWork } from "~/domains/workspace/components/ai-at-work";
 import { useTimeline } from "~/domains/career/hooks/use-career-queries";
 import { useTRPC } from "~/tools/trpc/client";
 
@@ -80,12 +81,11 @@ export function InstructionsReview({
       <ConfirmedInstructions openingId={openingId} instructions={data} />
 
       {data.splitting ? (
-        <p className="text-muted-foreground flex items-center gap-2 text-xs">
-          <Loader2 className="size-3.5 animate-spin" />
-          {t.formatMessage({
-            defaultMessage: "Splitting your instructions into points…",
+        <AiAtWork
+          title={t.formatMessage({
+            defaultMessage: "Splitting your instructions into points",
           })}
-        </p>
+        />
       ) : reviewing ? (
         <DraftReview
           key={[...drafts, ...draftOverrides].map((row) => row.id).join()}

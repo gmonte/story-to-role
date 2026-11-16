@@ -14,6 +14,7 @@ import {
 } from "vitest";
 
 import { createAiClient } from "@repo/api/domains/ai/ai-client";
+import type { TaskProgress } from "@repo/api/domains/tasks/schemas/task";
 import { getUserCipher } from "@repo/api/domains/encryption/user-cipher";
 import { InterviewService } from "@repo/api/domains/interview/interview-service";
 import { TasksService } from "@repo/api/domains/tasks/tasks-service";
@@ -84,7 +85,8 @@ async function setup() {
     content: string,
     extraction: unknown,
     kind: "resume" | "truth_file" = "resume",
-    isCareerDocument = true
+    isCareerDocument = true,
+    reportProgress?: (progress: TaskProgress) => Promise<void>
   ) {
     const { sourceDocumentId } = await documents.upload({
       userId: user.id,
@@ -104,6 +106,7 @@ async function setup() {
     });
     const cipher = await getUserCipher(db, user.id);
     await runImportDocument({
+      reportProgress,
       db,
       cipher,
       storage,
@@ -415,6 +418,37 @@ describe("document import", () => {
         language: "en-US",
       }),
     ]);
+  });
+});
+
+describe("import progress", () => {
+  it("narrates its steps with counts and no career content", async () => {
+    const ctx = await setup();
+    const steps: TaskProgress[] = [];
+    await ctx.importFile(
+      resumeA,
+      { positions: [acmeA], credentials: [], exclusions: [] },
+      "resume",
+      true,
+      async (progress) => {
+        steps.push(progress);
+      }
+    );
+
+    expect(steps.map((step) => step.label)).toEqual([
+      "reading",
+      "checking",
+      "extracting",
+      "found",
+      "saving",
+    ]);
+    expect(steps.find((step) => step.label === "saving")?.counts).toEqual({
+      positions: 1,
+      facts: 2,
+      credentials: 0,
+    });
+    // Realtime metadata lives on Trigger.dev: keys and numbers only.
+    expect(JSON.stringify(steps)).not.toMatch(/Acme|Kubernetes|deploy/i);
   });
 });
 

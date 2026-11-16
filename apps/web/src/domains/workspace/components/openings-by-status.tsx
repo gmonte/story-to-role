@@ -98,12 +98,20 @@ export function OpeningsByStatus() {
                       isActive={pathname === href}
                     >
                       <Link href={href}>
-                        <span className="truncate">
+                        <span
+                          className={
+                            opening.status === "processing"
+                              ? "truncate motion-safe:animate-pulse"
+                              : "truncate"
+                          }
+                        >
                           {[opening.company, opening.title]
                             .filter(Boolean)
                             .join(" · ") ||
                             (opening.status === "processing"
-                              ? t.formatMessage({ defaultMessage: "Reading…" })
+                              ? t.formatMessage({
+                                  defaultMessage: "Reading the opening…",
+                                })
                               : t.formatMessage({
                                   defaultMessage: "Untitled opening",
                                 }))}

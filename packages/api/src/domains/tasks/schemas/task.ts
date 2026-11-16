@@ -33,11 +33,16 @@ export const taskStatuses = [
 export const taskStatusSchema = z.enum(taskStatuses);
 export type TaskStatus = z.infer<typeof taskStatusSchema>;
 
-/** What a running task reports, live through Realtime and durably here. */
+/**
+ * What a running task reports, live through Realtime (metadata on
+ * Trigger.dev) and durably here: a step key the interface turns into words,
+ * and counts. Never career content.
+ */
 export const taskProgressSchema = z.object({
   step: z.number().int().nonnegative(),
   totalSteps: z.number().int().positive(),
   label: z.string().optional(),
+  counts: z.record(z.string(), z.number()).optional(),
 });
 export type TaskProgress = z.infer<typeof taskProgressSchema>;
 

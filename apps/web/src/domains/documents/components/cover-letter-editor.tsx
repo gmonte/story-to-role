@@ -3,7 +3,7 @@
 import { useState } from "react";
 
 import { useMutation } from "@tanstack/react-query";
-import { Highlighter, Loader2, RotateCcw, Sparkles } from "lucide-react";
+import { Highlighter, RotateCcw, Sparkles } from "lucide-react";
 
 import type { LineOrigin } from "@repo/api/domains/documents/schemas/document";
 import type {
@@ -24,6 +24,7 @@ import {
 } from "@repo/web/components/ui/tooltip";
 import { cn } from "@repo/web/lib/utils";
 
+import { AiAtWork } from "~/domains/workspace/components/ai-at-work";
 import { useTRPC } from "~/tools/trpc/client";
 
 import { useDocumentLabels } from "../hooks/use-document-labels";
@@ -153,10 +154,11 @@ export function CoverLetterEditor({
       </div>
 
       {generating && (
-        <p className="text-muted-foreground flex items-center gap-2 text-xs">
-          <Loader2 className="size-3.5 animate-spin" />
-          {t.formatMessage({ defaultMessage: "Writing the cover letter…" })}
-        </p>
+        <AiAtWork
+          title={t.formatMessage({
+            defaultMessage: "Writing your cover letter from your story",
+          })}
+        />
       )}
       {version.letter?.motivationSkipped && (
         <Badge variant="outline" className="self-start">

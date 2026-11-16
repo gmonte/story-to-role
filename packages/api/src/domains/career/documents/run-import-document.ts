@@ -7,6 +7,8 @@ import { outputLanguageNames } from "@repo/api/domains/documents/generation/resu
 import { sensitiveItemKindSchema } from "@repo/api/domains/evidence/schemas/evidence";
 import { InterviewRepository } from "@repo/api/domains/interview/interview-repository";
 import { findQuote } from "@repo/api/domains/interview/quotes/verify-quote";
+import { createNarrator } from "@repo/api/domains/tasks/narrate";
+import type { TaskProgress } from "@repo/api/domains/tasks/schemas/task";
 import type { DbClient } from "@repo/api/tools/db-client";
 import type { Storage } from "@repo/api/tools/storage/storage";
 
@@ -113,7 +115,17 @@ type Deps = {
   ai: AiClient;
   cipher: UserCipher;
   storage: Storage;
+  reportProgress?: (progress: TaskProgress) => Promise<void>;
 };
+
+/** The import's narrated steps, in order (the interface words them). */
+export const importSteps = [
+  "reading",
+  "checking",
+  "extracting",
+  "found",
+  "saving",
+] as const;
 
 /**
  * Imports a resume or truth file inside its task: text by code, a content
@@ -154,6 +166,9 @@ export async function runImportDocument(
     deps.cipher.decrypt(stored.toString("utf8")),
     "base64"
   );
+  const step = createNarrator(importSteps, deps.reportProgress);
+
+  await step("reading");
   const extracted = await extractDocumentText({
     bytes,
     mimeType: document.mimeType,
@@ -162,6 +177,7 @@ export async function runImportDocument(
   const text = extracted.text;
 
   // Content check (guardrail 4): only career documents reach extraction.
+  await step("checking");
   const { object: check } = await deps.ai.generateObject({
     purpose: "document_content_check",
     role: "classification",
@@ -188,6 +204,7 @@ export async function runImportDocument(
   if (kind !== document.kind)
     await career.updateDocument(document.id, { kind });
 
+  await step("extracting");
   const { object: extraction } = await deps.ai.generateObject({
     purpose: "document_extraction",
     role: "writing",
@@ -214,7 +231,18 @@ export async function runImportDocument(
     await career.updateDocument(document.id, { status: "failed" });
     return;
   }
+  // Repeated on the next step: Realtime may deliver only the latest update.
+  const found = {
+    positions: extraction.positions.length,
+    facts: extraction.positions.reduce(
+      (sum, position) => sum + position.facts.length,
+      0
+    ),
+    credentials: extraction.credentials.length,
+  };
+  await step("found", found);
 
+  await step("saving", found);
   await deps.db.transaction(async (tx) => {
     const touched = await new CareerService(tx).applyImportedPositions({
       tx,

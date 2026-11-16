@@ -6,6 +6,7 @@ import { OpeningsRepository } from "@repo/api/domains/openings/openings-reposito
 import type { RealtimeSubscription } from "@repo/api/domains/tasks/schemas/task";
 import { TasksService } from "@repo/api/domains/tasks/tasks-service";
 import type { DbClient } from "@repo/api/tools/db-client";
+import { TasksRepository } from "@repo/api/domains/tasks/tasks-repository";
 
 import type { CompanyResearch } from "../schemas/research";
 import { ResearchRepository } from "./research-repository";
@@ -58,6 +59,13 @@ export class ResearchService {
           Date.now() - latest.createdAt.getTime() >= staleResearchMs
             ? "failed"
             : (latest?.status ?? null),
+        progress:
+          latest?.status === "researching"
+            ? await new TasksRepository(tx).latestProgress(
+                latest.id,
+                "research_company"
+              )
+            : null,
         facts: (await repository.listFacts(opening.id)).map((fact) => ({
           id: fact.id,
           text: cipher.decrypt(fact.encryptedText),

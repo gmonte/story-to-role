@@ -3,7 +3,7 @@
 import { useState } from "react";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Loader2, Send } from "lucide-react";
+import { Send } from "lucide-react";
 
 import type { MotivationView } from "@repo/api/domains/applications/schemas/motivation";
 import { useTranslation } from "@repo/intl/use-translation";
@@ -16,6 +16,7 @@ import type { OutputLanguage } from "@repo/api/domains/documents/schemas/documen
 import type { VersionView } from "@repo/api/domains/documents/schemas/document-view";
 import type { Tone } from "@repo/api/domains/openings/schemas/opening";
 
+import { AiAtWork } from "~/domains/workspace/components/ai-at-work";
 import { VoiceInputButton } from "~/domains/career/components/voice-input-button";
 import { CoverLetterEditor } from "~/domains/documents/components/cover-letter-editor";
 import { GenerateLetterDialog } from "~/domains/documents/components/generate-letter-dialog";
@@ -136,10 +137,11 @@ function WriteLetter({
   const t = useTranslation();
   if (generating) {
     return (
-      <p className="text-muted-foreground flex items-center gap-2 text-sm">
-        <Loader2 className="size-4 animate-spin" />
-        {t.formatMessage({ defaultMessage: "Writing the cover letter…" })}
-      </p>
+      <AiAtWork
+        title={t.formatMessage({
+          defaultMessage: "Writing your cover letter from your story",
+        })}
+      />
     );
   }
   return (
@@ -350,11 +352,12 @@ function Interview({
           </li>
         ))}
         {motivation.thinking && (
-          <li className="text-muted-foreground flex items-center gap-2 text-xs">
-            <Loader2 className="size-3.5 animate-spin" />
-            {t.formatMessage({
-              defaultMessage: "Thinking of the next question…",
-            })}
+          <li>
+            <AiAtWork
+              title={t.formatMessage({
+                defaultMessage: "Thinking of the next question",
+              })}
+            />
           </li>
         )}
       </ul>

@@ -6,6 +6,8 @@ import { interviewLanguages } from "@repo/api/domains/career/schemas/career";
 import type { UserCipher } from "@repo/api/domains/encryption/user-cipher";
 import { EvidenceRepository } from "@repo/api/domains/evidence/evidence-repository";
 import { loadSensitiveFilter } from "@repo/api/domains/evidence/sensitive/load-sensitive-filter";
+import { createNarrator } from "@repo/api/domains/tasks/narrate";
+import type { TaskProgress } from "@repo/api/domains/tasks/schemas/task";
 import type { DbClient } from "@repo/api/tools/db-client";
 import { embedStaleVersions } from "@repo/api/domains/documents/similar/embed-versions";
 import type { Embedder } from "@repo/api/tools/embeddings/embedder";
@@ -29,7 +31,16 @@ type Deps = {
   readLink: (url: string) => Promise<LinkResult>;
   userId: string;
   openingId: string;
+  reportProgress?: (progress: TaskProgress) => Promise<void>;
 };
+
+/** The fit check's narrated steps, in order (the interface words them). */
+export const fitCheckSteps = [
+  "reading",
+  "requirements",
+  "matching",
+  "judging",
+] as const;
 
 const RETRIEVED_PER_TERM = 5;
 
@@ -72,6 +83,7 @@ const gapQuestionsSchema = z.object({
  */
 export async function runAnalyzeOpening(deps: Deps) {
   const { db, ai, cipher, embedder } = deps;
+  const step = createNarrator(fitCheckSteps, deps.reportProgress);
   const openings = new OpeningsRepository(db);
   const opening = await openings.findOpeningById(deps.openingId);
   if (!opening) throw new Error(`Opening ${deps.openingId} not found`);
@@ -117,6 +129,7 @@ export async function runAnalyzeOpening(deps: Deps) {
   }
   if (!description) return reject("empty");
 
+  await step("reading");
   // Third-party text: data, never instructions (workspace spec).
   const posting = `<opening_text>${description}</opening_text>`;
   const { object: check } = await ai.generateObject({
@@ -160,7 +173,14 @@ export async function runAnalyzeOpening(deps: Deps) {
       kind: "requirement" as const,
     })),
   ].filter((term) => term.text.trim());
+  // Repeated on later steps: the page reads only the latest one.
+  const found = {
+    keywords: extracted.keywords.length,
+    requirements: extracted.requirements.length,
+  };
+  await step("requirements", found);
 
+  await step("matching", found);
   const [openingVector, ...termVectors] = await embedder.embed(
     [
       [
@@ -260,6 +280,7 @@ export async function runAnalyzeOpening(deps: Deps) {
     );
   }
 
+  await step("judging", found);
   const { object: judgment } = await ai.generateObject({
     purpose: "fit_check_judgment",
     role: "classification",

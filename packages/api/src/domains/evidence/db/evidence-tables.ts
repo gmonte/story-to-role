@@ -144,6 +144,9 @@ export const sensitiveItemsTable = createTable(
       .references(() => positionsTable.id, { onDelete: "set null" }),
     kind: d.text().$type<SensitiveItemKind>().notNull(),
     encryptedOriginal: d.text().notNull(),
+    // The passage it appears in, so the user knows what it is ("R$ 18.000"
+    // alone says nothing).
+    encryptedContext: d.text(),
     choice: d.text().$type<SensitivityChoice>(),
     encryptedGeneralized: d.text(),
     reviewedAt: d.timestamp({ withTimezone: true }),

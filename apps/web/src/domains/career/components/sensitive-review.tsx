@@ -89,10 +89,19 @@ export function SensitiveReview() {
                 </Badge>
               )}
             </div>
+            {item.context && (
+              <Passage text={item.context} mark={item.original} />
+            )}
             <Input
-              placeholder={t.formatMessage({
-                defaultMessage: "How to describe it without the name",
-              })}
+              placeholder={
+                item.kind === "figure"
+                  ? t.formatMessage({
+                      defaultMessage: "How to describe it without the figure",
+                    })
+                  : t.formatMessage({
+                      defaultMessage: "How to describe it without the name",
+                    })
+              }
               defaultValue={item.generalized ?? ""}
               onChange={(event) =>
                 setGeneralized((current) => ({
@@ -131,5 +140,25 @@ export function SensitiveReview() {
         );
       })}
     </section>
+  );
+}
+
+/** The passage a name or figure appears in, with it marked. */
+function Passage({ text, mark }: { text: string; mark: string }) {
+  const at = text.toLowerCase().indexOf(mark.toLowerCase());
+  return (
+    <p className="text-muted-foreground bg-muted/50 rounded-md p-2 text-xs italic">
+      {at === -1 ? (
+        text
+      ) : (
+        <>
+          {text.slice(0, at)}
+          <mark className="bg-primary/15 text-foreground rounded px-0.5 not-italic">
+            {text.slice(at, at + mark.length)}
+          </mark>
+          {text.slice(at + mark.length)}
+        </>
+      )}
+    </p>
   );
 }

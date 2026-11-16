@@ -24,6 +24,7 @@ import {
   markImportReactionsSaid,
   pendingImportReactions,
 } from "@repo/api/domains/career-chat/import-reactions";
+import { sensitiveItemsTable } from "@repo/api/domains/evidence/db/evidence-tables";
 import { InterviewRepository } from "@repo/api/domains/interview/interview-repository";
 import { fakeProviderPackage } from "@repo/api/test/fake-provider-package";
 import {
@@ -38,6 +39,7 @@ import { CareerService } from "../career-service";
 import { DocumentsService } from "./documents-service";
 import {
   isConcreteItem,
+  passageAround,
   runImportDocument,
   withoutAuthorNotes,
 } from "./run-import-document";
@@ -330,7 +332,13 @@ describe("document import", () => {
       {
         positions: [],
         credentials: [],
-        exclusions: [{ kind: "client", original: "Banco X" }],
+        exclusions: [
+          {
+            kind: "client",
+            original: "Banco X",
+            generalized: "a large private bank",
+          },
+        ],
       },
       "truth_file"
     );
@@ -339,13 +347,22 @@ describe("document import", () => {
       ctx.db,
       new TasksService(ctx.db, { trigger: vi.fn() })
     );
+    // With the line it appears in, and the suggested description.
     expect(await interview.listSensitiveItems(ctx.user.id)).toEqual([
       expect.objectContaining({
         original: "Banco X",
+        context: "Led the Phoenix migration for Banco X.",
+        generalized: "a large private bank",
         choice: "exclude",
         reviewed: false,
       }),
     ]);
+
+    // An item kept before passages were finds its own in the file's text.
+    await ctx.db.update(sensitiveItemsTable).set({ encryptedContext: null });
+    expect((await interview.listSensitiveItems(ctx.user.id))[0]?.context).toBe(
+      "Led the Phoenix migration for Banco X."
+    );
   });
 
   it("applies a truth file's rules to names, never keeping a rule as an item", async () => {
@@ -706,6 +723,17 @@ describe("import helpers", () => {
     );
     expect(withoutAuthorNotes("Wrote the [C++] engine")).toBe(
       "Wrote the [C++] engine"
+    );
+  });
+
+  it("cut a long line around the name it shows", () => {
+    const line = `${"a".repeat(300)} R$ 18.000 ${"b".repeat(300)}`;
+    const passage = passageAround(`Title\n${line}\nEnd`, "R$ 18.000")!;
+    expect(passage).toContain("R$ 18.000");
+    expect(passage.startsWith("…")).toBe(true);
+    expect(passage.endsWith("…")).toBe(true);
+    expect(passageAround("Short line with R$ 5", "R$ 5")).toBe(
+      "Short line with R$ 5"
     );
   });
 

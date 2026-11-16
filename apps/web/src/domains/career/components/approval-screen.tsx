@@ -163,13 +163,32 @@ export function ApprovalScreen({ session }: { session: SessionView }) {
                   </button>
                 )}
               </div>
-              <div className="bg-muted/50 text-muted-foreground flex gap-2 rounded-md p-2 text-sm">
-                {draft.fromDocument ? (
-                  <FileText className="mt-0.5 size-4 shrink-0" />
-                ) : (
-                  <Quote className="mt-0.5 size-4 shrink-0" />
+              <div className="flex flex-col gap-1.5">
+                {draft.alsoQuotes.length > 0 && (
+                  <p className="text-muted-foreground text-xs font-medium">
+                    {t.formatMessage(
+                      {
+                        defaultMessage:
+                          "{count, plural, =0 {In no file} one {In # file} other {In # files}}",
+                      },
+                      { count: draft.alsoQuotes.length + 1 }
+                    )}
+                  </p>
                 )}
-                <span className="italic">{draft.quote}</span>
+                {/* Each file's own words for the same fact. */}
+                {[draft.quote, ...draft.alsoQuotes].map((quote, index) => (
+                  <div
+                    key={index}
+                    className="bg-muted/50 text-muted-foreground flex gap-2 rounded-md p-2 text-sm"
+                  >
+                    {draft.fromDocument ? (
+                      <FileText className="mt-0.5 size-4 shrink-0" />
+                    ) : (
+                      <Quote className="mt-0.5 size-4 shrink-0" />
+                    )}
+                    <span className="italic">{quote}</span>
+                  </div>
+                ))}
               </div>
               <div className="flex gap-2 sm:col-span-2">
                 <Button

@@ -211,6 +211,11 @@ export class InterviewService {
                     }
                   : null,
               quote: cipher.decrypt(draft.encryptedQuote),
+              alsoQuotes: draft.encryptedAlsoQuotes
+                ? (JSON.parse(
+                    cipher.decrypt(draft.encryptedAlsoQuotes)
+                  ) as string[])
+                : [],
               fromDocument: !!draft.sourceDocumentId,
               language: draft.language,
               lowDetail: draft.lowDetail,

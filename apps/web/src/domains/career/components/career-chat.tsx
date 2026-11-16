@@ -53,10 +53,14 @@ export function CareerChat({
   interviewLanguage: InterviewLanguage;
   hasPositions: boolean;
 }) {
+  // Loaded afresh on every visit: what the chat said while the page was
+  // elsewhere (or before it left) is only in the stored transcript, and
+  // useChat reads its messages once, on mount.
   const loaded = useQuery({
     queryKey: ["career-chat"],
     queryFn: () => loadCareerChat(),
     staleTime: Infinity,
+    gcTime: 0,
   });
   if (!loaded.data) return null;
   return (

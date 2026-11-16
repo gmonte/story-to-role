@@ -35,6 +35,8 @@ export const draftViewSchema = z.object({
     })
     .nullable(),
   quote: z.string(),
+  // The same fact's passages in the user's other files.
+  alsoQuotes: z.array(z.string()),
   fromDocument: z.boolean(),
   language: interviewLanguageSchema,
   lowDetail: z.boolean(),

@@ -118,6 +118,9 @@ export const draftFactsTable = createTable(
     // The user's exact words (or the document passage) the draft rests on,
     // checked against its source before it is saved.
     encryptedQuote: d.text().notNull(),
+    // The same fact's passages in the user's other files (JSON array of
+    // strings, encrypted): one draft, however many files state it.
+    encryptedAlsoQuotes: d.text(),
     sourceTurnId: d.uuid(),
     sourceDocumentId: d
       .uuid()

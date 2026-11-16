@@ -5,8 +5,7 @@ import { createContext, useContext, useState, type ReactNode } from "react";
 import type { SourceImport } from "../hooks/use-source-upload";
 
 type CareerWorkspace = {
-  // A position's session under review: the chat column shows its approval
-  // screen instead of the conversation.
+  // A position's session under review, in the pane beside the chat.
   activeSessionId: string | null;
   setActiveSessionId: (sessionId: string | null) => void;
   // The career chat's unsent message, which a position card can prefill.
@@ -38,7 +37,11 @@ export function CareerWorkspaceProvider({ children }: { children: ReactNode }) {
     <CareerWorkspaceContext
       value={{
         activeSessionId,
-        setActiveSessionId,
+        // One pane at a time: a review replaces a source preview, and back.
+        setActiveSessionId: (sessionId) => {
+          setActiveSessionId(sessionId);
+          if (sessionId) setPreviewSourceDocumentId(null);
+        },
         draft,
         setDraft,
         prefillDraft: (text) => {
@@ -46,7 +49,10 @@ export function CareerWorkspaceProvider({ children }: { children: ReactNode }) {
           document.querySelector<HTMLTextAreaElement>("main textarea")?.focus();
         },
         previewSourceDocumentId,
-        setPreviewSourceDocumentId,
+        setPreviewSourceDocumentId: (sourceDocumentId) => {
+          setPreviewSourceDocumentId(sourceDocumentId);
+          if (sourceDocumentId) setActiveSessionId(null);
+        },
         imports,
         startImport: (started) =>
           setImports((current) => [...current, started]),

@@ -1,5 +1,7 @@
 "use client";
 
+import { useEffect, useRef } from "react";
+
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { ListChecks, MessageSquare, MoreHorizontal } from "lucide-react";
 
@@ -18,6 +20,7 @@ import {
   DropdownMenuTrigger,
 } from "@repo/web/components/ui/dropdown-menu";
 import { toast } from "@repo/web/components/ui/sonner";
+import { cn } from "@repo/web/lib/utils";
 import {
   Tooltip,
   TooltipContent,
@@ -49,7 +52,8 @@ export function PositionCard({
   const labels = useCareerLabels();
   const trpc = useTRPC();
   const refresh = useRefreshCareer();
-  const { setActiveSessionId, prefillDraft } = useCareerWorkspace();
+  const { activeSessionId, setActiveSessionId, prefillDraft } =
+    useCareerWorkspace();
   const onError = (error: { message: string }) => toast.error(error.message);
 
   // The position's interviewer has a session going: what it found so far
@@ -58,6 +62,12 @@ export function PositionCard({
   const session = openSessions.data?.find(
     (candidate) => candidate.positionId === position.id
   );
+  // Under review in the pane beside the chat: marked, and brought into view.
+  const reviewed = !!session && session.sessionId === activeSessionId;
+  const card = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (reviewed) card.current?.scrollIntoView({ block: "nearest" });
+  }, [reviewed]);
 
   const remove = useMutation(
     trpc.career.removePosition.mutationOptions({ onSuccess: refresh, onError })
@@ -81,7 +91,13 @@ export function PositionCard({
         : t.formatMessage({ defaultMessage: "End" });
 
   return (
-    <div className="bg-background flex flex-col gap-2 rounded-lg border p-3">
+    <div
+      ref={card}
+      className={cn(
+        "bg-background flex flex-col gap-2 rounded-lg border p-3",
+        reviewed && "border-primary ring-primary/40 ring-2"
+      )}
+    >
       <div className="flex items-start gap-2">
         <div className="min-w-0 flex-1">
           <p className="truncate text-sm font-medium">{position.title}</p>

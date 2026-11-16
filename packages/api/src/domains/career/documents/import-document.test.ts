@@ -24,6 +24,7 @@ import {
   markImportReactionsSaid,
   pendingImportReactions,
 } from "@repo/api/domains/career-chat/import-reactions";
+import { InterviewRepository } from "@repo/api/domains/interview/interview-repository";
 import { fakeProviderPackage } from "@repo/api/test/fake-provider-package";
 import {
   clearTestDatabase,
@@ -472,6 +473,74 @@ describe("career language", () => {
     );
 
     expect((await ctx.timeline()).profile.interviewLanguage).toBe("en-US");
+  });
+});
+
+describe("facts stated again", () => {
+  it("folds a fact another file already brought into its draft", async () => {
+    const ctx = await setup();
+    await ctx.importFile(resumeA, {
+      positions: [acmeA],
+      credentials: [],
+      exclusions: [],
+    });
+
+    const fake = await ctx.importFile(resumeB, {
+      positions: [
+        {
+          employer: "Acme Corp",
+          title: "Senior Engineer",
+          start_date: "2020-01",
+          end_date: "2023-06",
+          facts: [
+            {
+              kind: "achievement",
+              text: "Cut deploy time from 2 hours to 15 minutes; led the platform team of 6 engineers",
+              quote: "Led the platform team of 6 engineers",
+              same_as: "k1",
+            },
+            {
+              kind: "responsibility",
+              text: "Owned the CI pipeline end to end",
+              quote: "owned the CI pipeline end to end",
+            },
+          ],
+        },
+      ],
+      credentials: [],
+      exclusions: [],
+    });
+
+    // The extraction saw what the career holds, with ids to point at.
+    const extraction = fake.generateObject.mock.calls.find(
+      ([request]: [{ system: string }]) =>
+        request.system.startsWith("Extract the career facts")
+    )![0] as unknown as { messages: Array<{ content: string }> };
+    expect(extraction.messages[0]?.content).toContain(
+      "- k1 (Senior Engineer at Acme Corp, achievement): Cut deploy time from 2 hours to 15 minutes"
+    );
+
+    const cipher = await getUserCipher(ctx.db, ctx.user.id);
+    const interview = new InterviewRepository(ctx.db);
+    const profile = await new CareerRepository(ctx.db).findProfileByUserId(
+      ctx.user.id
+    );
+    const drafts = (
+      await Promise.all(
+        (await interview.listSessions(profile.id)).map((session) =>
+          interview.listDrafts(session.id)
+        )
+      )
+    ).flat();
+    // One draft for the repeated fact, one for the new one.
+    expect(drafts).toHaveLength(2);
+    const repeated = drafts.find((draft) => draft.encryptedAlsoQuotes)!;
+    expect(JSON.parse(cipher.decrypt(repeated.encryptedPayload))).toEqual({
+      text: "Cut deploy time from 2 hours to 15 minutes; led the platform team of 6 engineers",
+    });
+    expect(JSON.parse(cipher.decrypt(repeated.encryptedAlsoQuotes!))).toEqual([
+      "Led the platform team of 6 engineers",
+    ]);
   });
 });
 

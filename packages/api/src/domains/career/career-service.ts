@@ -18,6 +18,7 @@ import {
   type InterviewLanguage,
   type ConflictField,
   type TimelineProposalKind,
+  type StartPath,
 } from "./schemas/career";
 import {
   positionInputSchema,
@@ -93,6 +94,33 @@ export class CareerService {
     const profile = await this.requireProfile(input.userId);
     await new CareerRepository(this.db).updateProfile(profile.id, {
       interviewLanguage: input.interviewLanguage,
+    });
+  }
+
+  /**
+   * Where the user stands at the start (workspace spec, "Onboarding"): the
+   * path they chose, and whether they already have anything (someone who
+   * does skips the choice). Read-only: the profile comes with the choice.
+   */
+  async startState(userId: string) {
+    const repository = new CareerRepository(this.db);
+    const profile = await repository.findProfileByUserId(userId);
+    if (!profile) return { path: null, hasStarted: false, hasOpening: false };
+    const [hasStarted, hasOpening] = await Promise.all([
+      repository.hasStarted(profile.id),
+      repository.hasOpening(profile.id),
+    ]);
+    return { path: profile.startPath, hasStarted, hasOpening };
+  }
+
+  async chooseStart(input: {
+    userId: string;
+    defaultLanguage: InterviewLanguage;
+    path: StartPath;
+  }) {
+    const profile = await this.getOrCreateProfile(input);
+    await new CareerRepository(this.db).updateProfile(profile.id, {
+      startPath: input.path,
     });
   }
 

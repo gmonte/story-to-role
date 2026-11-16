@@ -13,6 +13,7 @@ import {
 import { CareerService } from "./career-service";
 import {
   interviewLanguageSchema,
+  startPathSchema,
   type InterviewLanguage,
 } from "./schemas/career";
 import {
@@ -60,6 +61,45 @@ export const careerRouter = createTRPCRouter({
       await new CareerService(db).updateSettings({
         userId: ctx.userId,
         ...input,
+      });
+      return ok;
+    }),
+
+  startState: userProcedure
+    .meta(
+      openApiMeta(
+        "career",
+        "GET",
+        "/career/start",
+        "Returns how the user chose to start and whether they have started"
+      )
+    )
+    .input(z.object({}))
+    .output(
+      z.object({
+        path: startPathSchema.nullable(),
+        hasStarted: z.boolean(),
+        hasOpening: z.boolean(),
+      })
+    )
+    .query(({ ctx }) => new CareerService(db).startState(ctx.userId)),
+
+  chooseStart: userProcedure
+    .meta(
+      openApiMeta(
+        "career",
+        "POST",
+        "/career/start",
+        "Records how the user chose to start"
+      )
+    )
+    .input(z.object({ path: startPathSchema }))
+    .output(okSchema)
+    .mutation(async ({ ctx, input }) => {
+      await new CareerService(db).chooseStart({
+        userId: ctx.userId,
+        defaultLanguage: defaultLanguage(ctx),
+        path: input.path,
       });
       return ok;
     }),

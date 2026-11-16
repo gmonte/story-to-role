@@ -16,10 +16,11 @@ export default clerkMiddleware(async (auth, request) => {
     await auth.protect();
   }
 
-  // The workspace opens on My career. An HTTP redirect, unlike redirect() in
+  // The workspace opens on the start screen, which sends anyone who has
+  // started on to My career. An HTTP redirect, unlike redirect() in
   // a page, is also followed by the client-side navigation after sign-in.
   if (request.nextUrl.pathname === "/app") {
-    return NextResponse.redirect(new URL("/app/career", request.url));
+    return NextResponse.redirect(new URL("/app/start", request.url));
   }
 
   if (!request.nextUrl.pathname.startsWith("/api")) {

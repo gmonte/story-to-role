@@ -30,6 +30,13 @@ export const positionOrigins = [
 export const positionOriginSchema = z.enum(positionOrigins);
 export type PositionOrigin = z.infer<typeof positionOriginSchema>;
 
+/**
+ * How the user starts (workspace spec, "Onboarding"): with an opening in
+ * mind, or organizing their career first.
+ */
+export const startPathSchema = z.enum(["opening", "career"]);
+export type StartPath = z.infer<typeof startPathSchema>;
+
 /** The full six-stage script or the short one (highlights only). */
 export const scriptKindSchema = z.enum(["full", "short"]);
 export type ScriptKind = z.infer<typeof scriptKindSchema>;

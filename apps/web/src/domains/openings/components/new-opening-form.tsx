@@ -17,6 +17,7 @@ import {
   TabsTrigger,
 } from "@repo/web/components/ui/tabs";
 import { Textarea } from "@repo/web/components/ui/textarea";
+import { cn } from "@repo/web/lib/utils";
 
 import { CreditCost } from "~/domains/credits/components/credit-cost";
 import { useCredits } from "~/domains/credits/hooks/use-credits";
@@ -28,7 +29,12 @@ import { useRefreshOpenings } from "../hooks/use-opening";
  * Adds an opening: paste its description, give its link (read by code in an
  * isolated task), or name a company to approach with no vacancy open.
  */
-export function NewOpeningForm() {
+export function NewOpeningForm({
+  embedded = false,
+}: {
+  // Inside another page (the guided start), which brings its own heading.
+  embedded?: boolean;
+}) {
   const t = useTranslation();
   const trpc = useTRPC();
   const credits = useCredits();
@@ -59,18 +65,25 @@ export function NewOpeningForm() {
   };
 
   return (
-    <div className="mx-auto flex h-full w-full max-w-2xl flex-col justify-center gap-6 p-6">
-      <div>
-        <h2 className="font-display text-2xl font-semibold tracking-tight">
-          {t.formatMessage({ defaultMessage: "Add an opening" })}
-        </h2>
-        <p className="text-muted-foreground text-sm">
-          {t.formatMessage({
-            defaultMessage:
-              "You'll see right away whether it fits your career: a hint, never a gate.",
-          })}
-        </p>
-      </div>
+    <div
+      className={cn(
+        "flex w-full flex-col gap-6",
+        !embedded && "mx-auto h-full max-w-2xl justify-center p-6"
+      )}
+    >
+      {!embedded && (
+        <div>
+          <h2 className="font-display text-2xl font-semibold tracking-tight">
+            {t.formatMessage({ defaultMessage: "Add an opening" })}
+          </h2>
+          <p className="text-muted-foreground text-sm">
+            {t.formatMessage({
+              defaultMessage:
+                "You'll see right away whether it fits your career: a hint, never a gate.",
+            })}
+          </p>
+        </div>
+      )}
       <Tabs defaultValue="paste">
         <TabsList>
           <TabsTrigger value="paste">

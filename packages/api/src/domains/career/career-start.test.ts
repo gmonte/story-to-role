@@ -9,6 +9,7 @@ import {
   closeTestDatabase,
   getTestDatabase,
 } from "@repo/api/test/pglite";
+import { OpeningsRepository } from "@repo/api/domains/openings/openings-repository";
 
 import { CareerService } from "./career-service";
 
@@ -36,16 +37,34 @@ describe("onboarding start", () => {
     const career = new CareerService(db);
     const input = { userId: user.id, defaultLanguage: "pt-BR" as const };
 
-    expect(await career.startState(input)).toEqual({
+    expect(await career.startState(user.id)).toEqual({
       path: null,
-      privacyNoticeAccepted: false,
-      interviewLanguage: "pt-BR",
       hasStarted: false,
       hasOpening: false,
     });
 
     await career.chooseStart({ ...input, path: "opening" });
-    expect((await career.startState(input)).path).toBe("opening");
+    expect((await career.startState(user.id)).path).toBe("opening");
+    await career.chooseStart({ ...input, path: "career" });
+    expect((await career.startState(user.id)).path).toBe("career");
+  });
+
+  it("counts an opening added the usual way", async () => {
+    const db = await getTestDatabase();
+    const user = await createTestUser();
+    const career = new CareerService(db);
+    const profile = await career.getOrCreateProfile({
+      userId: user.id,
+      defaultLanguage: "en-US",
+    });
+    await new OpeningsRepository(db).insertOpening({
+      profileId: profile.id,
+      kind: "posted",
+    });
+    expect(await career.startState(user.id)).toMatchObject({
+      hasStarted: true,
+      hasOpening: true,
+    });
   });
 
   it("knows a user who already has something has started", async () => {
@@ -53,7 +72,10 @@ describe("onboarding start", () => {
     const user = await createTestUser();
     const career = new CareerService(db);
     const input = { userId: user.id, defaultLanguage: "en-US" as const };
-    await career.startState(input);
+    await career.getOrCreateProfile(input);
+    expect(await career.startState(user.id)).toMatchObject({
+      hasStarted: false,
+    });
     await new TrackerService(db).createExternal({
       userId: user.id,
       company: "Globex",
@@ -62,7 +84,7 @@ describe("onboarding start", () => {
       status: "applied",
     });
 
-    expect(await career.startState(input)).toMatchObject({
+    expect(await career.startState(user.id)).toMatchObject({
       hasStarted: true,
       hasOpening: true,
     });

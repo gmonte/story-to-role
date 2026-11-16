@@ -65,31 +65,24 @@ export const careerRouter = createTRPCRouter({
       return ok;
     }),
 
-  start: userProcedure
+  startState: userProcedure
     .meta(
       openApiMeta(
         "career",
         "GET",
         "/career/start",
-        "Returns how the user chose to start and whether they already have"
+        "Returns how the user chose to start and whether they have started"
       )
     )
     .input(z.object({}))
     .output(
       z.object({
         path: startPathSchema.nullable(),
-        privacyNoticeAccepted: z.boolean(),
-        interviewLanguage: interviewLanguageSchema,
         hasStarted: z.boolean(),
         hasOpening: z.boolean(),
       })
     )
-    .query(({ ctx }) =>
-      new CareerService(db).startState({
-        userId: ctx.userId,
-        defaultLanguage: defaultLanguage(ctx),
-      })
-    ),
+    .query(({ ctx }) => new CareerService(db).startState(ctx.userId)),
 
   chooseStart: userProcedure
     .meta(

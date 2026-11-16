@@ -40,7 +40,7 @@ export class CareerRepository {
   }
 
   /** Whether the profile holds anything yet: an imported file, a position or an opening. */
-  async hasAnything(profileId: string) {
+  async hasStarted(profileId: string) {
     const first = (
       table:
         | typeof sourceDocumentsTable

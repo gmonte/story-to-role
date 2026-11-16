@@ -1,8 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
-
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useMutation } from "@tanstack/react-query";
 import { BriefcaseBusiness, Target } from "lucide-react";
 import { useRouter } from "next/navigation";
 
@@ -21,33 +19,18 @@ const destinations: Record<StartPath, string> = {
 
 /**
  * Right after sign-up (workspace spec, "Onboarding"): the user chooses how
- * to start. Anyone who has started already goes straight on.
+ * to start (the page sends anyone who has started straight on).
  */
 export function StartChoice() {
   const t = useTranslation();
   const trpc = useTRPC();
   const router = useRouter();
-  const start = useQuery(trpc.career.start.queryOptions({}));
   const choose = useMutation(
     trpc.career.chooseStart.mutationOptions({
       onSuccess: (_, { path }) => router.push(destinations[path]),
       onError: (error) => toast.error(error.message),
     })
   );
-
-  const state = start.data;
-  // The guided opening path resumes until its first opening exists.
-  const resume =
-    state?.path === "opening" && !state.hasOpening
-      ? destinations.opening
-      : state?.path || state?.hasStarted
-        ? destinations.career
-        : null;
-  useEffect(() => {
-    if (resume) router.replace(resume);
-  }, [resume, router]);
-
-  if (!state || resume) return null;
 
   const options: Array<{
     path: StartPath;

@@ -100,21 +100,17 @@ export class CareerService {
   /**
    * Where the user stands at the start (workspace spec, "Onboarding"): the
    * path they chose, and whether they already have anything (someone who
-   * does skips the choice).
+   * does skips the choice). Read-only: the profile comes with the choice.
    */
-  async startState(input: {
-    userId: string;
-    defaultLanguage: InterviewLanguage;
-  }) {
-    const profile = await this.getOrCreateProfile(input);
+  async startState(userId: string) {
     const repository = new CareerRepository(this.db);
-    return {
-      path: profile.startPath,
-      privacyNoticeAccepted: !!profile.privacyNoticeAcceptedAt,
-      interviewLanguage: profile.interviewLanguage,
-      hasStarted: await repository.hasAnything(profile.id),
-      hasOpening: await repository.hasOpening(profile.id),
-    };
+    const profile = await repository.findProfileByUserId(userId);
+    if (!profile) return { path: null, hasStarted: false, hasOpening: false };
+    const [hasStarted, hasOpening] = await Promise.all([
+      repository.hasStarted(profile.id),
+      repository.hasOpening(profile.id),
+    ]);
+    return { path: profile.startPath, hasStarted, hasOpening };
   }
 
   async chooseStart(input: {

@@ -42,6 +42,7 @@ export function buildCareerChatPrompt(input: {
     "How to handle each user message:",
     "- Decide which positions or credentials it is about and call `consult_interviewer` once for each, in the same step when it covers several (two at most per message; say you will get to the others next). Pass the id exactly as listed below.",
     '- When the user has no positions yet, or talks about their career in general (a first job, a career change, what they want next), use kind "no_position".',
+    "- When the user asks what you know about a position or credential (what their files say, what was approved), consult its interviewer, who holds its facts, and answer from what it replies; never say you know nothing before asking it.",
     "- When it is a greeting, welcome the user and suggest where to start (the most recent position not yet approved), without calling the tool. The user never has to pick a position first: only when a fact can't be placed in any position, ask where it belongs.",
     `- Then answer the user yourself, in the language of their latest message (${languageNames[input.language]} when it doesn't tell). Relay what the interviewer asked, one question at a time. When several interviewers replied, keep the single most useful question and say you will come back to the other positions.`,
     "- When a result says a review is required, tell the user that position has a lot to review and ask them to review it on its card before going on.",

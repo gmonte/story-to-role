@@ -20,6 +20,7 @@ import {
 import { Input } from "@repo/web/components/ui/input";
 import { Label } from "@repo/web/components/ui/label";
 import { toast } from "@repo/web/components/ui/sonner";
+import { privacySettings } from "@repo/common/settings/privacy-settings";
 
 import { useTRPC } from "~/tools/trpc/client";
 
@@ -54,10 +55,13 @@ export function PrivacyAndData() {
           {t.formatMessage({ defaultMessage: "Delete your account" })}
         </h2>
         <p className="text-muted-foreground">
-          {t.formatMessage({
-            defaultMessage:
-              "Everything is deleted right away and can’t be recovered; copies in database backups become unreadable and expire within 30 days. A subscription ends now. Stripe keeps only the invoices the law requires.",
-          })}
+          {t.formatMessage(
+            {
+              defaultMessage:
+                "Everything is deleted right away and can’t be recovered. The database’s recovery history keeps a copy for up to {hours, plural, one {# hour} other {# hours}}, with your career content unreadable, and then it’s gone. A subscription ends now. Stripe keeps only the invoices the law requires.",
+            },
+            { hours: privacySettings.databaseHistoryHours }
+          )}
         </p>
         <DeleteAccountDialog />
       </section>

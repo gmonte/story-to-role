@@ -11,6 +11,9 @@ import { runDraftNarrative, runSummarizePosition } from "../run-career-writing";
 export const importDocumentTask = task({
   id: "import_document",
   retry: { maxAttempts: 1 },
+  // One import at a time per user (the trigger passes their id as the
+  // key): each sees the facts the one before saved, so a repeat folds in.
+  concurrency: { perKey: 1 },
   run: async ({ taskId }: { taskId: string }) => {
     await runTask(
       { db, taskId, type: "import_document" },

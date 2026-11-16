@@ -13,10 +13,7 @@ import { evidenceTable } from "@repo/api/domains/evidence/db/evidence-tables";
 import { openingsTable } from "@repo/api/domains/openings/db/openings-tables";
 import type { DbClient } from "@repo/api/tools/db-client";
 
-import type {
-  InterviewLanguage,
-  InterviewLanguageSource,
-} from "./schemas/career";
+import type { InterviewLanguage } from "./schemas/career";
 import { slotStatuses } from "./documents/document-limits";
 import {
   careerNarrativesTable,
@@ -116,32 +113,6 @@ export class CareerRepository {
       .insert(careerProfilesTable)
       .values(profile)
       .onConflictDoNothing({ target: careerProfilesTable.userId });
-  }
-
-  /**
-   * Sets the career language from the first file or chat message, only while
-   * nothing has set it and the profile has no evidence, in one statement: of
-   * two imported at once, one wins. Returns the language the career is in.
-   */
-  async adoptLanguage(
-    profileId: string,
-    language: InterviewLanguage,
-    source: Exclude<InterviewLanguageSource, "user">
-  ) {
-    const [adopted] = await this.tx
-      .update(careerProfilesTable)
-      .set({ interviewLanguage: language, interviewLanguageSource: source })
-      .where(
-        and(
-          eq(careerProfilesTable.id, profileId),
-          isNull(careerProfilesTable.interviewLanguageSource),
-          this.hasNoEvidence(profileId)
-        )
-      )
-      .returning({ language: careerProfilesTable.interviewLanguage });
-    if (adopted) return adopted.language;
-    const profile = await this.findProfileById(profileId);
-    return profile?.interviewLanguage ?? language;
   }
 
   /**

@@ -56,7 +56,7 @@ The user sees one continuous chat with a career timeline beside it; behind it, e
 8. **Career narrative.** After all positions are approved (or whenever the user asks), the system drafts the links between positions for approval.
 9. **Come back anytime.** Leaving mid-position keeps progress. Reopening an approved position starts a new session seeded with what was approved.
 
-The chat follows the language of the user's messages. Extracted facts are kept in one career language, set once (the first imported file's, else the first chat message's, else the interface language) and locked once there is evidence; each fact keeps its original wording, which generation prefers when the document is in that language.
+The chat follows the language of the user's messages. Extracted facts are kept in one career language, the interface language when the profile is made, whatever the files' language, and locked once there is evidence; each fact keeps its original wording, which generation prefers when the document is in that language.
 
 Switching language mid-interview only changes the conversation; facts stay in the career language. Each evidence item records its language (older careers may hold both). The approval screen and the timeline show a small language badge (EN/PT) on each item only when the career holds evidence in both languages.
 

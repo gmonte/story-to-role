@@ -225,29 +225,26 @@ describe("career chat", () => {
     expect(turn?.funding).toBe("credits");
   });
 
-  it("keeps the career in the first message's language, then locks it", async () => {
+  it("keeps the career's language whatever the chat is in, then locks it", async () => {
     const ctx = await setup();
     const career = new CareerService(ctx.db);
     const language = async () =>
       (await new CareerRepository(ctx.db).findProfileByUserId(ctx.user.id))
         ?.interviewLanguage;
 
+    // A message in another language only changes the conversation's.
     await ctx.say(
       "Eu trabalhei na Acme por três anos",
       orchestrator([], "Conte mais.")
     );
-    expect(await language()).toBe("pt-BR");
-
-    // A later message in another language only changes the conversation's.
-    await ctx.say("I worked at Globex too", orchestrator([], "Tell me more."));
-    expect(await language()).toBe("pt-BR");
+    expect(await language()).toBe("en-US");
 
     // Before any evidence the user may still pick another one; after, no.
     await career.updateSettings({
       userId: ctx.user.id,
-      interviewLanguage: "en-US",
+      interviewLanguage: "pt-BR",
     });
-    expect(await language()).toBe("en-US");
+    expect(await language()).toBe("pt-BR");
     const profile = await new CareerRepository(ctx.db).findProfileByUserId(
       ctx.user.id
     );
@@ -263,7 +260,7 @@ describe("career chat", () => {
       },
     ]);
     await expect(
-      career.updateSettings({ userId: ctx.user.id, interviewLanguage: "pt-BR" })
+      career.updateSettings({ userId: ctx.user.id, interviewLanguage: "en-US" })
     ).rejects.toMatchObject({ code: "CONFLICT" });
   });
 

@@ -192,7 +192,7 @@ Acceptance:
 
 ### W5: Career language
 
-- The interview language leaves the privacy notice and the screen: no control at all. The conversation follows the language the user writes in; the career language (the one facts are kept in) is set once, by the first imported file, else the first chat message, else the interface language, and locks once there is evidence, so facts never mix languages. A column records what set it (`interviewLanguageSource`: file, message or user), so two files imported at once can't both switch it; profiles that went through the privacy notice count as set.
+- The interview language leaves the privacy notice and the screen: no control at all. The conversation follows the language the user writes in; the career language (the one facts are kept in) is the interface's when the profile is made, whatever language the files are in (documents can be in any), and locks once there is evidence, so facts never mix languages. A user may still set it through the API before the first evidence. Imports run one at a time per user (a Trigger.dev concurrency key), so each sees the facts the one before saved.
 - Generation gets each file fact's original wording (author notes removed, sensitive filter applied), to prefer when the document is in that language; it also backs the line's figures. Resumes and cover letters.
 
 ## Not in the MVP

@@ -87,8 +87,8 @@ export const timelineProposalKindSchema = z.enum([
 export type TimelineProposalKind = z.infer<typeof timelineProposalKindSchema>;
 
 /**
- * What set the career language, once: the first imported file, the first
- * chat message, or the user (before evidence existed).
+ * Who set the career language: the user (before evidence existed). Older
+ * profiles may say a file or a message set it, as they once could.
  */
 export const interviewLanguageSourceSchema = z.enum([
   "file",

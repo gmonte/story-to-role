@@ -44,6 +44,10 @@ const asPaymentRequired = (error: unknown) => {
 const keptFor = (tx: DbClient, userId: string, type: TaskType, now: Date) =>
   keepsReserve(type) ? creditReserve(tx, userId, now) : Promise.resolve(0);
 
+// Tasks that run one at a time per user (their task caps the key): an
+// import must see the facts the one before it saved.
+const queuedPerUser: ReadonlySet<TaskType> = new Set(["import_document"]);
+
 export class TasksService {
   constructor(
     private readonly db: DbClient,
@@ -106,9 +110,12 @@ export class TasksService {
 
     const repository = new TasksRepository(this.db);
     try {
-      const { runId, accessToken } = await this.trigger.trigger(task.type, {
-        taskId: task.id,
-      });
+      const payload = { taskId: task.id };
+      const { runId, accessToken } = queuedPerUser.has(task.type)
+        ? await this.trigger.trigger(task.type, payload, {
+            concurrencyKey: input.userId,
+          })
+        : await this.trigger.trigger(task.type, payload);
       await repository.setRunId({ taskId: task.id, runId });
       return { task: { ...task, runId }, realtime: { runId, accessToken } };
     } catch (error) {

@@ -29,6 +29,7 @@
     "@anthropic-ai/sdk": "catalog:ai",
     "@clerk/nextjs": "catalog:web",
     "@huggingface/transformers": "catalog:api",
+    "@napi-rs/canvas": "catalog:api",
     "@react-pdf/renderer": "catalog:api",
     "@repo/common": "workspace:*",
     "@repo/intl": "workspace:*",

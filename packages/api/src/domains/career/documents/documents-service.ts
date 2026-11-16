@@ -6,16 +6,17 @@ import type { DbClient } from "@repo/api/tools/db-client";
 import { getStorage, type Storage } from "@repo/api/tools/storage/storage";
 
 import { CareerRepository } from "../career-repository";
-import type { SourceDocumentKind } from "../schemas/career";
 import {
   documentLimits,
   documentTypeOf,
+  hasExpectedContent,
   isAcceptedDocumentType,
 } from "./document-limits";
+import { previewDocument, renderPdfPage } from "./document-preview";
 
 /**
- * Receives an imported resume or truth file: the file is stored encrypted
- * with the user's key and its import task receives only the document id.
+ * The user's sources: each file is stored encrypted with the user's key, its
+ * import task receives only the document id, and its preview is read-only.
  */
 export class DocumentsService {
   constructor(
@@ -26,7 +27,6 @@ export class DocumentsService {
 
   async upload(input: {
     userId: string;
-    kind: SourceDocumentKind;
     fileName: string;
     mimeType: string;
     bytes: Buffer;
@@ -35,7 +35,8 @@ export class DocumentsService {
     if (
       !isAcceptedDocumentType(mimeType) ||
       input.bytes.length === 0 ||
-      input.bytes.length > documentLimits.maxBytes
+      input.bytes.length > documentLimits.maxBytes ||
+      !hasExpectedContent(input.bytes, mimeType)
     ) {
       throw new TRPCError({ code: "BAD_REQUEST" });
     }
@@ -53,6 +54,15 @@ export class DocumentsService {
     });
 
     const document = await this.db.transaction(async (tx) => {
+      const career = new CareerRepository(tx);
+      // Counted under a lock: files dropped together can't overshoot.
+      await career.lockProfile(profile.id);
+      if (
+        (await career.countSlottedDocuments(profile.id)) >=
+        documentLimits.maxSources
+      ) {
+        throw new TRPCError({ code: "CONFLICT" });
+      }
       const cipher = await getUserCipher(tx, input.userId);
       const storageKey = `users/${input.userId}/documents/${crypto.randomUUID()}`;
       await this.storage.put(
@@ -60,9 +70,10 @@ export class DocumentsService {
         Buffer.from(cipher.encrypt(input.bytes.toString("base64"))),
         { contentType: "application/octet-stream" }
       );
-      return new CareerRepository(tx).insertDocument({
+      return career.insertDocument({
         profileId: profile.id,
-        kind: input.kind,
+        // Until the import reads it: confidentiality rules make it a truth file.
+        kind: "resume",
         encryptedFileName: cipher.encrypt(input.fileName.slice(0, 255)),
         mimeType,
         storageKey,
@@ -75,5 +86,68 @@ export class DocumentsService {
       subjectId: document.id,
     });
     return { sourceDocumentId: document.id, realtime };
+  }
+
+  /**
+   * Removes a source and its file, freeing its slot. What was already
+   * extracted from it stays: evidence and drafts only lose the link.
+   */
+  async remove(input: { userId: string; sourceDocumentId: string }) {
+    const document = await this.requireDocument(input);
+    // Its import still reads the file.
+    if (document.status === "pending" || document.status === "processing") {
+      throw new TRPCError({ code: "CONFLICT" });
+    }
+    await new CareerRepository(this.db).deleteDocument(document.id);
+    await this.storage.delete(document.storageKey);
+  }
+
+  async preview(input: { userId: string; sourceDocumentId: string }) {
+    const { bytes, mimeType } = await this.readFile(input);
+    return previewDocument({ bytes, mimeType });
+  }
+
+  async renderPage(input: {
+    userId: string;
+    sourceDocumentId: string;
+    page: number;
+  }) {
+    const { bytes, mimeType } = await this.readFile(input);
+    if (mimeType !== "application/pdf") {
+      throw new TRPCError({ code: "BAD_REQUEST" });
+    }
+    const png = await renderPdfPage({ bytes, page: input.page });
+    if (!png) throw new TRPCError({ code: "NOT_FOUND" });
+    return png;
+  }
+
+  /** A source of the user's own: anyone else's is not found. */
+  private async requireDocument(input: {
+    userId: string;
+    sourceDocumentId: string;
+  }) {
+    const career = new CareerRepository(this.db);
+    const [profile, document] = await Promise.all([
+      career.findProfileByUserId(input.userId),
+      career.findDocument(input.sourceDocumentId),
+    ]);
+    if (!profile || !document) throw new TRPCError({ code: "NOT_FOUND" });
+    if (document.profileId !== profile.id) {
+      throw new TRPCError({ code: "NOT_FOUND" });
+    }
+    return document;
+  }
+
+  private async readFile(input: { userId: string; sourceDocumentId: string }) {
+    const document = await this.requireDocument(input);
+    const stored = await this.storage.get(document.storageKey);
+    if (!stored || !isAcceptedDocumentType(document.mimeType)) {
+      throw new TRPCError({ code: "NOT_FOUND" });
+    }
+    const cipher = await getUserCipher(this.db, input.userId);
+    return {
+      bytes: Buffer.from(cipher.decrypt(stored.toString("utf8")), "base64"),
+      mimeType: document.mimeType,
+    };
   }
 }

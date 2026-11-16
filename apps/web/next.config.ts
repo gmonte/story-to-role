@@ -8,6 +8,8 @@ const nextConfig: NextConfig = {
     viewTransition: true,
   },
   reactCompiler: true,
+  // Native: the source preview renders PDF pages with it on the server.
+  serverExternalPackages: ["@napi-rs/canvas"],
   typedRoutes: true,
   typescript: {
     ignoreBuildErrors: true,

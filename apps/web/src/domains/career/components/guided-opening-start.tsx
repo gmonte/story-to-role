@@ -17,7 +17,7 @@ import { useTRPC } from "~/tools/trpc/client";
 
 import { useTimeline } from "../hooks/use-career-queries";
 import { ApproveImportedButton } from "./approve-imported-button";
-import { ImportDocuments } from "./import-documents";
+import { Sources } from "./sources";
 import { PrivacyNotice } from "./privacy-notice";
 
 /**
@@ -124,7 +124,7 @@ export function GuidedOpeningStart() {
                 })}
               </p>
             </div>
-            <ImportDocuments documents={documents} />
+            <Sources documents={documents} />
             {reading && (
               <p className="text-muted-foreground flex items-center gap-2 text-sm">
                 <Loader2 className="size-4 animate-spin" />

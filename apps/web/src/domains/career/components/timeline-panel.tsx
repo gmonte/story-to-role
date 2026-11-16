@@ -11,19 +11,21 @@ import {
 } from "@repo/web/components/ui/collapsible";
 
 import { useTimeline } from "../hooks/use-career-queries";
+import { useCareerWorkspace } from "./career-workspace-context";
 import { CredentialsSection } from "./credentials-section";
-import { ImportDocuments } from "./import-documents";
 import { NarrativeCard } from "./narrative-card";
 import { PositionCard } from "./position-card";
 import { PositionFormDialog } from "./position-form-dialog";
 import { ApproveImportedButton } from "./approve-imported-button";
 import { ProposalCards } from "./proposal-cards";
 import { SensitiveReview } from "./sensitive-review";
+import { Sources } from "./sources";
 
 /** The side panel of My career: the timeline of positions and its tools. */
 export function TimelinePanel() {
   const t = useTranslation();
   const timeline = useTimeline();
+  const { setPreviewSourceDocumentId } = useCareerWorkspace();
 
   // Nothing to import or review before the privacy notice is acknowledged.
   if (!timeline.data?.profile.privacyNoticeAccepted) return null;
@@ -38,7 +40,10 @@ export function TimelinePanel() {
 
   return (
     <div className="flex flex-col gap-6">
-      <ImportDocuments documents={timeline.data.documents} />
+      <Sources
+        documents={timeline.data.documents}
+        onPreview={setPreviewSourceDocumentId}
+      />
       <ProposalCards
         proposals={timeline.data.proposals}
         positions={positions}

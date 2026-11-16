@@ -96,6 +96,13 @@ export const sourceDocumentViewSchema = z.object({
   createdAt: z.date(),
 });
 
+/** Read-only: a PDF is shown as page images, anything else as plain text. */
+export const documentPreviewSchema = z.discriminatedUnion("type", [
+  z.object({ type: z.literal("pdf"), pageCount: z.number().int() }),
+  z.object({ type: z.literal("text"), text: z.string() }),
+]);
+export type DocumentPreview = z.infer<typeof documentPreviewSchema>;
+
 export const timelineProposalViewSchema = z.object({
   id: z.uuid(),
   kind: timelineProposalKindSchema,

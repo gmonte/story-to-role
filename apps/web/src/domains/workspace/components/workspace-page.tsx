@@ -26,7 +26,9 @@ export function WorkspacePage({
       <div className="flex min-h-0 flex-1">
         <main className="flex min-w-0 flex-1 flex-col">{chat}</main>
         {panel && (
-          <aside className="bg-muted/30 hidden w-80 shrink-0 overflow-y-auto border-l p-4 lg:block xl:w-96">
+          // A panel that renders nothing (My career before the privacy
+          // notice) leaves no empty column behind.
+          <aside className="bg-muted/30 hidden w-80 shrink-0 overflow-y-auto border-l p-4 empty:hidden lg:block xl:w-96">
             {panel}
           </aside>
         )}

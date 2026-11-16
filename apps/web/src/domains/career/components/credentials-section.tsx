@@ -3,11 +3,9 @@
 import { useState, type FormEvent } from "react";
 
 import { useMutation } from "@tanstack/react-query";
+import { Plus } from "lucide-react";
 
-import {
-  credentialKinds,
-  type CredentialKind,
-} from "@repo/api/domains/career/schemas/career";
+import type { CredentialKind } from "@repo/api/domains/career/schemas/career";
 import type { CredentialView } from "@repo/api/domains/career/schemas/timeline";
 import { useTranslation } from "@repo/intl/use-translation";
 import { Badge } from "@repo/web/components/ui/badge";
@@ -37,8 +35,16 @@ import { useCareerLabels } from "../hooks/use-career-labels";
 import { useRefreshCareer } from "../hooks/use-career-queries";
 import { useCareerWorkspace } from "./career-workspace-context";
 
+/** The credential kinds each group of the side panel shows, as the resume does. */
+const groupKinds = {
+  education: ["education"],
+  language: ["language"],
+  certification: ["certification"],
+  other: ["course", "publication", "award", "volunteering"],
+} as const satisfies Record<string, readonly CredentialKind[]>;
+
 /**
- * Education, certifications, languages and the like: short facts approved
+ * Education, languages, certifications and the rest: short facts approved
  * item by item, each of which can also tell its story in a short session.
  */
 export function CredentialsSection({
@@ -46,6 +52,69 @@ export function CredentialsSection({
 }: {
   credentials: CredentialView[];
 }) {
+  const t = useTranslation();
+
+  const groups = [
+    {
+      kinds: groupKinds.education,
+      title: t.formatMessage({ defaultMessage: "Education" }),
+      empty: t.formatMessage({
+        defaultMessage: "Degrees and schooling appear here.",
+      }),
+      // The kinds without a group of their own are added from here.
+      addable: [...groupKinds.education, ...groupKinds.other],
+    },
+    {
+      kinds: groupKinds.language,
+      title: t.formatMessage({ defaultMessage: "Languages" }),
+      empty: t.formatMessage({
+        defaultMessage: "The languages you speak, with their level.",
+      }),
+      addable: groupKinds.language,
+    },
+    {
+      kinds: groupKinds.certification,
+      title: t.formatMessage({ defaultMessage: "Certifications" }),
+      empty: t.formatMessage({
+        defaultMessage: "Certifications you hold appear here.",
+      }),
+      addable: groupKinds.certification,
+    },
+    {
+      kinds: groupKinds.other,
+      title: t.formatMessage({
+        defaultMessage: "Courses, publications and more",
+      }),
+      // Shown only once it has an item.
+      empty: null,
+      addable: groupKinds.other,
+    },
+  ];
+
+  return groups.map((group) => {
+    const items = credentials.filter((credential) =>
+      (group.kinds as readonly CredentialKind[]).includes(credential.kind)
+    );
+    if (items.length === 0 && !group.empty) return null;
+
+    return (
+      <section key={group.kinds[0]} className="flex flex-col gap-2">
+        <div className="flex items-center justify-between">
+          <h3 className="text-sm font-medium">{group.title}</h3>
+          <AddCredentialDialog kinds={group.addable} />
+        </div>
+        {items.length === 0 && (
+          <p className="text-muted-foreground text-xs">{group.empty}</p>
+        )}
+        {items.map((credential) => (
+          <CredentialCard key={credential.id} credential={credential} />
+        ))}
+      </section>
+    );
+  });
+}
+
+function CredentialCard({ credential }: { credential: CredentialView }) {
   const t = useTranslation();
   const labels = useCareerLabels();
   const trpc = useTRPC();
@@ -76,96 +145,70 @@ export function CredentialsSection({
   );
 
   return (
-    <section className="flex flex-col gap-2">
-      <div className="flex items-center justify-between">
-        <h3 className="text-sm font-medium">
-          {t.formatMessage({ defaultMessage: "Education and credentials" })}
-        </h3>
-        <AddCredentialDialog />
-      </div>
-      {credentials.length === 0 && (
-        <p className="text-muted-foreground text-xs">
-          {t.formatMessage({
-            defaultMessage:
-              "Degrees, certifications, languages and courses appear here.",
-          })}
-        </p>
-      )}
-      {credentials.map((credential) => (
-        <div
-          key={credential.id}
-          className="bg-background flex flex-col gap-1.5 rounded-lg border p-3"
-        >
-          <div className="flex items-start justify-between gap-2">
-            <div className="min-w-0">
-              <p className="truncate text-sm font-medium">
-                {[credential.title, credential.level]
-                  .filter(Boolean)
-                  .join(" · ")}
-              </p>
-              <p className="text-muted-foreground truncate text-xs">
-                {[
-                  labels.credentialKind(credential.kind),
-                  credential.institution,
-                ]
-                  .filter(Boolean)
-                  .join(" · ")}
-              </p>
-            </div>
-            <div className="flex shrink-0 gap-1">
-              {credential.depth.counts.stories > 0 &&
-                credential.depth.level && (
-                  <Badge variant="secondary">
-                    {labels.depth(credential.depth.level)}
-                  </Badge>
-                )}
-              {!credential.approved && (
-                <Badge variant="outline">
-                  {t.formatMessage({ defaultMessage: "To review" })}
-                </Badge>
-              )}
-            </div>
-          </div>
-          <div className="flex flex-wrap gap-1.5">
-            {!credential.approved && (
-              <Button
-                size="sm"
-                className="h-7"
-                onClick={() => approve.mutate({ credentialId: credential.id })}
-              >
-                {t.formatMessage({ defaultMessage: "Approve" })}
-              </Button>
-            )}
-            <Button
-              size="sm"
-              variant="outline"
-              className="h-7"
-              onClick={() => tellStory.mutate({ credentialId: credential.id })}
-            >
-              {t.formatMessage({ defaultMessage: "Tell the story" })}
-            </Button>
-            <Button
-              size="sm"
-              variant="ghost"
-              className="h-7"
-              onClick={() => remove.mutate({ credentialId: credential.id })}
-            >
-              {t.formatMessage({ defaultMessage: "Remove" })}
-            </Button>
-          </div>
+    <div className="bg-background flex flex-col gap-1.5 rounded-lg border p-3">
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0">
+          <p className="truncate text-sm font-medium">
+            {[credential.title, credential.level].filter(Boolean).join(" · ")}
+          </p>
+          <p className="text-muted-foreground truncate text-xs">
+            {[labels.credentialKind(credential.kind), credential.institution]
+              .filter(Boolean)
+              .join(" · ")}
+          </p>
         </div>
-      ))}
-    </section>
+        <div className="flex shrink-0 gap-1">
+          {credential.depth.counts.stories > 0 && credential.depth.level && (
+            <Badge variant="secondary">
+              {labels.depth(credential.depth.level)}
+            </Badge>
+          )}
+          {!credential.approved && (
+            <Badge variant="outline">
+              {t.formatMessage({ defaultMessage: "To review" })}
+            </Badge>
+          )}
+        </div>
+      </div>
+      <div className="flex flex-wrap gap-1.5">
+        {!credential.approved && (
+          <Button
+            size="sm"
+            className="h-7"
+            onClick={() => approve.mutate({ credentialId: credential.id })}
+          >
+            {t.formatMessage({ defaultMessage: "Approve" })}
+          </Button>
+        )}
+        <Button
+          size="sm"
+          variant="outline"
+          className="h-7"
+          onClick={() => tellStory.mutate({ credentialId: credential.id })}
+        >
+          {t.formatMessage({ defaultMessage: "Tell the story" })}
+        </Button>
+        <Button
+          size="sm"
+          variant="ghost"
+          className="h-7"
+          onClick={() => remove.mutate({ credentialId: credential.id })}
+        >
+          {t.formatMessage({ defaultMessage: "Remove" })}
+        </Button>
+      </div>
+    </div>
   );
 }
 
-function AddCredentialDialog() {
+/** Adds a credential of one of `kinds`; a single kind skips the choice. */
+function AddCredentialDialog({ kinds }: { kinds: readonly CredentialKind[] }) {
   const t = useTranslation();
   const labels = useCareerLabels();
   const trpc = useTRPC();
   const refresh = useRefreshCareer();
   const [open, setOpen] = useState(false);
-  const [kind, setKind] = useState<CredentialKind>("education");
+  const [kind, setKind] = useState<CredentialKind>(kinds[0]);
   const add = useMutation(
     trpc.career.addCredential.mutationOptions({
       onSuccess: async () => {
@@ -200,6 +243,7 @@ function AddCredentialDialog() {
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
         <Button size="sm" variant="ghost">
+          <Plus />
           {t.formatMessage({ defaultMessage: "Add" })}
         </Button>
       </DialogTrigger>
@@ -210,21 +254,23 @@ function AddCredentialDialog() {
           </DialogTitle>
         </DialogHeader>
         <form id="credential-form" onSubmit={onSubmit} className="grid gap-3">
-          <Select
-            value={kind}
-            onValueChange={(value) => setKind(value as CredentialKind)}
-          >
-            <SelectTrigger className="w-full">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {credentialKinds.map((option) => (
-                <SelectItem key={option} value={option}>
-                  {labels.credentialKind(option)}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          {kinds.length > 1 && (
+            <Select
+              value={kind}
+              onValueChange={(value) => setKind(value as CredentialKind)}
+            >
+              <SelectTrigger className="w-full">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {kinds.map((option) => (
+                  <SelectItem key={option} value={option}>
+                    {labels.credentialKind(option)}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
           {[
             {
               name: "title",
@@ -235,12 +281,14 @@ function AddCredentialDialog() {
               name: "institution",
               label: t.formatMessage({ defaultMessage: "Institution" }),
             },
-            {
-              name: "level",
-              label: t.formatMessage({
-                defaultMessage: "Level (for languages)",
-              }),
-            },
+            ...(kind === "language"
+              ? [
+                  {
+                    name: "level",
+                    label: t.formatMessage({ defaultMessage: "Level" }),
+                  },
+                ]
+              : []),
           ].map((field) => (
             <div key={field.name} className="grid gap-1.5">
               <Label htmlFor={field.name}>{field.label}</Label>

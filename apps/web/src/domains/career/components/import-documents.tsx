@@ -12,6 +12,11 @@ import { Badge } from "@repo/web/components/ui/badge";
 import { Button } from "@repo/web/components/ui/button";
 import { toast } from "@repo/web/components/ui/sonner";
 
+import {
+  type CreditsShortfall,
+  useOutOfCreditsToast,
+} from "~/domains/credits/components/out-of-credits-notice";
+
 import { useRefreshCareer } from "../hooks/use-career-queries";
 
 const ACCEPT =
@@ -28,6 +33,7 @@ export function ImportDocuments({
 }) {
   const t = useTranslation();
   const refresh = useRefreshCareer();
+  const showOutOfCredits = useOutOfCreditsToast();
   const resumeInput = useRef<HTMLInputElement>(null);
   const truthInput = useRef<HTMLInputElement>(null);
   const [running, setRunning] = useState<RealtimeSubscription[]>([]);
@@ -40,6 +46,13 @@ export function ImportDocuments({
       method: "POST",
       body: form,
     });
+    if (response.status === 402) {
+      const { credits } = (await response.json()) as {
+        credits: CreditsShortfall;
+      };
+      showOutOfCredits(credits);
+      return;
+    }
     if (!response.ok) {
       toast.error(
         t.formatMessage({

@@ -72,6 +72,7 @@ async function setup() {
     userId: user.id,
     defaultLanguage: "en-US",
   });
+  await career.acceptPrivacyNotice(user.id);
   const documents = new DocumentsService(
     db,
     new TasksService(db, trigger),
@@ -116,7 +117,7 @@ async function setup() {
 
   const timeline = () =>
     career.getTimeline({ userId: user.id, defaultLanguage: "en-US" });
-  return { db, user, career, importFile, timeline };
+  return { db, user, career, documents, importFile, timeline };
 }
 
 const acmeA = {
@@ -136,6 +137,25 @@ const acmeA = {
 };
 
 describe("document import", () => {
+  it("refuses a file before the privacy notice is acknowledged", async () => {
+    const { db, documents } = await setup();
+    const newcomer = await createTestUser("grace@example.com");
+    await new CareerService(db).getOrCreateProfile({
+      userId: newcomer.id,
+      defaultLanguage: "en-US",
+    });
+
+    await expect(
+      documents.upload({
+        userId: newcomer.id,
+        kind: "resume",
+        fileName: "resume.md",
+        mimeType: "text/markdown",
+        bytes: Buffer.from(resumeA),
+      })
+    ).rejects.toMatchObject({ code: "PRECONDITION_FAILED" });
+  });
+
   beforeEach(async () => {
     rootDir = await mkdtemp(path.join(tmpdir(), "import-"));
     await clearTestDatabase();

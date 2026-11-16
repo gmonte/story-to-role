@@ -2,8 +2,8 @@
 
 import { useEffect, useRef } from "react";
 
-import { useMutation, useQuery } from "@tanstack/react-query";
-import { ListChecks, MessageSquare, MoreHorizontal } from "lucide-react";
+import { useMutation } from "@tanstack/react-query";
+import { MessageSquare, MoreHorizontal, PanelRightOpen } from "lucide-react";
 
 import type { DepthLevel } from "@repo/api/domains/career/depth";
 import type { PositionView } from "@repo/api/domains/career/schemas/timeline";
@@ -52,18 +52,11 @@ export function PositionCard({
   const labels = useCareerLabels();
   const trpc = useTRPC();
   const refresh = useRefreshCareer();
-  const { activeSessionId, setActiveSessionId, prefillDraft } =
-    useCareerWorkspace();
+  const { openPosition, setOpenPosition, prefillDraft } = useCareerWorkspace();
   const onError = (error: { message: string }) => toast.error(error.message);
 
-  // The position's interviewer has a session going: what it found so far
-  // can be reviewed and approved.
-  const openSessions = useQuery(trpc.interview.openSessions.queryOptions({}));
-  const session = openSessions.data?.find(
-    (candidate) => candidate.positionId === position.id
-  );
-  // Under review in the pane beside the chat: marked, and brought into view.
-  const reviewed = !!session && session.sessionId === activeSessionId;
+  // Open in the pane beside the chat: marked, and brought into view.
+  const reviewed = openPosition?.positionId === position.id;
   const card = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (reviewed) card.current?.scrollIntoView({ block: "nearest" });
@@ -301,19 +294,22 @@ export function PositionCard({
             <MessageSquare />
             {t.formatMessage({ defaultMessage: "Talk about it" })}
           </Button>
-          {/* Only with something to review (a merge can bring an empty
-              session along). */}
-          {session && position.draftsToReview > 0 && (
-            <Button
-              size="sm"
-              variant="outline"
-              className="flex-1"
-              onClick={() => setActiveSessionId(session.sessionId)}
-            >
-              <ListChecks />
-              {t.formatMessage({ defaultMessage: "What the AI understood" })}
-            </Button>
-          )}
+          {/* Its space: what was approved, what is left to review, its
+              own chat. */}
+          <Button
+            size="sm"
+            variant="outline"
+            className="flex-1"
+            onClick={() =>
+              setOpenPosition({
+                positionId: position.id,
+                tab: position.draftsToReview > 0 ? "review" : "overview",
+              })
+            }
+          >
+            <PanelRightOpen />
+            {t.formatMessage({ defaultMessage: "Open" })}
+          </Button>
         </div>
       )}
     </div>

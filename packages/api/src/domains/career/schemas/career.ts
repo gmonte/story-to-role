@@ -114,5 +114,8 @@ export const careerEventKinds = [
   "credential_removed",
   "credentials_merged",
   "source_removed",
+  "fact_edited",
+  "fact_removed",
+  "position_chat",
 ] as const;
 export type CareerEventKind = (typeof careerEventKinds)[number];

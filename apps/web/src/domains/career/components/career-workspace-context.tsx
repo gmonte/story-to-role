@@ -4,10 +4,15 @@ import { createContext, useContext, useState, type ReactNode } from "react";
 
 import type { SourceImport } from "../hooks/use-source-upload";
 
+/** The tabs of a position's space. */
+export type PositionTab = "overview" | "facts" | "review" | "chat";
+
 type CareerWorkspace = {
-  // A position's session under review, in the pane beside the chat.
-  activeSessionId: string | null;
-  setActiveSessionId: (sessionId: string | null) => void;
+  // The position whose space is open in the pane beside the chat.
+  openPosition: { positionId: string; tab: PositionTab } | null;
+  setOpenPosition: (
+    openPosition: { positionId: string; tab: PositionTab } | null
+  ) => void;
   // The career chat's unsent message, which a position card can prefill.
   draft: string;
   setDraft: (draft: string) => void;
@@ -26,7 +31,8 @@ const CareerWorkspaceContext = createContext<CareerWorkspace | null>(null);
 
 /** Shared by the chat column and the timeline panel of My career. */
 export function CareerWorkspaceProvider({ children }: { children: ReactNode }) {
-  const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
+  const [openPosition, setOpenPosition] =
+    useState<CareerWorkspace["openPosition"]>(null);
   const [draft, setDraft] = useState("");
   const [previewSourceDocumentId, setPreviewSourceDocumentId] = useState<
     string | null
@@ -36,11 +42,11 @@ export function CareerWorkspaceProvider({ children }: { children: ReactNode }) {
   return (
     <CareerWorkspaceContext
       value={{
-        activeSessionId,
-        // One pane at a time: a review replaces a source preview, and back.
-        setActiveSessionId: (sessionId) => {
-          setActiveSessionId(sessionId);
-          if (sessionId) setPreviewSourceDocumentId(null);
+        openPosition,
+        // One pane at a time: a position replaces a source preview, and back.
+        setOpenPosition: (next) => {
+          setOpenPosition(next);
+          if (next) setPreviewSourceDocumentId(null);
         },
         draft,
         setDraft,
@@ -51,7 +57,7 @@ export function CareerWorkspaceProvider({ children }: { children: ReactNode }) {
         previewSourceDocumentId,
         setPreviewSourceDocumentId: (sourceDocumentId) => {
           setPreviewSourceDocumentId(sourceDocumentId);
-          if (sourceDocumentId) setActiveSessionId(null);
+          if (sourceDocumentId) setOpenPosition(null);
         },
         imports,
         startImport: (started) =>

@@ -5,8 +5,11 @@ import { CareerEventsRepository } from "./career-events-repository";
 import { careerEventKinds, type CareerEventKind } from "./schemas/career";
 
 // Every change gets a word from the chat (a burst of them, one): the user
-// sees it follow along. A kind could stay context only for its next turn.
-const reactiveKinds: ReadonlySet<CareerEventKind> = new Set(careerEventKinds);
+// sees it follow along. A message in a position's own chat is context
+// only: that chat answers it, the general one just knows.
+const reactiveKinds: ReadonlySet<CareerEventKind> = new Set(
+  careerEventKinds.filter((kind) => kind !== "position_chat")
+);
 
 /**
  * Records what the user just did to their career outside the chat, in the

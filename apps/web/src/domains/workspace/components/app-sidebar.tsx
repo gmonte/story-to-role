@@ -36,6 +36,7 @@ import { useTRPC } from "~/tools/trpc/client";
 
 import { LanguageSwitcher } from "./language-switcher";
 import { OpeningsByStatus } from "./openings-by-status";
+import { ThemeSwitcher } from "./theme-switcher";
 
 export function AppSidebar() {
   const t = useTranslation();
@@ -129,6 +130,9 @@ export function AppSidebar() {
           </SidebarMenuItem>
           <SidebarMenuItem>
             <LanguageSwitcher />
+          </SidebarMenuItem>
+          <SidebarMenuItem>
+            <ThemeSwitcher />
           </SidebarMenuItem>
           <SidebarMenuItem>
             <UserButton />

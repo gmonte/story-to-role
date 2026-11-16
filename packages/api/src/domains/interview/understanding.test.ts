@@ -147,6 +147,21 @@ describe("what the AI understood", () => {
     ).toMatchObject({ pendingDrafts: 1, current: false });
   });
 
+  it("has nothing to sum up once the session is approved", async () => {
+    const ctx = await setup();
+    await ctx.addDraft("One");
+    await new InterviewRepository(ctx.db).updateSession(ctx.sessionId, {
+      status: "closed",
+    });
+    // The page may still ask right after approving: no error.
+    expect(
+      await ctx.interview.understanding({
+        userId: ctx.user.id,
+        sessionId: ctx.sessionId,
+      })
+    ).toEqual({ text: null, pendingDrafts: 0, current: true });
+  });
+
   it("writes nothing for a session without drafts", async () => {
     const ctx = await setup();
     await expect(

@@ -252,6 +252,25 @@ export class BillingService {
     return { customers: customers.length };
   }
 
+  /**
+   * The account is being deleted (privacy spec): its subscriptions end now.
+   * The customer and its invoices stay in Stripe, as the law requires.
+   */
+  async cancelForDeletion(userId: string) {
+    const customer = await new BillingRepository(this.db).findCustomerByUserId(
+      userId
+    );
+    if (!customer) return;
+    const subscriptions = await this.stripe.subscriptions
+      .list({ customer: customer.stripeCustomerId, status: "all" })
+      .autoPagingToArray({ limit: 100 });
+    for (const subscription of subscriptions) {
+      if (isLiveSubscription(subscription.status as SubscriptionStatus)) {
+        await this.stripe.subscriptions.cancel(subscription.id);
+      }
+    }
+  }
+
   private async customerFor(userId: string) {
     const repository = new BillingRepository(this.db);
     const existing = await repository.findCustomerByUserId(userId);

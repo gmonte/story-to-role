@@ -1,10 +1,13 @@
 import type { verifyWebhook } from "@clerk/nextjs/webhooks";
-import { eq } from "drizzle-orm";
 
-import { usersTable } from "@repo/api/domains/users/db/users-tables";
+import { AccountService } from "@repo/api/domains/account/account-service";
 import { db } from "@repo/api/tools/db";
 import { logger } from "@repo/common/tools/logger";
 
+/**
+ * Clerk deleted the user, from our "Delete account" or its own interface:
+ * everything StoryToRole holds for them goes too (privacy spec).
+ */
 export const userDeletedWebhook = async (
   event: Awaited<ReturnType<typeof verifyWebhook>>
 ) => {
@@ -18,10 +21,7 @@ export const userDeletedWebhook = async (
     return new Response("Invalid user id", { status: 400 });
   }
 
-  await db
-    .update(usersTable)
-    .set({ deletedAt: new Date() })
-    .where(eq(usersTable.clerkUserId, event.data.id));
+  await new AccountService(db).deleteByClerkUser(event.data.id);
 
   logger.info(["user deleted webhook"], "user deleted userId:", event.data.id);
   return new Response("User deleted", { status: 200 });

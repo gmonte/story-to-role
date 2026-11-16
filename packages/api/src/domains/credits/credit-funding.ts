@@ -10,6 +10,8 @@ import type { CreditScope } from "./schemas/credits";
  * Who pays for a task (billing spec, "Funding order"), decided when it
  * starts:
  *
+ * - Free to the user (no cap): the user's key on a paid plan, otherwise
+ *   StoryToRole pays, taking no credit.
  * - Free: credits (a key needs the paid plan).
  * - Courtesy plan: the user's key first, then courtesy credits.
  * - Subscription: the month's plan credits first, then the user's key.
@@ -29,11 +31,14 @@ export async function decideFunding(
     keep?: number;
   }
 ): Promise<AiFunding> {
-  if (input.cap <= 0) return "credits";
   const plan = await currentPlan(tx, input.userId, input.now);
-  if (plan.kind === "free") return "credits";
   const key = await new AiKeysRepository(tx).findByUserId(input.userId);
   const usableKey = key?.status === "active";
+  // Free to the user (StoryToRole's cost): their own key when they use one.
+  if (input.cap <= 0) {
+    return usableKey && plan.kind !== "free" ? "key" : "credits";
+  }
+  if (plan.kind === "free") return "credits";
   if (plan.kind === "courtesy") return usableKey ? "key" : "credits";
   await ensureMonthlyCredits(tx, input.userId, input.now);
   const planCredits = await spendableTotal(

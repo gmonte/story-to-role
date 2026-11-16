@@ -2,15 +2,11 @@ import { getUserCipher } from "@repo/api/domains/encryption/user-cipher";
 import type { DbClient } from "@repo/api/tools/db-client";
 
 import { CareerEventsRepository } from "./career-events-repository";
-import type { CareerEventKind } from "./schemas/career";
+import { careerEventKinds, type CareerEventKind } from "./schemas/career";
 
-// The changes that move the conversation's next step: the chat says
-// something by itself. The rest is context for its next turn.
-const reactiveKinds: ReadonlySet<CareerEventKind> = new Set([
-  "facts_approved",
-  "imported_approved",
-  "conflict_resolved",
-]);
+// Every change gets a word from the chat (a burst of them, one): the user
+// sees it follow along. A kind could stay context only for its next turn.
+const reactiveKinds: ReadonlySet<CareerEventKind> = new Set(careerEventKinds);
 
 /**
  * Records what the user just did to their career outside the chat, in the

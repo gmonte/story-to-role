@@ -301,7 +301,9 @@ export function PositionCard({
             <MessageSquare />
             {t.formatMessage({ defaultMessage: "Talk about it" })}
           </Button>
-          {session && (
+          {/* Only with something to review (a merge can bring an empty
+              session along). */}
+          {session && position.draftsToReview > 0 && (
             <Button
               size="sm"
               variant="outline"

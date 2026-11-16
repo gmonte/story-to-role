@@ -86,8 +86,15 @@ export const timelineProposalKindSchema = z.enum([
 ]);
 export type TimelineProposalKind = z.infer<typeof timelineProposalKindSchema>;
 
-/** Who set the career language: the first imported file, or the user. */
-export const interviewLanguageSourceSchema = z.enum(["file", "user"]);
+/**
+ * What set the career language, once: the first imported file, the first
+ * chat message, or the user (before evidence existed).
+ */
+export const interviewLanguageSourceSchema = z.enum([
+  "file",
+  "message",
+  "user",
+]);
 export type InterviewLanguageSource = z.infer<
   typeof interviewLanguageSourceSchema
 >;

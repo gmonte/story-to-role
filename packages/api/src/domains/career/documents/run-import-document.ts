@@ -212,7 +212,7 @@ export async function runImportDocument(
   // file they import, so its facts need no translation.
   const language = owner.interviewLanguageSource
     ? owner.interviewLanguage
-    : await career.adoptFileLanguage(owner.id, check.language);
+    : await career.adoptLanguage(owner.id, check.language, "file");
 
   await step("extracting");
   const { object: extraction } = await deps.ai.generateObject({

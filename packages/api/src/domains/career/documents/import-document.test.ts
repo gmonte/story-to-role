@@ -424,7 +424,7 @@ describe("document import", () => {
 });
 
 describe("career language", () => {
-  it("adopts the first file's language until the user chooses one", async () => {
+  it("adopts the first file's language until something set one", async () => {
     const ctx = await setup();
     await ctx.importFile(
       resumeA,
@@ -436,10 +436,7 @@ describe("career language", () => {
     );
 
     const timeline = await ctx.timeline();
-    expect(timeline.profile).toMatchObject({
-      interviewLanguage: "pt-BR",
-      interviewLanguageSource: "file",
-    });
+    expect(timeline.profile.interviewLanguage).toBe("pt-BR");
 
     // A second file in another language doesn't move it again.
     await ctx.importFile(
@@ -468,10 +465,7 @@ describe("career language", () => {
       "pt-BR"
     );
 
-    expect((await ctx.timeline()).profile).toMatchObject({
-      interviewLanguage: "en-US",
-      interviewLanguageSource: "user",
-    });
+    expect((await ctx.timeline()).profile.interviewLanguage).toBe("en-US");
   });
 });
 

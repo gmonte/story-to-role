@@ -41,7 +41,7 @@ Five rules shape every decision below; when a design choice conflicts with one, 
 
 The user sees one continuous chat with a career timeline beside it; behind it, each position is its own session.
 
-1. **Choose languages.** Interface language and interview language are separate settings (English or Brazilian Portuguese). A user may browse in Portuguese and answer in English when targeting foreign roles. Both default to the browser locale. In every chat the user can type or tap a microphone button and speak; the transcript lands in the input box to edit before sending.
+1. **Languages.** The interface language is a setting (English or Brazilian Portuguese, defaulting to the browser locale). The interview has no language setting: it answers in the language the user writes in. A user may browse in Portuguese and answer in English when targeting foreign roles. In every chat the user can type or tap a microphone button and speak; the transcript lands in the input box to edit before sending.
 2. **Privacy notice.** Before the first question: what goes to the AI provider, what to avoid saying (client data under NDA, salaries, other people's personal data, health and family), and that sensitive items can be hidden later.
 3. **Import.** The user uploads one or more resumes, now or at any later point. The system merges them into one draft timeline: the same position found in several files becomes one entry, and conflicting titles or dates are shown side by side for the user to pick. With or without files, the user can add, edit, merge or remove positions on the timeline.
 4. **Truth file import (optional).** A user who already keeps a document with their own career facts (like the `profile_truth.md` of the meu-emprego-novo CLI) can attach it in the chat. It becomes a source document: extraction proposes positions and evidence from it, each traced to the document, and the user validates them like any extraction. It is a base for the interview, which then focuses on what the file leaves out:
@@ -56,9 +56,9 @@ The user sees one continuous chat with a career timeline beside it; behind it, e
 8. **Career narrative.** After all positions are approved (or whenever the user asks), the system drafts the links between positions for approval.
 9. **Come back anytime.** Leaving mid-position keeps progress. Reopening an approved position starts a new session seeded with what was approved.
 
-The chat language follows the interview language setting; extracted data is stored in the language it was told in and translated at generation time, never at extraction.
+The chat follows the language of the user's messages. Extracted facts are kept in one career language, set once (the first imported file's, else the first chat message's, else the interface language) and locked once there is evidence; each fact keeps its original wording, which generation prefers when the document is in that language.
 
-The interview language can change at any time and takes effect from the next turn; most users will keep one language for the whole interview. Each evidence item keeps the language it was told in. The approval screen and the timeline show a small language badge (EN/PT) on each item only when the career holds evidence in both languages.
+Switching language mid-interview only changes the conversation; facts stay in the career language. Each evidence item records its language (older careers may hold both). The approval screen and the timeline show a small language badge (EN/PT) on each item only when the career holds evidence in both languages.
 
 ## Architecture
 
@@ -108,7 +108,7 @@ StoryToRole starts from a clone of the private `gmonte/company-balance` repo, wh
 | AI processing | None | Every AI call (interview turns, extraction, generation, fit checks, embeddings) runs as a Trigger.dev task; progress and tokens are streamed to the client through Trigger.dev Realtime, and results are saved to Postgres |
 | Rate limiting | None | Upstash Redis (free tier: 256 MB, 500K commands a month; then pay as you go) for rate limits and the misuse cooldown, through `@upstash/ratelimit`. Credit balances and every result stay in Postgres. Locally, `compose.yaml` runs serverless-redis-http (an Upstash-compatible REST API) on top of a host Redis, so the same client code runs in development and production. Two Upstash databases: one for previews and staging, one for production. Every key carries the environment prefix from `REDIS_KEY_PREFIX` (passed to each limiter's `prefix` option and to the helper that builds other keys), so staging and every preview keep their own counters in the shared database: CI passes it on deploy like `APP_URL` (`stg` for staging, `pr-<number>` for previews), production sets `prod` on Vercel, and local development uses `dev`. The databases are created directly in the Upstash console (not through the Vercel integration), and the app reads the standard `UPSTASH_REDIS_REST_URL` and `UPSTASH_REDIS_REST_TOKEN`, set by hand per Vercel environment (Preview and Production; never Development, so `vercel env pull` keeps the local values) |
 
-**Interface language** uses the existing `@repo/intl` setup. **Interview language** is stored on the user and passed to every prompt; prompts are written in English with an instruction to converse in the chosen language.
+**Interface language** uses the existing `@repo/intl` setup. **Career language** is stored on the profile (with what set it) and passed to every prompt; prompts are written in English, tell the model to converse in the user's language and to record facts in the career language.
 
 **AI providers.** Two modes share one adapter interface:
 

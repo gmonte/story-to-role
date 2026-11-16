@@ -41,8 +41,9 @@ export const careerProfilesTable = createTable(
       .notNull()
       .references(() => usersTable.id, { onDelete: "cascade" }),
     interviewLanguage: d.text().$type<InterviewLanguage>().notNull(),
-    // Who set the career language: still nobody (the interface's), the
-    // first imported file, or the user. A file sets it only while nobody has.
+    // What set the career language: still nothing (the interface's), the
+    // first imported file, the first chat message, or the user. Set once,
+    // while the profile has no evidence; then it stays.
     interviewLanguageSource: d.text().$type<InterviewLanguageSource>(),
     privacyNoticeAcceptedAt: d.timestamp({ withTimezone: true }),
     // How the user chose to start (workspace spec, "Onboarding").

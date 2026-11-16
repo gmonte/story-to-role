@@ -3,7 +3,6 @@ import { z } from "zod";
 import { depthLevels } from "../depth";
 import {
   interviewLanguageSchema,
-  interviewLanguageSourceSchema,
   conflictFieldSchema,
   credentialKindSchema,
   credentialStatusSchema,
@@ -116,9 +115,6 @@ export type TimelineProposalView = z.infer<typeof timelineProposalViewSchema>;
 
 export const careerProfileViewSchema = z.object({
   interviewLanguage: interviewLanguageSchema,
-  // Who set it: the user, the first imported file (to confirm), or nobody
-  // yet (the interface's).
-  interviewLanguageSource: interviewLanguageSourceSchema.nullable(),
   privacyNoticeAccepted: z.boolean(),
 });
 

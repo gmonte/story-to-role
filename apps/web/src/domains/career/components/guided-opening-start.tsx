@@ -17,7 +17,6 @@ import { useTRPC } from "~/tools/trpc/client";
 
 import { useTimeline } from "../hooks/use-career-queries";
 import { ApproveImportedButton } from "./approve-imported-button";
-import { CareerLanguageBar } from "./career-language-bar";
 import { Sources } from "./sources";
 import { PrivacyNotice } from "./privacy-notice";
 
@@ -121,19 +120,11 @@ export function GuidedOpeningStart() {
               <p className="text-muted-foreground text-sm">
                 {t.formatMessage({
                   defaultMessage:
-                    "Import your resume or a truth file: it fills your career timeline, so the fit check has something to go on.",
+                    "Import your resume, your LinkedIn PDF or a text file about your career: it fills your career timeline, so the fit check has something to go on.",
                 })}
               </p>
             </div>
             <Sources documents={documents} />
-            {/* The first file set the career's language: ask to keep it. */}
-            {profile.interviewLanguageSource === "file" && (
-              <CareerLanguageBar
-                interviewLanguage={profile.interviewLanguage}
-                source={profile.interviewLanguageSource}
-                started={false}
-              />
-            )}
             {!reading && waiting.length > 0 && (
               <div className="flex flex-col gap-2 rounded-lg border p-3 text-sm">
                 <p>

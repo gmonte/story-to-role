@@ -14,6 +14,7 @@
     "predeploy": "echo 'predeploy'"
   },
   "dependencies": {
+    "@ai-sdk/react": "catalog:ai",
     "@clerk/localizations": "catalog:web",
     "@clerk/nextjs": "catalog:web",
     "@napi-rs/canvas": "catalog:api",
@@ -23,10 +24,12 @@
     "@repo/web": "workspace:*",
     "@tanstack/react-query": "catalog:common",
     "@trigger.dev/react-hooks": "catalog:web",
+    "@trigger.dev/sdk": "catalog:api",
     "@trpc/client": "catalog:common",
     "@trpc/server": "catalog:common",
     "@trpc/tanstack-react-query": "catalog:common",
     "@types/swagger-ui-dist": "catalog:web",
+    "ai": "catalog:ai",
     "class-variance-authority": "catalog:web",
     "clsx": "catalog:web",
     "lucide-react": "catalog:web",

@@ -1,7 +1,7 @@
 "use client";
 
-import { useMutation } from "@tanstack/react-query";
-import { MessageSquare, MoreHorizontal } from "lucide-react";
+import { useMutation, useQuery } from "@tanstack/react-query";
+import { ListChecks, MessageSquare, MoreHorizontal } from "lucide-react";
 
 import type { PositionView } from "@repo/api/domains/career/schemas/timeline";
 import { useTranslation } from "@repo/intl/use-translation";
@@ -43,16 +43,18 @@ export function PositionCard({
   const labels = useCareerLabels();
   const trpc = useTRPC();
   const refresh = useRefreshCareer();
-  const { setActiveSessionId } = useCareerWorkspace();
+  const { setActiveSessionId, prefillDraft } = useCareerWorkspace();
   const onError = (error: { message: string }) => toast.error(error.message);
 
-  const openSession = useMutation(
-    trpc.interview.openSession.mutationOptions({
-      // Refresh first: the chat only keeps a session listed as open.
-      onSuccess: async ({ sessionId }) => {
-        await refresh();
-        setActiveSessionId(sessionId);
-      },
+  // The position's interviewer has a session going: what it found so far
+  // can be reviewed and approved.
+  const openSessions = useQuery(trpc.interview.openSessions.queryOptions({}));
+  const session = openSessions.data?.find(
+    (candidate) => candidate.positionId === position.id
+  );
+  const review = useMutation(
+    trpc.interview.proposeExtraction.mutationOptions({
+      onSuccess: (_, { sessionId }) => setActiveSessionId(sessionId),
       onError,
     })
   );
@@ -239,19 +241,38 @@ export function PositionCard({
       ))}
 
       {!removed && (
-        <Button
-          size="sm"
-          variant={position.status === "in_progress" ? "default" : "outline"}
-          disabled={openSession.isPending}
-          onClick={() => openSession.mutate({ positionId: position.id })}
-        >
-          <MessageSquare />
-          {position.status === "in_progress"
-            ? t.formatMessage({ defaultMessage: "Continue interview" })
-            : position.status === "approved"
-              ? t.formatMessage({ defaultMessage: "Reopen" })
-              : t.formatMessage({ defaultMessage: "Interview" })}
-        </Button>
+        <div className="flex flex-wrap gap-1.5">
+          <Button
+            size="sm"
+            variant="outline"
+            className="flex-1"
+            // The chat goes on about this position; the user finishes the
+            // sentence.
+            onClick={() =>
+              prefillDraft(
+                t.formatMessage(
+                  { defaultMessage: "About {title} at {employer}: " },
+                  { title: position.title, employer: position.employer }
+                )
+              )
+            }
+          >
+            <MessageSquare />
+            {t.formatMessage({ defaultMessage: "Talk about it" })}
+          </Button>
+          {session && (
+            <Button
+              size="sm"
+              variant="outline"
+              className="flex-1"
+              disabled={review.isPending}
+              onClick={() => review.mutate({ sessionId: session.sessionId })}
+            >
+              <ListChecks />
+              {t.formatMessage({ defaultMessage: "Review what was found" })}
+            </Button>
+          )}
+        </div>
       )}
     </div>
   );

@@ -246,6 +246,8 @@ export function Sources({
       </div>
       <input
         ref={input}
+        // The career chat's "Upload" shortcut is a label for this input.
+        id="sources-upload-input"
         type="file"
         accept={ACCEPT}
         multiple

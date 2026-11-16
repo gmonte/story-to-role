@@ -52,7 +52,8 @@ export async function creditReserve(db: DbClient, userId: string, now: Date) {
 }
 
 /** Only the interview may never spend what the reserve keeps. */
-export const keepsReserve = (type: TaskType) => type === "interview_turn";
+export const keepsReserve = (type: TaskType) =>
+  type === "interview_turn" || type === "career_chat_turn";
 
 // Within this many interview turns of the reserve, the interviewer wraps up.
 const wrapUpTurns = 5;

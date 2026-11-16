@@ -34,8 +34,13 @@ type Deps = {
  * session's turns and nothing from closed sessions.
  */
 export async function runInterviewTurn(
-  deps: Deps & { userTurnId: string }
-): Promise<{ kind: TurnKind }> {
+  deps: Deps & {
+    userTurnId: string;
+    // The career chat's orchestrator already passed the message through the
+    // cooldown and the topic gate: the position agent doesn't again.
+    gated?: boolean;
+  }
+): Promise<{ kind: TurnKind; text: string | null; checkpoint: boolean }> {
   const { db, ai, cipher } = deps;
   const interview = new InterviewRepository(db);
 
@@ -75,7 +80,7 @@ export async function runInterviewTurn(
       language: userTurn.language,
       tokenCount: content ? estimateTokens(content) : 0,
     });
-    return { kind };
+    return { kind, text: content, checkpoint: false };
   };
 
   // A blocked message is marked on the user's turn too, so it never joins
@@ -85,19 +90,21 @@ export async function runInterviewTurn(
     return reply(kind, fixedReply(kind, userTurn.language));
   };
 
-  if (await deps.misuse.isCoolingDown(deps.userId)) {
-    return block("cooldown");
-  }
+  if (deps.gated !== false) {
+    if (await deps.misuse.isCoolingDown(deps.userId)) {
+      return block("cooldown");
+    }
 
-  const verdict = await checkTopic({
-    ai,
-    context: "career_interview",
-    message,
-    previousQuestion,
-  });
-  if (verdict !== "on_topic") {
-    await deps.misuse.recordBlocked(deps.userId);
-    return block(verdict === "override" ? "blocked_override" : "off_topic");
+    const verdict = await checkTopic({
+      ai,
+      context: "career_interview",
+      message,
+      previousQuestion,
+    });
+    if (verdict !== "on_topic") {
+      await deps.misuse.recordBlocked(deps.userId);
+      return block(verdict === "override" ? "blocked_override" : "off_topic");
+    }
   }
 
   const promptInput = {
@@ -142,16 +149,14 @@ export async function runInterviewTurn(
 
   // Past the threshold the interviewer proposes a checkpoint (once).
   const updated = await interview.findSessionById(session.id);
-  if (
-    updated &&
+  const checkpoint =
+    !!updated &&
     !updated.extractionProposedAt &&
     updated.turnTokens >= interviewSettings.checkpointTokens &&
-    !turns.some((turn) => turn.kind === "checkpoint")
-  ) {
-    await reply("checkpoint", null);
-  }
+    !turns.some((turn) => turn.kind === "checkpoint");
+  if (checkpoint) await reply("checkpoint", null);
 
-  return { kind: "text" };
+  return { kind: "text", text, checkpoint };
 }
 
 async function loadPromptInput({

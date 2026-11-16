@@ -20,6 +20,10 @@ const models: Record<AiRole, string> = {
   research: "claude-sonnet-5-5",
 };
 
+// The career chat's orchestrator streams through the AI SDK on the same
+// models.
+export { models as anthropicModels };
+
 // How many times a paused server-side search turn is sent back.
 const maxSearchResumes = 3;
 

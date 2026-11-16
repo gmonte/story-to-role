@@ -26,6 +26,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@ai-sdk/anthropic": "catalog:ai",
     "@anthropic-ai/sdk": "catalog:ai",
     "@clerk/nextjs": "catalog:web",
     "@huggingface/transformers": "catalog:api",
@@ -38,6 +39,7 @@
     "@upstash/ratelimit": "catalog:api",
     "@upstash/redis": "catalog:api",
     "@vercel/blob": "catalog:api",
+    "ai": "catalog:ai",
     "drizzle-orm": "catalog:api",
     "drizzle-zod": "catalog:api",
     "fflate": "catalog:api",

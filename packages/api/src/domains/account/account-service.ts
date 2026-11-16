@@ -18,6 +18,7 @@ type Deps = {
   billing: Pick<BillingService, "removeForDeletion">;
   deleteClerkUser: (clerkUserId: string) => Promise<void>;
   cancelRun: (runId: string) => Promise<void>;
+  closeChatSession: (chatId: string) => Promise<void>;
 };
 
 const sameEmail = (a: string, b: string) =>
@@ -43,6 +44,9 @@ export class AccountService {
           await (await clerkClient()).users.deleteUser(clerkUserId);
         }),
       cancelRun: deps.cancelRun ?? ((runId) => triggerClient.cancel(runId)),
+      closeChatSession:
+        deps.closeChatSession ??
+        (async (chatId) => triggerClient.closeSession(chatId)),
     };
   }
 
@@ -77,7 +81,7 @@ export class AccountService {
 
   /**
    * Everything StoryToRole holds for the user: running tasks stopped,
-   * subscriptions cancelled, checkouts expired and the Stripe customer
+   * career chat sessions closed, subscriptions cancelled, checkouts expired and the Stripe customer
    * deleted, then the user's rows
    * with their data key (use stops here), then their stored files, which
    * that key protected.
@@ -90,6 +94,11 @@ export class AccountService {
     )) {
       await this.deps.cancelRun(runId).catch((error: unknown) => {
         logger.warn(logTags, "Could not cancel a run", { runId, error });
+      });
+    }
+    for (const chatId of await repository.careerChatIds(userId)) {
+      await this.deps.closeChatSession(chatId).catch((error: unknown) => {
+        logger.warn(logTags, "Could not close a chat session", { error });
       });
     }
     await this.deps.billing.removeForDeletion(userId);

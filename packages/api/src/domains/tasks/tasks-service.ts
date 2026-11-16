@@ -102,8 +102,40 @@ export class TasksService {
     subjectId?: string;
     hints?: CapHints;
   }): Promise<{ task: Task; realtime: RealtimeSubscription }> {
+    const task = await this.reserve(input);
+
+    const repository = new TasksRepository(this.db);
+    try {
+      const { runId, accessToken } = await this.trigger.trigger(task.type, {
+        taskId: task.id,
+      });
+      await repository.setRunId({ taskId: task.id, runId });
+      return { task: { ...task, runId }, realtime: { runId, accessToken } };
+    } catch (error) {
+      await repository.markFailed({
+        taskId: task.id,
+        errorMessage: "The task could not be started",
+      });
+      await this.db.transaction((tx) =>
+        settleCredits(tx, { userId: input.userId, taskId: task.id, actual: 0 })
+      );
+      throw error;
+    }
+  }
+
+  /**
+   * The task row and its reservation, with funding decided, without a run:
+   * for work that runs inside a run already going, such as a career chat
+   * turn. `finishTask` settles it.
+   */
+  async reserve(input: {
+    userId: string;
+    type: TaskType;
+    subjectId?: string;
+    hints?: CapHints;
+  }): Promise<Task> {
     const now = new Date();
-    const task = await this.db
+    return this.db
       .transaction(async (tx) => {
         // The reserve is read under the lock that reserving holds.
         await new CreditsRepository(tx).lockUser(input.userId);
@@ -136,24 +168,6 @@ export class TasksService {
         return created;
       })
       .catch(asPaymentRequired);
-
-    const repository = new TasksRepository(this.db);
-    try {
-      const { runId, accessToken } = await this.trigger.trigger(task.type, {
-        taskId: task.id,
-      });
-      await repository.setRunId({ taskId: task.id, runId });
-      return { task: { ...task, runId }, realtime: { runId, accessToken } };
-    } catch (error) {
-      await repository.markFailed({
-        taskId: task.id,
-        errorMessage: "The task could not be started",
-      });
-      await this.db.transaction((tx) =>
-        settleCredits(tx, { userId: input.userId, taskId: task.id, actual: 0 })
-      );
-      throw error;
-    }
   }
 
   /**

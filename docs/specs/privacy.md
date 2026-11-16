@@ -21,7 +21,7 @@ StoryToRole handles the most personal professional data a person has. It keeps o
 ## Export and deletion
 
 - **Export:** a button produces a ZIP with all of the user's data: evidence base, positions, applications, snapshots as JSON, and the PDFs.
-- **Deletion:** deleting the account stops all use immediately; removal is final within 30 days, the time for database backups to expire, which must match the retention configured in Neon. Deleting the user's key makes any copy left in a backup unreadable.
+- **Deletion:** deleting the account stops all use immediately and removes everything the app holds at once. Nothing is retained on purpose: what remains is only Neon's recovery history (point-in-time restore), which keeps every change for its history window (6 hours on the Free plan; 1 day by default, up to 7 or 30 days, on paid plans) and then drops it. The deletion notice states that window, from a setting that must follow the production project's (`privacySettings.databaseHistoryHours`). Deleting the user's key makes any copy left in that history unreadable. A restore keeps the state before it in a backup branch, which is deleted as soon as it isn't needed, so it never outlives the window.
 - Only records the law requires are kept (invoices in Stripe), with no career content. Clerk data is deleted with the account; Upstash data expires on its own.
 
 ## Data location and subprocessors

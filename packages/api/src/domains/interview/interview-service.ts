@@ -11,11 +11,14 @@ import {
   type SensitivityChoice,
 } from "@repo/api/domains/evidence/schemas/evidence";
 import type { RealtimeSubscription } from "@repo/api/domains/tasks/schemas/task";
+import { TasksRepository } from "@repo/api/domains/tasks/tasks-repository";
 import { TasksService } from "@repo/api/domains/tasks/tasks-service";
 import type { DbClient } from "@repo/api/tools/db-client";
 
+import { draftsFingerprint } from "./drafts-fingerprint";
 import { InterviewRepository } from "./interview-repository";
 import { estimateTokens, interviewSettings } from "./interview-settings";
+import type { ImportSkipReason } from "./schemas/interview";
 import type { ExtractionDecision, SessionView } from "./schemas/session-view";
 
 const notFound = () => new TRPCError({ code: "NOT_FOUND" });
@@ -296,6 +299,60 @@ export class InterviewService {
     });
   }
 
+  private async pendingDrafts(sessionId: string) {
+    return (
+      await new InterviewRepository(this.db).listDrafts(sessionId)
+    ).filter((draft) => draft.status === "draft");
+  }
+
+  /**
+   * "What the AI understood" about a session's drafts: the summary, and
+   * whether it still covers exactly the pending drafts.
+   */
+  async understanding(input: { userId: string; sessionId: string }) {
+    const { session } = await this.requireOpenSession(
+      input.userId,
+      input.sessionId
+    );
+    const pending = await this.pendingDrafts(session.id);
+    const cipher = await getUserCipher(this.db, input.userId);
+    return {
+      text: session.encryptedUnderstanding
+        ? cipher.decrypt(session.encryptedUnderstanding)
+        : null,
+      pendingDrafts: pending.length,
+      current: session.understandingFingerprint === draftsFingerprint(pending),
+    };
+  }
+
+  /**
+   * Writes (or rewrites) the summary of a session's drafts, in a task: only
+   * when there are drafts, and one run at a time.
+   */
+  async understand(input: { userId: string; sessionId: string }) {
+    const { session } = await this.requireOpenSession(
+      input.userId,
+      input.sessionId
+    );
+    if ((await this.pendingDrafts(session.id)).length === 0) {
+      throw new TRPCError({ code: "BAD_REQUEST" });
+    }
+    if (
+      await new TasksRepository(this.db).activeTask(
+        session.id,
+        "understand_session"
+      )
+    ) {
+      throw new TRPCError({ code: "CONFLICT" });
+    }
+    const { realtime } = await this.tasks.start({
+      userId: input.userId,
+      type: "understand_session",
+      subjectId: session.id,
+    });
+    return { realtime };
+  }
+
   /** "I'm done with this position": open the approval screen now. */
   async proposeExtraction(input: { userId: string; sessionId: string }) {
     const { session } = await this.requireOpenSession(
@@ -560,49 +617,84 @@ export class InterviewService {
    * facts came only from files, with no conflict left, is approved with all
    * its extracted facts. Positions with conflicts wait for the user.
    */
-  async approveImportedPositionsWithoutConflicts(userId: string) {
+  /**
+   * What approving imported positions at once would do: the positions it
+   * approves with how many facts, and those it leaves for the user, with
+   * why (a conflict between files, a session the user talked in, nothing
+   * extracted, or facts not all from a file).
+   */
+  async planImportedApproval(userId: string) {
     const profile = await this.requireProfile(userId);
     const career = new CareerRepository(this.db);
     const interview = new InterviewRepository(this.db);
     const positions = (await career.listPositions(profile.id)).filter(
       (position) =>
-        position.status === "pending" || position.status === "in_progress"
+        (position.origin === "imported" || position.origin === "truth_file") &&
+        (position.status === "pending" || position.status === "in_progress")
     );
     const conflicts = await career.listOpenConflicts(
       positions.map((p) => p.id)
     );
     const sessions = await interview.listSessions(profile.id);
 
-    let approved = 0;
+    const ready: Array<{
+      positionId: string;
+      sessionId: string;
+      draftIds: string[];
+    }> = [];
+    const skipped: Array<{ positionId: string; reason: ImportSkipReason }> = [];
     for (const position of positions) {
-      if (conflicts.some((conflict) => conflict.positionId === position.id))
+      if (conflicts.some((conflict) => conflict.positionId === position.id)) {
+        skipped.push({ positionId: position.id, reason: "conflict" });
         continue;
+      }
       const session = sessions.find(
         (candidate) =>
           candidate.positionId === position.id && candidate.status === "open"
       );
-      if (!session) continue;
-      const [turns, drafts] = await Promise.all([
-        interview.listTurns(session.id),
-        interview.listDrafts(session.id),
-      ]);
+      const [turns, drafts] = session
+        ? await Promise.all([
+            interview.listTurns(session.id),
+            interview.listDrafts(session.id),
+          ])
+        : [[], []];
       const pending = drafts.filter((draft) => draft.status === "draft");
       // Only file imports: a session the user talked in is reviewed by them.
-      if (turns.length > 0 || pending.length === 0) continue;
-      if (!pending.every((draft) => draft.sourceDocumentId)) continue;
+      const reason: ImportSkipReason | null =
+        !session || pending.length === 0
+          ? "nothing_extracted"
+          : turns.length > 0
+            ? "talked"
+            : !pending.every((draft) => draft.sourceDocumentId)
+              ? "not_from_file"
+              : null;
+      if (reason || !session) {
+        skipped.push({
+          positionId: position.id,
+          reason: reason ?? "nothing_extracted",
+        });
+        continue;
+      }
+      ready.push({
+        positionId: position.id,
+        sessionId: session.id,
+        draftIds: pending.map((draft) => draft.id),
+      });
+    }
+    return { ready, skipped };
+  }
 
+  async approveImportedPositionsWithoutConflicts(userId: string) {
+    const { ready } = await this.planImportedApproval(userId);
+    for (const { sessionId, draftIds } of ready) {
       await this.approveExtraction({
         userId,
-        sessionId: session.id,
+        sessionId,
         closePosition: true,
-        decisions: pending.map((draft) => ({
-          draftId: draft.id,
-          approved: true,
-        })),
+        decisions: draftIds.map((draftId) => ({ draftId, approved: true })),
       });
-      approved++;
     }
-    return { approved };
+    return { approved: ready.length };
   }
 
   /** The open session of each target, for the timeline's "continue" action. */

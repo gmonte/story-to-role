@@ -11,6 +11,7 @@ import {
 } from "@repo/api/tools/trpc";
 
 import { InterviewService } from "./interview-service";
+import { importSkipReasonSchema } from "./schemas/interview";
 import {
   extractionDecisionSchema,
   sensitiveItemViewSchema,
@@ -111,6 +112,75 @@ export const interviewRouter = createTRPCRouter({
       });
       return ok;
     }),
+
+  importedApprovalPlan: userProcedure
+    .meta(
+      openApiMeta(
+        "interview",
+        "GET",
+        "/interview/imported-approval",
+        "What approving imported positions at once would approve and skip"
+      )
+    )
+    .input(z.object({}))
+    .output(
+      z.object({
+        ready: z.array(
+          z.object({ positionId: z.uuid(), facts: z.number().int() })
+        ),
+        skipped: z.array(
+          z.object({ positionId: z.uuid(), reason: importSkipReasonSchema })
+        ),
+      })
+    )
+    .query(async ({ ctx }) => {
+      const plan = await new InterviewService(db).planImportedApproval(
+        ctx.userId
+      );
+      return {
+        ready: plan.ready.map(({ positionId, draftIds }) => ({
+          positionId,
+          facts: draftIds.length,
+        })),
+        skipped: plan.skipped,
+      };
+    }),
+
+  understanding: userProcedure
+    .meta(
+      openApiMeta(
+        "interview",
+        "GET",
+        "/interview/sessions/by-id/{sessionId}/understanding",
+        "What the AI understood from the session's drafts"
+      )
+    )
+    .input(z.object({ sessionId: z.uuid() }))
+    .output(
+      z.object({
+        text: z.string().nullable(),
+        pendingDrafts: z.number(),
+        current: z.boolean(),
+      })
+    )
+    .query(({ ctx, input }) =>
+      new InterviewService(db).understanding({ userId: ctx.userId, ...input })
+    ),
+
+  understand: userProcedure
+    .meta(
+      openApiMeta(
+        "interview",
+        "POST",
+        "/interview/sessions/by-id/{sessionId}/understanding",
+        "Writes what the AI understood from the session's drafts"
+      )
+    )
+    .input(z.object({ sessionId: z.uuid() }))
+    .output(z.object({ realtime: realtimeSubscriptionSchema }))
+    .mutation(({ ctx, input }) =>
+      new InterviewService(db).understand({ userId: ctx.userId, ...input })
+    ),
 
   approveExtraction: userProcedure
     .meta(

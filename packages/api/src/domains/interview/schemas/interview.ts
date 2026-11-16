@@ -43,3 +43,12 @@ export type DraftKind = z.infer<typeof draftKindSchema>;
 
 export const draftStatusSchema = z.enum(["draft", "approved", "discarded"]);
 export type DraftStatus = z.infer<typeof draftStatusSchema>;
+
+/** Why approving imports at once leaves a position for the user. */
+export const importSkipReasonSchema = z.enum([
+  "conflict",
+  "talked",
+  "nothing_extracted",
+  "not_from_file",
+]);
+export type ImportSkipReason = z.infer<typeof importSkipReasonSchema>;

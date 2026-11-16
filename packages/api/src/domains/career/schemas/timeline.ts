@@ -61,6 +61,8 @@ export const positionViewSchema = z.object({
   depth: depthSchema,
   // Languages its evidence was told in.
   languages: z.array(interviewLanguageSchema),
+  // Facts its interviewer extracted that wait for the user's review.
+  draftsToReview: z.number(),
 });
 export type PositionView = z.infer<typeof positionViewSchema>;
 

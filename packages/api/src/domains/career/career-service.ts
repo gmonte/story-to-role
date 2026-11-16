@@ -153,6 +153,18 @@ export class CareerService {
         ]);
 
       const contextStage = interviewStages.indexOf("projects");
+      // What the interviewers extracted and the user hasn't approved yet.
+      const openSessions = sessions.filter((s) => s.status === "open");
+      const pendingDrafts = await new InterviewRepository(
+        tx
+      ).countPendingDrafts(openSessions.map((session) => session.id));
+      const draftsToReview = (positionId: string) =>
+        openSessions
+          .filter((session) => session.positionId === positionId)
+          .reduce(
+            (sum, session) => sum + (pendingDrafts.get(session.id) ?? 0),
+            0
+          );
 
       const toView = (row: PositionRow): PositionView => {
         const ownEvidence = evidenceRows.filter((e) => e.positionId === row.id);
@@ -194,6 +206,7 @@ export class CareerService {
             ).length,
           }),
           languages: [...new Set(ownEvidence.map((e) => e.language))],
+          draftsToReview: draftsToReview(row.id),
         };
       };
 

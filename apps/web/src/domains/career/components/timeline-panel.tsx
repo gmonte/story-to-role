@@ -31,13 +31,6 @@ export function TimelinePanel() {
   if (!timeline.data?.profile.privacyNoticeAccepted) return null;
   const { positions, removedPositions } = timeline.data;
   const bilingual = timeline.data.evidenceLanguages.length > 1;
-  const canApproveImported = positions.some(
-    (position) =>
-      (position.origin === "imported" || position.origin === "truth_file") &&
-      position.status !== "approved" &&
-      position.conflicts.length === 0
-  );
-
   return (
     <div className="flex flex-col gap-6">
       <Sources
@@ -63,7 +56,7 @@ export function TimelinePanel() {
             }
           />
         </div>
-        {canApproveImported && <ApproveImportedButton />}
+        <ApproveImportedButton positions={positions} />
         {positions.length === 0 && (
           <p className="text-muted-foreground text-xs">
             {t.formatMessage({

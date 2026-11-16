@@ -61,6 +61,11 @@ export const interviewSessionsTable = createTable(
     extractionProposedAt: d.timestamp({ withTimezone: true }),
     extractionApprovedAt: d.timestamp({ withTimezone: true }),
     closedAt: d.timestamp({ withTimezone: true }),
+    // "What the AI understood": a short summary of the drafts, in the
+    // interviewer's voice, and a fingerprint of the drafts it covered (stale
+    // when one is added, approved, discarded or edited).
+    encryptedUnderstanding: d.text(),
+    understandingFingerprint: d.text(),
   }),
   (t) => [
     index("interview_sessions_profile_id_idx").on(t.profileId),

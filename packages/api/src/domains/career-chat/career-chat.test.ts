@@ -271,8 +271,8 @@ describe("career chat", () => {
       positionId: ctx.globex,
       intoPositionId: ctx.acme,
     });
-    // A merge is context only: nothing to say by itself.
-    expect(await pendingCareerChanges(ctx.db, ctx.chatId)).toBeNull();
+    // Worth a word from the chat by itself, until a turn takes it in.
+    expect(await pendingCareerChanges(ctx.db, ctx.chatId)).not.toBeNull();
 
     const model = orchestrator([], "Got it.");
     await ctx.say("Hi", model);
@@ -280,7 +280,8 @@ describe("career chat", () => {
       "merged Engineer at Globex into Staff Engineer at Acme"
     );
 
-    // Taken in once.
+    // Taken in once: nothing left to react to either.
+    expect(await pendingCareerChanges(ctx.db, ctx.chatId)).toBeNull();
     const next = orchestrator([], "Sure.");
     await ctx.say("And now?", next);
     expect(JSON.stringify(next.doStreamCalls[0]?.prompt)).not.toContain(

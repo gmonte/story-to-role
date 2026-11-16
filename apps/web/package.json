@@ -16,6 +16,7 @@
   "dependencies": {
     "@clerk/localizations": "catalog:web",
     "@clerk/nextjs": "catalog:web",
+    "@napi-rs/canvas": "catalog:api",
     "@repo/api": "workspace:*",
     "@repo/common": "workspace:*",
     "@repo/intl": "workspace:*",

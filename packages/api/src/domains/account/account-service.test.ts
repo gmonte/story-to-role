@@ -56,7 +56,7 @@ async function setup() {
   const profile = await career.findProfileByUserId(user.id);
   const cipher = await getUserCipher(db, user.id);
   const storage = memoryStorage();
-  const billing = { cancelForDeletion: vi.fn(() => Promise.resolve()) };
+  const billing = { removeForDeletion: vi.fn(() => Promise.resolve()) };
   const deleteClerkUser = vi.fn((_clerkUserId: string) => Promise.resolve());
   const cancelRun = vi.fn((_runId: string) => Promise.resolve());
   const account = new AccountService(db, {
@@ -168,7 +168,7 @@ describe("account", () => {
       confirmEmail: ` ${ctx.user.email.toUpperCase()} `,
     });
 
-    expect(ctx.billing.cancelForDeletion).toHaveBeenCalledWith(ctx.user.id);
+    expect(ctx.billing.removeForDeletion).toHaveBeenCalledWith(ctx.user.id);
     expect(ctx.deleteClerkUser).toHaveBeenCalledWith(ctx.user.clerkUserId);
     expect(ctx.storage.keys()).toEqual([]);
     for (const table of [

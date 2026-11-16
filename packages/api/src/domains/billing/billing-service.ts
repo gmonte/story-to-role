@@ -253,11 +253,12 @@ export class BillingService {
   }
 
   /**
-   * The account is being deleted (privacy spec): its subscriptions end now
-   * and open checkouts expire. The customer and its invoices stay in
-   * Stripe, as the law requires.
+   * The account is being deleted (privacy spec): its subscriptions end now,
+   * open checkouts expire, and the Stripe customer (email, name, saved
+   * card) is deleted. The charges and invoices stay in Stripe as records,
+   * which is all the law requires.
    */
-  async cancelForDeletion(userId: string) {
+  async removeForDeletion(userId: string) {
     const customer = await new BillingRepository(this.db).findCustomerByUserId(
       userId
     );
@@ -278,6 +279,7 @@ export class BillingService {
     for (const session of open) {
       await this.stripe.checkout.sessions.expire(session.id);
     }
+    await this.stripe.customers.del(customer.stripeCustomerId);
   }
 
   private async customerFor(userId: string) {

@@ -113,7 +113,7 @@ After slice 7, before calling the MVP done. Raised by the owner while testing sl
 - Per-application sensitive-item overrides (guided-interview spec, "Per-application overrides"; listed in the workspace Context block): in the specs but in no slice yet.
 - A guided walkthrough of every flow with the owner, using the product as a user.
 - Evaluate an optional product tour that teaches new users the system.
-- Privacy decisions raised in slice 7b: whether signing up again after deleting an account grants welcome credits again; keeping the Stripe customer (email, name) after deletion, for the invoices. (Neon's history window, 6 hours on the Free plan, is stated in the deletion notice; changing plans means updating `privacySettings.databaseHistoryHours`.)
+- Privacy decisions raised in slice 7b, decided: nothing of a deleted account is kept (signing up again grants welcome credits again; remaining credits are lost, as the deletion dialog warns), and the Stripe customer is deleted with the account (charges and invoices stay in Stripe). Neon's history window, 6 hours on the Free plan, is stated in the deletion notice; changing plans means updating `privacySettings.databaseHistoryHours`.
 
 Acceptance:
 - [ ] Switching the interface to Brazilian Portuguese translates every screen.

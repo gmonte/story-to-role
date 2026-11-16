@@ -1,5 +1,6 @@
 import { TRPCError } from "@trpc/server";
 
+import { currentPlan } from "@repo/api/domains/credits/credit-plan";
 import { CareerRepository } from "@repo/api/domains/career/career-repository";
 import type { ScriptKind } from "@repo/api/domains/career/schemas/career";
 import { getUserCipher } from "@repo/api/domains/encryption/user-cipher";
@@ -111,7 +112,14 @@ export class InterviewService {
           positionId: input.positionId,
         });
         if (!position || position.status === "removed") throw notFound();
-        scriptKind = scriptFor(position.endDate, position.scriptKind);
+        // The Free plan suggests the short script (guided interview spec,
+        // "Short script"; billing spec, "Free plan"): its credits go
+        // further. The user can always ask the interviewer for the full one.
+        const free =
+          (await currentPlan(tx, input.userId, new Date())).kind === "free";
+        scriptKind = free
+          ? "short"
+          : scriptFor(position.endDate, position.scriptKind);
         await career.updatePosition(position.id, { status: "in_progress" });
       } else if (input.credentialId) {
         const credential = await career.findCredential({

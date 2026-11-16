@@ -117,29 +117,41 @@ function Conversation({
   const busy = status === "submitted" || status === "streaming";
   const { sendAction } = useChatActions({ sendMessage });
 
-  // An import ended (here or while the page was away): the chat says what
-  // it found. The reaction was written by the import; saying it is free.
+  // The chat catches up with what happened outside it (here or while the
+  // page was away): an import ended (its reaction is ready), or the user
+  // changed their career on the side panel. Changes wait a few quiet
+  // seconds, so a burst of clicks gets one word, not one per click.
   const reactionPending = documents.some(
     (document) => document.reactionPending
   );
+  const updatePending = timeline.data?.profile.careerUpdatePending ?? false;
+  // Settled: the timeline hasn't changed for five seconds.
+  const changedAt = timeline.dataUpdatedAt;
+  const [settledAt, setSettledAt] = useState(0);
+  useEffect(() => {
+    if (!updatePending) return;
+    const timer = setTimeout(() => setSettledAt(changedAt), 5000);
+    return () => clearTimeout(timer);
+  }, [updatePending, changedAt]);
+  const settled = settledAt === changedAt;
+  const catchUp = reactionPending || (updatePending && settled);
   const asking = useRef(false);
   useEffect(() => {
-    if (!reactionPending || busy || asking.current) return;
+    if (!catchUp || busy || asking.current) return;
     asking.current = true;
     // The answer to a request without a message continues the last
-    // assistant message: an empty one takes it, so earlier ones stay. The
-    // stored transcript then replaces the local one.
+    // assistant message: an empty one takes it, so earlier ones stay.
     setMessages((current) => [
       ...current,
-      { id: `reaction-${Date.now()}`, role: "assistant", parts: [] },
+      { id: `catch-up-${Date.now()}`, role: "assistant", parts: [] },
     ]);
-    void sendAction({ type: "say_import_reactions" })
-      .then(async () => setMessages((await loadCareerChat()).messages))
-      .finally(() => {
-        asking.current = false;
-        void refresh();
-      });
-  }, [reactionPending, busy, sendAction, setMessages, refresh]);
+    void sendAction({ type: "catch_up" }).finally(async () => {
+      // The stored transcript has the last word, whatever the stream showed.
+      setMessages((await loadCareerChat()).messages);
+      asking.current = false;
+      void refresh();
+    });
+  }, [catchUp, busy, sendAction, setMessages, refresh]);
   const lastReview = messages.findLastIndex((message) =>
     message.parts.some((part) => part.type === "data-import-review")
   );

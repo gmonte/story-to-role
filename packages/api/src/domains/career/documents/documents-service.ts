@@ -6,6 +6,7 @@ import type { DbClient } from "@repo/api/tools/db-client";
 import { getStorage, type Storage } from "@repo/api/tools/storage/storage";
 
 import { CareerRepository } from "../career-repository";
+import { recordCareerEvent } from "../record-career-event";
 import {
   documentLimits,
   documentTypeOf,
@@ -98,7 +99,16 @@ export class DocumentsService {
     if (document.status === "pending" || document.status === "processing") {
       throw new TRPCError({ code: "CONFLICT" });
     }
-    await new CareerRepository(this.db).deleteDocument(document.id);
+    await this.db.transaction(async (tx) => {
+      await new CareerRepository(tx).deleteDocument(document.id);
+      const cipher = await getUserCipher(tx, input.userId);
+      await recordCareerEvent(tx, {
+        userId: input.userId,
+        profileId: document.profileId,
+        kind: "source_removed",
+        summary: `removed the source file ${cipher.decrypt(document.encryptedFileName)} (what was extracted from it stays)`,
+      });
+    });
     await this.storage.delete(document.storageKey);
   }
 

@@ -12,7 +12,9 @@ import { InterviewRepository } from "@repo/api/domains/interview/interview-repos
 import { TasksService } from "@repo/api/domains/tasks/tasks-service";
 import { interviewStages } from "@repo/api/domains/interview/schemas/interview";
 
+import { CareerEventsRepository } from "./career-events-repository";
 import { CareerRepository } from "./career-repository";
+import { recordCareerEvent } from "./record-career-event";
 import { computeDepth } from "./depth";
 import {
   yearMonthSchema,
@@ -244,6 +246,9 @@ export class CareerService {
         profile: {
           interviewLanguage: profile.interviewLanguage,
           privacyNoticeAccepted: !!profile.privacyNoticeAcceptedAt,
+          careerUpdatePending: await new CareerEventsRepository(
+            tx
+          ).hasReactivePending(profile.id),
         },
         positions: sorted.filter((r) => r.status !== "removed").map(toView),
         removedPositions: sorted
@@ -332,6 +337,14 @@ export class CareerService {
     });
   }
 
+  private event(
+    tx: DbClient,
+    input: Omit<Parameters<typeof recordCareerEvent>[1], "summary">,
+    summary: string
+  ) {
+    return recordCareerEvent(tx, { ...input, summary });
+  }
+
   async addPosition(input: { userId: string; position: PositionInput }) {
     const profile = await this.requireProfile(input.userId);
     return this.db.transaction(async (tx) => {
@@ -341,6 +354,11 @@ export class CareerService {
         origin: "manual",
         ...this.sealPosition(cipher, input.position),
       });
+      await this.event(
+        tx,
+        { userId: input.userId, profileId: profile.id, kind: "position_added" },
+        `added the position ${input.position.title} at ${input.position.employer}`
+      );
       return { positionId: row.id };
     });
   }
@@ -364,6 +382,15 @@ export class CareerService {
         row.id,
         this.sealPosition(cipher, input.position)
       );
+      await this.event(
+        tx,
+        {
+          userId: input.userId,
+          profileId: profile.id,
+          kind: "position_edited",
+        },
+        `edited the position ${input.position.title} at ${input.position.employer} (${input.position.startDate ?? "?"} to ${input.position.endDate ?? "now"})`
+      );
     });
   }
 
@@ -381,6 +408,16 @@ export class CareerService {
         status: "removed",
         removedAt: new Date(),
       });
+      const cipher = await getUserCipher(tx, input.userId);
+      await this.event(
+        tx,
+        {
+          userId: input.userId,
+          profileId: profile.id,
+          kind: "position_removed",
+        },
+        `removed the position ${describePositionRow(cipher, row)}`
+      );
     });
   }
 
@@ -437,6 +474,16 @@ export class CareerService {
         ],
       });
       await career.deletePosition(from.id);
+      const cipher = await getUserCipher(tx, input.userId);
+      await this.event(
+        tx,
+        {
+          userId: input.userId,
+          profileId: profile.id,
+          kind: "positions_merged",
+        },
+        `merged ${describePositionRow(cipher, from)} into ${describePositionRow(cipher, into)}`
+      );
     });
   }
 
@@ -474,6 +521,15 @@ export class CareerService {
       };
       await career.updatePosition(position.id, changes[conflict.field]());
       await career.resolveConflict(conflict.id);
+      await this.event(
+        tx,
+        {
+          userId: input.userId,
+          profileId: profile.id,
+          kind: "conflict_resolved",
+        },
+        `confirmed the ${conflict.field} of ${describePositionRow(cipher, position)} is ${input.value === "current" ? "still current" : input.value}`
+      );
     });
   }
 
@@ -596,6 +652,15 @@ export class CareerService {
         // Added by hand: the user is the source, so it is approved already.
         approvedAt: new Date(),
       });
+      await this.event(
+        tx,
+        {
+          userId: input.userId,
+          profileId: profile.id,
+          kind: "credential_added",
+        },
+        `added ${describeCredentialRow(cipher, row)}`
+      );
       return { credentialId: row.id };
     });
   }
@@ -614,10 +679,20 @@ export class CareerService {
       });
       if (!row) throw notFound();
       const cipher = await getUserCipher(tx, input.userId);
+      const sealed = this.sealCredential(cipher, input.credential);
       await career.updateCredential(row.id, {
-        ...this.sealCredential(cipher, input.credential),
+        ...sealed,
         approvedAt: row.approvedAt ?? new Date(),
       });
+      await this.event(
+        tx,
+        {
+          userId: input.userId,
+          profileId: profile.id,
+          kind: "credential_edited",
+        },
+        `edited ${row.approvedAt ? "" : "and approved "}${describeCredentialRow(cipher, { ...row, ...sealed })}`
+      );
     });
   }
 
@@ -659,6 +734,16 @@ export class CareerService {
         ],
       });
       await career.deleteCredential(from.id);
+      const cipher = await getUserCipher(tx, input.userId);
+      await this.event(
+        tx,
+        {
+          userId: input.userId,
+          profileId: profile.id,
+          kind: "credentials_merged",
+        },
+        `merged ${describeCredentialRow(cipher, from)} into ${describeCredentialRow(cipher, into)}`
+      );
     });
   }
 
@@ -672,6 +757,15 @@ export class CareerService {
       });
       if (!row) throw notFound();
       await career.updateCredential(row.id, { approvedAt: new Date() });
+      await this.event(
+        tx,
+        {
+          userId: input.userId,
+          profileId: profile.id,
+          kind: "credential_approved",
+        },
+        `approved ${describeCredentialRow(await getUserCipher(tx, input.userId), row)}`
+      );
     });
   }
 
@@ -685,6 +779,15 @@ export class CareerService {
       });
       if (!row) throw notFound();
       await career.deleteCredential(row.id);
+      await this.event(
+        tx,
+        {
+          userId: input.userId,
+          profileId: profile.id,
+          kind: "credential_removed",
+        },
+        `removed ${describeCredentialRow(await getUserCipher(tx, input.userId), row)}`
+      );
     });
   }
 
@@ -896,3 +999,24 @@ function previousMonth(yearMonth: string) {
   const date = new Date(Date.UTC(year, month - 2, 1));
   return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, "0")}`;
 }
+
+const describePositionRow = (
+  cipher: UserCipher,
+  row: { encryptedTitle: string; encryptedEmployer: string }
+) =>
+  `${cipher.decrypt(row.encryptedTitle)} at ${cipher.decrypt(row.encryptedEmployer)}`;
+
+const describeCredentialRow = (
+  cipher: UserCipher,
+  row: {
+    kind: string;
+    encryptedTitle: string;
+    encryptedInstitution: string | null;
+  }
+) =>
+  [
+    `${row.kind} ${cipher.decrypt(row.encryptedTitle)}`,
+    row.encryptedInstitution && cipher.decrypt(row.encryptedInstitution),
+  ]
+    .filter(Boolean)
+    .join(" at ");

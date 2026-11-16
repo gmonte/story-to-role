@@ -2,6 +2,7 @@ import { chat } from "@trigger.dev/sdk/ai";
 import { APICallError, type LanguageModelUsage } from "ai";
 import { z } from "zod";
 
+import type { AiFunding } from "@repo/api/domains/ai/ai-funding";
 import { AiUsageRepository } from "@repo/api/domains/ai/ai-usage-repository";
 import { KeyUnusableError } from "@repo/api/domains/ai/providers/provider-package";
 import { finishTask } from "@repo/api/domains/tasks/run-task";
@@ -15,18 +16,27 @@ import {
   pendingImportReactions,
 } from "../import-reactions";
 import {
-  runCareerChatTurn,
-  startingWithUser,
-  type OpenTurn,
-} from "../run-career-chat-turn";
+  markCareerChangesSeen,
+  pendingCareerChanges,
+  reactToCareerChanges,
+  recordChangesReactionUsage,
+  type PendingCareerChanges,
+} from "../career-changes";
+import { startingWithUser } from "../chat-history";
+import { runCareerChatTurn, type OpenTurn } from "../run-career-chat-turn";
 
 // The turn each chat has open in this run, settled when it completes.
 const openTurns = new Map<string, OpenTurn>();
-// What each chat says about finished imports on its next action turn.
-const importReactions = new Map<
-  string,
-  { sourceDocumentIds: string[]; text: string; said?: boolean }
->();
+// What each chat says on its next action turn to catch up with the user:
+// a finished import's reaction, or its word on changes from the side panel.
+type CatchUp =
+  | { kind: "import"; sourceDocumentIds: string[]; text: string }
+  | {
+      kind: "changes";
+      pending: PendingCareerChanges;
+      used?: { funding: AiFunding; modelId: string };
+    };
+const catchUps = new Map<string, CatchUp & { said?: boolean }>();
 
 /** A provider refusal of the user's own key, as the task ledger knows it. */
 function keyFailure(error: unknown) {
@@ -71,30 +81,48 @@ export const careerChatAgent = chat.agent({
     onError: () =>
       "Something went wrong with this answer. Please send it again.",
   },
-  // The page asks once an import ends (or on load, when one ended away):
-  // the chat says what the import wrote, at no cost, as its own message.
-  actionSchema: z.object({ type: z.literal("say_import_reactions") }),
+  // The page asks when it sees something the chat hasn't said yet (an
+  // import ended, the user changed their career on the side panel), also
+  // when that happened while it was away. One thing per ask: the page asks
+  // again while anything is left.
+  actionSchema: z.object({ type: z.literal("catch_up") }),
   onAction: async ({ chatId }) => {
     const reactions = await pendingImportReactions(db, chatId);
-    if (!reactions) return;
-    importReactions.set(chatId, reactions);
-    return chat.turn();
+    if (reactions) {
+      catchUps.set(chatId, { kind: "import", ...reactions });
+      return chat.turn();
+    }
+    const pending = await pendingCareerChanges(db, chatId);
+    if (pending) {
+      catchUps.set(chatId, { kind: "changes", pending });
+      return chat.turn();
+    }
   },
   run: async ({ chatId, messages, signal, streamText, trigger }) => {
-    const reaction = importReactions.get(chatId);
-    if (trigger === "action-turn" && reaction) {
-      reaction.said = true;
+    const catchUp = catchUps.get(chatId);
+    if (trigger === "action-turn" && catchUp?.kind === "import") {
+      catchUp.said = true;
       // Marks the message: the page offers the import's shortcuts under it.
       chat.response.write({
         type: "data-import-review",
         id: "import-review",
         data: {},
       });
-      // The chat may be empty yet; the stream wants a prompt to answer.
+      // The import wrote it (its cost); saying it is free. The chat may be
+      // empty yet: the stream wants a prompt to answer.
       return streamText({
-        model: fixedReplyModel(reaction.text),
+        model: fixedReplyModel(catchUp.text),
         messages: startingWithUser(messages),
       });
+    }
+    if (trigger === "action-turn" && catchUp?.kind === "changes") {
+      catchUp.said = true;
+      const { result, funding, modelId } = await reactToCareerChanges(
+        { db, streamText },
+        { pending: catchUp.pending, messages }
+      );
+      catchUp.used = { funding, modelId };
+      return result;
     }
     const { result, turn } = await runCareerChatTurn(
       {
@@ -115,13 +143,29 @@ export const careerChatAgent = chat.agent({
     return result;
   },
   onTurnComplete: async ({ chatId, usage, error, finishReason }) => {
-    // An import reaction counts as said once its turn completed cleanly;
-    // otherwise it waits for the next ask.
-    const reaction = importReactions.get(chatId);
-    if (reaction?.said) {
-      importReactions.delete(chatId);
-      if (error === undefined && finishReason !== "error") {
-        await markImportReactionsSaid(db, reaction.sourceDocumentIds);
+    // What the chat caught up on counts as said once its turn completed
+    // cleanly; otherwise it waits for the next ask.
+    const catchUp = catchUps.get(chatId);
+    if (catchUp?.said) {
+      catchUps.delete(chatId);
+      // Only an answer that finished: a provider error may end the stream
+      // with no error raised.
+      const clean = error === undefined && finishReason === "stop";
+      if (catchUp.kind === "import" && clean) {
+        await markImportReactionsSaid(db, catchUp.sourceDocumentIds);
+      }
+      if (catchUp.kind === "changes") {
+        if (clean) {
+          await markCareerChangesSeen(db, catchUp.pending.careerEventIds);
+        }
+        // Not charged; recorded, on the user's key or ours.
+        if (usage && catchUp.used) {
+          await recordChangesReactionUsage(db, {
+            userId: catchUp.pending.userId,
+            ...catchUp.used,
+            usage,
+          });
+        }
       }
     }
     const turn = openTurns.get(chatId);

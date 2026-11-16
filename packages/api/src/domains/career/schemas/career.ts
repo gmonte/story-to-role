@@ -98,3 +98,21 @@ export const interviewLanguageSourceSchema = z.enum([
 export type InterviewLanguageSource = z.infer<
   typeof interviewLanguageSourceSchema
 >;
+
+/** What the user did to their career outside the chat. */
+export const careerEventKinds = [
+  "position_added",
+  "position_edited",
+  "position_removed",
+  "positions_merged",
+  "conflict_resolved",
+  "facts_approved",
+  "imported_approved",
+  "credential_added",
+  "credential_edited",
+  "credential_approved",
+  "credential_removed",
+  "credentials_merged",
+  "source_removed",
+] as const;
+export type CareerEventKind = (typeof careerEventKinds)[number];

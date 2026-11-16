@@ -118,6 +118,8 @@ export type TimelineProposalView = z.infer<typeof timelineProposalViewSchema>;
 export const careerProfileViewSchema = z.object({
   interviewLanguage: interviewLanguageSchema,
   privacyNoticeAccepted: z.boolean(),
+  // A change made outside the chat waits for the chat's word on it.
+  careerUpdatePending: z.boolean(),
 });
 
 export const narrativeViewSchema = z.object({

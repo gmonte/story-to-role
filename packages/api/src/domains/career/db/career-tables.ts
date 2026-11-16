@@ -15,6 +15,7 @@ import type {
   SourceDocumentKind,
   SourceDocumentStatus,
   TimelineProposalKind,
+  StartPath,
 } from "../schemas/career";
 
 // Every `encrypted*` column holds ciphertext from the user's data key
@@ -40,6 +41,8 @@ export const careerProfilesTable = createTable(
       .references(() => usersTable.id, { onDelete: "cascade" }),
     interviewLanguage: d.text().$type<InterviewLanguage>().notNull(),
     privacyNoticeAcceptedAt: d.timestamp({ withTimezone: true }),
+    // How the user chose to start (workspace spec, "Onboarding").
+    startPath: d.text().$type<StartPath>(),
   }),
   (t) => [unique("career_profiles_user_id_unique").on(t.userId)]
 );

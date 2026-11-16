@@ -1,5 +1,6 @@
 import { and, desc, eq, inArray, isNull } from "drizzle-orm";
 
+import { openingsTable } from "@repo/api/domains/openings/db/openings-tables";
 import type { DbClient } from "@repo/api/tools/db-client";
 
 import {
@@ -26,6 +27,37 @@ export class CareerRepository {
       .from(careerProfilesTable)
       .where(eq(careerProfilesTable.userId, userId));
     return row;
+  }
+
+  /** Whether the profile has an opening yet. */
+  async hasOpening(profileId: string) {
+    const rows = await this.tx
+      .select({ id: openingsTable.id })
+      .from(openingsTable)
+      .where(eq(openingsTable.profileId, profileId))
+      .limit(1);
+    return rows.length > 0;
+  }
+
+  /** Whether the profile holds anything yet: an imported file, a position or an opening. */
+  async hasAnything(profileId: string) {
+    const first = (
+      table:
+        | typeof sourceDocumentsTable
+        | typeof positionsTable
+        | typeof openingsTable
+    ) =>
+      this.tx
+        .select({ id: table.id })
+        .from(table)
+        .where(eq(table.profileId, profileId))
+        .limit(1);
+    const found = await Promise.all([
+      first(sourceDocumentsTable),
+      first(positionsTable),
+      first(openingsTable),
+    ]);
+    return found.some((rows) => rows.length > 0);
   }
 
   async findProfileById(profileId: string) {

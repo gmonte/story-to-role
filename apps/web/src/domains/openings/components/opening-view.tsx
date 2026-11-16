@@ -15,6 +15,8 @@ import { Tabs, TabsList, TabsTrigger } from "@repo/web/components/ui/tabs";
 import { Textarea } from "@repo/web/components/ui/textarea";
 
 import { CoverLetterPrep } from "~/domains/applications/components/cover-letter-prep";
+import { CreditCost } from "~/domains/credits/components/credit-cost";
+import { useCredits } from "~/domains/credits/hooks/use-credits";
 import { GenerateResumeDialog } from "~/domains/documents/components/generate-resume-dialog";
 import { ResumeEditor } from "~/domains/documents/components/resume-editor";
 import { useOpeningDocuments } from "~/domains/documents/hooks/use-opening-documents";
@@ -43,6 +45,13 @@ export function OpeningView({ openingId }: { openingId: string }) {
     params.set("view", next);
     router.replace(`${pathname}?${params.toString()}`, { scroll: false });
   };
+  const credits = useCredits();
+  const analyze = useMutation(
+    trpc.openings.analyzeExternal.mutationOptions({
+      onSuccess: refresh,
+      onError: (error) => toast.error(error.message),
+    })
+  );
   const setClosed = useMutation(
     trpc.openings.setClosed.mutationOptions({
       onSuccess: refresh,
@@ -121,6 +130,48 @@ export function OpeningView({ openingId }: { openingId: string }) {
             )}
           </div>
         </div>
+
+        {data.status === "external" && (
+          <div className="flex flex-col gap-2 rounded-lg border p-4 text-sm">
+            <p>
+              {t.formatMessage({
+                defaultMessage:
+                  "You applied to this opening outside StoryToRole, so it wasn’t analyzed. Analyze it to see your fit and write documents for it.",
+              })}
+            </p>
+            {data.sourceUrl && (
+              <a
+                href={data.sourceUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="text-primary flex items-center gap-1 self-start hover:underline"
+              >
+                <ExternalLink className="size-3.5" />
+                {t.formatMessage({ defaultMessage: "Open the posting" })}
+              </a>
+            )}
+            {data.description || data.sourceUrl ? (
+              <div className="flex items-center gap-2">
+                <Button
+                  size="sm"
+                  className="self-start"
+                  disabled={analyze.isPending}
+                  onClick={() => analyze.mutate({ openingId })}
+                >
+                  {t.formatMessage({ defaultMessage: "Analyze this opening" })}
+                </Button>
+                <CreditCost credits={credits.data?.estimates.fitCheck} />
+              </div>
+            ) : (
+              <p className="text-muted-foreground">
+                {t.formatMessage({
+                  defaultMessage:
+                    "Without its description or link, there is nothing to analyze.",
+                })}
+              </p>
+            )}
+          </div>
+        )}
 
         {data.status === "rejected" && (
           <div className="flex flex-col gap-2 rounded-lg border border-amber-500/40 bg-amber-500/10 p-4 text-sm">

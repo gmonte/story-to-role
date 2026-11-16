@@ -36,6 +36,20 @@ export const applicationsTable = createTable(
       .notNull()
       .default("in_preparation"),
     tone: d.text().$type<Tone>().notNull().default("your_style"),
+    // Registered by hand for an opening applied to outside StoryToRole
+    // (tracker spec); it stops being external with its first document.
+    external: d.boolean().notNull().default(false),
+    statusChangedAt: d
+      .timestamp({ withTimezone: true })
+      .default(sql`CURRENT_TIMESTAMP`)
+      .notNull(),
+    // The last thing that happened (a status change or an event): "No
+    // response" counts from it.
+    lastActivityAt: d
+      .timestamp({ withTimezone: true })
+      .default(sql`CURRENT_TIMESTAMP`)
+      .notNull(),
+    appliedAt: d.timestamp({ withTimezone: true }),
     // Sections forced in or out for this application only.
     sectionsForcedIn: d
       .text()

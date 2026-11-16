@@ -127,6 +127,13 @@
       "when": 1794782232218,
       "tag": "0017_add_ai_keys_and_funding",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1794786797181,
+      "tag": "0018_add_tracker",
+      "breakpoints": true
     }
   ]
 }

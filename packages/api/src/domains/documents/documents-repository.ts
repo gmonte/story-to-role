@@ -59,6 +59,17 @@ export class DocumentsRepository {
       .insert(applicationsTable)
       .values(application)
       .onConflictDoNothing({ target: applicationsTable.openingId });
+    // A document for an external application: it isn't external anymore
+    // (tracker spec).
+    await this.tx
+      .update(applicationsTable)
+      .set({ external: false })
+      .where(
+        and(
+          eq(applicationsTable.openingId, application.openingId),
+          eq(applicationsTable.external, true)
+        )
+      );
     return await this.findApplicationByOpening(application.openingId);
   }
 

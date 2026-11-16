@@ -11,6 +11,7 @@ import {
   or,
 } from "drizzle-orm";
 
+import { applicationsTable } from "@repo/api/domains/applications/db/applications-tables";
 import { positionsTable } from "@repo/api/domains/career/db/career-tables";
 import { evidenceTable } from "@repo/api/domains/evidence/db/evidence-tables";
 import type { DbClient } from "@repo/api/tools/db-client";
@@ -63,6 +64,18 @@ export class OpeningsRepository {
       .from(openingsTable)
       .where(eq(openingsTable.id, openingId));
     return row;
+  }
+
+  /** The tracker's status of the openings that have an application. */
+  async applicationStatuses(openingIds: string[]) {
+    if (openingIds.length === 0) return [];
+    return this.tx
+      .select({
+        openingId: applicationsTable.openingId,
+        status: applicationsTable.status,
+      })
+      .from(applicationsTable)
+      .where(inArray(applicationsTable.openingId, openingIds));
   }
 
   listOpenings(profileId: string) {

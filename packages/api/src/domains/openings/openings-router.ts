@@ -116,6 +116,26 @@ export const openingsRouter = createTRPCRouter({
       })
     ),
 
+  analyzeExternal: userProcedure
+    .use(rateLimited("taskStart"))
+    .meta(
+      openApiMeta(
+        "openings",
+        "POST",
+        "/openings/by-id/{openingId}/analyze",
+        "Analyzes an opening registered with an external application"
+      )
+    )
+    .input(z.object({ openingId: z.uuid() }))
+    .output(z.object({ realtime: realtimeSubscriptionSchema }))
+    .mutation(async ({ ctx, input }) => {
+      const { realtime } = await new OpeningsService(db).analyzeExternal({
+        userId: ctx.userId,
+        ...input,
+      });
+      return { realtime };
+    }),
+
   setClosed: userProcedure
     .meta(
       openApiMeta(

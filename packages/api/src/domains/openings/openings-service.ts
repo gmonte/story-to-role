@@ -60,11 +60,15 @@ export class OpeningsService {
         ...fields(cipher),
       });
     });
-    const { realtime } = await this.tasks.start({
-      userId,
-      type: "analyze_opening",
-      subjectId: opening.id,
-    });
+    // An analysis that can't start leaves the opening refused (it can be
+    // added again), never "being analyzed" forever.
+    const { realtime } = await this.tasks.startOrUndo(
+      { userId, type: "analyze_opening", subjectId: opening.id },
+      () =>
+        new OpeningsRepository(this.db).updateOpening(opening.id, {
+          status: "rejected",
+        })
+    );
     return { openingId: opening.id, realtime };
   }
 
@@ -124,6 +128,9 @@ export class OpeningsService {
       const fitChecks = await openings.latestFitChecks(
         rows.map((row) => row.id)
       );
+      const applications = await openings.applicationStatuses(
+        rows.map((row) => row.id)
+      );
       return rows.map((row) => ({
         id: row.id,
         kind: row.kind,
@@ -132,6 +139,9 @@ export class OpeningsService {
         title: open(cipher, row.encryptedTitle),
         band:
           fitChecks.find((check) => check.openingId === row.id)?.band ?? null,
+        applicationStatus:
+          applications.find((item) => item.openingId === row.id)?.status ??
+          null,
         createdAt: row.createdAt,
       }));
     });
@@ -194,6 +204,8 @@ export class OpeningsService {
         company: open(cipher, row.encryptedCompany),
         title: open(cipher, row.encryptedTitle),
         band: fitCheck?.band ?? null,
+        applicationStatus:
+          (await openings.applicationStatuses([row.id]))[0]?.status ?? null,
         createdAt: row.createdAt,
         description: open(cipher, row.encryptedDescription),
         notes: open(cipher, row.encryptedNotes),
@@ -204,6 +216,41 @@ export class OpeningsService {
         fitCheck: items,
       };
     });
+  }
+
+  /**
+   * Analyzes an opening registered with an external application, once the
+   * user wants documents for it: the fit check, at its usual cost.
+   */
+  async analyzeExternal(input: { userId: string; openingId: string }) {
+    const profile = await this.requireProfile(input.userId);
+    const row = await new OpeningsRepository(this.db).findOpening({
+      profileId: profile.id,
+      openingId: input.openingId,
+    });
+    if (row?.status !== "external") throw notFound();
+    if (!row.encryptedDescription && !row.encryptedSourceUrl) {
+      throw new TRPCError({ code: "PRECONDITION_FAILED" });
+    }
+    await this.tasks.assertAffordable({
+      userId: input.userId,
+      type: "analyze_opening",
+    });
+    await new OpeningsRepository(this.db).updateOpening(row.id, {
+      status: "processing",
+    });
+    try {
+      return await this.tasks.start({
+        userId: input.userId,
+        type: "analyze_opening",
+        subjectId: row.id,
+      });
+    } catch (error) {
+      await new OpeningsRepository(this.db).updateOpening(row.id, {
+        status: "external",
+      });
+      throw error;
+    }
   }
 
   /** The user can close an opening (the company has no vacancies…) and reopen it. */
@@ -219,7 +266,13 @@ export class OpeningsService {
         profileId: profile.id,
         openingId: input.openingId,
       });
-      if (!row || row.status === "processing" || row.status === "rejected")
+      // An external opening was never analyzed: its application closes.
+      if (
+        !row ||
+        row.status === "processing" ||
+        row.status === "rejected" ||
+        row.status === "external"
+      )
         throw notFound();
       await openings.updateOpening(row.id, {
         status: input.closed ? "closed" : "analyzed",

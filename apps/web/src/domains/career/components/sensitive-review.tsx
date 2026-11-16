@@ -21,8 +21,9 @@ import { useRefreshCareer } from "../hooks/use-career-queries";
 
 /**
  * The sensitive-data review: for each flagged name or figure, use it,
- * generalize it (with a description the user edits) or exclude it. Code
- * applies the choice before and after every AI call.
+ * generalize it (replaced by a description the user writes, which it needs
+ * first) or exclude it. Code applies the choice before and after every AI
+ * call.
  */
 export function SensitiveReview() {
   const t = useTranslation();
@@ -62,54 +63,73 @@ export function SensitiveReview() {
       <p className="text-muted-foreground text-xs">
         {t.formatMessage({
           defaultMessage:
-            "Choose how each one may appear in what StoryToRole writes for you.",
+            "Choose how each one may appear in what StoryToRole writes for you. Use: as it is. Generalize: replaced by the description you write (“a large industrial machinery maker”). Exclude: never appears.",
         })}
       </p>
-      {items.data.map((item) => (
-        <div
-          key={item.id}
-          className="bg-background flex flex-col gap-2 rounded-lg border p-3"
-        >
-          <div className="flex items-center gap-2">
-            <span className="text-sm font-medium">{item.original}</span>
-            <Badge variant="secondary">{labels.sensitiveKind(item.kind)}</Badge>
-            {!item.reviewed && (
-              <Badge variant="outline">
-                {t.formatMessage({ defaultMessage: "To review" })}
+      {items.data.map((item) => {
+        // Generalizing needs the description that will stand in for it.
+        const description = (
+          generalized[item.id] ??
+          item.generalized ??
+          ""
+        ).trim();
+        return (
+          <div
+            key={item.id}
+            className="bg-background flex flex-col gap-2 rounded-lg border p-3"
+          >
+            <div className="flex items-center gap-2">
+              <span className="text-sm font-medium">{item.original}</span>
+              <Badge variant="secondary">
+                {labels.sensitiveKind(item.kind)}
               </Badge>
-            )}
+              {!item.reviewed && (
+                <Badge variant="outline">
+                  {t.formatMessage({ defaultMessage: "To review" })}
+                </Badge>
+              )}
+            </div>
+            <Input
+              placeholder={t.formatMessage({
+                defaultMessage: "How to describe it without the name",
+              })}
+              defaultValue={item.generalized ?? ""}
+              onChange={(event) =>
+                setGeneralized((current) => ({
+                  ...current,
+                  [item.id]: event.target.value,
+                }))
+              }
+            />
+            <div className="flex gap-1.5">
+              {sensitivityChoiceSchema.options.map((choice) => (
+                <Button
+                  key={choice}
+                  size="sm"
+                  className="h-7"
+                  variant={
+                    item.choice === choice && item.reviewed
+                      ? "default"
+                      : "outline"
+                  }
+                  disabled={choice === "generalize" && !description}
+                  title={
+                    choice === "generalize" && !description
+                      ? t.formatMessage({
+                          defaultMessage:
+                            "Write above how to describe it without the name first.",
+                        })
+                      : undefined
+                  }
+                  onClick={() => choose(item.id, choice, item.generalized)}
+                >
+                  {labels.sensitiveChoice(choice)}
+                </Button>
+              ))}
+            </div>
           </div>
-          <Input
-            placeholder={t.formatMessage({
-              defaultMessage: "How to describe it without the name",
-            })}
-            defaultValue={item.generalized ?? ""}
-            onChange={(event) =>
-              setGeneralized((current) => ({
-                ...current,
-                [item.id]: event.target.value,
-              }))
-            }
-          />
-          <div className="flex gap-1.5">
-            {sensitivityChoiceSchema.options.map((choice) => (
-              <Button
-                key={choice}
-                size="sm"
-                className="h-7"
-                variant={
-                  item.choice === choice && item.reviewed
-                    ? "default"
-                    : "outline"
-                }
-                onClick={() => choose(item.id, choice, item.generalized)}
-              >
-                {labels.sensitiveChoice(choice)}
-              </Button>
-            ))}
-          </div>
-        </div>
-      ))}
+        );
+      })}
     </section>
   );
 }

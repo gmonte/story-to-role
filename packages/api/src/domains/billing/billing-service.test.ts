@@ -87,6 +87,7 @@ function fakeStripe(state: {
         list: vi.fn(() => list(state.sessions ?? [])),
       },
     },
+    customers: { del: vi.fn(async () => ({ deleted: true })) },
     invoicePayments: {
       list: vi.fn(async () =>
         list(
@@ -239,9 +240,12 @@ describe("billing service", () => {
     expect(await ctx.spendable()).toBe(0);
   });
 
-  it("cancels live subscriptions when the account is deleted", async () => {
+  it("cancels subscriptions and deletes the customer with the account", async () => {
     const ctx = await setup({ subscription: subscription() });
-    await ctx.billing.cancelForDeletion(ctx.user.id);
+    await ctx.billing.removeForDeletion(ctx.user.id);
+    expect(vi.mocked(ctx.stripe.customers).del.mock.calls[0]).toEqual([
+      "cus_ada",
+    ]);
     expect(vi.mocked(ctx.stripe.subscriptions).cancel.mock.calls[0]).toEqual([
       "sub_1",
     ]);

@@ -22,6 +22,7 @@ import { Label } from "@repo/web/components/ui/label";
 import { toast } from "@repo/web/components/ui/sonner";
 import { privacySettings } from "@repo/common/settings/privacy-settings";
 
+import { useCredits } from "~/domains/credits/hooks/use-credits";
 import { useTRPC } from "~/tools/trpc/client";
 
 /**
@@ -82,6 +83,8 @@ function DeleteAccountDialog() {
     })
   );
   const expected = user?.primaryEmailAddress?.emailAddress ?? "";
+  // Credits go with the account: nothing is kept to give them back.
+  const credits = useCredits().data?.available ?? 0;
 
   return (
     <Dialog>
@@ -105,6 +108,17 @@ function DeleteAccountDialog() {
             })}
           </DialogDescription>
         </DialogHeader>
+        {credits > 0 && (
+          <p className="rounded-md border border-amber-500/40 bg-amber-500/10 p-2.5 text-sm">
+            {t.formatMessage(
+              {
+                defaultMessage:
+                  "Your {credits, number} remaining credits are lost with the account, including any you bought. Signing up again doesn’t bring them back.",
+              },
+              { credits }
+            )}
+          </p>
+        )}
         <div className="grid gap-1.5">
           <Label htmlFor="confirm-email">{expected}</Label>
           <Input

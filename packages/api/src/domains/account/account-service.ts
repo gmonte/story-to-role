@@ -15,7 +15,7 @@ const logTags = ["account"];
 
 type Deps = {
   storage: Storage;
-  billing: Pick<BillingService, "cancelForDeletion">;
+  billing: Pick<BillingService, "removeForDeletion">;
   deleteClerkUser: (clerkUserId: string) => Promise<void>;
   cancelRun: (runId: string) => Promise<void>;
 };
@@ -77,7 +77,8 @@ export class AccountService {
 
   /**
    * Everything StoryToRole holds for the user: running tasks stopped,
-   * subscriptions cancelled and checkouts expired, then the user's rows
+   * subscriptions cancelled, checkouts expired and the Stripe customer
+   * deleted, then the user's rows
    * with their data key (use stops here), then their stored files, which
    * that key protected.
    */
@@ -91,7 +92,7 @@ export class AccountService {
         logger.warn(logTags, "Could not cancel a run", { runId, error });
       });
     }
-    await this.deps.billing.cancelForDeletion(userId);
+    await this.deps.billing.removeForDeletion(userId);
     await repository.deleteUser(userId);
     for (const storageKey of storageKeys) {
       // Unreadable without the deleted key; removed for good measure.

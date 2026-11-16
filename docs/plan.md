@@ -129,13 +129,25 @@ Found with the owner in the guided walkthrough (2026-11-16), stopped after the f
 - Hide the side panel until the privacy notice is acknowledged, and refuse imports on the server before it (today only the interview checks it).
 - Remove the sample-task card ("Background tasks").
 - Import sits at the top of the side panel, above the timeline.
-- Credentials split into Education, Languages and Certifications, each with its own "+ Add"; courses, publications, awards and volunteering go under "Other", shown only when it has items. The resume already has a section per kind.
+- Credentials split into Education, Languages and Certifications, each with its own "+ Add"; courses, publications, awards and volunteering go under "Courses, publications and more", shown only when it has items (Education's "+ Add" also offers those kinds, so the first one can be added). The resume already has a section per kind.
 - The credit meter refreshes after an import (uploads skip the tRPC invalidation).
-- Plural messages handle zero in Brazilian Portuguese ("0 fato" reads wrong): say "nenhum fato" or use the plural.
+- Plural messages handle zero in Brazilian Portuguese ("0 fato" reads wrong): every pt-BR plural has an `=0` case, since Portuguese's `one` category covers zero.
 
 Acceptance:
 - [ ] Before the notice, the side panel is hidden and an import request is refused.
 - [ ] The meter shows the import's cost as soon as it settles.
+
+### W1b: Sources
+
+Raised by the owner during W1: most users have a few resume versions, a LinkedIn PDF or a summary their own AI wrote, rarely a truth file.
+
+- "Import" becomes "Sources": one upload button plus a drop zone for dragged files; no resume or truth-file choice. The import task works out the kind itself (rules such as "do not include" make it a truth file).
+- Up to 5 sources per user, counted on the server (rejected or failed files don't count); a source can be removed to free its slot, keeping the evidence already approved from it.
+- Clicking a source opens a preview in a panel further right, as the Claude app does: PDFs as they are, DOCX as their extracted text, Markdown and text as text. Files stay in the platform's storage, encrypted, readable only by their owner through an authenticated route.
+
+Acceptance:
+- [ ] Dropping three resumes and a summary imports all four with no kind chosen; a sixth file is refused.
+- [ ] Clicking a source shows its contents beside the panel; another user gets 404 for it.
 
 ### W2: One career chat on chat.agent
 

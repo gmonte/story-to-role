@@ -169,6 +169,47 @@ export function Sources({
       <h3 className="text-sm font-medium">
         {t.formatMessage({ defaultMessage: "Sources" })}
       </h3>
+      {/* What was uploaded comes first; the upload area below. */}
+      <ul className="flex flex-col gap-1">
+        {documents.map((document) => (
+          <li key={document.id} className="flex items-center gap-1 text-xs">
+            <button
+              type="button"
+              disabled={!onPreview}
+              onClick={() => onPreview?.(document.id)}
+              className="min-w-0 flex-1 truncate text-left enabled:hover:underline"
+            >
+              {document.fileName}
+            </button>
+            <Badge
+              variant={
+                document.status === "rejected" ? "destructive" : "outline"
+              }
+            >
+              {statusLabel(document)}
+            </Badge>
+            {/* An import still reads its file. */}
+            {!reading(document) && (
+              <Button
+                size="icon"
+                variant="ghost"
+                className="size-6"
+                aria-label={t.formatMessage({
+                  defaultMessage: "Remove this source",
+                })}
+                title={t.formatMessage({
+                  defaultMessage:
+                    "Remove this source. What was already extracted from it stays.",
+                })}
+                disabled={remove.isPending}
+                onClick={() => remove.mutate({ sourceDocumentId: document.id })}
+              >
+                <Trash2 />
+              </Button>
+            )}
+          </li>
+        ))}
+      </ul>
       <div
         onDragOver={(event) => {
           event.preventDefault();
@@ -226,46 +267,6 @@ export function Sources({
           }}
         />
       ))}
-      <ul className="flex flex-col gap-1">
-        {documents.map((document) => (
-          <li key={document.id} className="flex items-center gap-1 text-xs">
-            <button
-              type="button"
-              disabled={!onPreview}
-              onClick={() => onPreview?.(document.id)}
-              className="min-w-0 flex-1 truncate text-left enabled:hover:underline"
-            >
-              {document.fileName}
-            </button>
-            <Badge
-              variant={
-                document.status === "rejected" ? "destructive" : "outline"
-              }
-            >
-              {statusLabel(document)}
-            </Badge>
-            {/* An import still reads its file. */}
-            {!reading(document) && (
-              <Button
-                size="icon"
-                variant="ghost"
-                className="size-6"
-                aria-label={t.formatMessage({
-                  defaultMessage: "Remove this source",
-                })}
-                title={t.formatMessage({
-                  defaultMessage:
-                    "Remove this source. What was already extracted from it stays.",
-                })}
-                disabled={remove.isPending}
-                onClick={() => remove.mutate({ sourceDocumentId: document.id })}
-              >
-                <Trash2 />
-              </Button>
-            )}
-          </li>
-        ))}
-      </ul>
     </section>
   );
 }

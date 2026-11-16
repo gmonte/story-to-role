@@ -153,9 +153,10 @@ Acceptance:
 
 Raised by the owner after W1b.
 
-- The border between the chat and a source's preview can be dragged to resize both; the side panel (sources and timeline) keeps its width.
+- With a source's preview open, the dividers on both sides of the side panel can be dragged to resize the chat and the preview; the side panel (sources and timeline) keeps its width.
 - Each screen remembers the split per viewer (browser storage, a convenience only); the chat and the preview keep a usable minimum width.
-- Built with the shadcn `resizable` component, wrapped in `packages/web`.
+- A plain draggable divider, so the chat is never remounted when a preview opens or closes (its draft and scroll stay).
+- In Sources, the uploaded files are listed above the upload area.
 
 Acceptance:
 - [ ] Dragging the border widens the preview and narrows the chat; a reload keeps the split.

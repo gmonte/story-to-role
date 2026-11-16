@@ -1,3 +1,6 @@
+import { createAnthropic } from "@ai-sdk/anthropic";
+import type { LanguageModel } from "ai";
+
 import { env } from "@repo/common/env/web.env";
 import type { DbClient } from "@repo/api/tools/db-client";
 import type { UserCipher } from "@repo/api/domains/encryption/user-cipher";
@@ -15,6 +18,9 @@ export type AiFunding = "credits" | "key";
 export type ResolvedAiFunding = {
   funding: AiFunding;
   providerPackage: ProviderPackage;
+  // The career chat's streamed orchestrator calls the provider through the
+  // AI SDK on the same funding; the key stays inside this closure.
+  languageModel: (modelId: string) => LanguageModel;
 };
 
 /**
@@ -35,6 +41,8 @@ export async function resolveAiFunding(input: {
       providerPackage: createAnthropicPackage({
         apiKey: env.ANTHROPIC_API_KEY,
       }),
+      languageModel: (modelId) =>
+        createAnthropic({ apiKey: env.ANTHROPIC_API_KEY })(modelId),
     };
   }
   const key = await new AiKeysRepository(input.db).findByUserId(input.userId);
@@ -42,11 +50,11 @@ export async function resolveAiFunding(input: {
   // without calling the provider.
   if (!key) throw new KeyUnusableError("refused");
   if (key.status !== "active") throw new KeyUnusableError(key.status);
+  // Decrypted in memory for this task's calls only.
+  const apiKey = input.cipher.decrypt(key.encryptedKey);
   return {
     funding: "key",
-    // Decrypted in memory for this task's calls only.
-    providerPackage: createAnthropicPackage({
-      apiKey: input.cipher.decrypt(key.encryptedKey),
-    }),
+    providerPackage: createAnthropicPackage({ apiKey }),
+    languageModel: (modelId) => createAnthropic({ apiKey })(modelId),
   };
 }

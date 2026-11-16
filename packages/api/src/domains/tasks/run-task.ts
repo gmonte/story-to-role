@@ -1,5 +1,6 @@
 import type { DbClient } from "@repo/api/tools/db-client";
 import { triggerClient } from "@repo/api/tools/trigger/trigger-client";
+import type { AiFunding } from "@repo/api/domains/ai/ai-funding";
 import { AiKeysRepository } from "@repo/api/domains/ai/ai-keys-repository";
 import { KeyUnusableError } from "@repo/api/domains/ai/providers/provider-package";
 import { settleTask } from "@repo/api/domains/credits/settle-task";
@@ -48,28 +49,55 @@ export async function runTask(
       },
     });
   } catch (error) {
-    const keyFailure =
-      owner.funding === "key" && error instanceof KeyUnusableError
-        ? error.reason
-        : null;
-    if (keyFailure) {
-      // The user sees why on their key; nothing is charged.
-      await new AiKeysRepository(db).setStatus(
-        owner.userId,
-        keyFailure,
-        new Date()
-      );
-    }
-    await repository.markFailed({
+    await finishTask({
+      db,
       taskId,
-      errorMessage: keyFailure ? `key_${keyFailure}` : "The task failed",
+      userId: owner.userId,
+      funding: owner.funding,
+      error,
     });
-    // A failed task releases its reservation (billing spec).
-    await settleTask(db, { userId: owner.userId, taskId, succeeded: false });
     throw error;
   }
-  await repository.markCompleted(taskId);
-  // Outside the try: a settlement error never turns a finished task into a
-  // failed, free one; reconciliation settles what is left open.
-  await settleTask(db, { userId: owner.userId, taskId, succeeded: true });
+  await finishTask({
+    db,
+    taskId,
+    userId: owner.userId,
+    funding: owner.funding,
+  });
+}
+
+/**
+ * Ends a task: marks it completed or failed and settles its credits. A
+ * key-funded task that failed on the user's key marks the key, so the user
+ * sees why; nothing is charged for a failure.
+ */
+export async function finishTask(input: {
+  db: DbClient;
+  taskId: string;
+  userId: string;
+  funding: AiFunding;
+  error?: unknown;
+}) {
+  const { db, taskId, userId } = input;
+  const repository = new TasksRepository(db);
+  if (input.error === undefined) {
+    await repository.markCompleted(taskId);
+    // A settlement error never turns a finished task into a failed, free
+    // one; reconciliation settles what is left open.
+    await settleTask(db, { userId, taskId, succeeded: true });
+    return;
+  }
+  const keyFailure =
+    input.funding === "key" && input.error instanceof KeyUnusableError
+      ? input.error.reason
+      : null;
+  if (keyFailure) {
+    await new AiKeysRepository(db).setStatus(userId, keyFailure, new Date());
+  }
+  await repository.markFailed({
+    taskId,
+    errorMessage: keyFailure ? `key_${keyFailure}` : "The task failed",
+  });
+  // A failed task releases its reservation (billing spec).
+  await settleTask(db, { userId, taskId, succeeded: false });
 }

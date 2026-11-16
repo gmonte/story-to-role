@@ -119,7 +119,7 @@ function CredentialCard({ credential }: { credential: CredentialView }) {
   const labels = useCareerLabels();
   const trpc = useTRPC();
   const refresh = useRefreshCareer();
-  const { setActiveSessionId } = useCareerWorkspace();
+  const { prefillDraft } = useCareerWorkspace();
   const onError = (error: { message: string }) => toast.error(error.message);
 
   const approve = useMutation(
@@ -134,15 +134,15 @@ function CredentialCard({ credential }: { credential: CredentialView }) {
       onError,
     })
   );
-  const tellStory = useMutation(
-    trpc.interview.openSession.mutationOptions({
-      onSuccess: async ({ sessionId }) => {
-        await refresh();
-        setActiveSessionId(sessionId);
-      },
-      onError,
-    })
-  );
+  // The story is told in the career chat, which hands it to this
+  // credential's interviewer.
+  const tellStory = () =>
+    prefillDraft(
+      t.formatMessage(
+        { defaultMessage: "The story behind {title}: " },
+        { title: credential.title }
+      )
+    );
 
   return (
     <div className="bg-background flex flex-col gap-1.5 rounded-lg border p-3">
@@ -180,12 +180,7 @@ function CredentialCard({ credential }: { credential: CredentialView }) {
             {t.formatMessage({ defaultMessage: "Approve" })}
           </Button>
         )}
-        <Button
-          size="sm"
-          variant="outline"
-          className="h-7"
-          onClick={() => tellStory.mutate({ credentialId: credential.id })}
-        >
+        <Button size="sm" variant="outline" className="h-7" onClick={tellStory}>
           {t.formatMessage({ defaultMessage: "Tell the story" })}
         </Button>
         <Button

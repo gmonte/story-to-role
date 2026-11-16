@@ -32,7 +32,7 @@ export async function createTaskAi(input: {
       })
     : undefined;
   const task = await new TasksRepository(input.db).findOwner(input.taskId);
-  const { funding, providerPackage } = await resolveAiFunding({
+  const { funding, providerPackage, languageModel } = await resolveAiFunding({
     db: input.db,
     userId: input.userId,
     cipher,
@@ -43,6 +43,8 @@ export async function createTaskAi(input: {
     cipher,
     profileId: profile?.id,
     sensitiveFilter,
+    funding,
+    languageModel,
     ai: createAiClient({
       db: input.db,
       userId: input.userId,

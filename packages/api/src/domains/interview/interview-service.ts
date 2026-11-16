@@ -244,6 +244,27 @@ export class InterviewService {
       userId: input.userId,
       type: "interview_turn",
     });
+    const turn = await this.addUserTurn({ ...input, message });
+    if (!turn) throw new TRPCError({ code: "PRECONDITION_FAILED" });
+
+    const { realtime } = await this.tasks.start({
+      userId: input.userId,
+      type: "interview_turn",
+      subjectId: turn.id,
+    });
+    return { realtime };
+  }
+
+  /**
+   * Stores the user's message (encrypted) in an open session. Past twice the
+   * checkpoint threshold nothing is stored and the approval screen is due
+   * (null): the session must be checkpointed first.
+   */
+  async addUserTurn(input: {
+    userId: string;
+    sessionId: string;
+    message: string;
+  }) {
     const { profile, session } = await this.requireOpenSession(
       input.userId,
       input.sessionId
@@ -253,10 +274,10 @@ export class InterviewService {
       await new InterviewRepository(this.db).updateSession(session.id, {
         extractionProposedAt: session.extractionProposedAt ?? new Date(),
       });
-      throw new TRPCError({ code: "PRECONDITION_FAILED" });
+      return null;
     }
 
-    const turn = await this.db.transaction(async (tx) => {
+    return this.db.transaction(async (tx) => {
       const cipher = await getUserCipher(tx, input.userId);
       const interview = new InterviewRepository(tx);
       // Answering again after the approval screen opened: another round.
@@ -268,18 +289,11 @@ export class InterviewService {
       return interview.insertTurn({
         sessionId: session.id,
         role: "user",
-        encryptedContent: cipher.encrypt(message),
+        encryptedContent: cipher.encrypt(input.message),
         language: profile.interviewLanguage,
-        tokenCount: estimateTokens(message),
+        tokenCount: estimateTokens(input.message),
       });
     });
-
-    const { realtime } = await this.tasks.start({
-      userId: input.userId,
-      type: "interview_turn",
-      subjectId: turn.id,
-    });
-    return { realtime };
   }
 
   /** "I'm done with this position": open the approval screen now. */

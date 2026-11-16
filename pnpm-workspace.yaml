@@ -12,7 +12,10 @@ allowBuilds:
 
 catalogs:
   ai:
+    "@ai-sdk/anthropic": 4.0.105
+    "@ai-sdk/react": 4.0.177
     "@anthropic-ai/sdk": 1.8.0
+    ai: 7.0.173
 
   api:
     "@huggingface/transformers": 4.3.2

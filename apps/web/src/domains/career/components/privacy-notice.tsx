@@ -35,6 +35,10 @@ export function PrivacyNotice({
     }),
     t.formatMessage({
       defaultMessage:
+        "The conversation travels through our task service (Trigger.dev), which keeps it for up to 7 days. Our own copy is encrypted and deleted on the same schedule.",
+    }),
+    t.formatMessage({
+      defaultMessage:
         "Avoid client data under NDA, salaries, other people's personal data, health and family matters.",
     }),
     t.formatMessage({

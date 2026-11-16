@@ -76,6 +76,9 @@ export function creditCap(type: TaskType, hints: CapHints = {}): number {
     case "split_instructions":
     case "extract_style_profile":
       return 3;
+    // Up to two position agents beside the orchestrator.
+    case "career_chat_turn":
+      return 8;
     case "summarize_position":
     case "draft_narrative":
       return 5;

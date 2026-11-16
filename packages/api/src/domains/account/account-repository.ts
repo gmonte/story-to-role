@@ -3,6 +3,7 @@ import type { PgColumn, PgTable } from "drizzle-orm/pg-core";
 
 import * as tables from "@repo/api/db";
 import type { DbClient } from "@repo/api/tools/db-client";
+import { CareerChatRepository } from "@repo/api/domains/career-chat/career-chat-repository";
 
 type Row = Record<string, unknown>;
 
@@ -56,6 +57,7 @@ export class AccountRepository {
 
     const positions = await byProfile(t.positionsTable);
     const sessions = await byProfile(t.interviewSessionsTable);
+    const careerChats = await byProfile(t.careerChatsTable);
     const openings = await byProfile(t.openingsTable);
     const fitChecks = await this.rowsWhere(
       t.fitChecksTable,
@@ -134,6 +136,12 @@ export class AccountRepository {
         t.draftSensitiveItemsTable.sessionId,
         sessions
       ),
+      career_chats: careerChats,
+      career_chat_messages: await below(
+        t.careerChatMessagesTable,
+        t.careerChatMessagesTable.chatId,
+        careerChats
+      ),
       openings,
       opening_terms: await below(
         t.openingTermsTable,
@@ -192,6 +200,16 @@ export class AccountRepository {
       resume_templates: await byProfile(t.resumeTemplatesTable),
       style_profiles: await byProfile(t.styleProfilesTable),
     };
+  }
+
+  /** The user's career conversations, whose Trigger.dev sessions close. */
+  async careerChatIds(userId: string) {
+    const profiles = await this.rowsWhere(
+      tables.careerProfilesTable,
+      tables.careerProfilesTable.userId,
+      [userId]
+    );
+    return new CareerChatRepository(this.tx).listChatIds(idsOf(profiles));
   }
 
   /** Every stored file of the user: imported documents and rendered PDFs. */

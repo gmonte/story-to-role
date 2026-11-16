@@ -18,6 +18,7 @@ StoryToRole handles the most personal professional data a person has. It keeps o
 
 - Interview turns, evidence quotes, imported resumes, truth files and other career content are encrypted in the application before reaching the database, with a key per user protected by the master key (the same envelope scheme as bring-your-own keys). A database copy reveals nothing; content is decrypted in memory only when needed.
 - **No content in logs, at any vendor.** Trigger.dev records each task's payload and output, and Vercel records request logs: tasks receive only IDs and load content from the database inside the task, and sensitive fields are marked so they are never logged.
+- **The career chat is the one exception (ADR 0007).** Its messages travel through the conversation's streams on Trigger.dev, the user's in and the reply out, and stay there until the session's 7-day deadline or the plan's retention window, whichever comes first. The transcript itself lives in StoryToRole's database, encrypted like interview turns, and is deleted on the same 7-day clock; the run trace records no message. The privacy notice says so.
 
 ## Export and deletion
 

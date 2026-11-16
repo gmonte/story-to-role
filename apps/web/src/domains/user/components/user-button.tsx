@@ -1,16 +1,14 @@
 "use client";
 
 import { UserButton as ClerkUserButton, useUser } from "@clerk/nextjs";
-import { Coins, KeyRound } from "lucide-react";
+import { Coins, ShieldCheck } from "lucide-react";
 
 import { useTranslation } from "@repo/intl/use-translation";
 import { Skeleton } from "@repo/web/components/ui/skeleton";
 
-import { ProfilePagePlaceholder } from "./profile-page-placeholder";
-
 /**
- * Account settings live in Clerk's own profile modal; StoryToRole's sections
- * (plan and credits, bring-your-own keys) are pages inside it.
+ * Account settings live in Clerk's own profile modal; StoryToRole's own
+ * (plan, credits and the user's key; privacy and data) are linked from it.
  */
 export function UserButton() {
   const t = useTranslation();
@@ -44,32 +42,18 @@ export function UserButton() {
       }}
     >
       <ClerkUserButton.UserProfilePage label="account" />
-      <ClerkUserButton.UserProfilePage
-        label={t.formatMessage({ defaultMessage: "Plan and credits" })}
-        url="plan"
+      <ClerkUserButton.UserProfileLink
+        label={t.formatMessage({
+          defaultMessage: "Plan, credits and your key",
+        })}
+        url="/app/billing"
         labelIcon={<Coins className="size-4" />}
-      >
-        <ProfilePagePlaceholder
-          title={t.formatMessage({ defaultMessage: "Plan and credits" })}
-          description={t.formatMessage({
-            defaultMessage:
-              "Your plan, your credit balance and credit packs will appear here.",
-          })}
-        />
-      </ClerkUserButton.UserProfilePage>
-      <ClerkUserButton.UserProfilePage
-        label={t.formatMessage({ defaultMessage: "Your AI keys" })}
-        url="keys"
-        labelIcon={<KeyRound className="size-4" />}
-      >
-        <ProfilePagePlaceholder
-          title={t.formatMessage({ defaultMessage: "Your AI keys" })}
-          description={t.formatMessage({
-            defaultMessage:
-              "Bring your own key from a certified provider to pay for AI with it instead of credits.",
-          })}
-        />
-      </ClerkUserButton.UserProfilePage>
+      />
+      <ClerkUserButton.UserProfileLink
+        label={t.formatMessage({ defaultMessage: "Privacy and data" })}
+        url="/app/account"
+        labelIcon={<ShieldCheck className="size-4" />}
+      />
       <ClerkUserButton.UserProfilePage label="security" />
     </ClerkUserButton>
   );

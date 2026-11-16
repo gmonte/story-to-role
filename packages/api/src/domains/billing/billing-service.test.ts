@@ -77,6 +77,7 @@ function fakeStripe(state: {
     subscriptions: {
       retrieve: vi.fn(async () => state.subscription ?? subscription()),
       list: vi.fn(() => list(state.subscription ? [state.subscription] : [])),
+      cancel: vi.fn(async () => ({})),
     },
     checkout: {
       sessions: {
@@ -236,6 +237,14 @@ describe("billing service", () => {
     await ctx.billing.reconcile();
 
     expect(await ctx.spendable()).toBe(0);
+  });
+
+  it("cancels live subscriptions when the account is deleted", async () => {
+    const ctx = await setup({ subscription: subscription() });
+    await ctx.billing.cancelForDeletion(ctx.user.id);
+    expect(vi.mocked(ctx.stripe.subscriptions).cancel.mock.calls[0]).toEqual([
+      "sub_1",
+    ]);
   });
 
   it("reconciles a missed webhook without duplicating grants", async () => {

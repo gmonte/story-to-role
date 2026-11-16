@@ -33,6 +33,20 @@ export class TasksRepository {
     return task;
   }
 
+  /** The runs still going for the user: what deleting the account stops. */
+  async activeRunIds(userId: string) {
+    const rows = await this.tx
+      .select({ runId: tasksTable.runId })
+      .from(tasksTable)
+      .where(
+        and(
+          eq(tasksTable.userId, userId),
+          inArray(tasksTable.status, ["pending", "processing"])
+        )
+      );
+    return rows.flatMap((row) => (row.runId ? [row.runId] : []));
+  }
+
   /** The user's latest task their key stopped (out of credit, refused). */
   async lastStoppedByKey(userId: string) {
     const [row] = await this.tx

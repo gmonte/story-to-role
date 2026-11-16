@@ -99,8 +99,9 @@ export function TimelinePanel() {
         )}
       </section>
 
-      <SensitiveReview />
       <CredentialsSection credentials={timeline.data.credentials} />
+      {/* After education, certifications and languages: the last check. */}
+      <SensitiveReview />
       <NarrativeCard
         narrative={timeline.data.narrative}
         hasApprovedPositions={positions.some((p) => p.status === "approved")}

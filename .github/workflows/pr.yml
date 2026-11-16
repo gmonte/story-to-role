@@ -62,6 +62,11 @@ jobs:
   preview:
     name: preview
     needs: quality
+    # Temporarily disabled: Trigger.dev refuses every deploy, so a preview
+    # can't run its tasks, and the quality job already runs every migration
+    # (packages/api/src/db.test.ts). Delete this `if` to turn previews back on,
+    # together with the predeploy restore described in CLAUDE.md.
+    if: false
     runs-on: ubuntu-latest
     permissions:
       contents: read

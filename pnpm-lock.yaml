@@ -99,6 +99,9 @@ catalogs:
     '@formatjs/cli':
       specifier: 6.14.1
       version: 6.14.1
+    '@formatjs/icu-messageformat-parser':
+      specifier: 3.5.3
+      version: 3.5.3
     '@formatjs/intl':
       specifier: 4.1.5
       version: 4.1.5
@@ -651,6 +654,9 @@ importers:
       '@formatjs/cli':
         specifier: catalog:intl
         version: 6.14.1
+      '@formatjs/icu-messageformat-parser':
+        specifier: catalog:intl
+        version: 3.5.3
       '@repo/eslint-config':
         specifier: workspace:*
         version: link:../../configs/eslint-config

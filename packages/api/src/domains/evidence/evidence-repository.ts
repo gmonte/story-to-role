@@ -155,6 +155,20 @@ export class EvidenceRepository {
       .where(eq(sensitiveItemsTable.positionId, input.fromPositionId));
   }
 
+  async moveCredentialContent(input: {
+    fromCredentialId: string;
+    toCredentialId: string;
+  }) {
+    await this.tx
+      .update(evidenceTable)
+      .set({ credentialId: input.toCredentialId })
+      .where(eq(evidenceTable.credentialId, input.fromCredentialId));
+    await this.tx
+      .update(storiesTable)
+      .set({ credentialId: input.toCredentialId })
+      .where(eq(storiesTable.credentialId, input.fromCredentialId));
+  }
+
   countEvidenceByIds(evidenceIds: string[]) {
     if (evidenceIds.length === 0) return Promise.resolve([]);
     return this.tx

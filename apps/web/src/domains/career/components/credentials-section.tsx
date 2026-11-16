@@ -1,9 +1,9 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { useId, useState, type FormEvent, type ReactNode } from "react";
 
 import { useMutation } from "@tanstack/react-query";
-import { Plus } from "lucide-react";
+import { MoreHorizontal, Plus } from "lucide-react";
 
 import type { CredentialKind } from "@repo/api/domains/career/schemas/career";
 import type { CredentialView } from "@repo/api/domains/career/schemas/timeline";
@@ -18,6 +18,15 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@repo/web/components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
+  DropdownMenuTrigger,
+} from "@repo/web/components/ui/dropdown-menu";
 import { Input } from "@repo/web/components/ui/input";
 import { Label } from "@repo/web/components/ui/label";
 import {
@@ -65,20 +74,20 @@ export function CredentialsSection({
       addable: [...groupKinds.education, ...groupKinds.other],
     },
     {
-      kinds: groupKinds.language,
-      title: t.formatMessage({ defaultMessage: "Languages" }),
-      empty: t.formatMessage({
-        defaultMessage: "The languages you speak, with their level.",
-      }),
-      addable: groupKinds.language,
-    },
-    {
       kinds: groupKinds.certification,
       title: t.formatMessage({ defaultMessage: "Certifications" }),
       empty: t.formatMessage({
         defaultMessage: "Certifications you hold appear here.",
       }),
       addable: groupKinds.certification,
+    },
+    {
+      kinds: groupKinds.language,
+      title: t.formatMessage({ defaultMessage: "Languages" }),
+      empty: t.formatMessage({
+        defaultMessage: "The languages you speak, with their level.",
+      }),
+      addable: groupKinds.language,
     },
     {
       kinds: groupKinds.other,
@@ -101,20 +110,39 @@ export function CredentialsSection({
       <section key={group.kinds[0]} className="flex flex-col gap-2">
         <div className="flex items-center justify-between">
           <h3 className="text-sm font-medium">{group.title}</h3>
-          <AddCredentialDialog kinds={group.addable} />
+          <CredentialFormDialog
+            kinds={group.addable}
+            trigger={
+              <Button size="sm" variant="ghost">
+                <Plus />
+                {t.formatMessage({ defaultMessage: "Add" })}
+              </Button>
+            }
+          />
         </div>
         {items.length === 0 && (
           <p className="text-muted-foreground text-xs">{group.empty}</p>
         )}
         {items.map((credential) => (
-          <CredentialCard key={credential.id} credential={credential} />
+          <CredentialCard
+            key={credential.id}
+            credential={credential}
+            others={items.filter((other) => other.id !== credential.id)}
+          />
         ))}
       </section>
     );
   });
 }
 
-function CredentialCard({ credential }: { credential: CredentialView }) {
+function CredentialCard({
+  credential,
+  others,
+}: {
+  credential: CredentialView;
+  // The same group's other items, to merge this one into.
+  others: CredentialView[];
+}) {
   const t = useTranslation();
   const labels = useCareerLabels();
   const trpc = useTRPC();
@@ -134,6 +162,14 @@ function CredentialCard({ credential }: { credential: CredentialView }) {
       onError,
     })
   );
+  const merge = useMutation(
+    trpc.career.mergeCredentials.mutationOptions({
+      onSuccess: refresh,
+      onError,
+    })
+  );
+  const describe = (item: CredentialView) =>
+    [item.title, item.level, item.institution].filter(Boolean).join(" · ");
   // The story is told in the career chat, which hands it to this
   // credential's interviewer.
   const tellStory = () =>
@@ -157,7 +193,7 @@ function CredentialCard({ credential }: { credential: CredentialView }) {
               .join(" · ")}
           </p>
         </div>
-        <div className="flex shrink-0 gap-1">
+        <div className="flex shrink-0 items-center gap-1">
           {credential.depth.counts.stories > 0 && credential.depth.level && (
             <Badge variant="secondary">
               {labels.depth(credential.depth.level)}
@@ -168,6 +204,61 @@ function CredentialCard({ credential }: { credential: CredentialView }) {
               {t.formatMessage({ defaultMessage: "To review" })}
             </Badge>
           )}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                size="icon"
+                variant="ghost"
+                className="size-7"
+                aria-label={t.formatMessage({
+                  defaultMessage: "Credential actions",
+                })}
+              >
+                <MoreHorizontal />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <CredentialFormDialog
+                kinds={[credential.kind]}
+                credential={credential}
+                trigger={
+                  <DropdownMenuItem
+                    onSelect={(event) => event.preventDefault()}
+                  >
+                    {t.formatMessage({ defaultMessage: "Edit" })}
+                  </DropdownMenuItem>
+                }
+              />
+              {others.length > 0 && (
+                <DropdownMenuSub>
+                  <DropdownMenuSubTrigger>
+                    {t.formatMessage({ defaultMessage: "Merge into…" })}
+                  </DropdownMenuSubTrigger>
+                  <DropdownMenuSubContent>
+                    {others.map((other) => (
+                      <DropdownMenuItem
+                        key={other.id}
+                        onSelect={() =>
+                          merge.mutate({
+                            credentialId: credential.id,
+                            intoCredentialId: other.id,
+                          })
+                        }
+                      >
+                        {describe(other)}
+                      </DropdownMenuItem>
+                    ))}
+                  </DropdownMenuSubContent>
+                </DropdownMenuSub>
+              )}
+              <DropdownMenuItem
+                variant="destructive"
+                onSelect={() => remove.mutate({ credentialId: credential.id })}
+              >
+                {t.formatMessage({ defaultMessage: "Remove" })}
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </div>
       <div className="flex flex-wrap gap-1.5">
@@ -183,36 +274,47 @@ function CredentialCard({ credential }: { credential: CredentialView }) {
         <Button size="sm" variant="outline" className="h-7" onClick={tellStory}>
           {t.formatMessage({ defaultMessage: "Tell the story" })}
         </Button>
-        <Button
-          size="sm"
-          variant="ghost"
-          className="h-7"
-          onClick={() => remove.mutate({ credentialId: credential.id })}
-        >
-          {t.formatMessage({ defaultMessage: "Remove" })}
-        </Button>
       </div>
     </div>
   );
 }
 
-/** Adds a credential of one of `kinds`; a single kind skips the choice. */
-function AddCredentialDialog({ kinds }: { kinds: readonly CredentialKind[] }) {
+/**
+ * Adds a credential of one of `kinds` (a single kind skips the choice), or
+ * edits `credential`. Saving an imported one also approves it: the user has
+ * just checked it.
+ */
+function CredentialFormDialog({
+  kinds,
+  credential,
+  trigger,
+}: {
+  kinds: readonly CredentialKind[];
+  credential?: CredentialView;
+  trigger: ReactNode;
+}) {
   const t = useTranslation();
   const labels = useCareerLabels();
   const trpc = useTRPC();
   const refresh = useRefreshCareer();
   const [open, setOpen] = useState(false);
-  const [kind, setKind] = useState<CredentialKind>(kinds[0]);
-  const add = useMutation(
-    trpc.career.addCredential.mutationOptions({
-      onSuccess: async () => {
-        await refresh();
-        setOpen(false);
-      },
-      onError: (error) => toast.error(error.message),
-    })
+  const [kind, setKind] = useState<CredentialKind>(
+    credential?.kind ?? kinds[0]
   );
+  const options = {
+    onSuccess: async () => {
+      await refresh();
+      setOpen(false);
+    },
+    onError: (error: { message: string }) => toast.error(error.message),
+  };
+  const add = useMutation(trpc.career.addCredential.mutationOptions(options));
+  const update = useMutation(
+    trpc.career.updateCredential.mutationOptions(options)
+  );
+  const saving = add.isPending || update.isPending;
+  // Several dialogs can be mounted at once; each form needs its own ids.
+  const formId = useId();
 
   function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -223,32 +325,31 @@ function AddCredentialDialog({ kinds }: { kinds: readonly CredentialKind[] }) {
         ? field.trim()
         : undefined;
     };
-    add.mutate({
+    const fields = {
       kind,
       title: value("title") ?? "",
       institution: value("institution"),
       level: value("level"),
       startDate: value("startDate"),
       endDate: value("endDate"),
-      status: "completed",
-    });
+      status: credential?.status ?? ("completed" as const),
+    };
+    if (credential) update.mutate({ credentialId: credential.id, ...fields });
+    else add.mutate(fields);
   }
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        <Button size="sm" variant="ghost">
-          <Plus />
-          {t.formatMessage({ defaultMessage: "Add" })}
-        </Button>
-      </DialogTrigger>
+      <DialogTrigger asChild>{trigger}</DialogTrigger>
       <DialogContent>
         <DialogHeader>
           <DialogTitle>
-            {t.formatMessage({ defaultMessage: "Add credential" })}
+            {credential
+              ? t.formatMessage({ defaultMessage: "Edit credential" })
+              : t.formatMessage({ defaultMessage: "Add credential" })}
           </DialogTitle>
         </DialogHeader>
-        <form id="credential-form" onSubmit={onSubmit} className="grid gap-3">
+        <form id={formId} onSubmit={onSubmit} className="grid gap-3">
           {kinds.length > 1 && (
             <Select
               value={kind}
@@ -268,50 +369,63 @@ function AddCredentialDialog({ kinds }: { kinds: readonly CredentialKind[] }) {
           )}
           {[
             {
-              name: "title",
+              name: "title" as const,
               label: t.formatMessage({ defaultMessage: "Title" }),
               required: true,
             },
             {
-              name: "institution",
+              name: "institution" as const,
               label: t.formatMessage({ defaultMessage: "Institution" }),
             },
             ...(kind === "language"
               ? [
                   {
-                    name: "level",
+                    name: "level" as const,
                     label: t.formatMessage({ defaultMessage: "Level" }),
                   },
                 ]
               : []),
           ].map((field) => (
             <div key={field.name} className="grid gap-1.5">
-              <Label htmlFor={field.name}>{field.label}</Label>
+              <Label htmlFor={`${formId}-${field.name}`}>{field.label}</Label>
               <Input
-                id={field.name}
+                id={`${formId}-${field.name}`}
                 name={field.name}
                 required={field.required}
+                defaultValue={credential?.[field.name] ?? undefined}
               />
             </div>
           ))}
           <div className="grid grid-cols-2 gap-3">
             <div className="grid gap-1.5">
-              <Label htmlFor="startDate">
+              <Label htmlFor={`${formId}-startDate`}>
                 {t.formatMessage({ defaultMessage: "Start" })}
               </Label>
-              <Input id="startDate" name="startDate" type="month" />
+              <Input
+                id={`${formId}-startDate`}
+                name="startDate"
+                type="month"
+                defaultValue={credential?.startDate ?? undefined}
+              />
             </div>
             <div className="grid gap-1.5">
-              <Label htmlFor="endDate">
+              <Label htmlFor={`${formId}-endDate`}>
                 {t.formatMessage({ defaultMessage: "End" })}
               </Label>
-              <Input id="endDate" name="endDate" type="month" />
+              <Input
+                id={`${formId}-endDate`}
+                name="endDate"
+                type="month"
+                defaultValue={credential?.endDate ?? undefined}
+              />
             </div>
           </div>
         </form>
         <DialogFooter>
-          <Button form="credential-form" type="submit" disabled={add.isPending}>
-            {t.formatMessage({ defaultMessage: "Save" })}
+          <Button form={formId} type="submit" disabled={saving}>
+            {credential && !credential.approved
+              ? t.formatMessage({ defaultMessage: "Save and approve" })
+              : t.formatMessage({ defaultMessage: "Save" })}
           </Button>
         </DialogFooter>
       </DialogContent>

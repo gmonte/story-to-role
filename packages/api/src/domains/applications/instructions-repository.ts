@@ -13,6 +13,17 @@ type Insert<T extends { $inferInsert: unknown }> = T["$inferInsert"];
 export class InstructionsRepository {
   constructor(private readonly tx: DbClient) {}
 
+  /** Points that cited a merged credential now cite the one it went into. */
+  async moveCredentialPoints(input: {
+    fromCredentialId: string;
+    toCredentialId: string;
+  }) {
+    await this.tx
+      .update(instructionPointsTable)
+      .set({ credentialId: input.toCredentialId })
+      .where(eq(instructionPointsTable.credentialId, input.fromCredentialId));
+  }
+
   async insertInstructions(row: Insert<typeof applicationInstructionsTable>) {
     const [inserted] = await this.tx
       .insert(applicationInstructionsTable)

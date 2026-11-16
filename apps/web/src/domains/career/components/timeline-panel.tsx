@@ -16,7 +16,6 @@ import { CredentialsSection } from "./credentials-section";
 import { NarrativeCard } from "./narrative-card";
 import { PositionCard } from "./position-card";
 import { PositionFormDialog } from "./position-form-dialog";
-import { ApproveImportedButton } from "./approve-imported-button";
 import { ProposalCards } from "./proposal-cards";
 import { SensitiveReview } from "./sensitive-review";
 import { Sources } from "./sources";
@@ -56,7 +55,6 @@ export function TimelinePanel() {
             }
           />
         </div>
-        <ApproveImportedButton positions={positions} />
         {positions.length === 0 && (
           <p className="text-muted-foreground text-xs">
             {t.formatMessage({

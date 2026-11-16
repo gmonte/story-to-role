@@ -1,0 +1,2 @@
+ALTER TABLE "source_documents" ADD COLUMN IF NOT EXISTS "encryptedReaction" text;--> statement-breakpoint
+ALTER TABLE "source_documents" ADD COLUMN IF NOT EXISTS "reactionDeliveredAt" timestamp with time zone;

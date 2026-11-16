@@ -70,6 +70,10 @@ export const sourceDocumentsTable = createTable(
     status: d.text().$type<SourceDocumentStatus>().notNull().default("pending"),
     // Why a file was refused (not a resume, too long…), never its content.
     rejectionReason: d.text(),
+    // What the career chat says about the import once it ends, written by
+    // the import itself, and when the chat said it (once).
+    encryptedReaction: d.text(),
+    reactionDeliveredAt: d.timestamp({ withTimezone: true }),
   }),
   (t) => [index("source_documents_profile_id_idx").on(t.profileId)]
 );

@@ -4,6 +4,7 @@ import {
   desc,
   eq,
   inArray,
+  isNotNull,
   isNull,
   sql,
 } from "drizzle-orm";
@@ -410,6 +411,34 @@ export class CareerRepository {
       .values(document)
       .returning();
     return row;
+  }
+
+  /** The import reactions the career chat hasn't said yet. */
+  async listImportReactions(profileId: string) {
+    return this.tx
+      .select({
+        sourceDocumentId: sourceDocumentsTable.id,
+        encryptedReaction: sourceDocumentsTable.encryptedReaction,
+        createdAt: sourceDocumentsTable.createdAt,
+      })
+      .from(sourceDocumentsTable)
+      .where(
+        and(
+          eq(sourceDocumentsTable.profileId, profileId),
+          isNotNull(sourceDocumentsTable.encryptedReaction),
+          isNull(sourceDocumentsTable.reactionDeliveredAt)
+        )
+      )
+      .orderBy(sourceDocumentsTable.createdAt);
+  }
+
+  /** Marks import reactions said, once the chat has said them. */
+  async markImportReactionsSaid(sourceDocumentIds: string[]) {
+    if (sourceDocumentIds.length === 0) return;
+    await this.tx
+      .update(sourceDocumentsTable)
+      .set({ reactionDeliveredAt: new Date() })
+      .where(inArray(sourceDocumentsTable.id, sourceDocumentIds));
   }
 
   async updateDocument(

@@ -1,5 +1,6 @@
 import { chat } from "@trigger.dev/sdk/ai";
 import { APICallError, type LanguageModelUsage } from "ai";
+import { z } from "zod";
 
 import { AiUsageRepository } from "@repo/api/domains/ai/ai-usage-repository";
 import { KeyUnusableError } from "@repo/api/domains/ai/providers/provider-package";
@@ -8,10 +9,24 @@ import { db } from "@repo/api/tools/db";
 import { redisMisuseGuard } from "@repo/api/tools/misuse-guard";
 
 import { createCareerTranscriptStorage } from "../career-transcript-storage";
-import { runCareerChatTurn, type OpenTurn } from "../run-career-chat-turn";
+import { fixedReplyModel } from "../fixed-reply-model";
+import {
+  markImportReactionsSaid,
+  pendingImportReactions,
+} from "../import-reactions";
+import {
+  runCareerChatTurn,
+  startingWithUser,
+  type OpenTurn,
+} from "../run-career-chat-turn";
 
 // The turn each chat has open in this run, settled when it completes.
 const openTurns = new Map<string, OpenTurn>();
+// What each chat says about finished imports on its next action turn.
+const importReactions = new Map<
+  string,
+  { sourceDocumentIds: string[]; text: string; said?: boolean }
+>();
 
 /** A provider refusal of the user's own key, as the task ledger knows it. */
 function keyFailure(error: unknown) {
@@ -56,7 +71,31 @@ export const careerChatAgent = chat.agent({
     onError: () =>
       "Something went wrong with this answer. Please send it again.",
   },
-  run: async ({ chatId, messages, signal, streamText }) => {
+  // The page asks once an import ends (or on load, when one ended away):
+  // the chat says what the import wrote, at no cost, as its own message.
+  actionSchema: z.object({ type: z.literal("say_import_reactions") }),
+  onAction: async ({ chatId }) => {
+    const reactions = await pendingImportReactions(db, chatId);
+    if (!reactions) return;
+    importReactions.set(chatId, reactions);
+    return chat.turn();
+  },
+  run: async ({ chatId, messages, signal, streamText, trigger }) => {
+    const reaction = importReactions.get(chatId);
+    if (trigger === "action-turn" && reaction) {
+      reaction.said = true;
+      // Marks the message: the page offers the import's shortcuts under it.
+      chat.response.write({
+        type: "data-import-review",
+        id: "import-review",
+        data: {},
+      });
+      // The chat may be empty yet; the stream wants a prompt to answer.
+      return streamText({
+        model: fixedReplyModel(reaction.text),
+        messages: startingWithUser(messages),
+      });
+    }
     const { result, turn } = await runCareerChatTurn(
       {
         db,
@@ -76,6 +115,15 @@ export const careerChatAgent = chat.agent({
     return result;
   },
   onTurnComplete: async ({ chatId, usage, error, finishReason }) => {
+    // An import reaction counts as said once its turn completed cleanly;
+    // otherwise it waits for the next ask.
+    const reaction = importReactions.get(chatId);
+    if (reaction?.said) {
+      importReactions.delete(chatId);
+      if (error === undefined && finishReason !== "error") {
+        await markImportReactionsSaid(db, reaction.sourceDocumentIds);
+      }
+    }
     const turn = openTurns.get(chatId);
     if (!turn) return;
     openTurns.delete(chatId);

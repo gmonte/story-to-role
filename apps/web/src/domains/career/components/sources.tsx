@@ -5,38 +5,26 @@ import { useRef, useState, type DragEvent } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { FileUp, Sparkles, Trash2 } from "lucide-react";
 
-import {
-  acceptedDocumentTypes,
-  documentLimits,
-  slotStatuses,
-  typesByExtension,
-} from "@repo/api/domains/career/documents/document-limits";
+import { documentLimits } from "@repo/api/domains/career/documents/document-limits";
 import type { Timeline } from "@repo/api/domains/career/schemas/timeline";
-import type { RealtimeSubscription } from "@repo/api/domains/tasks/schemas/task";
 import { useTranslation } from "@repo/intl/use-translation";
 import { Badge } from "@repo/web/components/ui/badge";
 import { Button } from "@repo/web/components/ui/button";
 import { toast } from "@repo/web/components/ui/sonner";
 import { cn } from "@repo/web/lib/utils";
 
-import {
-  type CreditsShortfall,
-  useOutOfCreditsToast,
-} from "~/domains/credits/components/out-of-credits-notice";
 import { useTRPC } from "~/tools/trpc/client";
 
 import { useRefreshCareer } from "../hooks/use-career-queries";
+import {
+  sourceAccept,
+  sourceMegabytes,
+  useSourceUpload,
+  type SourceImport,
+} from "../hooks/use-source-upload";
+import { useOptionalCareerWorkspace } from "./career-workspace-context";
 import { ImportProgress } from "./import-progress";
 
-const extensions = Object.keys(typesByExtension);
-const ACCEPT = [
-  ...extensions.map((extension) => `.${extension}`),
-  ...Object.keys(acceptedDocumentTypes),
-].join(",");
-const megabytes = documentLimits.maxBytes / (1024 * 1024);
-
-const takesSlot = (document: Timeline["documents"][number]) =>
-  (slotStatuses as readonly string[]).includes(document.status);
 const reading = (document: Timeline["documents"][number]) =>
   document.status === "pending" || document.status === "processing";
 
@@ -55,11 +43,17 @@ export function Sources({
   const t = useTranslation();
   const trpc = useTRPC();
   const refresh = useRefreshCareer();
-  const showOutOfCredits = useOutOfCreditsToast();
   const input = useRef<HTMLInputElement>(null);
-  const [running, setRunning] = useState<
-    Array<RealtimeSubscription & { fileName: string }>
-  >([]);
+  // In My career the chat shows the imports; on its own, this panel does.
+  const workspace = useOptionalCareerWorkspace();
+  const [running, setRunning] = useState<SourceImport[]>([]);
+  const { add } = useSourceUpload({
+    documents,
+    onStarted: (started) =>
+      workspace
+        ? workspace.startImport(started)
+        : setRunning((current) => [...current, started]),
+  });
   const [dragging, setDragging] = useState(false);
 
   const remove = useMutation(
@@ -68,64 +62,6 @@ export function Sources({
       onError: (error) => toast.error(error.message),
     })
   );
-
-  const invalidFile = t.formatMessage(
-    {
-      defaultMessage:
-        "That file couldn't be imported. Use a PDF, DOCX, Markdown or text file up to {megabytes, number} MB.",
-    },
-    { megabytes }
-  );
-  const tooMany = t.formatMessage(
-    {
-      defaultMessage:
-        "You can keep up to {max, number} sources. Remove one to add another.",
-    },
-    { max: documentLimits.maxSources }
-  );
-
-  async function upload(file: File) {
-    const form = new FormData();
-    form.set("file", file);
-    const response = await fetch("/api/career/documents", {
-      method: "POST",
-      body: form,
-    });
-    if (response.status === 402) {
-      const { credits } = (await response.json()) as {
-        credits: CreditsShortfall;
-      };
-      showOutOfCredits(credits);
-      return;
-    }
-    if (!response.ok) {
-      toast.error(response.status === 409 ? tooMany : invalidFile);
-      return;
-    }
-    const { realtime } = (await response.json()) as {
-      realtime: RealtimeSubscription;
-    };
-    setRunning((current) => [...current, { ...realtime, fileName: file.name }]);
-    await refresh();
-  }
-
-  // Format, size and the slots left are checked here first; the server
-  // checks them again (the content too) and has the last word.
-  function add(files: File[]) {
-    const valid = files.filter((file) => {
-      const extension = file.name.split(".").pop()?.toLowerCase() ?? "";
-      return (
-        extensions.includes(extension) &&
-        file.size > 0 &&
-        file.size <= documentLimits.maxBytes
-      );
-    });
-    if (valid.length < files.length) toast.error(invalidFile);
-    // As many as fit; the rest wait for a free slot.
-    const free = documentLimits.maxSources - documents.filter(takesSlot).length;
-    if (valid.length > free) toast.error(tooMany);
-    for (const file of valid.slice(0, Math.max(free, 0))) void upload(file);
-  }
 
   function onDrop(event: DragEvent) {
     event.preventDefault();
@@ -247,7 +183,7 @@ export function Sources({
             },
             {
               max: documentLimits.maxSources,
-              megabytes,
+              megabytes: sourceMegabytes,
               pages: documentLimits.maxPages,
             }
           )}
@@ -255,10 +191,8 @@ export function Sources({
       </div>
       <input
         ref={input}
-        // The career chat's "Upload" shortcut is a label for this input.
-        id="sources-upload-input"
         type="file"
-        accept={ACCEPT}
+        accept={sourceAccept}
         multiple
         hidden
         onChange={(event) => {

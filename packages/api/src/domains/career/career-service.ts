@@ -288,6 +288,7 @@ export class CareerService {
           status: row.status,
           rejectionReason: row.rejectionReason,
           createdAt: row.createdAt,
+          reactionPending: !!row.encryptedReaction && !row.reactionDeliveredAt,
         })),
         proposals: (await career.listPendingProposals(profile.id)).map(
           (row): TimelineProposalView => ({

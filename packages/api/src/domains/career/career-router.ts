@@ -11,6 +11,7 @@ import {
 } from "@repo/api/tools/trpc";
 
 import { CareerService } from "./career-service";
+import { DocumentsService } from "./documents/documents-service";
 import {
   interviewLanguageSchema,
   startPathSchema,
@@ -18,6 +19,7 @@ import {
 } from "./schemas/career";
 import {
   credentialInputSchema,
+  documentPreviewSchema,
   positionInputSchema,
   timelineSchema,
 } from "./schemas/timeline";
@@ -149,6 +151,37 @@ export const careerRouter = createTRPCRouter({
       });
       return ok;
     }),
+
+  removeDocument: userProcedure
+    .meta(
+      openApiMeta(
+        "career",
+        "DELETE",
+        "/career/documents/by-id/{sourceDocumentId}",
+        "Removes a source and its file; what was extracted from it stays"
+      )
+    )
+    .input(z.object({ sourceDocumentId: z.uuid() }))
+    .output(okSchema)
+    .mutation(async ({ ctx, input }) => {
+      await new DocumentsService(db).remove({ userId: ctx.userId, ...input });
+      return ok;
+    }),
+
+  documentPreview: userProcedure
+    .meta(
+      openApiMeta(
+        "career",
+        "GET",
+        "/career/documents/by-id/{sourceDocumentId}/preview",
+        "A source's read-only preview: plain text, or a PDF's page count"
+      )
+    )
+    .input(z.object({ sourceDocumentId: z.uuid() }))
+    .output(documentPreviewSchema)
+    .query(({ ctx, input }) =>
+      new DocumentsService(db).preview({ userId: ctx.userId, ...input })
+    ),
 
   removePosition: userProcedure
     .meta(

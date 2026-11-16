@@ -16,6 +16,7 @@ catalogs:
 
   api:
     "@huggingface/transformers": 4.3.2
+    "@napi-rs/canvas": 1.1.1
     "@react-pdf/renderer": 4.9.0
     "@trigger.dev/build": 4.8.5
     "@trigger.dev/sdk": 4.8.5

@@ -1,8 +1,17 @@
-import { and, desc, eq, inArray, isNull } from "drizzle-orm";
+import {
+  and,
+  arrayContains,
+  desc,
+  eq,
+  inArray,
+  isNull,
+  sql,
+} from "drizzle-orm";
 
 import { openingsTable } from "@repo/api/domains/openings/db/openings-tables";
 import type { DbClient } from "@repo/api/tools/db-client";
 
+import { slotStatuses } from "./documents/document-limits";
 import {
   careerNarrativesTable,
   careerProfilesTable,
@@ -294,6 +303,44 @@ export class CareerRepository {
       .from(sourceDocumentsTable)
       .where(eq(sourceDocumentsTable.profileId, profileId))
       .orderBy(desc(sourceDocumentsTable.createdAt));
+  }
+
+  /**
+   * Locks the profile for the rest of the transaction, so concurrent
+   * uploads count the sources one at a time.
+   */
+  async lockProfile(profileId: string) {
+    await this.tx
+      .select({ id: careerProfilesTable.id })
+      .from(careerProfilesTable)
+      .where(eq(careerProfilesTable.id, profileId))
+      .for("update");
+  }
+
+  /** Sources that take a slot of the limit. */
+  async countSlottedDocuments(profileId: string) {
+    return this.tx.$count(
+      sourceDocumentsTable,
+      and(
+        eq(sourceDocumentsTable.profileId, profileId),
+        inArray(sourceDocumentsTable.status, [...slotStatuses])
+      )
+    );
+  }
+
+  /** Deletes a source and drops it from the positions and credentials it fed. */
+  async deleteDocument(sourceDocumentId: string) {
+    for (const table of [positionsTable, credentialsTable]) {
+      await this.tx
+        .update(table)
+        .set({
+          sourceDocumentIds: sql`array_remove(${table.sourceDocumentIds}, ${sourceDocumentId}::uuid)`,
+        })
+        .where(arrayContains(table.sourceDocumentIds, [sourceDocumentId]));
+    }
+    await this.tx
+      .delete(sourceDocumentsTable)
+      .where(eq(sourceDocumentsTable.id, sourceDocumentId));
   }
 
   async findDocument(sourceDocumentId: string) {

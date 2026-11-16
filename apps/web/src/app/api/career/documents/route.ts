@@ -4,19 +4,18 @@ import { z } from "zod";
 
 import { documentLimits } from "@repo/api/domains/career/documents/document-limits";
 import { DocumentsService } from "@repo/api/domains/career/documents/documents-service";
-import { sourceDocumentKindSchema } from "@repo/api/domains/career/schemas/career";
 import { UsersRepository } from "@repo/api/domains/users/users-repository";
 import { db } from "@repo/api/tools/db";
 import { upstashRateLimiter } from "@repo/api/tools/rate-limit";
 
 const formSchema = z.object({
-  kind: sourceDocumentKindSchema,
   file: z.instanceof(File),
 });
 
 /**
- * Receives an imported resume or truth file (multipart, which tRPC doesn't
- * carry). The file goes to storage encrypted and its import runs in a task.
+ * Receives a source, a resume, a LinkedIn PDF, notes or a truth file
+ * (multipart, which tRPC doesn't carry). The file goes to storage encrypted
+ * and its import runs in a task, which works out what kind of file it is.
  */
 export async function POST(request: NextRequest) {
   const { userId: clerkUserId } = await auth();
@@ -46,7 +45,6 @@ export async function POST(request: NextRequest) {
   try {
     const result = await new DocumentsService(db).upload({
       userId: user.id,
-      kind: form.data.kind,
       fileName: form.data.file.name,
       mimeType: form.data.file.type,
       bytes: Buffer.from(await form.data.file.arrayBuffer()),
@@ -71,8 +69,11 @@ export async function POST(request: NextRequest) {
         { status: 402 }
       );
     }
-    return new Response(null, {
-      status: code === "PRECONDITION_FAILED" ? 412 : 400,
-    });
+    const status: Record<string, number> = {
+      PRECONDITION_FAILED: 412,
+      // Already holding the most sources a user can keep.
+      CONFLICT: 409,
+    };
+    return new Response(null, { status: status[code ?? ""] ?? 400 });
   }
 }

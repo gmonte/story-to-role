@@ -15,6 +15,7 @@ import type { Storage } from "@repo/api/tools/storage/storage";
 import { CareerRepository } from "../career-repository";
 import { CareerService } from "../career-service";
 import {
+  interviewLanguageSchema,
   interviewLanguages,
   credentialKindSchema,
   credentialStatusSchema,
@@ -26,6 +27,9 @@ import { extractDocumentText } from "./extract-text";
 const contentCheckSchema = z.object({
   is_career_document: z.boolean(),
   has_confidentiality_rules: z.boolean(),
+  language: interviewLanguageSchema.describe(
+    "The language the document is written in"
+  ),
 });
 
 const yearMonth = z
@@ -204,6 +208,12 @@ export async function runImportDocument(
   if (kind !== document.kind)
     await career.updateDocument(document.id, { kind });
 
+  // Until the user chooses, the career is kept in the language of the first
+  // file they import, so its facts need no translation.
+  const language = owner.interviewLanguageSource
+    ? owner.interviewLanguage
+    : await career.adoptFileLanguage(owner.id, check.language);
+
   await step("extracting");
   const { object: extraction } = await deps.ai.generateObject({
     purpose: "document_extraction",
@@ -214,7 +224,7 @@ export async function runImportDocument(
       "Extract the career facts in this document. Record only what it states; add, infer or round nothing.",
       "- language: the language the document is written in (en-US or pt-BR).",
       "- positions: employer, title, dates as YYYY-MM (leave end_date out for a current position), location.",
-      `- facts per position: achievements, responsibilities, metrics, tools, awards and skills. Write each fact's \`text\` in ${outputLanguageNames[owner.interviewLanguage]} (the language the user reviews in), translating if the document is in another language; copy \`quote\` exactly from the document, in its own language.`,
+      `- facts per position: achievements, responsibilities, metrics, tools, awards and skills. Write each fact's \`text\` in ${outputLanguageNames[language]} (the language the user reviews in), translating if the document is in another language; copy \`quote\` exactly from the document, in its own language.`,
       "- Notes the author left for themselves next to a figure, in brackets (like [medido], [estimado], [confirmar]), are not part of a fact: leave them out of `text` (they may stay in `quote`).",
       "- credentials: education, certifications, languages (with level), courses, publications, awards, volunteering.",
       kind === "truth_file"
@@ -261,9 +271,8 @@ export async function runImportDocument(
       })),
     });
 
-    // Facts are written in the language the user reviews in; each quote
-    // keeps the document's.
-    const language = owner.interviewLanguage;
+    // Facts are written in the language the user reviews in (set above);
+    // each quote keeps the document's.
     const interview = new InterviewRepository(tx);
     const sessions = await interview.listSessions(document.profileId);
     const targets = [...new Set(touched.map((entry) => entry.positionId))];

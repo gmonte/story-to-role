@@ -94,6 +94,7 @@ export class CareerService {
     const profile = await this.requireProfile(input.userId);
     await new CareerRepository(this.db).updateProfile(profile.id, {
       interviewLanguage: input.interviewLanguage,
+      interviewLanguageSource: "user",
     });
   }
 
@@ -234,6 +235,7 @@ export class CareerService {
           : null,
         profile: {
           interviewLanguage: profile.interviewLanguage,
+          interviewLanguageSource: profile.interviewLanguageSource,
           privacyNoticeAccepted: !!profile.privacyNoticeAcceptedAt,
         },
         positions: sorted.filter((r) => r.status !== "removed").map(toView),

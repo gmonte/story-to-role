@@ -96,10 +96,10 @@ export function resumeMaterial(input: {
         `- position ${position.id}: ${position.title} at ${position.employer}, ${period(position.startDate, position.endDate)}`
     ),
     "",
-    "Approved evidence (the only facts you may use; cite their ids):",
+    "Approved evidence (the only facts you may use; cite their ids). Some show the original wording from the user's file: when it is in the language you are writing in, prefer its phrasing, terms and figures over the translated text.",
     ...context.evidence.map(
       (row) =>
-        `- evidence ${row.id} [${row.kind}]${row.positionId ? ` (position ${row.positionId})` : ""}${row.projectId ? ` (project ${row.projectId})` : ""}: ${row.text}`
+        `- evidence ${row.id} [${row.kind}]${row.positionId ? ` (position ${row.positionId})` : ""}${row.projectId ? ` (project ${row.projectId})` : ""}: ${row.text}${row.sourceWording ? ` (original wording: ${row.sourceWording})` : ""}`
     ),
     ...(context.instructions.length
       ? [

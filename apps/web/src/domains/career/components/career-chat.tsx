@@ -11,7 +11,10 @@ import { ArrowUp, FileUp, Plus, Sparkles } from "lucide-react";
 import { careerAgentLabel } from "@repo/api/domains/career-chat/career-agent-label";
 import type { careerChatAgent } from "@repo/api/domains/career-chat/tasks/career-chat-agent";
 import { interviewSettings } from "@repo/api/domains/interview/interview-settings";
-import type { InterviewLanguage } from "@repo/api/domains/career/schemas/career";
+import type {
+  InterviewLanguage,
+  InterviewLanguageSource,
+} from "@repo/api/domains/career/schemas/career";
 import { useTranslation } from "@repo/intl/use-translation";
 import { Button } from "@repo/web/components/ui/button";
 import { Textarea } from "@repo/web/components/ui/textarea";
@@ -24,7 +27,7 @@ import {
 } from "../actions/career-chat-actions";
 import { useRefreshCareer } from "../hooks/use-career-queries";
 import { useCareerWorkspace } from "./career-workspace-context";
-import { InterviewLanguageSelect } from "./interview-language-select";
+import { CareerLanguageBar } from "./career-language-bar";
 import { PositionFormDialog } from "./position-form-dialog";
 import { VoiceInputButton } from "./voice-input-button";
 
@@ -36,9 +39,11 @@ import { VoiceInputButton } from "./voice-input-button";
  */
 export function CareerChat({
   interviewLanguage,
+  languageSource,
   hasPositions,
 }: {
   interviewLanguage: InterviewLanguage;
+  languageSource: InterviewLanguageSource | null;
   hasPositions: boolean;
 }) {
   const loaded = useQuery({
@@ -54,6 +59,7 @@ export function CareerChat({
       initialMessages={loaded.data.messages}
       session={loaded.data.session}
       interviewLanguage={interviewLanguage}
+      languageSource={languageSource}
       hasPositions={hasPositions}
     />
   );
@@ -64,12 +70,14 @@ function Conversation({
   initialMessages,
   session,
   interviewLanguage,
+  languageSource,
   hasPositions,
 }: {
   chatId: string;
   initialMessages: UIMessage[];
   session: { publicAccessToken: string; lastEventId?: string } | null;
   interviewLanguage: InterviewLanguage;
+  languageSource: InterviewLanguageSource | null;
   hasPositions: boolean;
 }) {
   const t = useTranslation();
@@ -120,14 +128,11 @@ function Conversation({
 
   return (
     <div className="flex h-full flex-col">
-      <div className="flex items-center justify-end gap-2 border-b px-4 py-2">
-        <span className="text-muted-foreground text-xs">
-          {t.formatMessage({ defaultMessage: "Interview language" })}
-        </span>
-        <div className="w-44">
-          <InterviewLanguageSelect value={interviewLanguage} />
-        </div>
-      </div>
+      <CareerLanguageBar
+        interviewLanguage={interviewLanguage}
+        source={languageSource}
+        started={messages.length > 0}
+      />
       <div className="flex-1 overflow-y-auto">
         <ol className="mx-auto flex w-full max-w-3xl flex-col gap-4 p-6">
           {messages.length === 0 && <Introduction />}

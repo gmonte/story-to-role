@@ -17,6 +17,7 @@ import { useTRPC } from "~/tools/trpc/client";
 
 import { useTimeline } from "../hooks/use-career-queries";
 import { ApproveImportedButton } from "./approve-imported-button";
+import { CareerLanguageBar } from "./career-language-bar";
 import { Sources } from "./sources";
 import { PrivacyNotice } from "./privacy-notice";
 
@@ -110,7 +111,7 @@ export function GuidedOpeningStart() {
         // The privacy notice comes only now, when career data is about to
         // arrive (workspace spec: "only when needed").
         (!profile.privacyNoticeAccepted ? (
-          <PrivacyNotice interviewLanguage={profile.interviewLanguage} />
+          <PrivacyNotice />
         ) : (
           <section className="flex flex-col gap-4">
             <div className="flex flex-col gap-1">
@@ -125,6 +126,14 @@ export function GuidedOpeningStart() {
               </p>
             </div>
             <Sources documents={documents} />
+            {/* The first file set the career's language: ask to keep it. */}
+            {profile.interviewLanguageSource === "file" && (
+              <CareerLanguageBar
+                interviewLanguage={profile.interviewLanguage}
+                source={profile.interviewLanguageSource}
+                started={false}
+              />
+            )}
             {!reading && waiting.length > 0 && (
               <div className="flex flex-col gap-2 rounded-lg border p-3 text-sm">
                 <p>

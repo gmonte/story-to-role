@@ -108,7 +108,13 @@ export async function loadLetterMaterial(input: {
   const wanted = new Set([...(story?.evidenceIds ?? []), ...fromResume]);
   const evidence = context.evidence
     .filter((row) => wanted.has(row.id))
-    .map((row) => ({ id: row.id, text: row.text }));
+    // A file fact carries its own words, to keep and to back its figures.
+    .map((row) => ({
+      id: row.id,
+      text: row.sourceWording
+        ? `${row.text} (original wording: ${row.sourceWording})`
+        : row.text,
+    }));
   const companyFacts = (
     await new ResearchRepository(db).listFacts(input.openingId)
   )

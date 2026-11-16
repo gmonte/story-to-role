@@ -86,7 +86,8 @@ async function setup() {
     extraction: unknown,
     kind: "resume" | "truth_file" = "resume",
     isCareerDocument = true,
-    reportProgress?: (progress: TaskProgress) => Promise<void>
+    reportProgress?: (progress: TaskProgress) => Promise<void>,
+    fileLanguage: "en-US" | "pt-BR" = "en-US"
   ) {
     const { sourceDocumentId } = await documents.upload({
       userId: user.id,
@@ -101,6 +102,7 @@ async function setup() {
               is_career_document: isCareerDocument,
               // The kind is detected, never chosen at upload.
               has_confidentiality_rules: kind === "truth_file",
+              language: fileLanguage,
             }
           : extraction,
     });
@@ -418,6 +420,58 @@ describe("document import", () => {
         language: "en-US",
       }),
     ]);
+  });
+});
+
+describe("career language", () => {
+  it("adopts the first file's language until the user chooses one", async () => {
+    const ctx = await setup();
+    await ctx.importFile(
+      resumeA,
+      { positions: [], credentials: [], exclusions: [] },
+      "resume",
+      true,
+      undefined,
+      "pt-BR"
+    );
+
+    const timeline = await ctx.timeline();
+    expect(timeline.profile).toMatchObject({
+      interviewLanguage: "pt-BR",
+      interviewLanguageSource: "file",
+    });
+
+    // A second file in another language doesn't move it again.
+    await ctx.importFile(
+      resumeB,
+      { positions: [], credentials: [], exclusions: [] },
+      "resume",
+      true,
+      undefined,
+      "en-US"
+    );
+    expect((await ctx.timeline()).profile.interviewLanguage).toBe("pt-BR");
+  });
+
+  it("keeps the language the user chose", async () => {
+    const ctx = await setup();
+    await ctx.career.updateSettings({
+      userId: ctx.user.id,
+      interviewLanguage: "en-US",
+    });
+    await ctx.importFile(
+      resumeA,
+      { positions: [], credentials: [], exclusions: [] },
+      "resume",
+      true,
+      undefined,
+      "pt-BR"
+    );
+
+    expect((await ctx.timeline()).profile).toMatchObject({
+      interviewLanguage: "en-US",
+      interviewLanguageSource: "user",
+    });
   });
 });
 

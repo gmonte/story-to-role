@@ -10,6 +10,7 @@ import { EvidenceRepository } from "@repo/api/domains/evidence/evidence-reposito
 import type { EvidenceKind } from "@repo/api/domains/evidence/schemas/evidence";
 import type { SensitiveFilter } from "@repo/api/domains/evidence/sensitive/sensitive-filter";
 import type { DbClient } from "@repo/api/tools/db-client";
+import { withoutAuthorNotes } from "@repo/api/domains/career/documents/run-import-document";
 
 import {
   approvedTitles,
@@ -33,6 +34,8 @@ export type ContextEvidence = {
   kind: EvidenceKind;
   /** As it may enter a prompt: sensitivity choices already applied. */
   text: string;
+  /** A file fact's own words (filtered too); null for interview facts. */
+  sourceWording?: string | null;
 };
 
 export type ContextCredential = {
@@ -157,14 +160,27 @@ export async function loadCareerContext(input: {
     )
     .map((row) => ({ row, text: cipher.decrypt(row.encryptedText) }))
     .filter(({ text }) => filter.dropFactsMentioningExcluded([text]).length)
-    .map(({ row, text }) => ({
-      id: row.id,
-      positionId: row.positionId,
-      credentialId: row.credentialId,
-      projectId: row.projectId,
-      kind: row.kind,
-      text: filter.apply(text),
-    }));
+    .map(({ row, text }) => {
+      // A fact from a file keeps the file's own words beside its text (which
+      // is in the career's language): a document in that file's language
+      // can use them instead of translating the translation back.
+      // The author's own notes ("[medido]") stay out of documents.
+      const quote = row.sourceDocumentId
+        ? withoutAuthorNotes(cipher.decrypt(row.encryptedSourceQuote))
+        : null;
+      return {
+        id: row.id,
+        positionId: row.positionId,
+        credentialId: row.credentialId,
+        projectId: row.projectId,
+        kind: row.kind,
+        text: filter.apply(text),
+        sourceWording:
+          quote && filter.dropFactsMentioningExcluded([quote]).length
+            ? filter.apply(quote)
+            : null,
+      };
+    });
   const evidenceIds = new Set(evidence.map((row) => row.id));
 
   const skills = (await evidenceRepository.listSkills(profileId))

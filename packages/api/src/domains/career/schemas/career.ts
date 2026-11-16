@@ -85,3 +85,9 @@ export const timelineProposalKindSchema = z.enum([
   "split_position",
 ]);
 export type TimelineProposalKind = z.infer<typeof timelineProposalKindSchema>;
+
+/** Who set the career language: the first imported file, or the user. */
+export const interviewLanguageSourceSchema = z.enum(["file", "user"]);
+export type InterviewLanguageSource = z.infer<
+  typeof interviewLanguageSourceSchema
+>;

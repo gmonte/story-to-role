@@ -44,6 +44,7 @@ export const exportPaths: Record<string, string> = {
   application_instructions: "applications/instructions",
   instruction_points: "applications/instruction-points",
   locked_fact_overrides: "applications/locked-fact-overrides",
+  application_overrides: "applications/sensitive-item-overrides",
   company_research: "applications/company-research",
   company_facts: "applications/company-facts",
   motivation_interviews: "applications/motivation-interviews",

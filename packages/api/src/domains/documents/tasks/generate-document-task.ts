@@ -9,6 +9,7 @@ import { getStorage } from "@repo/api/tools/storage/storage";
 
 import { refreshVersionVectors } from "../similar/embed-versions";
 import { DocumentsRepository } from "../documents-repository";
+import { openingOfGeneration } from "../generation-opening";
 import { runGenerateResume } from "../generation/run-generate-resume";
 import { runGenerateLetter } from "../letter/run-generate-letter";
 import { runUpdateLetter } from "../letter/run-update-letter";
@@ -22,10 +23,12 @@ export const generateDocumentTask = task({
       { db, taskId, type: "generate_document" },
       async ({ userId, subjectId, reportProgress }) => {
         if (!subjectId) throw new Error(`Task ${taskId} has no generation`);
+        // The application's sensitive-item overrides apply to its documents.
         const { ai, cipher, sensitiveFilter } = await createTaskAi({
           db,
           userId,
           taskId,
+          openingId: await openingOfGeneration(db, subjectId),
         });
         const run = {
           db,

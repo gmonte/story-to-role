@@ -48,6 +48,7 @@ import {
 import { toast } from "@repo/web/components/ui/sonner";
 
 import { InstructionsReview } from "~/domains/applications/components/instructions-review";
+import { SensitiveOverrides } from "~/domains/applications/components/sensitive-overrides";
 import { useApplicationInstructions } from "~/domains/applications/hooks/use-application-instructions";
 import { CreditCost } from "~/domains/credits/components/credit-cost";
 import { useCredits } from "~/domains/credits/hooks/use-credits";
@@ -284,6 +285,8 @@ export function GenerateResumeDialog({
           openingId={openingId}
           onUnreviewedChange={setUnreviewed}
         />
+
+        <SensitiveOverrides openingId={openingId} />
 
         <Collapsible>
           <CollapsibleTrigger className="text-muted-foreground flex items-center gap-1 text-xs hover:underline">

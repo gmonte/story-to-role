@@ -162,6 +162,7 @@ export class AccountRepository {
       application_instructions: await byProfile(t.applicationInstructionsTable),
       instruction_points: await byProfile(t.instructionPointsTable),
       locked_fact_overrides: await byProfile(t.lockedFactOverridesTable),
+      application_overrides: await byProfile(t.applicationOverridesTable),
       company_research: await byProfile(t.companyResearchTable),
       company_facts: await byProfile(t.companyFactsTable),
       motivation_interviews: motivationInterviews,

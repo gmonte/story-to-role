@@ -120,6 +120,53 @@ Acceptance:
 - [ ] Importing a resume and a truth file yields sensitive items that are real names or figures, and evidence without annotations.
 - [ ] A sensitive item can be kept, generalized or excluded for one application only.
 
+## Walkthrough fixes
+
+Found with the owner in the guided walkthrough (2026-11-16), stopped after the first resume import so the career interview is tested only once these are fixed. Each group is one slice.
+
+### W1: Quick fixes on My career
+
+- Hide the side panel until the privacy notice is acknowledged, and refuse imports on the server before it (today only the interview checks it).
+- Remove the sample-task card ("Background tasks").
+- Import sits at the top of the side panel, above the timeline.
+- Credentials split into Education, Languages and Certifications, each with its own "+ Add"; courses, publications, awards and volunteering go under "Other", shown only when it has items. The resume already has a section per kind.
+- The credit meter refreshes after an import (uploads skip the tRPC invalidation).
+- Plural messages handle zero in Brazilian Portuguese ("0 fato" reads wrong): say "nenhum fato" or use the plural.
+
+Acceptance:
+- [ ] Before the notice, the side panel is hidden and an import request is refused.
+- [ ] The meter shows the import's cost as soon as it settles.
+
+### W2: One career chat on chat.agent
+
+The guided-interview spec already asks for "one conversation; a light orchestrator and one short-lived agent context per position". Slice 2 built the position agents but exposed one conversation per position.
+
+- My career is always a chat: the message box is always there; its empty state is the introduction with shortcuts to import a resume, a LinkedIn PDF or a truth file, or add a position; "I have no positions yet" stays above the box while there are no positions.
+- One orchestrator routes each message to the right position agent (several when a message covers several positions); the user sees which positions are being worked on and how many agents are running. A position card's "Interview" becomes a shortcut that focuses the same chat on it.
+- Built on Trigger.dev `chat.agent` (`@trigger.dev/sdk/ai`), with live token streaming, sub-agents through `ai.toolExecute`, a `TranscriptStorage` writing encrypted turns to our tables (evidence keeps pointing at its source turn) and `loadContext` giving each agent only its slice. The provider layer (own key, credits, token accounting, topic gate, sensitive filter) moves onto the Vercel AI SDK.
+- Privacy: message content passes through Trigger.dev session streams for their retention window. A new ADR amends ADR 0003, the privacy notice and spec say so, and account deletion removes the sessions if Trigger.dev allows it. Check the retention window and trace redaction first.
+
+Acceptance:
+- [ ] One message about two positions saves draft facts to both, and the chat shows both agents working.
+- [ ] A reload mid-answer resumes the stream; transcripts stay in our database, encrypted, and are purged as before.
+
+### W3: Reviewing what the AI understood
+
+- Each position shows "what the AI understood": a short summary in the AI's voice, plus every extracted fact with its quote, before approval (today summaries exist only after approval).
+- Counts show imported facts waiting for review ("6 facts to review") instead of "0 facts".
+- The position's status (pending, approved) is shown apart from its depth level, and each depth level is explained.
+- The bulk approval states how many positions and facts it approves, that they were not reviewed, that they can be reviewed later, and which positions it skips because of conflicts.
+
+### W4: AI at work feels alive
+
+- One shared "AI at work" component: live, specific narration of each step ("Found 6 positions", "Extracting achievements at Initech…"), results appearing as they are found, and motion. No static "Reading…" label.
+- Used by import (prominent in the center, saying the user can leave), fit check, company research, generation and adaptation. Tasks report meaningful steps.
+
+### W5: Career language
+
+- The interview language leaves the privacy notice and the empty state. It is asked at the right moment (first import or first message), explained as the language the evidence is stored in, and defaults to the language of the imported files, else the interface language; it stays changeable in the chat. No schema change.
+- Check that generation uses a fact's original quote when the document's language matches it, instead of the translated fact.
+
 ## Not in the MVP
 
 Hiring interview prep, team or recruiter accounts, email reminders, OpenAI package and "Sign in with ChatGPT", languages beyond English and Brazilian Portuguese, final prices.

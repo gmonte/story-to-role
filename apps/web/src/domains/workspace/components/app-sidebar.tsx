@@ -29,6 +29,7 @@ import {
 import { BrandLockup } from "~/domains/brand/components/brand-lockup";
 import { BrandMark } from "~/domains/brand/components/brand-mark";
 import { CreditMeter } from "~/domains/credits/components/credit-meter";
+import { OutOfCreditsNotice } from "~/domains/credits/components/out-of-credits-notice";
 import { useReminders } from "~/domains/applications/hooks/use-tracker";
 import { UserButton } from "~/domains/user/components/user-button";
 import { useTRPC } from "~/tools/trpc/client";
@@ -124,6 +125,7 @@ export function AppSidebar() {
         <SidebarMenu>
           <SidebarMenuItem>
             <CreditMeter />
+            <OutOfCreditsNotice />
           </SidebarMenuItem>
           <SidebarMenuItem>
             <LanguageSwitcher />

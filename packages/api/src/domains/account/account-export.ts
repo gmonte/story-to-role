@@ -1,8 +1,5 @@
-import { eq, inArray } from "drizzle-orm";
-import type { PgColumn, PgTable } from "drizzle-orm/pg-core";
-import { strToU8, zipSync } from "fflate";
+import { strToU8, Zip, ZipDeflate } from "fflate";
 
-import * as tables from "@repo/api/db";
 import {
   getUserCipher,
   type UserCipher,
@@ -10,8 +7,77 @@ import {
 import type { DbClient } from "@repo/api/tools/db-client";
 import type { Storage } from "@repo/api/tools/storage/storage";
 
-// Never exported: vectors are derived, and keys are secrets.
-const leftOut = new Set(["embedding", "encryptedKey", "wrappedKey"]);
+import { AccountRepository } from "./account-repository";
+
+type Row = Record<string, unknown>;
+
+/** Where each table goes in the ZIP. */
+export const exportPaths: Record<string, string> = {
+  career_profiles: "career/profile",
+  positions: "career/positions",
+  position_conflicts: "career/position-conflicts",
+  projects: "career/projects",
+  position_summaries: "career/position-summaries",
+  cross_notes: "career/cross-notes",
+  credentials: "career/credentials",
+  career_narratives: "career/narratives",
+  timeline_proposals: "career/timeline-proposals",
+  career_goals: "career/goals",
+  source_documents: "career/imported-files",
+  evidence: "evidence/evidence",
+  stories: "evidence/stories",
+  skills: "evidence/skills",
+  sensitive_items: "evidence/sensitive-items",
+  interview_sessions: "interview/sessions",
+  interview_turns: "interview/turns",
+  draft_facts: "interview/draft-facts",
+  draft_sensitive_items: "interview/draft-sensitive-items",
+  openings: "openings/openings",
+  opening_terms: "openings/terms",
+  fit_checks: "openings/fit-checks",
+  fit_check_items: "openings/fit-check-items",
+  applications: "applications/applications",
+  application_events: "applications/events",
+  application_submissions: "applications/submissions",
+  tracker_settings: "applications/tracker-settings",
+  dismissed_reminders: "applications/dismissed-reminders",
+  application_instructions: "applications/instructions",
+  instruction_points: "applications/instruction-points",
+  locked_fact_overrides: "applications/locked-fact-overrides",
+  company_research: "applications/company-research",
+  company_facts: "applications/company-facts",
+  motivation_interviews: "applications/motivation-interviews",
+  motivation_turns: "applications/motivation-turns",
+  motivation_points: "applications/motivation-points",
+  documents: "documents/documents",
+  document_versions: "documents/versions",
+  document_snapshots: "documents/snapshots",
+  generations: "documents/generations",
+  review_rounds: "documents/review-rounds",
+  position_title_equivalents: "documents/title-equivalents",
+  rendered_files: "documents/rendered-files",
+  resume_templates: "documents/resume-template",
+  style_profiles: "documents/style-profile",
+  chat_messages: "chat/messages",
+  tasks: "activity/tasks",
+  ai_usage: "billing/ai-usage",
+  ai_keys: "billing/own-api-key",
+  credit_lots: "billing/credit-lots",
+  credit_entries: "billing/credit-entries",
+  courtesy_grants: "billing/courtesy-grants",
+  stored_credit_confirmations: "billing/stored-credit-confirmations",
+  billing_customers: "billing/stripe-customer",
+  subscriptions: "billing/subscriptions",
+};
+
+// Never exported: vectors are derived, keys are secrets, and who granted a
+// courtesy plan is another person's id.
+const leftOut = new Set([
+  "embedding",
+  "encryptedKey",
+  "wrappedKey",
+  "grantedBy",
+]);
 
 const lowerFirst = (text: string) =>
   text.charAt(0).toLowerCase() + text.slice(1);
@@ -30,8 +96,8 @@ function parsed(text: string): unknown {
  * A row as the user reads it: every `encryptedX` column decrypted to `x`,
  * vectors and secrets left out.
  */
-function readable(cipher: UserCipher, row: Record<string, unknown>) {
-  const out: Record<string, unknown> = {};
+function readable(cipher: UserCipher, row: Row) {
+  const out: Row = {};
   for (const [key, value] of Object.entries(row)) {
     if (leftOut.has(key)) continue;
     if (key.startsWith("encrypted")) {
@@ -44,245 +110,126 @@ function readable(cipher: UserCipher, row: Record<string, unknown>) {
   return out;
 }
 
+/** A name that never makes a path inside the ZIP. */
+const safeName = (text: string) => text.replace(/[/\\\\:*?"<>|]/g, "_");
+
 /**
- * The user's whole account as a ZIP (privacy spec, "Export"): the evidence
- * base, positions, applications, snapshots and everything else as JSON,
- * the rendered PDFs and the files they imported.
+ * The user's whole account as a ZIP stream (privacy spec, "Export"): every
+ * table they own as JSON, the rendered PDFs and the files they imported.
+ * Streamed, so an account's size never meets a response limit.
  */
-export async function buildAccountExport(deps: {
+export async function streamAccountExport(deps: {
   db: DbClient;
   storage: Storage;
   userId: string;
 }) {
-  const { db, userId } = deps;
-  const cipher = await getUserCipher(db, userId);
-  const rowsWhere = async <T extends PgTable>(
-    table: T,
-    column: PgColumn,
-    ids: Array<string | null>
-  ) => {
-    const present = ids.filter((id): id is string => !!id);
-    if (present.length === 0) return [];
-    return (await db
-      .select()
-      .from(table as PgTable)
-      .where(inArray(column, present))) as Array<Record<string, unknown>>;
-  };
-  const idsOf = (rows: Array<Record<string, unknown>>) =>
-    rows.map((row) => row.id as string);
+  const repository = new AccountRepository(deps.db);
+  const cipher = await getUserCipher(deps.db, deps.userId);
+  const user = await repository.findUser(deps.userId);
+  const rows = await repository.ownedRows(deps.userId);
 
-  const [user] = await db
-    .select()
-    .from(tables.usersTable)
-    .where(eq(tables.usersTable.id, userId));
-  const byUser = <T extends PgTable & { userId: PgColumn }>(table: T) =>
-    rowsWhere(table, table.userId, [userId]);
-  const profiles = await byUser(tables.careerProfilesTable);
-  const profileIds = idsOf(profiles);
-  const byProfile = <T extends PgTable & { profileId: PgColumn }>(table: T) =>
-    rowsWhere(table, table.profileId, profileIds);
-
-  const positions = await byProfile(tables.positionsTable);
-  const positionIds = idsOf(positions);
-  const sessions = await byProfile(tables.interviewSessionsTable);
-  const sessionIds = idsOf(sessions);
-  const openings = await byProfile(tables.openingsTable);
-  const openingIds = idsOf(openings);
-  const fitChecks = await rowsWhere(
-    tables.fitChecksTable,
-    tables.fitChecksTable.openingId,
-    openingIds
-  );
-  const applications = await byProfile(tables.applicationsTable);
-  const applicationIds = idsOf(applications);
-  const motivationInterviews = await byProfile(
-    tables.motivationInterviewsTable
-  );
-  const documents = await byProfile(tables.documentsTable);
-  const versions = await rowsWhere(
-    tables.documentVersionsTable,
-    tables.documentVersionsTable.documentId,
-    idsOf(documents)
-  );
-  const generations = await byProfile(tables.generationsTable);
-  const sourceDocuments = await byProfile(tables.sourceDocumentsTable);
-  const renderedFiles = await byProfile(tables.renderedFilesTable);
-  const aiKeys = await byUser(tables.aiKeysTable);
-
-  const sections: Record<string, Array<Record<string, unknown>>> = {
-    "career/profile": profiles,
-    "career/positions": positions,
-    "career/position-conflicts": await rowsWhere(
-      tables.positionConflictsTable,
-      tables.positionConflictsTable.positionId,
-      positionIds
-    ),
-    "career/projects": await rowsWhere(
-      tables.projectsTable,
-      tables.projectsTable.positionId,
-      positionIds
-    ),
-    "career/position-summaries": await rowsWhere(
-      tables.positionSummariesTable,
-      tables.positionSummariesTable.positionId,
-      positionIds
-    ),
-    "career/cross-notes": await rowsWhere(
-      tables.crossNotesTable,
-      tables.crossNotesTable.toPositionId,
-      positionIds
-    ),
-    "career/credentials": await byProfile(tables.credentialsTable),
-    "career/narratives": await byProfile(tables.careerNarrativesTable),
-    "career/timeline-proposals": await byProfile(tables.timelineProposalsTable),
-    "career/goals": await byProfile(tables.careerGoalsTable),
-    "career/imported-files": sourceDocuments,
-    "evidence/evidence": await byProfile(tables.evidenceTable),
-    "evidence/stories": await byProfile(tables.storiesTable),
-    "evidence/skills": await byProfile(tables.skillsTable),
-    "evidence/sensitive-items": await byProfile(tables.sensitiveItemsTable),
-    "interview/sessions": sessions,
-    "interview/turns": await rowsWhere(
-      tables.interviewTurnsTable,
-      tables.interviewTurnsTable.sessionId,
-      sessionIds
-    ),
-    "interview/draft-facts": await rowsWhere(
-      tables.draftFactsTable,
-      tables.draftFactsTable.sessionId,
-      sessionIds
-    ),
-    "interview/draft-sensitive-items": await rowsWhere(
-      tables.draftSensitiveItemsTable,
-      tables.draftSensitiveItemsTable.sessionId,
-      sessionIds
-    ),
-    "openings/openings": openings,
-    "openings/terms": await rowsWhere(
-      tables.openingTermsTable,
-      tables.openingTermsTable.openingId,
-      openingIds
-    ),
-    "openings/fit-checks": fitChecks,
-    "openings/fit-check-items": await rowsWhere(
-      tables.fitCheckItemsTable,
-      tables.fitCheckItemsTable.fitCheckId,
-      idsOf(fitChecks)
-    ),
-    "applications/applications": applications,
-    "applications/events": await rowsWhere(
-      tables.applicationEventsTable,
-      tables.applicationEventsTable.applicationId,
-      applicationIds
-    ),
-    "applications/submissions": await rowsWhere(
-      tables.applicationSubmissionsTable,
-      tables.applicationSubmissionsTable.applicationId,
-      applicationIds
-    ),
-    "applications/instructions": await byProfile(
-      tables.applicationInstructionsTable
-    ),
-    "applications/instruction-points": await byProfile(
-      tables.instructionPointsTable
-    ),
-    "applications/locked-fact-overrides": await byProfile(
-      tables.lockedFactOverridesTable
-    ),
-    "applications/company-research": await byProfile(
-      tables.companyResearchTable
-    ),
-    "applications/company-facts": await byProfile(tables.companyFactsTable),
-    "applications/motivation-interviews": motivationInterviews,
-    "applications/motivation-turns": await rowsWhere(
-      tables.motivationTurnsTable,
-      tables.motivationTurnsTable.interviewId,
-      idsOf(motivationInterviews)
-    ),
-    "applications/motivation-points": await byProfile(
-      tables.motivationPointsTable
-    ),
-    "applications/tracker-settings": await byProfile(
-      tables.trackerSettingsTable
-    ),
-    "documents/documents": documents,
-    "documents/versions": versions,
-    "documents/snapshots": await rowsWhere(
-      tables.documentSnapshotsTable,
-      tables.documentSnapshotsTable.versionId,
-      idsOf(versions)
-    ),
-    "documents/generations": generations,
-    "documents/review-rounds": await rowsWhere(
-      tables.reviewRoundsTable,
-      tables.reviewRoundsTable.generationId,
-      idsOf(generations)
-    ),
-    "documents/title-equivalents": await byProfile(
-      tables.positionTitleEquivalentsTable
-    ),
-    "documents/resume-template": await byProfile(tables.resumeTemplatesTable),
-    "documents/style-profile": await byProfile(tables.styleProfilesTable),
-    "chat/messages": await byUser(tables.chatMessagesTable),
-    "billing/credit-lots": await byUser(tables.creditLotsTable),
-    "billing/credit-entries": await byUser(tables.creditEntriesTable),
-    "billing/courtesy-grants": await byUser(tables.courtesyGrantsTable),
-    "billing/subscriptions": await byUser(tables.subscriptionsTable),
-    "billing/ai-usage": await byUser(tables.aiUsageTable),
-    // The key itself never leaves: only which one it is.
-    "billing/own-api-key": aiKeys,
-  };
-
-  const files: Record<string, Uint8Array> = {
-    "account.json": strToU8(
-      JSON.stringify(
-        {
-          exportedAt: new Date(),
-          email: user?.email,
-          firstName: user?.firstName,
-          lastName: user?.lastName,
-          createdAt: user?.createdAt,
-        },
-        null,
-        2
-      )
-    ),
-  };
-  for (const [name, rows] of Object.entries(sections)) {
-    files[`${name}.json`] = strToU8(
-      JSON.stringify(
-        rows.map((row) => readable(cipher, row)),
-        null,
-        2
-      )
-    );
-  }
-
-  // Stored files are encrypted like everything else: decrypted for the ZIP.
-  const readFile = async (storageKey: string) => {
-    const stored = await deps.storage.get(storageKey);
+  // Stored files are encrypted like everything else: decrypted one by one.
+  const readFile = async (storageKey: unknown) => {
+    const stored = await deps.storage.get(String(storageKey));
     return stored
       ? new Uint8Array(
           Buffer.from(cipher.decrypt(stored.toString("utf8")), "base64")
         )
       : null;
   };
-  for (const file of renderedFiles) {
-    const bytes = await readFile(file.storageKey as string);
-    if (bytes) files[`pdfs/${file.snapshotId as string}.pdf`] = bytes;
-  }
-  for (const document of sourceDocuments) {
-    const bytes = await readFile(document.storageKey as string);
-    const name = document.encryptedFileName
-      ? cipher.decrypt(document.encryptedFileName as string)
-      : (document.id as string);
-    // A file name never makes a path inside the ZIP.
-    const safe = name.replace(/[/\\]/g, "_");
-    if (bytes) files[`imported-files/${document.id as string}-${safe}`] = bytes;
-  }
-
-  return {
-    bytes: Buffer.from(zipSync(files)),
-    fileName: `StoryToRole_export_${new Date().toISOString().slice(0, 10)}.zip`,
+  // A PDF named by what it is: document, language, change and template.
+  const pdfName = (file: Row) => {
+    const snapshot = rows.document_snapshots.find(
+      (row) => row.id === file.snapshotId
+    );
+    const version = rows.document_versions.find(
+      (row) => row.id === snapshot?.versionId
+    );
+    const document = rows.documents.find(
+      (row) => row.id === version?.documentId
+    );
+    const text = (value: unknown) =>
+      typeof value === "string" || typeof value === "number"
+        ? String(value)
+        : "";
+    return safeName(
+      [
+        text(document?.kind) || "document",
+        text(version?.language),
+        `change-${text(snapshot?.sequence)}`,
+        text(file.template),
+        text(file.snapshotId).slice(0, 8),
+      ]
+        .filter(Boolean)
+        .join("_")
+    );
   };
+
+  return new ReadableStream<Uint8Array>({
+    async start(controller) {
+      const zip = new Zip((error, chunk, final) => {
+        if (error) return controller.error(error);
+        controller.enqueue(chunk);
+        if (final) controller.close();
+      });
+      const add = (name: string, data: Uint8Array) => {
+        const entry = new ZipDeflate(name, { level: 6 });
+        zip.add(entry);
+        entry.push(data, true);
+      };
+      try {
+        add(
+          "account.json",
+          strToU8(
+            JSON.stringify(
+              {
+                exportedAt: new Date(),
+                email: user?.email,
+                firstName: user?.firstName,
+                lastName: user?.lastName,
+                createdAt: user?.createdAt,
+              },
+              null,
+              2
+            )
+          )
+        );
+        for (const [table, path] of Object.entries(exportPaths)) {
+          add(
+            `${path}.json`,
+            strToU8(
+              JSON.stringify(
+                (rows[table] ?? []).map((row) => readable(cipher, row)),
+                null,
+                2
+              )
+            )
+          );
+        }
+        for (const file of rows.rendered_files) {
+          const bytes = await readFile(file.storageKey);
+          if (bytes) add(`pdfs/${pdfName(file)}.pdf`, bytes);
+        }
+        for (const document of rows.source_documents) {
+          const bytes = await readFile(document.storageKey);
+          const name =
+            typeof document.encryptedFileName === "string"
+              ? cipher.decrypt(document.encryptedFileName)
+              : "file";
+          if (bytes) {
+            add(
+              `imported-files/${String(document.id).slice(0, 8)}_${safeName(name)}`,
+              bytes
+            );
+          }
+        }
+        zip.end();
+      } catch (error) {
+        controller.error(error);
+      }
+    },
+  });
 }
+
+export const exportFileName = (now = new Date()) =>
+  `StoryToRole_export_${now.toISOString().slice(0, 10)}.zip`;

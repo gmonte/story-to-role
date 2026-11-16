@@ -253,8 +253,9 @@ export class BillingService {
   }
 
   /**
-   * The account is being deleted (privacy spec): its subscriptions end now.
-   * The customer and its invoices stay in Stripe, as the law requires.
+   * The account is being deleted (privacy spec): its subscriptions end now
+   * and open checkouts expire. The customer and its invoices stay in
+   * Stripe, as the law requires.
    */
   async cancelForDeletion(userId: string) {
     const customer = await new BillingRepository(this.db).findCustomerByUserId(
@@ -268,6 +269,14 @@ export class BillingService {
       if (isLiveSubscription(subscription.status as SubscriptionStatus)) {
         await this.stripe.subscriptions.cancel(subscription.id);
       }
+    }
+    // A Checkout still open (a Pix waiting to be paid) can't charge an
+    // account that no longer exists.
+    const open = await this.stripe.checkout.sessions
+      .list({ customer: customer.stripeCustomerId, status: "open" })
+      .autoPagingToArray({ limit: 100 });
+    for (const session of open) {
+      await this.stripe.checkout.sessions.expire(session.id);
     }
   }
 

@@ -1,6 +1,7 @@
 import { randomBytes } from "node:crypto";
 
-import { sql } from "drizzle-orm";
+import { getTableName, is, sql } from "drizzle-orm";
+import { PgTable } from "drizzle-orm/pg-core";
 import { strFromU8, unzipSync } from "fflate";
 import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -15,7 +16,10 @@ import {
   getTestDatabase,
 } from "@repo/api/test/pglite";
 import type { Storage } from "@repo/api/tools/storage/storage";
+import * as tables from "@repo/api/db";
 
+import { exportPaths } from "./account-export";
+import { notExported } from "./account-repository";
 import { AccountService } from "./account-service";
 
 vi.mock("@repo/common/env/web.env", () => ({
@@ -54,7 +58,13 @@ async function setup() {
   const storage = memoryStorage();
   const billing = { cancelForDeletion: vi.fn(() => Promise.resolve()) };
   const deleteClerkUser = vi.fn((_clerkUserId: string) => Promise.resolve());
-  const account = new AccountService(db, { storage, billing, deleteClerkUser });
+  const cancelRun = vi.fn((_runId: string) => Promise.resolve());
+  const account = new AccountService(db, {
+    storage,
+    billing,
+    deleteClerkUser,
+    cancelRun,
+  });
 
   // Some of everything: a position, an imported file, an application with
   // an event, an own key.
@@ -113,8 +123,10 @@ describe("account", () => {
 
   it("exports everything decrypted, with the files, but no secrets", async () => {
     const ctx = await setup();
-    const { bytes } = await ctx.account.export(ctx.user.id);
-    const zip = unzipSync(new Uint8Array(bytes));
+    const { stream } = await ctx.account.export(ctx.user.id);
+    const zip = unzipSync(
+      new Uint8Array(await new Response(stream).arrayBuffer())
+    );
     const read = (name: string) => JSON.parse(strFromU8(zip[name])) as unknown;
 
     expect(read("career/positions.json")).toEqual([
@@ -143,6 +155,7 @@ describe("account", () => {
     expect(read("billing/own-api-key.json")).toEqual([
       expect.objectContaining({ lastCharacters: "WXYZ" }),
     ]);
+    expect(imported).toMatch(/_my resume\.pdf$/);
   });
 
   it("deletes the account and everything in it at once", async () => {
@@ -151,6 +164,8 @@ describe("account", () => {
     await ctx.account.deleteAccount({
       userId: ctx.user.id,
       clerkUserId: ctx.user.clerkUserId,
+      email: ctx.user.email,
+      confirmEmail: ` ${ctx.user.email.toUpperCase()} `,
     });
 
     expect(ctx.billing.cancelForDeletion).toHaveBeenCalledWith(ctx.user.id);
@@ -173,6 +188,40 @@ describe("account", () => {
       );
       expect([table, result.rows[0].count]).toEqual([table, 0]);
     }
+  });
+
+  it("deletes nothing when Clerk can't delete the user, or the email differs", async () => {
+    const ctx = await setup();
+    await expect(
+      ctx.account.deleteAccount({
+        userId: ctx.user.id,
+        clerkUserId: ctx.user.clerkUserId,
+        email: ctx.user.email,
+        confirmEmail: "someone@else.com",
+      })
+    ).rejects.toMatchObject({ code: "BAD_REQUEST" });
+    ctx.deleteClerkUser.mockRejectedValueOnce(new Error("Clerk is down"));
+    await expect(
+      ctx.account.deleteAccount({
+        userId: ctx.user.id,
+        clerkUserId: ctx.user.clerkUserId,
+        email: ctx.user.email,
+        confirmEmail: ctx.user.email,
+      })
+    ).rejects.toThrow("Clerk is down");
+
+    const result = await ctx.db.execute<{ count: number }>(
+      sql`select count(*)::int as count from users`
+    );
+    expect(result.rows[0].count).toBe(1);
+  });
+
+  it("leaves no table out of the export by accident", () => {
+    const names = Object.values(tables)
+      .filter((value) => is(value, PgTable))
+      .map((table) => getTableName(table as PgTable));
+    const covered = new Set([...Object.keys(exportPaths), ...notExported]);
+    expect(names.filter((name) => !covered.has(name))).toEqual([]);
   });
 
   it("deletes the data when Clerk deletes the user", async () => {

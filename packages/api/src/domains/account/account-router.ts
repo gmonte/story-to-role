@@ -1,4 +1,3 @@
-import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 
 import { db } from "@repo/api/tools/db";
@@ -8,27 +7,24 @@ import { createTRPCRouter, userProcedure } from "@repo/api/tools/trpc";
 import { AccountService } from "./account-service";
 
 export const accountRouter = createTRPCRouter({
+  // A POST: the confirming email goes in the body, never in a logged URL.
   delete: userProcedure
     .meta(
       openApiMeta(
         "account",
-        "DELETE",
-        "/account",
+        "POST",
+        "/account/delete",
         "Deletes the account and everything in it, at once and for good"
       )
     )
-    // The user types their email to confirm.
-    .input(z.object({ confirmEmail: z.string() }))
+    .input(z.object({ confirmEmail: z.string().max(320) }))
     .output(okSchema)
     .mutation(async ({ ctx, input }) => {
-      if (
-        input.confirmEmail.trim().toLowerCase() !== ctx.user.email.toLowerCase()
-      ) {
-        throw new TRPCError({ code: "BAD_REQUEST" });
-      }
       await new AccountService(db).deleteAccount({
         userId: ctx.userId,
         clerkUserId: ctx.session.userId,
+        email: ctx.user.email,
+        confirmEmail: input.confirmEmail,
       });
       return ok;
     }),

@@ -1,4 +1,4 @@
-import { metadata, tasks } from "@trigger.dev/sdk";
+import { metadata, runs, tasks } from "@trigger.dev/sdk";
 
 import type { TaskProgress } from "@repo/api/domains/tasks/schemas/task";
 
@@ -12,6 +12,11 @@ export const triggerClient = {
     // The handle carries a token that reads only this run, which even a
     // trigger-only API key can hand out.
     return { runId: handle.id, accessToken: handle.publicAccessToken };
+  },
+
+  /** Stops a run (the account it works for is being deleted). */
+  async cancel(runId: string) {
+    await runs.cancel(runId);
   },
 
   /** Inside a run: mirrors progress to the browser through Realtime. */

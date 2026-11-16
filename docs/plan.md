@@ -113,6 +113,7 @@ After slice 7, before calling the MVP done. Raised by the owner while testing sl
 - Per-application sensitive-item overrides (guided-interview spec, "Per-application overrides"; listed in the workspace Context block): in the specs but in no slice yet.
 - A guided walkthrough of every flow with the owner, using the product as a user.
 - Evaluate an optional product tour that teaches new users the system.
+- Privacy operations and decisions raised in slice 7b: confirm Neon's history (backup) retention is at most 30 days, as the deletion notice promises; decide whether signing up again after deleting an account grants welcome credits again; confirm keeping the Stripe customer (email, name) after deletion, for the invoices.
 
 Acceptance:
 - [ ] Switching the interface to Brazilian Portuguese translates every screen.

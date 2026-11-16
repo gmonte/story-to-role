@@ -1,11 +1,14 @@
 import { clerkClient } from "@clerk/nextjs/server";
+import { TRPCError } from "@trpc/server";
 
 import { BillingService } from "@repo/api/domains/billing/billing-service";
+import { TasksRepository } from "@repo/api/domains/tasks/tasks-repository";
 import type { DbClient } from "@repo/api/tools/db-client";
 import { getStorage, type Storage } from "@repo/api/tools/storage/storage";
+import { triggerClient } from "@repo/api/tools/trigger/trigger-client";
 import { logger } from "@repo/common/tools/logger";
 
-import { buildAccountExport } from "./account-export";
+import { exportFileName, streamAccountExport } from "./account-export";
 import { AccountRepository } from "./account-repository";
 
 const logTags = ["account"];
@@ -14,7 +17,11 @@ type Deps = {
   storage: Storage;
   billing: Pick<BillingService, "cancelForDeletion">;
   deleteClerkUser: (clerkUserId: string) => Promise<void>;
+  cancelRun: (runId: string) => Promise<void>;
 };
+
+const sameEmail = (a: string, b: string) =>
+  a.trim().toLowerCase() === b.trim().toLowerCase();
 
 /**
  * Export and deletion (privacy spec, "Export and deletion"): everything the
@@ -35,43 +42,63 @@ export class AccountService {
         (async (clerkUserId) => {
           await (await clerkClient()).users.deleteUser(clerkUserId);
         }),
+      cancelRun: deps.cancelRun ?? ((runId) => triggerClient.cancel(runId)),
     };
   }
 
-  export(userId: string) {
-    return buildAccountExport({
-      db: this.db,
-      storage: this.deps.storage,
-      userId,
-    });
+  async export(userId: string) {
+    return {
+      stream: await streamAccountExport({
+        db: this.db,
+        storage: this.deps.storage,
+        userId,
+      }),
+      fileName: exportFileName(),
+    };
   }
 
   /**
-   * Deletes the account from the app: then its Clerk user, which signs it
-   * out everywhere. Stripe keeps only the invoices.
+   * Deletes the account: the Clerk user first (a failure stops here, with
+   * nothing deleted), then everything StoryToRole holds. Should that fail,
+   * Clerk's own deletion webhook, retried until it succeeds, finishes it.
    */
-  async deleteAccount(input: { userId: string; clerkUserId: string }) {
-    await this.deleteData(input.userId);
-    try {
-      await this.deps.deleteClerkUser(input.clerkUserId);
-    } catch (error) {
-      // The data is gone already; a Clerk user left behind has no account
-      // to open, and its own deletion (the webhook) finds nothing.
-      logger.error(logTags, "Could not delete the Clerk user", { error });
+  async deleteAccount(input: {
+    userId: string;
+    clerkUserId: string;
+    email: string;
+    confirmEmail: string;
+  }) {
+    if (!sameEmail(input.email, input.confirmEmail)) {
+      throw new TRPCError({ code: "BAD_REQUEST" });
     }
+    await this.deps.deleteClerkUser(input.clerkUserId);
+    await this.deleteData(input.userId);
   }
 
   /**
-   * Everything StoryToRole holds for the user: subscriptions cancelled,
-   * stored files deleted, then the user's rows with their data key.
+   * Everything StoryToRole holds for the user: running tasks stopped,
+   * subscriptions cancelled and checkouts expired, then the user's rows
+   * with their data key (use stops here), then their stored files, which
+   * that key protected.
    */
   async deleteData(userId: string) {
-    await this.deps.billing.cancelForDeletion(userId);
     const repository = new AccountRepository(this.db);
-    for (const storageKey of await repository.storageKeys(userId)) {
-      await this.deps.storage.delete(storageKey);
+    const storageKeys = await repository.storageKeys(userId);
+    for (const runId of await new TasksRepository(this.db).activeRunIds(
+      userId
+    )) {
+      await this.deps.cancelRun(runId).catch((error: unknown) => {
+        logger.warn(logTags, "Could not cancel a run", { runId, error });
+      });
     }
+    await this.deps.billing.cancelForDeletion(userId);
     await repository.deleteUser(userId);
+    for (const storageKey of storageKeys) {
+      // Unreadable without the deleted key; removed for good measure.
+      await this.deps.storage.delete(storageKey).catch((error: unknown) => {
+        logger.warn(logTags, "Could not delete a stored file", { error });
+      });
+    }
     logger.info(logTags, "Account deleted", { userId });
   }
 

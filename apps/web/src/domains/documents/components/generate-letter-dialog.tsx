@@ -34,6 +34,7 @@ import { toast } from "@repo/web/components/ui/sonner";
 import { CreditCost } from "~/domains/credits/components/credit-cost";
 import { useCredits } from "~/domains/credits/hooks/use-credits";
 import { letterCredits } from "~/domains/credits/utils/credit-costs";
+import { SensitiveOverrides } from "~/domains/applications/components/sensitive-overrides";
 import { useOpeningLabels } from "~/domains/openings/hooks/use-opening-labels";
 import { useTRPC } from "~/tools/trpc/client";
 
@@ -226,6 +227,7 @@ function LetterForm({
             </SelectContent>
           </Select>
         </div>
+        <SensitiveOverrides openingId={openingId} />
       </div>
       <DialogFooter className="items-center">
         <CreditCost

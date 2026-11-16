@@ -16,13 +16,20 @@ export async function createTaskAi(input: {
   db: DbClient;
   userId: string;
   taskId: string;
+  // An application's task: its sensitive-item overrides apply.
+  openingId?: string | null;
 }) {
   const cipher = await getUserCipher(input.db, input.userId);
   const profile = await new CareerRepository(input.db).findProfileByUserId(
     input.userId
   );
   const sensitiveFilter = profile
-    ? await loadSensitiveFilter({ db: input.db, cipher, profileId: profile.id })
+    ? await loadSensitiveFilter({
+        db: input.db,
+        cipher,
+        profileId: profile.id,
+        openingId: input.openingId,
+      })
     : undefined;
   const task = await new TasksRepository(input.db).findOwner(input.taskId);
   const { funding, providerPackage } = await resolveAiFunding({

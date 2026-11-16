@@ -43,9 +43,13 @@ export function AiAtWork({
         className
       )}
     >
-      <div className="flex items-center gap-2">
+      <div className="flex min-w-0 items-center gap-2">
         <Sparkles className="text-primary size-4 shrink-0 motion-safe:animate-pulse" />
-        <span className="from-foreground via-muted-foreground to-foreground motion-safe:animate-shimmer bg-linear-to-r bg-[length:200%_100%] bg-clip-text text-sm font-medium text-transparent">
+        {/* One line: a long file name is cut, and shown whole on hover. */}
+        <span
+          title={title}
+          className="from-foreground via-muted-foreground to-foreground motion-safe:animate-shimmer min-w-0 truncate bg-linear-to-r bg-[length:200%_100%] bg-clip-text text-sm font-medium text-transparent"
+        >
           {title}
         </span>
       </div>

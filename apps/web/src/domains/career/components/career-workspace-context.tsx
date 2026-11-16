@@ -2,6 +2,8 @@
 
 import { createContext, useContext, useState, type ReactNode } from "react";
 
+import type { SourceImport } from "../hooks/use-source-upload";
+
 type CareerWorkspace = {
   // A position's session under review: the chat column shows its approval
   // screen instead of the conversation.
@@ -15,6 +17,10 @@ type CareerWorkspace = {
   // The source open in the preview beside the side panel.
   previewSourceDocumentId: string | null;
   setPreviewSourceDocumentId: (sourceDocumentId: string | null) => void;
+  // Imports under way, from the side panel or the chat: the chat shows them.
+  imports: SourceImport[];
+  startImport: (started: SourceImport) => void;
+  finishImport: (runId: string) => void;
 };
 
 const CareerWorkspaceContext = createContext<CareerWorkspace | null>(null);
@@ -26,6 +32,7 @@ export function CareerWorkspaceProvider({ children }: { children: ReactNode }) {
   const [previewSourceDocumentId, setPreviewSourceDocumentId] = useState<
     string | null
   >(null);
+  const [imports, setImports] = useState<SourceImport[]>([]);
 
   return (
     <CareerWorkspaceContext
@@ -40,11 +47,21 @@ export function CareerWorkspaceProvider({ children }: { children: ReactNode }) {
         },
         previewSourceDocumentId,
         setPreviewSourceDocumentId,
+        imports,
+        startImport: (started) =>
+          setImports((current) => [...current, started]),
+        finishImport: (runId) =>
+          setImports((current) => current.filter((run) => run.runId !== runId)),
       }}
     >
       {children}
     </CareerWorkspaceContext>
   );
+}
+
+/** The workspace when inside My career; null on other pages. */
+export function useOptionalCareerWorkspace() {
+  return useContext(CareerWorkspaceContext);
 }
 
 export function useCareerWorkspace() {

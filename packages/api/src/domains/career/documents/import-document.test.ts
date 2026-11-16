@@ -19,6 +19,11 @@ import { getUserCipher } from "@repo/api/domains/encryption/user-cipher";
 import { InterviewService } from "@repo/api/domains/interview/interview-service";
 import { TasksService } from "@repo/api/domains/tasks/tasks-service";
 import { createTestUser } from "@repo/api/test/create-test-user";
+import { CareerChatService } from "@repo/api/domains/career-chat/career-chat-service";
+import {
+  markImportReactionsSaid,
+  pendingImportReactions,
+} from "@repo/api/domains/career-chat/import-reactions";
 import { fakeProviderPackage } from "@repo/api/test/fake-provider-package";
 import {
   clearTestDatabase,
@@ -105,6 +110,7 @@ async function setup() {
               language: fileLanguage,
             }
           : extraction,
+      text: () => "Your resume brought one position at Acme.",
     });
     const cipher = await getUserCipher(db, user.id);
     await runImportDocument({
@@ -466,6 +472,32 @@ describe("career language", () => {
     );
 
     expect((await ctx.timeline()).profile.interviewLanguage).toBe("en-US");
+  });
+});
+
+describe("import reaction", () => {
+  it("leaves the chat a word on the import, said once", async () => {
+    const ctx = await setup();
+    const fake = await ctx.importFile(resumeA, {
+      positions: [acmeA],
+      credentials: [],
+      exclusions: [],
+    });
+
+    // Written from the timeline the import left.
+    const request = fake.generateText.mock.calls.at(-1)![0];
+    expect(request.system).toContain("at Acme Corp");
+    expect(request.system).toContain("File: resume.md");
+    expect((await ctx.timeline()).documents[0]?.reactionPending).toBe(true);
+
+    const { chatId } = await new CareerChatService(ctx.db).current(ctx.user.id);
+    const pending = await pendingImportReactions(ctx.db, chatId);
+    expect(pending?.text).toBe("Your resume brought one position at Acme.");
+    // Unsaid until the chat said it; then never again.
+    expect(await pendingImportReactions(ctx.db, chatId)).not.toBeNull();
+    await markImportReactionsSaid(ctx.db, pending!.sourceDocumentIds);
+    expect(await pendingImportReactions(ctx.db, chatId)).toBeNull();
+    expect((await ctx.timeline()).documents[0]?.reactionPending).toBe(false);
   });
 });
 

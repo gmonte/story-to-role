@@ -96,6 +96,8 @@ export const sourceDocumentViewSchema = z.object({
   status: sourceDocumentStatusSchema,
   rejectionReason: z.string().nullable(),
   createdAt: z.date(),
+  // The career chat has something to say about this import, not said yet.
+  reactionPending: z.boolean(),
 });
 
 /** Read-only: a PDF is shown as page images, anything else as plain text. */

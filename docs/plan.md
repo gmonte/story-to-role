@@ -185,7 +185,8 @@ Acceptance:
 
 - One shared "AI at work" component: live, specific narration of each step ("Found 6 positions", "Extracting achievements at Initech…"), results appearing as they are found, and motion. No static "Reading…" label.
 - Used by import (prominent in the center, saying the user can leave), fit check, company research, generation and adaptation. Tasks report meaningful steps.
-- Built: steps and counts for import, fit check, research and resume generation (keys and numbers only in Realtime metadata, worded by the interface); the shared component for every other AI wait. Later: results appearing one by one (position names, requirements) read from the database while the task runs, the import card in the chat column, and steps for adaptation and the cover letter.
+- Built: steps and counts for import, fit check, research and resume generation (keys and numbers only in Realtime metadata, worded by the interface); the shared component for every other AI wait. Later: results appearing one by one (position names, requirements) read from the database while the task runs and steps for adaptation and the cover letter.
+- The career chat takes files too (attach button, or dropped on the conversation), shows each import's card while it runs, and reacts when it ends: the import writes the reaction (what the file brought, the one disagreement worth asking about, where to start), inside its own task and cost, and the chat says it through a chat action at no extra cost, once (marked said when its turn completes), with the "approve imported positions" shortcut under it instead of at the top of the timeline.
 
 ### W5: Career language
 

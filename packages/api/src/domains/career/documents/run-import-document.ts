@@ -9,6 +9,7 @@ import { InterviewRepository } from "@repo/api/domains/interview/interview-repos
 import { findQuote } from "@repo/api/domains/interview/quotes/verify-quote";
 import { createNarrator } from "@repo/api/domains/tasks/narrate";
 import type { TaskProgress } from "@repo/api/domains/tasks/schemas/task";
+import { logger } from "@repo/common/tools/logger";
 import type { DbClient } from "@repo/api/tools/db-client";
 import type { Storage } from "@repo/api/tools/storage/storage";
 
@@ -22,6 +23,7 @@ import {
 } from "../schemas/career";
 import { isSamePosition } from "../timeline/merge-imported-positions";
 import { isAcceptedDocumentType } from "./document-limits";
+import { writeImportReaction } from "./write-import-reaction";
 import { extractDocumentText } from "./extract-text";
 
 const contentCheckSchema = z.object({
@@ -368,4 +370,22 @@ export async function runImportDocument(
       encryptedText: deps.cipher.encrypt(text),
     });
   });
+
+  // The chat's word on it: the import is done whatever happens here.
+  try {
+    await writeImportReaction({
+      db: deps.db,
+      ai: deps.ai,
+      cipher: deps.cipher,
+      userId: deps.userId,
+      sourceDocumentId: document.id,
+      fileName: deps.cipher.decrypt(document.encryptedFileName),
+      language,
+      found,
+    });
+  } catch (error) {
+    logger.warn(["career"], "The import reaction couldn't be written", {
+      error,
+    });
+  }
 }

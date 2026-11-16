@@ -72,6 +72,16 @@ export function lastText(messages: ModelMessage[], role: "user" | "assistant") {
  * bound to the exact conversation it was written in, and the orchestrator's
  * prompt (the timeline) and window change from one turn to the next.
  */
+/**
+ * The window may open on the chat's own words (an import reaction, a cut
+ * history); the provider wants a user message first, so one stands in.
+ */
+export function startingWithUser(messages: ModelMessage[]): ModelMessage[] {
+  return messages[0]?.role === "user"
+    ? messages
+    : [{ role: "user", content: "(Earlier in this chat.)" }, ...messages];
+}
+
 export function withoutReasoning(messages: ModelMessage[]): ModelMessage[] {
   return messages.map((message) =>
     message.role === "assistant" && Array.isArray(message.content)
@@ -308,8 +318,10 @@ async function orchestrate(
       model: (deps.model ?? languageModel)(modelId),
       // The user's sensitivity choices apply to the timeline it sees.
       system: sensitiveFilter ? sensitiveFilter.apply(system) : system,
-      messages: withoutReasoning(
-        input.messages.slice(-careerChatSettings.historyWindow)
+      messages: startingWithUser(
+        withoutReasoning(
+          input.messages.slice(-careerChatSettings.historyWindow)
+        )
       ),
       tools: { consult_interviewer: consult },
       stopWhen: stepCountIs(careerChatSettings.maxSteps),

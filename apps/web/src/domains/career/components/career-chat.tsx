@@ -4,9 +4,12 @@ import { useEffect, useRef, useState, type FormEvent } from "react";
 
 import { useChat } from "@ai-sdk/react";
 import { useQuery } from "@tanstack/react-query";
-import { useTriggerChatTransport } from "@trigger.dev/sdk/chat/react";
+import {
+  useChatActions,
+  useTriggerChatTransport,
+} from "@trigger.dev/sdk/chat/react";
 import type { UIMessage } from "ai";
-import { ArrowUp, FileUp, Plus, Sparkles } from "lucide-react";
+import { ArrowUp, FileUp, Paperclip, Plus, Sparkles } from "lucide-react";
 
 import { careerAgentLabel } from "@repo/api/domains/career-chat/career-agent-label";
 import type { careerChatAgent } from "@repo/api/domains/career-chat/tasks/career-chat-agent";
@@ -22,8 +25,11 @@ import {
   mintCareerChatToken,
   startCareerChatSession,
 } from "../actions/career-chat-actions";
-import { useRefreshCareer } from "../hooks/use-career-queries";
+import { useRefreshCareer, useTimeline } from "../hooks/use-career-queries";
+import { sourceAccept, useSourceUpload } from "../hooks/use-source-upload";
+import { ApproveImportedButton } from "./approve-imported-button";
 import { useCareerWorkspace } from "./career-workspace-context";
+import { ImportProgress } from "./import-progress";
 import { PositionFormDialog } from "./position-form-dialog";
 import { VoiceInputButton } from "./voice-input-button";
 
@@ -73,9 +79,17 @@ function Conversation({
 }) {
   const t = useTranslation();
   const refresh = useRefreshCareer();
-  const { draft, setDraft } = useCareerWorkspace();
+  const timeline = useTimeline();
+  const { draft, setDraft, imports, startImport, finishImport } =
+    useCareerWorkspace();
   const [working, setWorking] = useState<string[]>([]);
+  const [dragging, setDragging] = useState(false);
   const bottom = useRef<HTMLDivElement>(null);
+  const fileInput = useRef<HTMLInputElement>(null);
+  const documents = timeline.data?.documents ?? [];
+  const positions = timeline.data?.positions ?? [];
+  // Files go to the same Sources as the side panel's.
+  const { add } = useSourceUpload({ documents, onStarted: startImport });
 
   const transport = useTriggerChatTransport<typeof careerChatAgent>({
     task: "career_chat",
@@ -84,7 +98,7 @@ function Conversation({
     // A session under way: reconnect to it instead of starting one.
     sessions: session ? { [chatId]: session } : undefined,
   });
-  const { messages, sendMessage, status, error } = useChat({
+  const { messages, sendMessage, setMessages, status, error } = useChat({
     id: chatId,
     messages: initialMessages,
     transport,
@@ -101,10 +115,38 @@ function Conversation({
     },
   });
   const busy = status === "submitted" || status === "streaming";
+  const { sendAction } = useChatActions({ sendMessage });
+
+  // An import ended (here or while the page was away): the chat says what
+  // it found. The reaction was written by the import; saying it is free.
+  const reactionPending = documents.some(
+    (document) => document.reactionPending
+  );
+  const asking = useRef(false);
+  useEffect(() => {
+    if (!reactionPending || busy || asking.current) return;
+    asking.current = true;
+    // The answer to a request without a message continues the last
+    // assistant message: an empty one takes it, so earlier ones stay. The
+    // stored transcript then replaces the local one.
+    setMessages((current) => [
+      ...current,
+      { id: `reaction-${Date.now()}`, role: "assistant", parts: [] },
+    ]);
+    void sendAction({ type: "say_import_reactions" })
+      .then(async () => setMessages((await loadCareerChat()).messages))
+      .finally(() => {
+        asking.current = false;
+        void refresh();
+      });
+  }, [reactionPending, busy, sendAction, setMessages, refresh]);
+  const lastReview = messages.findLastIndex((message) =>
+    message.parts.some((part) => part.type === "data-import-review")
+  );
 
   useEffect(() => {
     bottom.current?.scrollIntoView({ block: "end" });
-  }, [messages, working]);
+  }, [messages, working, imports]);
 
   function send(text: string) {
     if (!text.trim() || busy) return;
@@ -118,11 +160,44 @@ function Conversation({
   }
 
   return (
-    <div className="flex h-full flex-col">
+    <div
+      className={cn(
+        "flex h-full flex-col transition-colors",
+        dragging && "bg-primary/5"
+      )}
+      // Files dropped anywhere on the conversation are imported.
+      onDragOver={(event) => {
+        if (!event.dataTransfer.types.includes("Files")) return;
+        event.preventDefault();
+        setDragging(true);
+      }}
+      onDragLeave={(event) => {
+        if (!event.currentTarget.contains(event.relatedTarget as Node | null))
+          setDragging(false);
+      }}
+      onDrop={(event) => {
+        event.preventDefault();
+        setDragging(false);
+        add(Array.from(event.dataTransfer.files));
+      }}
+    >
+      <input
+        ref={fileInput}
+        type="file"
+        accept={sourceAccept}
+        multiple
+        hidden
+        onChange={(event) => {
+          add(Array.from(event.target.files ?? []));
+          event.target.value = "";
+        }}
+      />
       <div className="flex-1 overflow-y-auto">
         <ol className="mx-auto flex w-full max-w-3xl flex-col gap-4 p-6">
-          {messages.length === 0 && <Introduction />}
-          {messages.map((message) => {
+          {messages.length === 0 && (
+            <Introduction onUpload={() => fileInput.current?.click()} />
+          )}
+          {messages.map((message, index) => {
             const text = message.parts
               .flatMap((part) => (part.type === "text" ? [part.text] : []))
               .join("");
@@ -136,9 +211,26 @@ function Conversation({
                 )}
               >
                 {text}
+                {/* The import's shortcut, offered where the chat raised it. */}
+                {index === lastReview && (
+                  <div className="mt-3 whitespace-normal">
+                    <ApproveImportedButton positions={positions} />
+                  </div>
+                )}
               </li>
             );
           })}
+          {imports.map((run) => (
+            <li key={run.runId} className="w-full max-w-md self-start">
+              <ImportProgress
+                {...run}
+                onDone={() => {
+                  finishImport(run.runId);
+                  void refresh();
+                }}
+              />
+            </li>
+          ))}
           {busy && <AiAtWork working={working} />}
           {error && (
             // The agent's own message is English-only; this one is the
@@ -183,9 +275,24 @@ function Conversation({
             placeholder={t.formatMessage({
               defaultMessage: "Tell what you did, or ask where to start",
             })}
-            className="resize-none border-0 pr-24 shadow-none focus-visible:ring-0"
+            className="resize-none border-0 pr-32 shadow-none focus-visible:ring-0"
           />
           <div className="absolute right-2 bottom-2 flex items-center gap-1">
+            <Button
+              type="button"
+              size="icon"
+              variant="ghost"
+              className="size-8"
+              aria-label={t.formatMessage({
+                defaultMessage: "Attach a resume or a text file",
+              })}
+              title={t.formatMessage({
+                defaultMessage: "Attach a resume or a text file",
+              })}
+              onClick={() => fileInput.current?.click()}
+            >
+              <Paperclip />
+            </Button>
             <VoiceInputButton
               language={interviewLanguage}
               value={draft}
@@ -208,7 +315,7 @@ function Conversation({
 }
 
 /** The empty conversation: what the interview does and where to begin. */
-function Introduction() {
+function Introduction({ onUpload }: { onUpload: () => void }) {
   const t = useTranslation();
   return (
     <li className="mx-auto flex max-w-md flex-col items-center gap-4 py-10 text-center">
@@ -222,15 +329,11 @@ function Introduction() {
         })}
       </p>
       <div className="flex flex-wrap justify-center gap-2">
-        <Button asChild size="sm" variant="outline">
-          {/* The Sources input in the side panel. */}
-          <label htmlFor="sources-upload-input" className="cursor-pointer">
-            <FileUp />
-            {t.formatMessage({
-              defaultMessage:
-                "Upload a resume, your LinkedIn PDF or a text file",
-            })}
-          </label>
+        <Button size="sm" variant="outline" onClick={onUpload}>
+          <FileUp />
+          {t.formatMessage({
+            defaultMessage: "Upload a resume, your LinkedIn PDF or a text file",
+          })}
         </Button>
         <PositionFormDialog
           trigger={

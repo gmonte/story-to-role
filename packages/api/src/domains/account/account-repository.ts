@@ -136,6 +136,7 @@ export class AccountRepository {
         t.draftSensitiveItemsTable.sessionId,
         sessions
       ),
+      career_events: await byProfile(t.careerEventsTable),
       career_chats: careerChats,
       career_chat_messages: await below(
         t.careerChatMessagesTable,

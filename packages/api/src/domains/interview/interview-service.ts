@@ -2,6 +2,7 @@ import { TRPCError } from "@trpc/server";
 
 import { currentPlan } from "@repo/api/domains/credits/credit-plan";
 import { CareerRepository } from "@repo/api/domains/career/career-repository";
+import { recordCareerEvent } from "@repo/api/domains/career/record-career-event";
 import type { ScriptKind } from "@repo/api/domains/career/schemas/career";
 import { getUserCipher } from "@repo/api/domains/encryption/user-cipher";
 import { EvidenceRepository } from "@repo/api/domains/evidence/evidence-repository";
@@ -376,6 +377,8 @@ export class InterviewService {
     sessionId: string;
     decisions: ExtractionDecision[];
     closePosition: boolean;
+    // Off when a bulk approval records one event for all.
+    recordEvent?: boolean;
   }): Promise<{ nextSessionId: string | null }> {
     const { profile, session } = await this.requireOpenSession(
       input.userId,
@@ -531,6 +534,32 @@ export class InterviewService {
         extractionApprovedAt: approvedAt,
       });
 
+      if (input.recordEvent !== false) {
+        const target = session.positionId
+          ? await career.findPosition({
+              profileId: profile.id,
+              positionId: session.positionId,
+            })
+          : null;
+        const credential = session.credentialId
+          ? await career.findCredential({
+              profileId: profile.id,
+              credentialId: session.credentialId,
+            })
+          : null;
+        const subject = target
+          ? `${cipher.decrypt(target.encryptedTitle)} at ${cipher.decrypt(target.encryptedEmployer)}`
+          : credential
+            ? cipher.decrypt(credential.encryptedTitle)
+            : "their career";
+        await recordCareerEvent(tx, {
+          userId: input.userId,
+          profileId: profile.id,
+          kind: "facts_approved",
+          summary: `reviewed ${subject}: approved ${approved.length} of ${drafts.length} facts${input.closePosition && session.positionId ? " and marked it done" : ""}`,
+        });
+      }
+
       if (session.positionId && input.closePosition) {
         await career.updatePosition(session.positionId, {
           status: "approved",
@@ -685,13 +714,23 @@ export class InterviewService {
   }
 
   async approveImportedPositionsWithoutConflicts(userId: string) {
-    const { ready } = await this.planImportedApproval(userId);
+    const { ready, skipped } = await this.planImportedApproval(userId);
     for (const { sessionId, draftIds } of ready) {
       await this.approveExtraction({
         userId,
         sessionId,
         closePosition: true,
         decisions: draftIds.map((draftId) => ({ draftId, approved: true })),
+        recordEvent: false,
+      });
+    }
+    if (ready.length > 0) {
+      const profile = await this.requireProfile(userId);
+      await recordCareerEvent(this.db, {
+        userId,
+        profileId: profile.id,
+        kind: "imported_approved",
+        summary: `approved ${ready.length} imported positions as they were, without reviewing (${ready.reduce((sum, item) => sum + item.draftIds.length, 0)} facts); ${skipped.length} positions were left to review`,
       });
     }
     return { approved: ready.length };

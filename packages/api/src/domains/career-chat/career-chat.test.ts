@@ -6,6 +6,7 @@ import { MockLanguageModelV3 } from "ai/test";
 import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { CareerService } from "@repo/api/domains/career/career-service";
+import { recordCareerEvent } from "@repo/api/domains/career/record-career-event";
 import { EvidenceRepository } from "@repo/api/domains/evidence/evidence-repository";
 import { CareerRepository } from "@repo/api/domains/career/career-repository";
 import { getUserCipher } from "@repo/api/domains/encryption/user-cipher";
@@ -22,7 +23,13 @@ import {
 import type { MisuseGuard } from "@repo/api/tools/misuse-guard";
 
 import { CareerChatService } from "./career-chat-service";
-import { runCareerChatTurn, withoutReasoning } from "./run-career-chat-turn";
+import {
+  markCareerChangesSeen,
+  pendingCareerChanges,
+  reactToCareerChanges,
+} from "./career-changes";
+import { withoutReasoning } from "./chat-history";
+import { runCareerChatTurn } from "./run-career-chat-turn";
 
 vi.mock("@repo/common/env/web.env", () => ({
   env: {
@@ -258,6 +265,63 @@ describe("career chat", () => {
     await expect(
       career.updateSettings({ userId: ctx.user.id, interviewLanguage: "pt-BR" })
     ).rejects.toMatchObject({ code: "CONFLICT" });
+  });
+
+  it("knows what the user changed on the side panel on its next turn", async () => {
+    const ctx = await setup();
+    await new CareerService(ctx.db).mergePositions({
+      userId: ctx.user.id,
+      positionId: ctx.globex,
+      intoPositionId: ctx.acme,
+    });
+    // A merge is context only: nothing to say by itself.
+    expect(await pendingCareerChanges(ctx.db, ctx.chatId)).toBeNull();
+
+    const model = orchestrator([], "Got it.");
+    await ctx.say("Hi", model);
+    expect(JSON.stringify(model.doStreamCalls[0]?.prompt)).toContain(
+      "merged Engineer at Globex into Staff Engineer at Acme"
+    );
+
+    // Taken in once.
+    const next = orchestrator([], "Sure.");
+    await ctx.say("And now?", next);
+    expect(JSON.stringify(next.doStreamCalls[0]?.prompt)).not.toContain(
+      "merged Engineer at Globex"
+    );
+  });
+
+  it("reacts by itself to a change that moves the next step", async () => {
+    const ctx = await setup();
+    const profile = await new CareerRepository(ctx.db).findProfileByUserId(
+      ctx.user.id
+    );
+    await recordCareerEvent(ctx.db, {
+      userId: ctx.user.id,
+      profileId: profile.id,
+      kind: "facts_approved",
+      summary: "reviewed Staff Engineer at Acme: approved 5 of 6 facts",
+    });
+
+    const pending = await pendingCareerChanges(ctx.db, ctx.chatId);
+    // With what came before it (the positions added by hand).
+    expect(pending?.summaries.at(-1)).toBe(
+      "reviewed Staff Engineer at Acme: approved 5 of 6 facts"
+    );
+    const model = orchestrator([], "Nice, Acme is in. Globex next?");
+    const { result, funding } = await reactToCareerChanges(
+      { db: ctx.db, streamText, model: () => model },
+      { pending: pending!, messages: [] }
+    );
+    expect(await result.text).toBe("Nice, Acme is in. Globex next?");
+    // Not the user's credits: StoryToRole's key without one of their own.
+    expect(funding).toBe("credits");
+    expect(JSON.stringify(model.doStreamCalls[0]?.prompt)).toContain(
+      "approved 5 of 6 facts"
+    );
+
+    await markCareerChangesSeen(ctx.db, pending!.careerEventIds);
+    expect(await pendingCareerChanges(ctx.db, ctx.chatId)).toBeNull();
   });
 
   it("answers an off-topic message from code, calling no interviewer", async () => {

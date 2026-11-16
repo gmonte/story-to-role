@@ -183,6 +183,13 @@
       "when": 1794856319258,
       "tag": "0025_add_import_reaction",
       "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1794860233998,
+      "tag": "0026_add_career_events",
+      "breakpoints": true
     }
   ]
 }

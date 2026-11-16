@@ -5,6 +5,7 @@ import { usersTable } from "@repo/api/domains/users/db/users-tables";
 import { createTable } from "@repo/api/utils/db/create-table";
 
 import type {
+  CareerEventKind,
   InterviewLanguage,
   InterviewLanguageSource,
   ConflictField,
@@ -246,4 +247,32 @@ export const timelineProposalsTable = createTable(
     rejectedAt: d.timestamp({ withTimezone: true }),
   }),
   (t) => [index("timeline_proposals_profile_id_idx").on(t.profileId)]
+);
+
+/**
+ * What the user did to their career outside the chat (approved a position,
+ * merged two items, resolved a conflict…), so the career chat knows it on
+ * its next turn and, for the changes that move the next step, says
+ * something by itself. The summary names career content: encrypted.
+ */
+export const careerEventsTable = createTable(
+  "career_events",
+  (d) => ({
+    id: d.uuid().defaultRandom().primaryKey(),
+    createdAt: d
+      .timestamp({ withTimezone: true })
+      .default(sql`CURRENT_TIMESTAMP`)
+      .notNull(),
+    profileId: d
+      .uuid()
+      .notNull()
+      .references(() => careerProfilesTable.id, { onDelete: "cascade" }),
+    kind: d.text().$type<CareerEventKind>().notNull(),
+    encryptedSummary: d.text().notNull(),
+    // Worth a word from the chat by itself, not only context for the next turn.
+    reactive: d.boolean().notNull().default(false),
+    // When the chat took it in (a turn's context or its own reaction).
+    seenAt: d.timestamp({ withTimezone: true }),
+  }),
+  (t) => [index("career_events_profile_id_idx").on(t.profileId)]
 );

@@ -31,6 +31,8 @@ const describe = (target: ChatTarget) =>
 export function buildCareerChatPrompt(input: {
   language: InterviewLanguage;
   targets: ChatTarget[];
+  // What the user changed outside the chat since its last turn.
+  changes?: string[];
 }) {
   const positions = input.targets.filter((t) => t.kind === "position");
   const credentials = input.targets.filter((t) => t.kind === "credential");
@@ -51,5 +53,12 @@ export function buildCareerChatPrompt(input: {
     "",
     "Credentials:",
     credentials.length > 0 ? credentials.map(describe).join("\n") : "(none)",
+    ...(input.changes?.length
+      ? [
+          "",
+          "Since the user's last message, outside this chat they (take it into account; don't list it back):",
+          ...input.changes.map((change) => `- ${change}`),
+        ]
+      : []),
   ].join("\n");
 }

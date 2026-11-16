@@ -26,6 +26,8 @@ import type { DbClient } from "@repo/api/tools/db-client";
 import type { MisuseGuard } from "@repo/api/tools/misuse-guard";
 
 import { CareerChatRepository } from "./career-chat-repository";
+import { markCareerChangesSeen, unseenCareerChanges } from "./career-changes";
+import { lastText, startingWithUser, withoutReasoning } from "./chat-history";
 import { buildCareerChatPrompt, type ChatTarget } from "./career-chat-prompt";
 import { careerAgentLabel } from "./career-agent-label";
 import { careerChatSettings } from "./career-chat-settings";
@@ -55,43 +57,6 @@ const outOfCredits: Record<InterviewLanguage, string> = {
   "pt-BR":
     "Seus créditos para a entrevista acabaram por agora. Assine para ter créditos todo mês ou compre um pacote, e volte a esta mensagem.",
 };
-
-/** The text of the conversation's last message from `role`. */
-export function lastText(messages: ModelMessage[], role: "user" | "assistant") {
-  const last = messages.findLast((message) => message.role === role);
-  if (!last) return undefined;
-  return typeof last.content === "string"
-    ? last.content
-    : last.content
-        .flatMap((part) => (part.type === "text" ? [part.text] : []))
-        .join("\n");
-}
-
-/**
- * The history without the model's earlier reasoning: a thinking block is
- * bound to the exact conversation it was written in, and the orchestrator's
- * prompt (the timeline) and window change from one turn to the next.
- */
-/**
- * The window may open on the chat's own words (an import reaction, a cut
- * history); the provider wants a user message first, so one stands in.
- */
-export function startingWithUser(messages: ModelMessage[]): ModelMessage[] {
-  return messages[0]?.role === "user"
-    ? messages
-    : [{ role: "user", content: "(Earlier in this chat.)" }, ...messages];
-}
-
-export function withoutReasoning(messages: ModelMessage[]): ModelMessage[] {
-  return messages.map((message) =>
-    message.role === "assistant" && Array.isArray(message.content)
-      ? {
-          ...message,
-          content: message.content.filter((part) => part.type !== "reasoning"),
-        }
-      : message
-  );
-}
 
 /**
  * One message of the career chat. The chat id leads to the profile and its
@@ -312,7 +277,17 @@ async function orchestrate(
     },
   });
 
-  const system = buildCareerChatPrompt({ language, targets });
+  // What the user changed on the side panel since the chat last saw it.
+  const changes = await unseenCareerChanges(db, {
+    profileId: input.profileId,
+    userId,
+  });
+  await markCareerChangesSeen(db, changes.careerEventIds);
+  const system = buildCareerChatPrompt({
+    language,
+    targets,
+    changes: changes.summaries,
+  });
   return {
     result: deps.streamText({
       model: (deps.model ?? languageModel)(modelId),

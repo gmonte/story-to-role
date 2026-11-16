@@ -4,6 +4,7 @@ import type { DbClient } from "@repo/api/tools/db-client";
 
 import { CareerRepository } from "../career-repository";
 import { CareerService } from "../career-service";
+import { describeTimelineForPrompt } from "../describe-timeline";
 import type { InterviewLanguage } from "../schemas/career";
 
 const languageNames: Record<InterviewLanguage, string> = {
@@ -31,17 +32,7 @@ export async function writeImportReaction(deps: {
     userId: deps.userId,
     defaultLanguage: deps.language,
   });
-  const positions = timeline.positions.map((position) =>
-    [
-      `- ${position.title} at ${position.employer} (${position.startDate ?? "?"} to ${position.endDate ?? "now"}):`,
-      `${position.draftsToReview} facts to review,`,
-      `${position.depth.counts.resultsWithNumbers} approved results with numbers`,
-      ...position.conflicts.map(
-        (conflict) =>
-          `; the files disagree on ${conflict.field}: ${conflict.options.join(" or ")}`
-      ),
-    ].join(" ")
-  );
+  const positions = describeTimelineForPrompt(timeline);
 
   const { text } = await deps.ai.generateText({
     purpose: "import_reaction",

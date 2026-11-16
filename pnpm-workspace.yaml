@@ -50,6 +50,7 @@ catalogs:
 
   intl:
     "@formatjs/cli": 6.14.1
+    "@formatjs/icu-messageformat-parser": 3.5.3
     "@formatjs/intl": 4.1.5
     "@formatjs/intl-localematcher": 0.8.2
     babel-plugin-formatjs: 11.3.2

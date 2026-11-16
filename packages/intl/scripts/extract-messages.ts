@@ -40,6 +40,16 @@ function mergeExtractedMessages(locale: string) {
     }
   }
 
+  // The committed translations (translations/<locale>.json, id → text)
+  // win over whatever the git-ignored catalog held.
+  const translations = readJson(`${intlDir}/translations/${locale}.json`);
+  for (const k of Object.keys(mergedContents)) {
+    const translation = translations[k];
+    if (typeof translation === "string") {
+      mergedContents[k] = { translation };
+    }
+  }
+
   const sorted = Object.fromEntries(
     Object.entries(mergedContents).sort(([a], [b]) =>
       a < b ? -1 : a > b ? 1 : 0

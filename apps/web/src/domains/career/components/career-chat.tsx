@@ -9,7 +9,14 @@ import {
   useTriggerChatTransport,
 } from "@trigger.dev/sdk/chat/react";
 import type { UIMessage } from "ai";
-import { ArrowUp, FileUp, Paperclip, Plus, Sparkles } from "lucide-react";
+import {
+  ArrowUp,
+  FileUp,
+  Paperclip,
+  Plus,
+  Sparkles,
+  Square,
+} from "lucide-react";
 
 import { careerAgentLabel } from "@repo/api/domains/career-chat/career-agent-label";
 import type { careerChatAgent } from "@repo/api/domains/career-chat/tasks/career-chat-agent";
@@ -98,7 +105,7 @@ function Conversation({
     // A session under way: reconnect to it instead of starting one.
     sessions: session ? { [chatId]: session } : undefined,
   });
-  const { messages, sendMessage, setMessages, status, error } = useChat({
+  const { messages, sendMessage, setMessages, status, error, stop } = useChat({
     id: chatId,
     messages: initialMessages,
     transport,
@@ -155,6 +162,14 @@ function Conversation({
   const lastReview = messages.findLastIndex((message) =>
     message.parts.some((part) => part.type === "data-import-review")
   );
+
+  // An answer that never starts (its run waiting for a worker, say) gives
+  // up after a minute instead of thinking forever.
+  useEffect(() => {
+    if (status !== "submitted") return;
+    const timer = setTimeout(() => void stop(), 60_000);
+    return () => clearTimeout(timer);
+  }, [status, stop]);
 
   useEffect(() => {
     bottom.current?.scrollIntoView({ block: "end" });
@@ -243,7 +258,13 @@ function Conversation({
               />
             </li>
           ))}
-          {busy && <AiAtWork working={working} />}
+          {busy && (
+            <AiAtWork
+              working={working}
+              // Catching up rather than answering: its message opened empty.
+              catchingUp={!!messages.at(-1)?.id.startsWith("catch-up-")}
+            />
+          )}
           {error && (
             // The agent's own message is English-only; this one is the
             // user's language.
@@ -310,15 +331,29 @@ function Conversation({
               value={draft}
               onValueChange={setDraft}
             />
-            <Button
-              type="submit"
-              size="icon"
-              disabled={!draft.trim() || busy}
-              className="size-8 rounded-full"
-              aria-label={t.formatMessage({ defaultMessage: "Send" })}
-            >
-              <ArrowUp />
-            </Button>
+            {busy ? (
+              // Stops the answer being written; what was said so far stays.
+              <Button
+                type="button"
+                size="icon"
+                className="size-8 rounded-full"
+                aria-label={t.formatMessage({ defaultMessage: "Stop" })}
+                title={t.formatMessage({ defaultMessage: "Stop" })}
+                onClick={() => void stop()}
+              >
+                <Square className="size-3 fill-current" />
+              </Button>
+            ) : (
+              <Button
+                type="submit"
+                size="icon"
+                disabled={!draft.trim()}
+                className="size-8 rounded-full"
+                aria-label={t.formatMessage({ defaultMessage: "Send" })}
+              >
+                <ArrowUp />
+              </Button>
+            )}
           </div>
         </div>
       </form>
@@ -361,7 +396,13 @@ function Introduction({ onUpload }: { onUpload: () => void }) {
 }
 
 /** The AI at work: which interviewers are on it, live, never a still label. */
-function AiAtWork({ working }: { working: string[] }) {
+function AiAtWork({
+  working,
+  catchingUp,
+}: {
+  working: string[];
+  catchingUp: boolean;
+}) {
   const t = useTranslation();
   return (
     <li className="text-muted-foreground flex items-center gap-2 self-start px-4 text-sm">
@@ -384,7 +425,11 @@ function AiAtWork({ working }: { working: string[] }) {
                   .join(", "),
               }
             )
-          : t.formatMessage({ defaultMessage: "Thinking…" })}
+          : catchingUp
+            ? t.formatMessage({
+                defaultMessage: "Reading what changed in your career…",
+              })
+            : t.formatMessage({ defaultMessage: "Thinking…" })}
       </span>
     </li>
   );

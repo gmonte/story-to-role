@@ -142,7 +142,7 @@ export const careerChatAgent = chat.agent({
     if (turn) openTurns.set(chatId, turn);
     return result;
   },
-  onTurnComplete: async ({ chatId, usage, error, finishReason }) => {
+  onTurnComplete: async ({ chatId, usage, error, finishReason, stopped }) => {
     // What the chat caught up on counts as said once its turn completed
     // cleanly; otherwise it waits for the next ask.
     const catchUp = catchUps.get(chatId);
@@ -150,7 +150,8 @@ export const careerChatAgent = chat.agent({
       catchUps.delete(chatId);
       // Only an answer that finished: a provider error may end the stream
       // with no error raised.
-      const clean = error === undefined && finishReason === "stop";
+      // Stopped by the user counts too: they don't want it said again.
+      const clean = error === undefined && (finishReason === "stop" || stopped);
       if (catchUp.kind === "import" && clean) {
         await markImportReactionsSaid(db, catchUp.sourceDocumentIds);
       }

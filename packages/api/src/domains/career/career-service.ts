@@ -1,6 +1,7 @@
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 
+import { InstructionsRepository } from "@repo/api/domains/applications/instructions-repository";
 import type { DbClient } from "@repo/api/tools/db-client";
 import {
   getUserCipher,
@@ -617,6 +618,47 @@ export class CareerService {
         ...this.sealCredential(cipher, input.credential),
         approvedAt: row.approvedAt ?? new Date(),
       });
+    });
+  }
+
+  /**
+   * Folds a duplicate credential into another (the same degree imported in
+   * two languages, say): its evidence, stories, sessions and source files go
+   * to the one kept, whose own details and approval stay.
+   */
+  async mergeCredentials(input: {
+    userId: string;
+    credentialId: string;
+    intoCredentialId: string;
+  }) {
+    if (input.credentialId === input.intoCredentialId) {
+      throw new TRPCError({ code: "BAD_REQUEST" });
+    }
+    const profile = await this.requireProfile(input.userId);
+    await this.db.transaction(async (tx) => {
+      const career = new CareerRepository(tx);
+      const [from, into] = await Promise.all([
+        career.findCredential({
+          profileId: profile.id,
+          credentialId: input.credentialId,
+        }),
+        career.findCredential({
+          profileId: profile.id,
+          credentialId: input.intoCredentialId,
+        }),
+      ]);
+      if (!from || !into) throw notFound();
+
+      const move = { fromCredentialId: from.id, toCredentialId: into.id };
+      await new EvidenceRepository(tx).moveCredentialContent(move);
+      await new InterviewRepository(tx).moveCredentialSessions(move);
+      await new InstructionsRepository(tx).moveCredentialPoints(move);
+      await career.updateCredential(into.id, {
+        sourceDocumentIds: [
+          ...new Set([...into.sourceDocumentIds, ...from.sourceDocumentIds]),
+        ],
+      });
+      await career.deleteCredential(from.id);
     });
   }
 

@@ -99,6 +99,16 @@ export class InterviewRepository {
       .where(eq(interviewSessionsTable.positionId, input.fromPositionId));
   }
 
+  async moveCredentialSessions(input: {
+    fromCredentialId: string;
+    toCredentialId: string;
+  }) {
+    await this.tx
+      .update(interviewSessionsTable)
+      .set({ credentialId: input.toCredentialId })
+      .where(eq(interviewSessionsTable.credentialId, input.fromCredentialId));
+  }
+
   /** Only ever called with an open session: closed turns never reach a prompt. */
   listTurns(sessionId: string) {
     return this.tx

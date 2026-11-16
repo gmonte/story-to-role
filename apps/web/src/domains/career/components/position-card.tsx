@@ -247,7 +247,8 @@ export function PositionCard({
                 key={option}
                 size="sm"
                 variant="outline"
-                className="h-7"
+                // A long title wraps inside the card instead of overflowing.
+                className="h-auto min-h-7 max-w-full py-1 text-left whitespace-normal"
                 onClick={() =>
                   resolve.mutate({
                     positionConflictId: conflict.id,

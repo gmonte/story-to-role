@@ -292,6 +292,25 @@ export const careerRouter = createTRPCRouter({
       return ok;
     }),
 
+  mergeCredentials: userProcedure
+    .meta(
+      openApiMeta(
+        "career",
+        "POST",
+        "/credentials/by-id/{credentialId}/merge",
+        "Merges a credential into another"
+      )
+    )
+    .input(z.object({ credentialId: z.uuid(), intoCredentialId: z.uuid() }))
+    .output(okSchema)
+    .mutation(async ({ ctx, input }) => {
+      await new CareerService(db).mergeCredentials({
+        userId: ctx.userId,
+        ...input,
+      });
+      return ok;
+    }),
+
   approveCredential: userProcedure
     .meta(
       openApiMeta(

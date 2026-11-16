@@ -194,4 +194,66 @@ describe("career timeline", () => {
       ctx.career.removePosition({ userId: grace.id, positionId })
     ).rejects.toMatchObject({ code: "NOT_FOUND" });
   });
+
+  it("merges a credential imported twice into the one kept", async () => {
+    const ctx = await setup();
+    const { credentialId: kept } = await ctx.career.addCredential({
+      userId: ctx.user.id,
+      credential: {
+        kind: "education",
+        title: "Bacharelado em Sistemas de Informação",
+        institution: "UFS",
+        status: "completed",
+      },
+    });
+    const { credentialId: duplicate } = await ctx.career.addCredential({
+      userId: ctx.user.id,
+      credential: {
+        kind: "education",
+        title: "Information Systems · Bachelor",
+        institution: "UFS",
+        status: "completed",
+      },
+    });
+    const cipher = await getUserCipher(ctx.db, ctx.user.id);
+    await ctx.db.insert(evidenceTable).values({
+      profileId: ctx.profile.id,
+      credentialId: duplicate,
+      kind: "achievement",
+      encryptedText: cipher.encrypt("Graduated with honors"),
+      encryptedSourceQuote: cipher.encrypt("with honors"),
+      language: "en-US",
+      approvedAt: new Date(),
+    });
+
+    await expect(
+      ctx.career.mergeCredentials({
+        userId: ctx.user.id,
+        credentialId: kept,
+        intoCredentialId: kept,
+      })
+    ).rejects.toMatchObject({ code: "BAD_REQUEST" });
+    const stranger = await createTestUser("eve@example.com");
+    await expect(
+      ctx.career.mergeCredentials({
+        userId: stranger.id,
+        credentialId: duplicate,
+        intoCredentialId: kept,
+      })
+    ).rejects.toMatchObject({ code: "NOT_FOUND" });
+
+    await ctx.career.mergeCredentials({
+      userId: ctx.user.id,
+      credentialId: duplicate,
+      intoCredentialId: kept,
+    });
+
+    const { credentials } = await ctx.timeline();
+    expect(credentials.map((c) => [c.id, c.title])).toEqual([
+      [kept, "Bacharelado em Sistemas de Informação"],
+    ]);
+    // Its evidence came along.
+    const rows = await ctx.db.select().from(evidenceTable);
+    expect(rows.map((row) => row.credentialId)).toEqual([kept]);
+  });
 });

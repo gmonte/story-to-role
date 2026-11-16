@@ -308,13 +308,22 @@ describe("career chat", () => {
     const model = orchestrator([], "Nice, Acme is in. Globex next?");
     const { result, funding } = await reactToCareerChanges(
       { db: ctx.db, streamText, model: () => model },
-      { pending: pending!, messages: [] }
+      {
+        pending: pending!,
+        messages: [
+          { role: "user", content: "Eu trabalhei na Acme por três anos" },
+        ],
+      }
     );
     expect(await result.text).toBe("Nice, Acme is in. Globex next?");
     // Not the user's credits: StoryToRole's key without one of their own.
     expect(funding).toBe("credits");
     expect(JSON.stringify(model.doStreamCalls[0]?.prompt)).toContain(
       "approved 5 of 6 facts"
+    );
+    // In the language the user writes in, not our stand-in message's.
+    expect(JSON.stringify(model.doStreamCalls[0]?.prompt)).toContain(
+      "Write in Brazilian Portuguese"
     );
 
     await markCareerChangesSeen(ctx.db, pending!.careerEventIds);

@@ -13,13 +13,14 @@ import { CareerEventsRepository } from "@repo/api/domains/career/career-events-r
 import { CareerRepository } from "@repo/api/domains/career/career-repository";
 import { CareerService } from "@repo/api/domains/career/career-service";
 import { describeTimelineForPrompt } from "@repo/api/domains/career/describe-timeline";
+import { detectLanguage } from "@repo/api/domains/career/detect-language";
 import { currentPlan } from "@repo/api/domains/credits/credit-plan";
 import { getUserCipher } from "@repo/api/domains/encryption/user-cipher";
 import { loadSensitiveFilter } from "@repo/api/domains/evidence/sensitive/load-sensitive-filter";
 import type { DbClient } from "@repo/api/tools/db-client";
 
 import { CareerChatRepository } from "./career-chat-repository";
-import { startingWithUser, withoutReasoning } from "./chat-history";
+import { lastText, startingWithUser, withoutReasoning } from "./chat-history";
 
 const languageNames = { "en-US": "English", "pt-BR": "Brazilian Portuguese" };
 
@@ -109,12 +110,16 @@ export async function reactToCareerChanges(
     defaultLanguage: pending.language,
   });
 
+  // The language the user writes in, else the career's: never the stand-in
+  // message below, which is ours.
+  const replyLanguage =
+    detectLanguage(lastText(input.messages, "user") ?? "") ?? pending.language;
   const system = [
     "You are StoryToRole's career interviewer, in the chat where the user tells their career. Outside this chat, on the side panel, the user just changed their career:",
     ...pending.summaries.map((summary) => `- ${summary}`),
     "",
     'In 1 to 3 short sentences, talking to the user ("you"), react to it as someone following along: acknowledge what they did, say what it changes for their story when it matters (a position still thin on numbers, conflicts left, what is now ready), and suggest one next step. Do not repeat the list back; do not congratulate at length.',
-    `Write in the language of the user's latest message (${languageNames[pending.language]} when none), in plain text without Markdown. Use only what is here; add nothing.`,
+    `Write in ${languageNames[replyLanguage]}, in plain text without Markdown. Use only what is here; add nothing.`,
     "",
     "The career timeline now:",
     ...describeTimelineForPrompt(timeline),

@@ -317,10 +317,16 @@ export class InterviewService {
    * whether it still covers exactly the pending drafts.
    */
   async understanding(input: { userId: string; sessionId: string }) {
-    const { session } = await this.requireOpenSession(
-      input.userId,
-      input.sessionId
-    );
+    const profile = await this.requireProfile(input.userId);
+    const session = await new InterviewRepository(this.db).findSession({
+      profileId: profile.id,
+      sessionId: input.sessionId,
+    });
+    if (!session) throw notFound();
+    // Approved a moment ago (the page may still ask): nothing left to sum up.
+    if (session.status !== "open") {
+      return { text: null, pendingDrafts: 0, current: true };
+    }
     const pending = await this.pendingDrafts(session.id);
     const cipher = await getUserCipher(this.db, input.userId);
     return {

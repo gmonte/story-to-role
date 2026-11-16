@@ -25,7 +25,8 @@ export function TimelinePanel() {
   const t = useTranslation();
   const timeline = useTimeline();
 
-  if (!timeline.data) return null;
+  // Nothing to import or review before the privacy notice is acknowledged.
+  if (!timeline.data?.profile.privacyNoticeAccepted) return null;
   const { positions, removedPositions } = timeline.data;
   const bilingual = timeline.data.evidenceLanguages.length > 1;
   const canApproveImported = positions.some(
@@ -37,6 +38,7 @@ export function TimelinePanel() {
 
   return (
     <div className="flex flex-col gap-6">
+      <ImportDocuments documents={timeline.data.documents} />
       <ProposalCards
         proposals={timeline.data.proposals}
         positions={positions}
@@ -101,7 +103,6 @@ export function TimelinePanel() {
         )}
       </section>
 
-      <ImportDocuments documents={timeline.data.documents} />
       <SensitiveReview />
       <CredentialsSection credentials={timeline.data.credentials} />
       <NarrativeCard

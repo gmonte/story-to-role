@@ -39,15 +39,18 @@ export class DocumentsService {
     ) {
       throw new TRPCError({ code: "BAD_REQUEST" });
     }
-    await this.tasks.assertAffordable({
-      userId: input.userId,
-      type: "import_document",
-    });
-
     const profile = await new CareerRepository(this.db).findProfileByUserId(
       input.userId
     );
     if (!profile) throw new TRPCError({ code: "NOT_FOUND" });
+    // Career data arrives only after the privacy notice was shown.
+    if (!profile.privacyNoticeAcceptedAt) {
+      throw new TRPCError({ code: "PRECONDITION_FAILED" });
+    }
+    await this.tasks.assertAffordable({
+      userId: input.userId,
+      type: "import_document",
+    });
 
     const document = await this.db.transaction(async (tx) => {
       const cipher = await getUserCipher(tx, input.userId);

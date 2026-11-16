@@ -52,7 +52,27 @@ export async function POST(request: NextRequest) {
       bytes: Buffer.from(await form.data.file.arrayBuffer()),
     });
     return Response.json(result);
-  } catch {
-    return new Response(null, { status: 400 });
+  } catch (error) {
+    // Matched by code: the error class may come from another copy of tRPC.
+    const { code, cause } = error as {
+      code?: string;
+      cause?: { needed?: number; available?: number; stored?: number };
+    };
+    if (code === "PAYMENT_REQUIRED") {
+      // The same shortfall tRPC errors carry, for the out-of-credits notice.
+      return Response.json(
+        {
+          credits: cause && {
+            needed: cause.needed,
+            available: cause.available,
+            stored: cause.stored,
+          },
+        },
+        { status: 402 }
+      );
+    }
+    return new Response(null, {
+      status: code === "PRECONDITION_FAILED" ? 412 : 400,
+    });
   }
 }

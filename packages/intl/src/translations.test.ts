@@ -34,6 +34,23 @@ function placeholders(text: string) {
   return [...names].sort();
 }
 
+/** Whether every plural in the message has its own `=0` branch. */
+function pluralsHandleZero(text: string) {
+  const walk = (elements: MessageFormatElement[]): boolean =>
+    elements.every((element) => {
+      if (element.type === TYPE.plural && !("=0" in element.options)) {
+        return false;
+      }
+      if (element.type === TYPE.plural || element.type === TYPE.select) {
+        return Object.values(element.options).every((option) =>
+          walk(option.value)
+        );
+      }
+      return element.type === TYPE.tag ? walk(element.children) : true;
+    });
+  return walk(parse(text));
+}
+
 describe("pt-BR translations", () => {
   // Built by `intl:extract` from the code (postinstall runs it).
   const english = read("extracted/en-US.json") as Record<
@@ -59,6 +76,14 @@ describe("pt-BR translations", () => {
       )
       .map(([id]) => id);
     expect(broken).toEqual([]);
+  });
+
+  // Portuguese's `one` category covers zero: without `=0`, 0 reads "0 fato".
+  it("give every plural a zero case", () => {
+    const singularZero = Object.entries(portuguese)
+      .filter(([, text]) => !pluralsHandleZero(text))
+      .map(([id]) => id);
+    expect(singularZero).toEqual([]);
   });
 
   it("use typographic quotes, never straight double quotes", () => {

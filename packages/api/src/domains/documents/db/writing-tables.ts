@@ -4,6 +4,7 @@ import { unique } from "drizzle-orm/pg-core";
 import { careerProfilesTable } from "@repo/api/domains/career/db/career-tables";
 import { createTable } from "@repo/api/utils/db/create-table";
 
+import type { GenerationSettings } from "../schemas/generation-settings";
 import type { TemplateSection } from "../schemas/template";
 
 /**
@@ -27,6 +28,9 @@ export const resumeTemplatesTable = createTable(
     sections: d.jsonb().$type<TemplateSection[]>().notNull(),
     // JSON of the resume header (name, contacts, city), encrypted.
     encryptedHeader: d.text(),
+    // The user's generation settings (resume spec, "Generation settings");
+    // null until they change a default.
+    generationSettings: d.jsonb().$type<GenerationSettings>(),
   }),
   (t) => [unique("resume_templates_profile_id_unique").on(t.profileId)]
 );

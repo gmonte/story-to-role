@@ -1,44 +1,42 @@
-import { eq } from "drizzle-orm";
-
-import { applicationOverridesTable } from "@repo/api/domains/applications/db/instructions-tables";
+import { CareerRepository } from "@repo/api/domains/career/career-repository";
 import type { UserCipher } from "@repo/api/domains/encryption/user-cipher";
+import { loadPublishedProfile } from "@repo/api/domains/profile/load-published-profile";
 import type { DbClient } from "@repo/api/tools/db-client";
 
-import { EvidenceRepository } from "../evidence-repository";
 import { createSensitiveFilter } from "./sensitive-filter";
 
+/** The filter of a profile's communication rules: what must never appear. */
+export function communicationRulesFilter(rules: { neverInclude: string[] }) {
+  return createSensitiveFilter(
+    rules.neverInclude.map((original) => ({ original, choice: "exclude" }))
+  );
+}
+
 /**
- * The user's sensitivity choices as a filter, decrypted in memory. For an
- * opening's application, its overrides replace the general choice of the
- * items they name (guided interview spec, "Per-application overrides").
+ * What the user's published profile says must never appear in what is
+ * generated (its communication rules' "never include" list), as a filter
+ * applied by code: taken out of what enters a prompt, and an output still
+ * carrying one of those terms is rejected. A given version's rules for a
+ * document that froze it; nothing to filter until a profile is published.
  */
 export async function loadSensitiveFilter(input: {
   db: DbClient;
   cipher: UserCipher;
   profileId: string;
-  openingId?: string | null;
+  profileVersionId?: string | null;
 }) {
-  const items = await new EvidenceRepository(input.db).listSensitiveItems(
+  const career = await new CareerRepository(input.db).findProfileById(
     input.profileId
   );
-  const overrides = input.openingId
-    ? await input.db
-        .select()
-        .from(applicationOverridesTable)
-        .where(eq(applicationOverridesTable.openingId, input.openingId))
-    : [];
-  const open = (value: string | null) =>
-    value ? input.cipher.decrypt(value) : null;
-  return createSensitiveFilter(
-    items.map((item) => {
-      const override = overrides.find((row) => row.sensitiveItemId === item.id);
-      return {
-        original: input.cipher.decrypt(item.encryptedOriginal),
-        choice: override?.choice ?? item.choice,
-        generalized:
-          open(override?.encryptedGeneralized ?? null) ??
-          open(item.encryptedGeneralized),
-      };
-    })
+  const published = career
+    ? await loadPublishedProfile({
+        db: input.db,
+        cipher: input.cipher,
+        userId: career.userId,
+        profileVersionId: input.profileVersionId ?? undefined,
+      })
+    : null;
+  return communicationRulesFilter(
+    published?.extract.rules ?? { neverInclude: [] }
   );
 }

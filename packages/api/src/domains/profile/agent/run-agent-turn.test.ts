@@ -469,8 +469,9 @@ describe("the profile agent", () => {
 
   it("reserves credits per message, settles them, and stops when they run out", async () => {
     // Free keeps a resume's worth in reserve (billing spec): the agent
-    // can spend only what is above it.
-    const reserve = creditCap("generate_document", { positions: 0 });
+    // can spend only what is above it. Nothing is published yet, so it
+    // is sized for a usual career.
+    const reserve = creditCap("generate_document", {});
     const ctx = await setup({ credits: reserve + 3 });
     const { model } = agentModel([], "Conte mais.");
     const { turn } = await ctx.say("Trabalhei na Beta.", model);

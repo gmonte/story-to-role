@@ -1,7 +1,8 @@
 import type { SensitiveFilter } from "@repo/api/domains/evidence/sensitive/sensitive-filter";
 
 import type { Line } from "../schemas/document";
-import type { ResumeContent } from "../schemas/resume-content";
+import type { ExperienceAge } from "../schemas/generation-settings";
+import type { ResumeContent, ResumeSection } from "../schemas/resume-content";
 import type { ContextPosition } from "./load-career-context";
 
 /** Every line of written text in a resume, in reading order. */
@@ -191,47 +192,125 @@ export function estimatePages(content: ResumeContent) {
   return Math.round((lines / LINES_PER_PAGE) * 10) / 10;
 }
 
-export const maxResumePages = 2;
-
 /**
- * Removes bullets until the estimate fits: the last bullet of the oldest
- * position (or project) that still has more than one goes first, then the
- * single ones, oldest first. Nothing is rewritten, so every line kept
- * still rests on its evidence.
+ * Shortens a resume until the estimate fits, in the order the generation
+ * settings give (resume spec, "Generation settings"): the bullet of a very
+ * old experience that entered for relevance (it leaves with it); the
+ * bullets of older experiences, oldest first; the summary down to three
+ * sentences; the competencies least related to the opening, which the
+ * writer lists last. The bullets of recent experiences are never cut: a
+ * resume that still doesn't fit is returned as it is, for the user to be
+ * warned. Nothing is rewritten, so every line kept still rests on the
+ * profile.
  */
-export function trimToPages(content: ResumeContent, pages: number) {
+export function trimToPages(
+  content: ResumeContent,
+  pages: number,
+  // Each position's age to this document; one not listed is recent.
+  ages: Map<string, ExperienceAge>
+) {
   let current = content;
   while (estimatePages(current) > pages) {
-    const entries = current.sections.flatMap((section, sectionIndex) =>
-      section.kind === "experience" || section.kind === "projects"
-        ? section.entries.map((entry, entryIndex) => ({
-            sectionIndex,
-            entryIndex,
-            count: entry.lines.length,
-          }))
-        : []
-    );
-    // Entries are most recent first, so the oldest come last.
-    const target =
-      [...entries].reverse().find((entry) => entry.count > 1) ??
-      [...entries].reverse().find((entry) => entry.count > 0);
-    if (!target) return current;
-    current = {
-      ...current,
-      sections: current.sections.map((section, sectionIndex) =>
-        sectionIndex === target.sectionIndex &&
-        (section.kind === "experience" || section.kind === "projects")
-          ? ({
-              ...section,
-              entries: section.entries.map((entry, entryIndex) =>
-                entryIndex === target.entryIndex
-                  ? { ...entry, lines: entry.lines.slice(0, -1) }
-                  : entry
-              ),
-            } as typeof section)
-          : section
-      ),
-    };
+    const next = shortenOnce(current, ages);
+    if (!next) return current;
+    current = next;
   }
   return current;
+}
+
+const maxSummarySentences = 3;
+// A resume with no competencies reads as incomplete to a screening tool.
+const minSkillItems = 3;
+
+/** One step of shortening, or null when nothing is left to cut. */
+function shortenOnce(
+  content: ResumeContent,
+  ages: Map<string, ExperienceAge>
+): ResumeContent | null {
+  const mapSection = (
+    kind: ResumeSection["kind"],
+    change: (section: ResumeSection) => ResumeSection | null
+  ): ResumeContent => ({
+    ...content,
+    sections: content.sections.flatMap((section) =>
+      section.kind === kind ? (change(section) ?? []) : [section]
+    ),
+  });
+  const experience = content.sections.find(
+    (section) => section.kind === "experience"
+  );
+  const entries = experience?.kind === "experience" ? experience.entries : [];
+  // Entries are most recent first, so the oldest come last.
+  const fromOldest = [...entries].reverse();
+
+  const veryOld = fromOldest.find(
+    (entry) => ages.get(entry.positionId) === "very_old"
+  );
+  if (veryOld) {
+    return mapSection("experience", (section) =>
+      section.kind === "experience"
+        ? {
+            ...section,
+            entries: section.entries.filter((entry) => entry !== veryOld),
+          }
+        : section
+    );
+  }
+  const older = fromOldest.find(
+    (entry) => ages.get(entry.positionId) === "older" && entry.lines.length > 0
+  );
+  if (older) {
+    return mapSection("experience", (section) =>
+      section.kind === "experience"
+        ? {
+            ...section,
+            entries: section.entries.map((entry) =>
+              entry === older
+                ? { ...entry, lines: entry.lines.slice(0, -1) }
+                : entry
+            ),
+          }
+        : section
+    );
+  }
+  const summary = content.sections.find(
+    (section) => section.kind === "summary"
+  );
+  if (summary?.kind === "summary") {
+    const sentences = summary.line.text.match(/[^.!?]+[.!?]+(\s+|$)/g) ?? [];
+    if (sentences.length > maxSummarySentences) {
+      return mapSection("summary", (section) =>
+        section.kind === "summary"
+          ? {
+              ...section,
+              line: {
+                ...section.line,
+                text: sentences.slice(0, maxSummarySentences).join("").trim(),
+              },
+            }
+          : section
+      );
+    }
+  }
+  const skills = content.sections.find((section) => section.kind === "skills");
+  if (skills?.kind === "skills") {
+    const items = skills.groups.flatMap((group) => group.text.split(", "));
+    if (items.length > minSkillItems) {
+      return mapSection("skills", (section) => {
+        if (section.kind !== "skills") return section;
+        const last = section.groups.at(-1)!;
+        const kept = last.text.split(", ").slice(0, -1);
+        return {
+          ...section,
+          groups: kept.length
+            ? [
+                ...section.groups.slice(0, -1),
+                { ...last, text: kept.join(", ") },
+              ]
+            : section.groups.slice(0, -1),
+        };
+      });
+    }
+  }
+  return null;
 }

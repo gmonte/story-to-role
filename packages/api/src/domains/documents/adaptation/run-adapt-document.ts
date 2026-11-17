@@ -11,8 +11,13 @@ import type { Storage } from "@repo/api/tools/storage/storage";
 import { DocumentsRepository } from "../documents-repository";
 import { fitToPages } from "../rendering/fit-to-pages";
 import { storeRenderedPdf } from "../rendering/store-rendered-pdf";
-import { generationSettings } from "../generation/generation-settings";
+import { reviewLoopSettings } from "../generation/review-loop-settings";
 import { loadCareerContext } from "../generation/load-career-context";
+import {
+  defaultGenerationSettings,
+  experienceAge,
+  generationSettingsSchema,
+} from "../schemas/generation-settings";
 import { outputLanguageNames } from "../generation/resume-prompts";
 import {
   findForbiddenLines,
@@ -118,15 +123,31 @@ export async function runAdaptDocument(deps: {
       return;
     }
 
-    // An adaptation runs longer in some languages: it fits the real PDF too.
+    // An adaptation runs longer in some languages: it fits the real PDF
+    // too, under the settings its document was written with.
+    const adapted = await adaptVersion({
+      ...deps,
+      profileId: profile.id,
+      generation,
+      source,
+    });
+    const settings = generationSettingsSchema
+      .catch(defaultGenerationSettings)
+      .parse(adapted.frozen?.settings ?? defaultGenerationSettings);
+    const today = new Date().toISOString().slice(0, 7);
     const fitted = await fitToPages({
-      content: await adaptVersion({
-        ...deps,
-        profileId: profile.id,
-        generation,
-        source,
-      }),
+      content: adapted.content,
       language: generation.language,
+      maxPages: settings.resumeMaxPages,
+      ages: new Map(
+        adapted.positions.map((position) => {
+          const age = experienceAge(position, settings, today);
+          return [
+            position.id,
+            age === "very_old" && settings.veryOld === "keep" ? "older" : age,
+          ] as const;
+        })
+      ),
     });
     const { content } = fitted;
     await deps.reportProgress?.({ step: 2, totalSteps: 2, label: "saving" });
@@ -218,17 +239,23 @@ async function adaptVersion(input: {
   const application = document?.applicationId
     ? await documents.findApplication(document.applicationId)
     : null;
+  const sourceVersion = await documents.findVersion(
+    generation.sourceVersionId!
+  );
+  // The profile version the document being adapted froze: its positions
+  // are the ones the content holds.
+  const frozen = sourceVersion
+    ? await documents.frozenGeneration(sourceVersion.documentId)
+    : null;
   const context = await loadCareerContext({
     db,
     cipher,
     profileId: input.profileId,
     filter,
+    profileVersionId: frozen?.profileVersionId,
     openingId: application?.openingId,
   });
   // Reused from another document: its locked facts become this one's.
-  const sourceVersion = await documents.findVersion(
-    generation.sourceVersionId!
-  );
   const source =
     sourceVersion?.documentId === generation.documentId
       ? input.source
@@ -240,12 +267,7 @@ async function adaptVersion(input: {
     filter,
   });
   const originals = new Map(
-    (await new CareerRepository(db).listPositions(input.profileId)).map(
-      (position) => [
-        position.id,
-        filter.apply(cipher.decrypt(position.encryptedTitle)),
-      ]
-    )
+    context.positions.map((position) => [position.id, position.title])
   );
   const entries = source.sections.flatMap((section) =>
     section.kind === "experience" ? section.entries : []
@@ -303,7 +325,7 @@ async function adaptVersion(input: {
     const { object } = await input.ai.generateObject({
       purpose: "resume_adaptation",
       role: "writing",
-      maxTokens: generationSettings.draftMaxTokens,
+      maxTokens: reviewLoopSettings.draftMaxTokens,
       schema: adaptationDraftSchema,
       system: [...extra, material].join("\n"),
       messages: [{ role: "user", content: "Adapt the resume." }],
@@ -383,7 +405,7 @@ async function adaptVersion(input: {
   ) {
     throw new Error(`Adaptation ${generation.id} altered a locked fact`);
   }
-  return content;
+  return { content, frozen, positions: context.positions };
 }
 
 /** One call adapts the selected changes; code merges them into the target. */
@@ -401,7 +423,7 @@ async function adaptChanges(input: {
     const { object } = await input.ai.generateObject({
       purpose: "language_sync",
       role: "writing",
-      maxTokens: generationSettings.draftMaxTokens,
+      maxTokens: reviewLoopSettings.draftMaxTokens,
       schema: syncDraftSchema,
       system: [
         `Carry these changed lines of a resume into its version in ${outputLanguageNames[input.language]}. Each item has the new wording in the source language and, when it has one, the target's current wording, whose style you keep.`,

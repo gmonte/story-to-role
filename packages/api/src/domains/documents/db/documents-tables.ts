@@ -2,14 +2,13 @@ import { sql } from "drizzle-orm";
 import { index, unique } from "drizzle-orm/pg-core";
 
 import { applicationsTable } from "@repo/api/domains/applications/db/applications-tables";
-import {
-  careerProfilesTable,
-  positionsTable,
-} from "@repo/api/domains/career/db/career-tables";
+import { careerProfilesTable } from "@repo/api/domains/career/db/career-tables";
+import { profileVersionsTable } from "@repo/api/domains/profile/db/profile-tables";
 import type { Tone } from "@repo/api/domains/openings/schemas/opening";
 import { embeddingDimensions } from "@repo/api/tools/embeddings/embedding-model";
 import { createTable } from "@repo/api/utils/db/create-table";
 
+import type { GenerationSettings } from "../schemas/generation-settings";
 import type {
   DocumentKind,
   GenerationKind,
@@ -157,6 +156,17 @@ export const generationsTable = createTable(
     resumeSnapshotId: d.uuid(),
     encryptedSyncPlan: d.text(),
     encryptedProposal: d.text(),
+    // The published profile version the document was written from, frozen
+    // (ADR 0008): the only source of its facts, and what its coverage
+    // review checks it against.
+    profileVersionId: d
+      .uuid()
+      .references(() => profileVersionsTable.id, { onDelete: "set null" }),
+    // The generation settings used for this document.
+    settings: d.jsonb().$type<GenerationSettings>(),
+    // What the document emphasizes and leaves in the background (or, for
+    // an adjustment, what changed): up to five lines, as JSON.
+    encryptedEmphasis: d.text(),
     reviewDepth: d.text().$type<ReviewDepth>().notNull(),
     writingLevel: d.text().$type<WritingLevel>().notNull(),
     tone: d.text().$type<Tone>().notNull(),
@@ -205,10 +215,9 @@ export const positionTitleEquivalentsTable = createTable(
       .uuid()
       .notNull()
       .references(() => careerProfilesTable.id, { onDelete: "cascade" }),
-    positionId: d
-      .uuid()
-      .notNull()
-      .references(() => positionsTable.id, { onDelete: "cascade" }),
+    // The position's id as derived from the profile (employer, title and
+    // start): a title that changes there is a new position to translate.
+    positionId: d.uuid().notNull(),
     language: d.text().$type<OutputLanguage>().notNull(),
     encryptedTitle: d.text().notNull(),
     approvedAt: d.timestamp({ withTimezone: true }),

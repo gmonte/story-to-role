@@ -29,6 +29,8 @@ import {
   reviewRoundsTable,
 } from "./db/documents-tables";
 import { resumeTemplatesTable, styleProfilesTable } from "./db/writing-tables";
+import type { GenerationSettings } from "./schemas/generation-settings";
+import { defaultTemplateSections } from "./schemas/template";
 
 type Insert<T extends { $inferInsert: unknown }> = T["$inferInsert"];
 
@@ -353,6 +355,47 @@ export class DocumentsRepository {
     return row ?? null;
   }
 
+  /**
+   * The profile version a document froze and the generation settings it
+   * was written with: those of the latest generation from the profile that
+   * wrote it.
+   */
+  async frozenGeneration(documentId: string) {
+    const [row] = await this.tx
+      .select({
+        profileVersionId: generationsTable.profileVersionId,
+        settings: generationsTable.settings,
+      })
+      .from(generationsTable)
+      .where(
+        and(
+          eq(generationsTable.documentId, documentId),
+          eq(generationsTable.status, "completed"),
+          isNotNull(generationsTable.profileVersionId)
+        )
+      )
+      .orderBy(desc(generationsTable.createdAt))
+      .limit(1);
+    return row ?? null;
+  }
+
+  /** The latest generation from the profile that wrote this version. */
+  async latestWrittenGeneration(versionId: string) {
+    const [row] = await this.tx
+      .select()
+      .from(generationsTable)
+      .where(
+        and(
+          eq(generationsTable.versionId, versionId),
+          eq(generationsTable.kind, "generate"),
+          eq(generationsTable.status, "completed")
+        )
+      )
+      .orderBy(desc(generationsTable.createdAt))
+      .limit(1);
+    return row ?? null;
+  }
+
   async insertGeneration(generation: Insert<typeof generationsTable>) {
     const [row] = await this.tx
       .insert(generationsTable)
@@ -598,10 +641,21 @@ export class DocumentsRepository {
       .values(template)
       .onConflictDoUpdate({
         target: resumeTemplatesTable.profileId,
-        set: {
-          sections: template.sections,
-          encryptedHeader: template.encryptedHeader,
-        },
+        set: { sections: template.sections },
+      });
+  }
+
+  /** The user's generation settings, kept with their template. */
+  async saveGenerationSettings(input: {
+    profileId: string;
+    generationSettings: GenerationSettings;
+  }) {
+    await this.tx
+      .insert(resumeTemplatesTable)
+      .values({ ...input, sections: defaultTemplateSections })
+      .onConflictDoUpdate({
+        target: resumeTemplatesTable.profileId,
+        set: { generationSettings: input.generationSettings },
       });
   }
 

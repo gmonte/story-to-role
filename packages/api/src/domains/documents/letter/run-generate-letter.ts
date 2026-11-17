@@ -12,7 +12,7 @@ import type { DbClient } from "@repo/api/tools/db-client";
 import type { Storage } from "@repo/api/tools/storage/storage";
 
 import { DocumentsRepository } from "../documents-repository";
-import { generationSettings } from "../generation/generation-settings";
+import { reviewLoopSettings } from "../generation/review-loop-settings";
 import { loadCareerContext } from "../generation/load-career-context";
 import { resumeLines, resumeText } from "../generation/resume-checks";
 import { outputLanguageNames } from "../generation/resume-prompts";
@@ -109,13 +109,7 @@ export async function loadLetterMaterial(input: {
   const wanted = new Set([...(story?.evidenceIds ?? []), ...fromResume]);
   const evidence = context.evidence
     .filter((row) => wanted.has(row.id))
-    // A file fact carries its own words, to keep and to back its figures.
-    .map((row) => ({
-      id: row.id,
-      text: row.sourceWording
-        ? `${row.text} (original wording: ${row.sourceWording})`
-        : row.text,
-    }));
+    .map((row) => ({ id: row.id, text: row.text }));
   const companyFacts = (
     await new ResearchRepository(db).listFacts(input.openingId)
   )
@@ -246,7 +240,7 @@ export async function runGenerateLetter(deps: {
       const { object } = await ai.generateObject({
         purpose: "cover_letter",
         role,
-        maxTokens: generationSettings.draftMaxTokens,
+        maxTokens: reviewLoopSettings.draftMaxTokens,
         schema: letterDraftSchema,
         system: extra ? `${system}\n\n${extra}` : system,
         messages: [{ role: "user", content: JSON.stringify(material.data) }],

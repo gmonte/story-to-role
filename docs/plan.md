@@ -120,6 +120,11 @@ Acceptance:
 - Prompts 04 (a new version for a family: the library document with focus) and 04b (an adjustment: only bullets' order, competencies' order and the summary) from the published profile, frozen in each document; only `[medido]` figures; the review loop judging coverage; the emphasis list (or what changed) after each generation.
 - The generation settings form, prefilled with the user's defaults (3 bullets on recent experiences up to 5 years, 1 on older ones, 15+ years only when relevant to the document's purpose, resume up to 2 pages, letter up to 4 paragraphs and 1 page), enforced in code after rendering, shortening in the specified order.
 
+- Note: a generation freezes, when it is asked for, the profile version published then and the settings chosen in the form; nothing is generated before a profile is published. Generation reads that version line by line: a position's id is derived from its employer, title and start (the `positions` and `credentials` tables lose their last readers here; instructions and overrides still point at them until P8), a line's figures count only where the profile marks them measured (an estimated, unconfirmed or unmarked result figure is withheld from the writer and refused by code), and "what I did not do", known gaps, studied competencies and the rules never reach it as evidence. The header comes from the profile's identity and contact.
+- Note: the communication rules' "never include" list replaces sensitive items as the filter code applies before and after every AI call.
+- Note: "Adjust" (04b) is the old "use as reference": the model names the reference's bullets and competencies in a new order, writes a summary and may add a bullet the profile has; code keeps every other word. It runs no review round. The review loop rates a draft by how much of its purpose it covers, leaving the fit check's gaps out of the count.
+- Note: the lines' trace back to the profile in the editor comes with the coverage review (P7); the cover letter's length settings are stored now and enforced in P8.
+
 Acceptance:
 - [ ] A React Native library resume brings mobile achievements forward; a general one each experience's strongest points.
 - [ ] An `[estimado]` or `[a confirmar]` figure never appears; a very old experience appears only with the requirement that justified it; the length rules hold.

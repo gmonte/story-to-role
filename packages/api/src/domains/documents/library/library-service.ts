@@ -11,7 +11,9 @@ import { loadSensitiveFilter } from "@repo/api/domains/evidence/sensitive/load-s
 
 import { DocumentsRepository } from "../documents-repository";
 import { failGeneration } from "../documents-service";
+import { freezeGeneration } from "../generation/generation-request";
 import { loadCareerContext } from "../generation/load-career-context";
+import type { GenerationSettings } from "../schemas/generation-settings";
 import { relockFacts } from "../generation/resume-checks";
 import { decryptResume } from "../snapshot-content";
 import { requireUserVersion } from "../require-version";
@@ -75,7 +77,7 @@ export class LibraryService {
   }
 
   /**
-   * Generates a library resume from the evidence base: a new document with
+   * Generates a library resume from the published profile: a new document with
    * its focus, or, with a version, that version's new snapshot. It never
    * starts an application.
    */
@@ -87,16 +89,23 @@ export class LibraryService {
     reviewDepth: ReviewDepth;
     writingLevel: WritingLevel;
     tone: Tone;
+    /** What the user changed in the settings form, for this document. */
+    settings?: Partial<GenerationSettings>;
   }): Promise<{
     documentId: string;
     generationId: string;
     realtime: RealtimeSubscription;
   }> {
     const profile = await this.requireProfile(input.userId);
+    const frozen = await freezeGeneration({
+      db: this.db,
+      cipher: await getUserCipher(this.db, input.userId),
+      userId: input.userId,
+      profileId: profile.id,
+      settings: input.settings,
+    });
     const hints = {
-      positions: (
-        await new CareerRepository(this.db).listPositions(profile.id)
-      ).filter((position) => position.status === "approved").length,
+      positions: frozen.positions,
       thorough: input.reviewDepth === "thorough",
       maximum: input.writingLevel === "maximum",
     };
@@ -125,6 +134,8 @@ export class LibraryService {
         profileId: profile.id,
         documentId: document.id,
         versionId: existing?.version.id ?? null,
+        profileVersionId: frozen.profileVersionId,
+        settings: frozen.settings,
         language: existing?.version.language ?? input.language,
         reviewDepth: input.reviewDepth,
         writingLevel: input.writingLevel,

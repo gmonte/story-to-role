@@ -9,6 +9,7 @@ import {
   userProcedure,
 } from "@repo/api/tools/trpc";
 
+import { generationSettingsSchema } from "../schemas/generation-settings";
 import {
   resumeHeaderFieldsSchema,
   styleProfileSchema,
@@ -31,6 +32,7 @@ export const writingRouter = createTRPCRouter({
       z.object({
         templateSections: z.array(templateSectionSchema),
         header: resumeHeaderFieldsSchema,
+        generationSettings: generationSettingsSchema,
         style: styleProfileSchema.nullable(),
         styleDraft: styleProfileSchema.nullable(),
         styleStatus: z.enum(["none", "extracting", "draft", "approved"]),
@@ -44,18 +46,36 @@ export const writingRouter = createTRPCRouter({
         "writing",
         "PUT",
         "/writing/template",
-        "Saves the global template and the resume header"
+        "Saves the global template"
       )
     )
     .input(
       z.object({
         sections: z.array(templateSectionSchema).max(20),
-        header: resumeHeaderFieldsSchema,
       })
     )
     .output(okSchema)
     .mutation(async ({ ctx, input }) => {
       await new WritingService(db).updateTemplate({
+        userId: ctx.userId,
+        ...input,
+      });
+      return ok;
+    }),
+
+  updateGenerationSettings: userProcedure
+    .meta(
+      openApiMeta(
+        "writing",
+        "PUT",
+        "/writing/generation-settings",
+        "Saves the user's generation settings, the defaults of every document"
+      )
+    )
+    .input(z.object({ settings: generationSettingsSchema }))
+    .output(okSchema)
+    .mutation(async ({ ctx, input }) => {
+      await new WritingService(db).updateGenerationSettings({
         userId: ctx.userId,
         ...input,
       });

@@ -55,6 +55,8 @@ export const experienceEntrySchema = z.object({
   startDate: z.string().nullable(),
   endDate: z.string().nullable(),
   context: z.string().nullable(),
+  // A very old experience: the requirement it entered the document for.
+  relevance: z.string().nullable().optional(),
   lines: z.array(lineSchema),
 });
 export type ExperienceEntry = z.infer<typeof experienceEntrySchema>;

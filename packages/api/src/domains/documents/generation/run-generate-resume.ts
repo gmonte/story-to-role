@@ -7,30 +7,44 @@ import {
 import type { AiClient } from "@repo/api/domains/ai/ai-client";
 import { CareerRepository } from "@repo/api/domains/career/career-repository";
 import type { UserCipher } from "@repo/api/domains/encryption/user-cipher";
-import type { SensitiveFilter } from "@repo/api/domains/evidence/sensitive/sensitive-filter";
+import { loadSensitiveFilter } from "@repo/api/domains/evidence/sensitive/load-sensitive-filter";
 import { OpeningsRepository } from "@repo/api/domains/openings/openings-repository";
 import type { TaskProgress } from "@repo/api/domains/tasks/schemas/task";
 import type { DbClient } from "@repo/api/tools/db-client";
+import { foldAccents } from "@repo/api/utils/text/fold-accents";
 import type { Storage } from "@repo/api/tools/storage/storage";
 
 import { decryptResume } from "../snapshot-content";
 import { DocumentsRepository } from "../documents-repository";
 import { fitToPages } from "../rendering/fit-to-pages";
 import { storeRenderedPdf } from "../rendering/store-rendered-pdf";
+import {
+  defaultGenerationSettings,
+  experienceAge,
+  generationSettingsSchema,
+} from "../schemas/generation-settings";
 import type { ResumeContent, ResumeSection } from "../schemas/resume-content";
 import { loadWritingSetup } from "../writing/load-writing-setup";
 import { resolveSections } from "../template/resolve-sections";
 import {
+  adjustDraftSchema,
+  adjustmentDraft,
+  relinkReference,
+} from "./adjust-resume";
+import {
   assembleResume,
+  type AssemblyDraft,
   type DroppedLine,
   type ResumeDraft,
   resumeDraftSchema,
 } from "./assemble-resume";
-import { generationSettings } from "./generation-settings";
+import { reviewLoopSettings } from "./review-loop-settings";
 import { loadCareerContext } from "./load-career-context";
 import {
+  adjusterPrompt,
   editorPrompt,
   type OpeningBrief,
+  purposesOf,
   resumeMaterial,
   reviewerPrompt,
   strategistPrompt,
@@ -39,24 +53,33 @@ import {
   estimatePages,
   findForbiddenLines,
   lockedFactViolations,
-  maxResumePages,
   resumeLines,
+  resumeText,
 } from "./resume-checks";
 
 const reviewSchema = z.object({
-  rating: z.number().int().min(1).max(10),
-  gaps: z.array(z.string()).max(8),
+  coverage: z
+    .array(
+      z.object({
+        requirement: z.string(),
+        level: z.enum(["strong", "partial", "not_proven"]),
+      })
+    )
+    .catch([]),
+  inconsistencies: z.array(z.string()).catch([]),
+  advice: z.array(z.string()).catch([]),
 });
+type Review = z.infer<typeof reviewSchema>;
 
 type Candidate = {
   round: number;
-  draft: ResumeDraft;
+  draft: AssemblyDraft;
   content: ResumeContent;
   dropped: DroppedLine[];
   forbidden: string[];
   pages: number;
   rating: number;
-  gaps: string[];
+  review: Review;
   inputTokens: number;
   outputTokens: number;
 };
@@ -66,27 +89,67 @@ const tokens = (usages: AiUsage[]) => ({
   outputTokens: usages.reduce((sum, u) => sum + u.outputTokens, 0),
 });
 
+const normalize = (text: string) => foldAccents(text).toLowerCase().trim();
+
 /**
- * Generates a resume for an opening (resume spec, "Review rounds"): the
- * strategist drafts, then each review round has a reviewer rate the draft
- * against the opening and an editor apply the review. Quick allows one
- * round, Thorough more, stopping early at the target rating or when the
- * rating stops improving. Code checks every draft (evidence, figures,
- * skills, locked facts, forbidden terms, length); the best-rated draft
- * becomes the version's new snapshot, and every round is stored.
+ * A draft's rating, from 1 to 10, by how much of its purpose it covers
+ * (resume spec, "Review rounds"): strong coverage counts whole, partial
+ * half. What the fit check found to be a gap is left out of the count: a
+ * resume must not cover it, so it can't be held against it. A draft that
+ * disagrees with the profile is never a good one.
+ */
+export function coverageRating(review: Review, gaps: string[]) {
+  const lacking = new Set(gaps.map(normalize));
+  const judged = review.coverage.filter(
+    (item) => !lacking.has(normalize(item.requirement))
+  );
+  if (judged.length === 0) return 5;
+  const covered = judged.reduce(
+    (sum, item) =>
+      sum + (item.level === "strong" ? 1 : item.level === "partial" ? 0.5 : 0),
+    0
+  );
+  const rating = Math.min(
+    10,
+    Math.max(1, Math.round((10 * covered) / judged.length))
+  );
+  return review.inconsistencies.length > 0 ? Math.min(rating, 4) : rating;
+}
+
+/**
+ * Generates a resume for an opening or a library focus, from the profile
+ * version the generation froze (resume spec, "Generation rules"; the
+ * method's prompts 04 and 04b).
+ *
+ * A new version: a strategist drafts, then each review round has a
+ * reviewer judge the draft's coverage of its purpose against the profile
+ * and an editor apply the review, only reordering and rewording. Quick
+ * allows one round, Thorough more, stopping early at the target rating or
+ * when coverage stops improving; the best-rated draft is kept.
+ *
+ * An adjustment (a reference resume was chosen): the model only reorders
+ * that resume's bullets and competencies, rewrites its summary and may add
+ * a bullet the profile has; nothing else changes.
+ *
+ * Code checks every draft: each line rests on the profile, figures only
+ * where the profile marks them measured, competencies the person uses,
+ * locked facts, the communication rules, and the generation settings
+ * (bullets per experience, very old experiences, length). Every round is
+ * stored, with what the document emphasizes.
  */
 export async function runGenerateResume(deps: {
   db: DbClient;
   ai: AiClient;
   cipher: UserCipher;
-  filter: SensitiveFilter;
   userId: string;
   generationId: string;
   reportProgress?: (progress: TaskProgress) => Promise<void>;
   /** Where the final PDF is kept; without it, it is only measured. */
   storage?: Storage;
+  /** This month (YYYY-MM): what "recent" is measured from. */
+  today?: string;
 }) {
-  const { db, ai, cipher, filter } = deps;
+  const { db, ai, cipher } = deps;
   const documents = new DocumentsRepository(db);
   const generation = await documents.findGeneration(deps.generationId);
   if (!generation) throw new Error(`Generation ${deps.generationId} not found`);
@@ -109,25 +172,51 @@ export async function runGenerateResume(deps: {
   }
 
   await documents.updateGeneration(generation.id, { status: "running" });
-  // A key that runs out mid-review stops at a safe point (guided interview
-  // spec): the best draft so far is saved, then the task stops.
+  // A key that runs out mid-review stops at a safe point (billing spec):
+  // the best draft so far is saved, then the task stops.
   let stoppedBy: KeyUnusableError | null = null;
   try {
-    const brief: OpeningBrief = application
-      ? await loadOpeningBrief({ db, cipher, openingId: application.openingId })
-      : { title: focus, company: null, terms: [], fitCheck: [], focus };
-    const reference = generation.referenceSnapshotId
-      ? await documents.findSnapshot(generation.referenceSnapshotId)
-      : null;
-    const setup = await loadWritingSetup({ db, cipher, userId: deps.userId });
+    const settings = generationSettingsSchema
+      .catch(defaultGenerationSettings)
+      .parse(generation.settings ?? defaultGenerationSettings);
+    const today = deps.today ?? new Date().toISOString().slice(0, 7);
+    // The frozen version's own rules, whatever was published since.
+    const filter = await loadSensitiveFilter({
+      db,
+      cipher,
+      profileId: generation.profileId,
+      profileVersionId: generation.profileVersionId,
+    });
     const context = await loadCareerContext({
       db,
       cipher,
       profileId: generation.profileId,
       filter,
+      profileVersionId: generation.profileVersionId,
       openingId: application?.openingId,
       language: generation.language,
     });
+    if (!context.profileVersionId) {
+      throw new Error(`Generation ${generation.id} has no published profile`);
+    }
+    const brief: OpeningBrief = application
+      ? await loadOpeningBrief({
+          db,
+          cipher,
+          openingId: application.openingId,
+          evidenceOfPassage: context.evidenceOfPassage,
+        })
+      : { title: focus, company: null, terms: [], fitCheck: [], focus };
+    const referenceSnapshot = generation.referenceSnapshotId
+      ? await documents.findSnapshot(generation.referenceSnapshotId)
+      : null;
+    const reference = referenceSnapshot
+      ? relinkReference(
+          decryptResume(cipher, referenceSnapshot),
+          context.positions
+        )
+      : null;
+    const setup = await loadWritingSetup({ db, cipher, userId: deps.userId });
     const sections = resolveSections({
       template: setup.templateSections,
       language: generation.language,
@@ -142,19 +231,42 @@ export async function runGenerateResume(deps: {
       language: generation.language,
       tone: generation.tone,
       style: setup.style,
-      reference: reference && decryptResume(cipher, reference),
+      settings,
+      today,
     });
+    const purposes = purposesOf(brief);
+    const gaps = brief.fitCheck
+      .filter((item) => item.verdict === "gap")
+      .map((item) => item.term);
+    // Each position's age to this document; kept very old ones shorten
+    // like older ones.
+    const ages = new Map(
+      context.positions.map((position) => {
+        const age = experienceAge(position, settings, today);
+        return [
+          position.id,
+          age === "very_old" && settings.veryOld === "keep" ? "older" : age,
+        ] as const;
+      })
+    );
     const role = generation.writingLevel === "maximum" ? "maximum" : "writing";
-    const totalRounds = generationSettings.reviewRounds[generation.reviewDepth];
+    // An adjustment changes too little to be worth a round of rewriting.
+    const totalRounds = reference
+      ? 0
+      : reviewLoopSettings.reviewRounds[generation.reviewDepth];
     const progress = (step: number, label: string) =>
       deps.reportProgress?.({ step, totalSteps: totalRounds + 2, label });
 
-    const evaluate = (draft: ResumeDraft) => {
+    const evaluate = (draft: AssemblyDraft) => {
       const { content, dropped } = assembleResume({
         draft,
+        reference,
         context,
         sections,
-        header: setup.header,
+        settings,
+        today,
+        purposes,
+        fallbackName: setup.header.name,
       });
       return {
         draft,
@@ -173,93 +285,126 @@ export async function runGenerateResume(deps: {
       const { object, usage } = await ai.generateObject({
         purpose: "resume_review",
         role: "writing",
-        maxTokens: generationSettings.reviewMaxTokens,
+        maxTokens: reviewLoopSettings.reviewMaxTokens,
         schema: reviewSchema,
         system: reviewerPrompt({
           material,
-          draft: evaluated.draft,
+          resume: resumeText(evaluated.content),
           pages: evaluated.pages,
+          maxPages: settings.resumeMaxPages,
         }),
-        messages: [{ role: "user", content: "Review the draft." }],
+        messages: [{ role: "user", content: "Review the resume." }],
       });
-      // A draft still carrying a forbidden term is unusable as it stands.
-      const rating = evaluated.forbidden.length > 0 ? 1 : (object?.rating ?? 1);
+      const judged = object ?? {
+        coverage: [],
+        inconsistencies: [],
+        advice: [],
+      };
       return {
         ...evaluated,
         round,
-        rating,
-        gaps: object?.gaps ?? [],
+        // A draft still carrying a forbidden term is unusable as it stands.
+        rating:
+          evaluated.forbidden.length > 0 ? 1 : coverageRating(judged, gaps),
+        review: judged,
         ...tokens([...usages, usage]),
       };
     };
 
     await progress(1, "drafting");
-    const first = await ai.generateObject({
-      purpose: "resume_strategist",
-      role,
-      maxTokens: generationSettings.draftMaxTokens,
-      schema: resumeDraftSchema,
-      system: strategistPrompt(material),
-      messages: [{ role: "user", content: "Write the resume." }],
-    });
-    if (!first.object) throw new Error("The strategist returned no draft");
-
-    const candidates = [await review(evaluate(first.object), 0, [first.usage])];
-    for (let round = 1; round <= totalRounds; round++) {
-      const previous = candidates.at(-1)!;
-      const fits = previous.pages <= maxResumePages;
-      if (fits && previous.rating >= generationSettings.targetRating) break;
-      if (round > 1 && previous.rating <= candidates.at(-2)!.rating) break;
-      // Step 2 is review round 1; the steps around it draft and save.
-      await progress(round + 1, "review_round");
-      const forbiddenTexts = resumeLines(previous.content)
-        .filter((line) => previous.forbidden.includes(line.id))
-        .map((line) => line.text);
-      try {
-        const edited = await ai.generateObject({
-          purpose: "resume_editor",
-          role,
-          maxTokens: generationSettings.draftMaxTokens,
-          schema: resumeDraftSchema,
-          system: editorPrompt({
-            material,
-            draft: previous.draft,
-            gaps: previous.gaps,
-            dropped: previous.dropped,
-            forbiddenLines: forbiddenTexts,
-            pages: previous.pages,
-          }),
-          messages: [{ role: "user", content: "Apply the review." }],
-        });
-        if (!edited.object) break;
-        candidates.push(
-          await review(evaluate(edited.object), round, [edited.usage])
-        );
-      } catch (error) {
-        if (!(error instanceof KeyUnusableError)) throw error;
-        stoppedBy = error;
-        break;
+    const candidates: Candidate[] = [];
+    if (reference) {
+      const adjusted = await ai.generateObject({
+        purpose: "resume_adjuster",
+        role,
+        maxTokens: reviewLoopSettings.draftMaxTokens,
+        schema: adjustDraftSchema,
+        system: adjusterPrompt({ material, settings, reference }),
+        messages: [{ role: "user", content: "Adjust the resume." }],
+      });
+      if (!adjusted.object) throw new Error("The adjuster returned no draft");
+      candidates.push(
+        await review(evaluate(adjustmentDraft(adjusted.object, reference)), 0, [
+          adjusted.usage,
+        ])
+      );
+    } else {
+      const first = await ai.generateObject({
+        purpose: "resume_strategist",
+        role,
+        maxTokens: reviewLoopSettings.draftMaxTokens,
+        schema: resumeDraftSchema,
+        system: strategistPrompt(material, settings),
+        messages: [{ role: "user", content: "Write the resume." }],
+      });
+      if (!first.object) throw new Error("The strategist returned no draft");
+      let draft: ResumeDraft = first.object;
+      candidates.push(await review(evaluate(draft), 0, [first.usage]));
+      for (let round = 1; round <= totalRounds; round++) {
+        const previous = candidates.at(-1)!;
+        const fits = previous.pages <= settings.resumeMaxPages;
+        if (fits && previous.rating >= reviewLoopSettings.targetRating) break;
+        // Coverage stopped improving.
+        if (round > 1 && previous.rating <= candidates.at(-2)!.rating) break;
+        // Step 2 is review round 1; the steps around it draft and save.
+        await progress(round + 1, "review_round");
+        const forbiddenTexts = resumeLines(previous.content)
+          .filter((line) => previous.forbidden.includes(line.id))
+          .map((line) => line.text);
+        try {
+          const edited = await ai.generateObject({
+            purpose: "resume_editor",
+            role,
+            maxTokens: reviewLoopSettings.draftMaxTokens,
+            schema: resumeDraftSchema,
+            system: editorPrompt({
+              material,
+              settings,
+              draft,
+              advice: previous.review.advice,
+              inconsistencies: previous.review.inconsistencies,
+              dropped: previous.dropped,
+              forbiddenLines: forbiddenTexts,
+              pages: previous.pages,
+            }),
+            messages: [{ role: "user", content: "Apply the review." }],
+          });
+          if (!edited.object) break;
+          draft = edited.object;
+          candidates.push(await review(evaluate(draft), round, [edited.usage]));
+        } catch (error) {
+          if (!(error instanceof KeyUnusableError)) throw error;
+          stoppedBy = error;
+          break;
+        }
       }
     }
 
-    // A draft within two pages beats a longer one; then the rating decides.
-    const fits = (candidate: Candidate) => candidate.pages <= maxResumePages;
+    // A draft within its pages beats a longer one; then the rating decides.
+    const fits = (candidate: Candidate) =>
+      candidate.pages <= settings.resumeMaxPages;
     const best = candidates.reduce((top, candidate) => {
       if (fits(candidate) !== fits(top))
         return fits(candidate) ? candidate : top;
       return candidate.rating > top.rating ? candidate : top;
     });
     // Code has the last word: lines with a forbidden term go, and a resume
-    // whose real PDF runs over two pages loses the last bullets of its
-    // oldest positions.
+    // whose real PDF runs over its pages is shortened in the settings'
+    // order, never touching the bullets of recent experiences.
     const fitted = await fitToPages({
       content: withoutLines(best.content, best.forbidden),
       language: generation.language,
+      maxPages: settings.resumeMaxPages,
+      ages,
     });
     const { content } = fitted;
     if (lockedFactViolations(content, context.positions).length > 0) {
       throw new Error(`Generation ${generation.id} altered a locked fact`);
     }
+    const emphasis = best.draft.emphasis
+      .map((line) => line.trim())
+      .filter((line) => line && filter.findForbiddenTerms(line).length === 0)
+      .slice(0, maxEmphasisLines);
 
     await progress(totalRounds + 2, "saving");
     const snapshotId = await db.transaction(async (tx) => {
@@ -293,7 +438,7 @@ export async function runGenerateResume(deps: {
           inputTokens: candidate.inputTokens,
           outputTokens: candidate.outputTokens,
           kept: candidate === best,
-          encryptedReview: cipher.encrypt(JSON.stringify(candidate.gaps)),
+          encryptedReview: cipher.encrypt(JSON.stringify(candidate.review)),
         }))
       );
       await repository.updateGeneration(generation.id, {
@@ -301,6 +446,9 @@ export async function runGenerateResume(deps: {
         versionId: version.id,
         snapshotId: snapshot.id,
         bestRound: best.round,
+        encryptedEmphasis: emphasis.length
+          ? cipher.encrypt(JSON.stringify(emphasis))
+          : null,
         finishedAt: new Date(),
       });
       return snapshot.id;
@@ -328,6 +476,9 @@ export async function runGenerateResume(deps: {
   // Saved: the task still stops so the user sees why.
   if (stoppedBy) throw stoppedBy;
 }
+
+// What a document emphasizes is told in a few lines (resume spec).
+const maxEmphasisLines = 5;
 
 /** Removes the given lines (and a forbidden title line) from content. */
 function withoutLines(
@@ -385,11 +536,17 @@ function withoutLines(
   };
 }
 
-/** The opening as generation sees it: its terms and its latest fit check. */
+/**
+ * The opening as generation sees it: its requirements and its latest fit
+ * check, each verdict with the profile lines behind it (those of the
+ * version the document froze; a fit check made on another version names
+ * passages this one doesn't have, and they are left out).
+ */
 export async function loadOpeningBrief(input: {
   db: DbClient;
   cipher: UserCipher;
   openingId: string;
+  evidenceOfPassage?: Map<string, string[]>;
 }): Promise<OpeningBrief> {
   const { cipher } = input;
   const openings = new OpeningsRepository(input.db);
@@ -408,12 +565,15 @@ export async function loadOpeningBrief(input: {
     terms: terms.map((term) => ({
       kind: term.kind,
       category: term.category,
+      importance: term.importance,
       text: termText.get(term.id)!,
     })),
     fitCheck: items.map((item) => ({
       term: termText.get(item.termId) ?? "",
       verdict: item.verdict,
-      evidenceIds: item.evidenceIds,
+      evidenceIds: item.evidenceIds.flatMap(
+        (passageId) => input.evidenceOfPassage?.get(passageId) ?? []
+      ),
     })),
   };
 }

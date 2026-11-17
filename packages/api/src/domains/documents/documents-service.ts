@@ -1,3 +1,4 @@
+import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 
 import { InstructionsRepository } from "@repo/api/domains/applications/instructions-repository";
@@ -35,7 +36,13 @@ import {
 } from "./letter/letter-resume";
 import { applyUserEdit, LockedFactEditError } from "./editing/apply-user-edit";
 import { atsCheck } from "./generation/ats-check";
+import { freezeGeneration } from "./generation/generation-request";
+import { loadProfileSource } from "./generation/load-profile-source";
 import { estimatePages, resumeText } from "./generation/resume-checks";
+import {
+  defaultGenerationSettings,
+  type GenerationSettings,
+} from "./schemas/generation-settings";
 import type {
   OutputLanguage,
   ReviewDepth,
@@ -92,15 +99,25 @@ export class DocumentsService {
     /** Sections forced in or out for this application only. */
     sectionsForcedIn?: ResumeSectionKind[];
     sectionsForcedOut?: ResumeSectionKind[];
-    /** "Use as reference": a similar version of the user's, to guide the draft. */
+    /**
+     * "Adjust" (the method's prompt 04b): a version of the same family to
+     * start from, changing only what this opening needs.
+     */
     referenceVersionId?: string;
+    /** What the user changed in the settings form, for this document. */
+    settings?: Partial<GenerationSettings>;
   }): Promise<{ generationId: string; realtime: RealtimeSubscription }> {
     const profile = await this.requireProfile(input.userId);
+    const frozen = await freezeGeneration({
+      db: this.db,
+      cipher: await getUserCipher(this.db, input.userId),
+      userId: input.userId,
+      profileId: profile.id,
+      settings: input.settings,
+    });
     // What it may cost depends on career length, depth and level.
     const hints = {
-      positions: (
-        await new CareerRepository(this.db).listPositions(profile.id)
-      ).filter((position) => position.status === "approved").length,
+      positions: frozen.positions,
       thorough: input.reviewDepth === "thorough",
       maximum: input.writingLevel === "maximum",
     };
@@ -148,9 +165,11 @@ export class DocumentsService {
         applicationId: application.id,
         kind: "resume",
       });
-      if (input.versionId) {
-        const version = await repository.findVersion(input.versionId);
-        if (version?.documentId !== document.id) throw notFound();
+      const version = input.versionId
+        ? await repository.findVersion(input.versionId)
+        : null;
+      if (input.versionId && version?.documentId !== document.id) {
+        throw notFound();
       }
       const referenced = input.referenceVersionId
         ? await requireUserVersion(tx, input.userId, input.referenceVersionId)
@@ -160,12 +179,23 @@ export class DocumentsService {
       }
       const reference =
         referenced && (await repository.latestSnapshot(referenced.version.id));
+      // An adjustment keeps the reference's bullets as written, so it is in
+      // the reference's language (adapting comes after, like any version);
+      // generating again into a version stays in that version's language.
+      const language =
+        referenced?.version.language ?? version?.language ?? input.language;
+      // Into an existing version, only a reference written in its language.
+      if (version && version.language !== language) {
+        throw new TRPCError({ code: "BAD_REQUEST" });
+      }
       return repository.insertGeneration({
         profileId: profile.id,
         documentId: document.id,
         versionId: input.versionId ?? null,
         referenceSnapshotId: reference?.id ?? null,
-        language: input.language,
+        profileVersionId: frozen.profileVersionId,
+        settings: frozen.settings,
+        language,
         reviewDepth: input.reviewDepth,
         writingLevel: input.writingLevel,
         tone: input.tone,
@@ -252,6 +282,9 @@ export class DocumentsService {
     const versions = await repository.listVersions([document.id]);
     const generation = await repository.latestGeneration(document.id);
     const outdated = await outdatedVersions(repository, cipher, versions);
+    // The settings the document was written with, for a version no
+    // generation wrote itself (an adaptation, a copy).
+    const frozen = await repository.frozenGeneration(document.id);
     const sent = await repository.submissionsForVersions(
       versions.map((version) => version.id)
     );
@@ -265,6 +298,7 @@ export class DocumentsService {
         pdfTemplate
       );
       const isResume = content.kind === "resume";
+      const written = await repository.latestWrittenGeneration(version.id);
       views.push({
         id: version.id,
         language: version.language,
@@ -279,6 +313,11 @@ export class DocumentsService {
         pages:
           rendered?.pages ??
           (isResume ? estimatePages(content) : estimateLetterPages(content)),
+        // The page limit this version was written under.
+        maxPages: isResume
+          ? ((written ?? frozen)?.settings?.resumeMaxPages ??
+            defaultGenerationSettings.resumeMaxPages)
+          : defaultGenerationSettings.letterMaxPages,
         pdf: {
           ready: !!rendered,
           rendering:
@@ -293,6 +332,14 @@ export class DocumentsService {
           keywords && isResume
             ? atsCheck({ text: resumeText(content), keywords })
             : null,
+        emphasis: written?.encryptedEmphasis
+          ? {
+              lines: z
+                .array(z.string())
+                .parse(JSON.parse(cipher.decrypt(written.encryptedEmphasis))),
+              adjusted: !!written.referenceSnapshotId,
+            }
+          : null,
         trace: trace.evidenceFor(content),
         instructionTrace: trace.instructionsFor(content),
         credentialApprovals: trace.credentialApprovals,
@@ -323,6 +370,9 @@ export class DocumentsService {
             reviewDepth: generation.reviewDepth,
             writingLevel: generation.writingLevel,
             tone: generation.tone,
+            adjusted:
+              generation.kind === "generate" &&
+              !!generation.referenceSnapshotId,
             progress: await repository.generationProgress(generation.id),
             createdAt: generation.createdAt,
           }
@@ -377,17 +427,15 @@ export class DocumentsService {
     // Library documents have no application, so no instructions.
     openingId: string | null
   ) {
-    const career = new CareerRepository(tx);
-    const positions = await career.listPositions(profileId);
-    const credentials = await career.listCredentials(profileId);
+    // Titles as the published profile writes them: a proposed equivalent
+    // only ever replaces one of those.
+    const positions =
+      (await loadProfileSource({ db: tx, cipher, profileId }))?.positions ?? [];
     const equivalents = await new DocumentsRepository(tx).listTitleEquivalents(
       profileId
     );
     const originalTitles = new Map(
-      positions.map((position) => [
-        position.id,
-        cipher.decrypt(position.encryptedTitle),
-      ])
+      positions.map((position) => [position.id, position.title])
     );
     // Removed points keep their row, so old lines still trace to them.
     const instructions = new Map(
@@ -470,11 +518,9 @@ export class DocumentsService {
             : []
         );
       },
-      credentialApprovals: credentials.flatMap((row) =>
-        row.approvedAt
-          ? [{ credentialId: row.id, approvedAt: row.approvedAt }]
-          : []
-      ),
+      // Credentials are lines of the published profile now: there is no
+      // approval of their own to show.
+      credentialApprovals: [],
     };
   }
 

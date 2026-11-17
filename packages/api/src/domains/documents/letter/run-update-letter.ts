@@ -6,7 +6,7 @@ import type { DbClient } from "@repo/api/tools/db-client";
 
 import { proposalDiff } from "../adaptation/three-way-merge";
 import { DocumentsRepository } from "../documents-repository";
-import { generationSettings } from "../generation/generation-settings";
+import { reviewLoopSettings } from "../generation/review-loop-settings";
 import { outputLanguageNames } from "../generation/resume-prompts";
 import type { CoverLetterContent } from "../schemas/cover-letter-content";
 import { decryptDocument, decryptResume } from "../snapshot-content";
@@ -79,7 +79,7 @@ export async function runUpdateLetter(deps: {
     const { object } = await ai.generateObject({
       purpose: "cover_letter_update",
       role: "writing",
-      maxTokens: generationSettings.draftMaxTokens,
+      maxTokens: reviewLoopSettings.draftMaxTokens,
       schema: letterDraftSchema,
       system: [
         "The user's resume changed after this cover letter was written. Return the whole letter, adjusting only the passages the resume changes affect; copy every other paragraph word for word, the user's own paragraphs included.",

@@ -12,7 +12,10 @@ import {
   type ResumeSection,
   type ResumeSectionKind,
 } from "../schemas/resume-content";
-import type { ResumeHeaderFields } from "../schemas/template";
+import {
+  experienceAge,
+  type GenerationSettings,
+} from "../schemas/generation-settings";
 import type { CareerContext } from "./load-career-context";
 
 const draftLine = z.object({
@@ -22,9 +25,12 @@ const draftLine = z.object({
 
 /**
  * What the writing model returns: wording and the evidence behind it, never
- * employers, titles or dates, which code takes from the evidence base.
+ * employers, titles or dates, which code takes from the profile.
  */
 export const resumeDraftSchema = z.object({
+  // Up to five lines: what the document brings forward and what it leaves
+  // in the background (resume spec, "Generation rules").
+  emphasis: z.array(z.string()).catch([]),
   title_line: z.string(),
   summary: draftLine.nullable(),
   skills: z.array(
@@ -38,44 +44,125 @@ export const resumeDraftSchema = z.object({
     z.object({
       position_id: z.string(),
       context: z.string().nullable(),
+      // For a very old experience: the requirement (or the focus) it is
+      // there for, as the opening writes it. Null for the others.
+      relevance: z.string().nullable().catch(null),
       bullets: z.array(draftLine),
     })
   ),
-  projects: z.array(
-    z.object({ project_id: z.string(), bullets: z.array(draftLine) })
-  ),
+  projects: z
+    .array(z.object({ project_id: z.string(), bullets: z.array(draftLine) }))
+    .catch([]),
 });
 export type ResumeDraft = z.infer<typeof resumeDraftSchema>;
+
+type DraftLine = z.infer<typeof draftLine>;
+// A line of the resume being adjusted, kept word for word by its id.
+type KeptLine = { keep: string };
+
+/**
+ * A draft as code assembles it: what a writer drafted, or, for an
+ * adjustment, lines and competency groups of an existing resume kept by
+ * their ids in a new order.
+ */
+export type AssemblyDraft = Omit<
+  ResumeDraft,
+  "summary" | "skills" | "experience"
+> & {
+  summary: DraftLine | KeptLine | null;
+  skills: Array<
+    ResumeDraft["skills"][number] | (KeptLine & { items: string[] })
+  >;
+  experience: Array<
+    Omit<ResumeDraft["experience"][number], "bullets"> & {
+      bullets: Array<DraftLine | KeptLine>;
+    }
+  >;
+};
+
+const isKept = (line: object): line is KeptLine => "keep" in line;
 
 /** A line code refused, reported to the editor in the next round. */
 export type DroppedLine = {
   text: string;
-  reason: "no_evidence" | "unsupported_figure" | "unknown_skill";
+  reason:
+    | "no_evidence"
+    | "unsupported_figure"
+    | "unknown_skill"
+    // A very old experience with no requirement that justifies it.
+    | "not_relevant";
 };
 
 const normalize = (text: string) => foldAccents(text).toLowerCase();
 
 /** Every figure in a line ("40%", "2021", "3") must appear in its evidence. */
 function figuresBackedBy(text: string, evidenceTexts: string[]) {
-  const source = evidenceTexts.join(" ");
-  return (text.match(/\d+(?:[.,]\d+)?/g) ?? []).every((figure) =>
-    source.includes(figure)
+  // Whole numbers, never a part of one: a measured "15" doesn't back a "5".
+  const figures = (value: string) =>
+    (value.match(/\d+(?:[.,]\d+)*/g) ?? []).map((figure) =>
+      figure.replace(/,/g, ".")
+    );
+  const known = new Set(figures(evidenceTexts.join(" ")));
+  return figures(text).every((figure) => known.has(figure));
+}
+
+// A position's context is a note of a few words, never a place for facts.
+const maxContextLength = 40;
+
+/**
+ * The note next to a position's title ("parallel project"): the only
+ * written text that cites nothing, so it holds no number and nothing long
+ * enough to be a claim.
+ */
+function shortNote(context: string | null | undefined) {
+  const note = context?.trim();
+  return note && note.length <= maxContextLength && !/\d/.test(note)
+    ? note
+    : null;
+}
+
+/**
+ * The requirement (or focus) a very old experience says it is there for,
+ * as the document's purpose writes it; null when it names none of them.
+ */
+export function matchPurpose(relevance: string | null, purposes: string[]) {
+  const wanted = normalize(relevance ?? "").trim();
+  if (!wanted) return null;
+  return (
+    purposes.find((purpose) => {
+      const known = normalize(purpose).trim();
+      return (
+        !!known &&
+        (known === wanted || known.includes(wanted) || wanted.includes(known))
+      );
+    }) ?? null
   );
 }
 
 /**
  * Turns a draft into a snapshot's content, enforcing in code what the AI
- * may not decide (guided-interview spec, principle 4): locked facts come
- * from the positions (with this application's overrides); each line must
- * cite evidence or instructions it was given, and every figure in it must
- * appear in them; a skill must be an approved skill or be spelled out in
- * what the group cites. Refused lines are dropped and reported.
+ * may not decide (profile spec, principles): locked facts come from the
+ * profile's positions (with this application's overrides); each line must
+ * cite profile lines or instructions it was given, and every figure in it
+ * must be one the profile marks measured there; a skill must be a
+ * competency the person uses or be spelled out in what the group cites.
+ * The generation settings decide how many bullets each experience keeps,
+ * and whether a very old one enters at all. Refused lines are dropped and
+ * reported.
  */
 export function assembleResume(input: {
-  draft: ResumeDraft;
+  draft: AssemblyDraft;
+  // The resume an adjustment starts from: where kept lines come from.
+  reference?: ResumeContent | null;
   context: CareerContext;
   sections: ResumeSectionKind[];
-  header: ResumeHeaderFields;
+  settings: GenerationSettings;
+  // This month (YYYY-MM): what "recent" is measured from.
+  today: string;
+  // What the document is for: the opening's requirements, or the focus.
+  purposes: string[];
+  // The account's name, printed only when the profile gives none.
+  fallbackName?: string;
   newLineId?: () => string;
 }): { content: ResumeContent; dropped: DroppedLine[] } {
   const { draft, context } = input;
@@ -85,13 +172,36 @@ export function assembleResume(input: {
     context.instructions.map((row) => [row.id, row])
   );
   const dropped: DroppedLine[] = [];
+  const reference = input.reference?.sections ?? [];
+  const referenceBullets = new Map(
+    reference.flatMap((section) =>
+      section.kind === "experience"
+        ? section.entries.flatMap((entry) =>
+            entry.lines.map(
+              (line) =>
+                [line.id, { line, positionId: entry.positionId }] as const
+            )
+          )
+        : []
+    )
+  );
+  const referenceGroups = new Map(
+    reference.flatMap((section) =>
+      section.kind === "skills"
+        ? section.groups.map((group) => [group.id, group] as const)
+        : []
+    )
+  );
+  const referenceSummary = reference.find(
+    (section) => section.kind === "summary"
+  );
 
   /**
    * An instruction backs a line when it is about the same position, or
    * about none in particular; `allowed` judges evidence.
    */
   function toLine(
-    line: z.infer<typeof draftLine>,
+    line: DraftLine,
     allowed: (evidenceId: string) => boolean,
     positionId: string | null = null
   ): Line | null {
@@ -113,11 +223,8 @@ export function assembleResume(input: {
       return null;
     }
     const texts = [
-      // A file fact's own words back its figures too: the writer may use them.
-      ...evidenceIds.map((id) => {
-        const row = evidenceById.get(id)!;
-        return [row.text, row.sourceWording].filter(Boolean).join(" ");
-      }),
+      // Only what the profile marks measured backs a figure.
+      ...evidenceIds.map((id) => evidenceById.get(id)!.figures),
       ...instructionIds.map((id) => instructionById.get(id)!.text),
     ];
     if (!figuresBackedBy(text, texts)) {
@@ -136,11 +243,40 @@ export function assembleResume(input: {
 
   const build: Record<ResumeSectionKind, () => ResumeSection | null> = {
     summary: () => {
-      const line = draft.summary && toLine(draft.summary, () => true);
-      return line ? { kind: "summary", line } : null;
+      const kept =
+        referenceSummary?.kind === "summary" ? referenceSummary.line : null;
+      const line =
+        draft.summary && !isKept(draft.summary)
+          ? toLine(draft.summary, () => true)
+          : null;
+      // An adjustment whose new summary was refused keeps the one it had.
+      const summary = line ?? kept;
+      return summary ? { kind: "summary", line: summary } : null;
     },
     skills: () => {
       const groups = draft.skills.flatMap((group) => {
+        if (isKept(group)) {
+          // The group as the resume has it, its items in the order asked;
+          // nothing new enters.
+          const existing = referenceGroups.get(group.keep);
+          if (!existing) return [];
+          const items = existing.text.split(", ");
+          const asked = group.items.flatMap(
+            (item) =>
+              items.find((known) => normalize(known) === normalize(item)) ?? []
+          );
+          return [
+            {
+              ...existing,
+              text: [
+                ...new Set([
+                  ...asked,
+                  ...items.filter((item) => !asked.includes(item)),
+                ]),
+              ].join(", "),
+            },
+          ];
+        }
         const cited = group.evidence_ids.filter((id) => evidenceById.has(id));
         const citedText = normalize(
           cited.map((id) => evidenceById.get(id)!.text).join(" ")
@@ -191,29 +327,84 @@ export function assembleResume(input: {
             ]
           : [];
       });
-      return groups.length > 0 ? { kind: "skills", groups } : null;
+      // A competency is listed once, in the first group that names it.
+      const listed = new Set<string>();
+      const unique = groups.flatMap((group) => {
+        const items = group.text.split(", ").filter((item) => {
+          const name = normalize(item);
+          if (listed.has(name)) return false;
+          listed.add(name);
+          return true;
+        });
+        return items.length > 0 ? [{ ...group, text: items.join(", ") }] : [];
+      });
+      return unique.length > 0 ? { kind: "skills", groups: unique } : null;
     },
     experience: () => {
-      const entries = context.positions.map((position) => {
+      const entries = context.positions.flatMap((position) => {
         const drafted = draft.experience.find(
           (entry) => entry.position_id === position.id
         );
-        return {
+        const keptIds = new Set<string>();
+        const lines = (drafted?.bullets ?? []).flatMap((bullet) => {
+          if (isKept(bullet)) {
+            const existing = referenceBullets.get(bullet.keep);
+            if (
+              existing?.positionId !== position.id ||
+              keptIds.has(bullet.keep)
+            ) {
+              return [];
+            }
+            keptIds.add(bullet.keep);
+            return [existing.line];
+          }
+          return (
+            toLine(
+              bullet,
+              (id) => evidenceById.get(id)!.positionId === position.id,
+              position.id
+            ) ?? []
+          );
+        });
+        const entry = {
           positionId: position.id,
           employer: position.employer,
           title: position.title,
           startDate: position.startDate,
           endDate: position.endDate,
-          context: drafted?.context?.trim() ? drafted.context.trim() : null,
-          lines: (drafted?.bullets ?? []).flatMap(
-            (bullet) =>
-              toLine(
-                bullet,
-                (id) => evidenceById.get(id)!.positionId === position.id,
-                position.id
-              ) ?? []
-          ),
+          context: shortNote(drafted?.context),
         };
+        const age = experienceAge(position, input.settings, input.today);
+        if (age === "very_old" && input.settings.veryOld !== "keep") {
+          if (input.settings.veryOld === "leave_out") return [];
+          // It enters only for a requirement of this document, with one
+          // bullet tied to it.
+          const relevance = matchPurpose(
+            drafted?.relevance ?? null,
+            input.purposes
+          );
+          if (!relevance || lines.length === 0) {
+            if (drafted?.bullets.length) {
+              dropped.push({
+                text: `${position.title}, ${position.employer}`,
+                reason: "not_relevant",
+              });
+            }
+            return [];
+          }
+          return [{ ...entry, relevance, lines: lines.slice(0, 1) }];
+        }
+        return [
+          {
+            ...entry,
+            lines: lines.slice(
+              0,
+              age === "recent"
+                ? input.settings.bulletsRecent
+                : input.settings.bulletsOlder
+            ),
+          },
+        ];
       });
       return entries.length > 0 ? { kind: "experience", entries } : null;
     },
@@ -287,12 +478,13 @@ export function assembleResume(input: {
     return [title.trim(), technologies.join(", ")].filter(Boolean).join(" | ");
   }
 
-  const { header } = input;
+  // Contact data comes from the profile, like every other fact.
+  const { header } = context;
   return {
     content: {
       kind: "resume",
       header: {
-        name: header.name,
+        name: header.name.trim() || (input.fallbackName ?? ""),
         titleLine: checkedTitleLine(),
         contacts: [header.email, header.phone, header.linkedin, header.github]
           .map((value) => value.trim())

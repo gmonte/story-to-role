@@ -5,6 +5,11 @@ import type { DbClient } from "@repo/api/tools/db-client";
 
 import { DocumentsRepository } from "../documents-repository";
 import {
+  defaultGenerationSettings,
+  type GenerationSettings,
+  generationSettingsSchema,
+} from "../schemas/generation-settings";
+import {
   defaultTemplateSections,
   type ResumeHeaderFields,
   resumeHeaderFieldsSchema,
@@ -16,6 +21,8 @@ import {
 export type WritingSetup = {
   templateSections: TemplateSection[];
   header: ResumeHeaderFields;
+  /** The user's generation settings: their defaults over the product's. */
+  generationSettings: GenerationSettings;
   /** Null until the user approves one. */
   style: StyleProfile | null;
   styleDraft: StyleProfile | null;
@@ -64,6 +71,9 @@ export async function loadWritingSetup(input: {
       template?.sections ?? defaultTemplateSections
     ),
     header,
+    generationSettings: generationSettingsSchema
+      .catch(defaultGenerationSettings)
+      .parse({ ...defaultGenerationSettings, ...template?.generationSettings }),
     style: styleRow?.approvedAt ? style : null,
     styleDraft: style,
     styleStatus: !styleRow

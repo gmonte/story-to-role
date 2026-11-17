@@ -10,6 +10,7 @@ import {
   userProcedure,
 } from "@repo/api/tools/trpc";
 
+import { generationSettingsSchema } from "../schemas/generation-settings";
 import { DocumentsService } from "../documents-service";
 import {
   outputLanguageSchema,
@@ -70,6 +71,7 @@ export const libraryRouter = createTRPCRouter({
         reviewDepth: reviewDepthSchema,
         writingLevel: writingLevelSchema,
         tone: toneSchema,
+        settings: generationSettingsSchema.partial().optional(),
       })
     )
     .output(

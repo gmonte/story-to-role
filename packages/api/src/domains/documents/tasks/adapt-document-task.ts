@@ -9,7 +9,6 @@ import { getStorage } from "@repo/api/tools/storage/storage";
 
 import { refreshVersionVectors } from "../similar/embed-versions";
 import { runAdaptDocument } from "../adaptation/run-adapt-document";
-import { openingOfGeneration } from "../generation-opening";
 
 export const adaptDocumentTask = task({
   id: "adapt_document",
@@ -20,12 +19,10 @@ export const adaptDocumentTask = task({
       { db, taskId, type: "adapt_document" },
       async ({ userId, subjectId, reportProgress }) => {
         if (!subjectId) throw new Error(`Task ${taskId} has no generation`);
-        // The application's sensitive-item overrides apply to its documents.
         const { ai, cipher, sensitiveFilter } = await createTaskAi({
           db,
           userId,
           taskId,
-          openingId: await openingOfGeneration(db, subjectId),
         });
         await runAdaptDocument({
           db,

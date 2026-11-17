@@ -12,13 +12,17 @@ import { toast } from "@repo/web/components/ui/sonner";
 import { useTRPC } from "~/tools/trpc/client";
 
 import { useDocumentLabels } from "../hooks/use-document-labels";
-import { useRefreshDocuments } from "../hooks/use-opening-documents";
+import {
+  useOpeningDocuments,
+  useRefreshDocuments,
+} from "../hooks/use-opening-documents";
 import { GenerateResumeDialog } from "./generate-resume-dialog";
 
 /**
  * Documents similar to the opening (resume spec, "Flow"), from the library
- * and other applications: used as they are (a copy starts this
- * application) or as a reference for a new generation.
+ * and other applications, and the three ways to a resume: one of them used
+ * as it is (a copy starts this application), adjusted for this opening, or
+ * a new version generated from the published profile.
  */
 export function SimilarDocuments({
   openingId,
@@ -36,13 +40,23 @@ export function SimilarDocuments({
   const similar = useQuery(
     trpc.library.similarForOpening.queryOptions({ openingId })
   );
+  const documents = useOpeningDocuments(openingId);
   if (!similar.data?.length) return null;
+  const resume = documents.data?.documents.find((d) => d.kind === "resume");
 
   return (
     <section className="flex flex-col gap-2">
-      <h3 className="text-sm font-medium">
-        {t.formatMessage({ defaultMessage: "Similar documents" })}
-      </h3>
+      <div>
+        <h3 className="text-sm font-medium">
+          {t.formatMessage({ defaultMessage: "Similar documents" })}
+        </h3>
+        <p className="text-muted-foreground text-xs">
+          {t.formatMessage({
+            defaultMessage:
+              "Use one as is, adjust it for this opening, or generate a new version from your published profile.",
+          })}
+        </p>
+      </div>
       <ul className="flex flex-col gap-1.5">
         {similar.data.map((document) => (
           <SimilarRow
@@ -55,6 +69,24 @@ export function SimilarDocuments({
           />
         ))}
       </ul>
+      {/* Its section choices start from the application's, once loaded. */}
+      {documents.data && (
+        <GenerateResumeDialog
+          openingId={openingId}
+          defaultLanguage={defaultLanguage}
+          defaultTone={documents.data.application?.tone ?? defaultTone}
+          pendingGaps={pendingGaps}
+          existingLanguages={(resume?.versions ?? []).map(
+            (version) => version.language
+          )}
+          application={documents.data.application}
+          trigger={
+            <Button size="sm" variant="outline" className="self-start">
+              {t.formatMessage({ defaultMessage: "Generate a new version" })}
+            </Button>
+          }
+        />
+      )}
     </section>
   );
 }
@@ -149,10 +181,10 @@ function SimilarRow({
           defaultLanguage={defaultLanguage}
           defaultTone={defaultTone}
           pendingGaps={pendingGaps}
-          referenceVersionId={document.versionId}
+          reference={document}
           trigger={
             <Button size="sm" variant="ghost">
-              {t.formatMessage({ defaultMessage: "Use as reference" })}
+              {t.formatMessage({ defaultMessage: "Adjust" })}
             </Button>
           }
         />

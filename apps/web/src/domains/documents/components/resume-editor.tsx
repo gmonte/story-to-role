@@ -149,9 +149,6 @@ export function ResumeEditor({
       version.instructionTrace.map((row) => [row.instructionId, row.text])
     ),
   };
-  const approvals = new Map(
-    version.credentialApprovals.map((row) => [row.credentialId, row.approvedAt])
-  );
   const edit = (next: ResumeContent) => setDraft(next);
 
   return (
@@ -262,7 +259,7 @@ export function ResumeEditor({
       {trace && (
         <div className="text-muted-foreground flex flex-wrap gap-3 text-xs">
           <Legend className="bg-emerald-500">
-            {t.formatMessage({ defaultMessage: "Approved evidence" })}
+            {t.formatMessage({ defaultMessage: "Your profile" })}
           </Legend>
           <Legend className="bg-sky-500">
             {t.formatMessage({ defaultMessage: "Application instruction" })}
@@ -308,7 +305,7 @@ export function ResumeEditor({
             trace={trace}
             note={t.formatMessage({
               defaultMessage:
-                "The opening's title and technologies from your approved skills and evidence",
+                "The target title and main technologies, from your published profile",
             })}
           >
             <EditableText
@@ -338,7 +335,6 @@ export function ResumeEditor({
               language={language}
               trace={trace}
               traceIndex={traceIndex}
-              approvals={approvals}
               onEdit={edit}
             />
           </section>
@@ -369,7 +365,6 @@ function SectionBody({
   language,
   trace,
   traceIndex,
-  approvals,
   onEdit,
 }: {
   section: ResumeSection;
@@ -377,7 +372,6 @@ function SectionBody({
   language: VersionView["language"];
   trace: boolean;
   traceIndex: TraceIndex;
-  approvals: Map<string, Date>;
   onEdit: (content: ResumeContent) => void;
 }) {
   const t = useTranslation();
@@ -428,7 +422,7 @@ function SectionBody({
                     trace={trace}
                     note={t.formatMessage({
                       defaultMessage:
-                        "Employer, title and dates: locked facts from your approved position",
+                        "Employer, title and dates: locked facts, as your profile states them",
                     })}
                   >
                     <div className="flex items-baseline justify-between gap-2">
@@ -449,6 +443,15 @@ function SectionBody({
                   </NotedLine>
                 ) : (
                   <span className="font-semibold">{entry.name}</span>
+                )}
+                {/* A very old experience: the requirement it entered for. */}
+                {"positionId" in entry && entry.relevance && (
+                  <span className="text-muted-foreground pl-2 text-xs">
+                    {t.formatMessage(
+                      { defaultMessage: "Included for: {requirement}" },
+                      { requirement: entry.relevance }
+                    )}
+                  </span>
                 )}
                 <ul className="flex flex-col gap-1 pl-4">
                   {entry.lines.map((row) => (
@@ -492,19 +495,9 @@ function SectionBody({
             <li key={entry.credentialId}>
               <NotedLine
                 trace={trace}
-                note={
-                  approvals.has(entry.credentialId)
-                    ? t.formatMessage(
-                        {
-                          defaultMessage:
-                            "Approved credential · approved {date}",
-                        },
-                        {
-                          date: t.formatDate(approvals.get(entry.credentialId)),
-                        }
-                      )
-                    : t.formatMessage({ defaultMessage: "Approved credential" })
-                }
+                note={t.formatMessage({
+                  defaultMessage: "A credential, as your profile states it",
+                })}
               >
                 {credentialLine(entry, language)}
               </NotedLine>
@@ -615,7 +608,7 @@ function TracedLine({
             ))}
           </div>
         ) : (
-          t.formatMessage({ defaultMessage: "From your evidence base" })
+          t.formatMessage({ defaultMessage: "From your published profile" })
         )}
       </TooltipContent>
     </Tooltip>
@@ -686,7 +679,7 @@ function RenameVersionDialog({
   );
 }
 
-/** A line printed from a record (a locked fact, a credential). */
+/** A line printed by code from the profile (a locked fact, a credential). */
 function NotedLine({
   note,
   trace,

@@ -9,6 +9,7 @@ import { TrackerService } from "@repo/api/domains/applications/tracker/tracker-s
 import { AiKeysRepository } from "@repo/api/domains/ai/ai-keys-repository";
 import { CareerRepository } from "@repo/api/domains/career/career-repository";
 import { getUserCipher } from "@repo/api/domains/encryption/user-cipher";
+import { AgentChatRepository } from "@repo/api/domains/profile/agent/agent-chat-repository";
 import { createTestUser } from "@repo/api/test/create-test-user";
 import {
   clearTestDatabase,
@@ -59,11 +60,19 @@ async function setup() {
   const billing = { removeForDeletion: vi.fn(() => Promise.resolve()) };
   const deleteClerkUser = vi.fn((_clerkUserId: string) => Promise.resolve());
   const cancelRun = vi.fn((_runId: string) => Promise.resolve());
+  const closeChatSession = vi.fn((_chatId: string) => Promise.resolve());
   const account = new AccountService(db, {
     storage,
     billing,
     deleteClerkUser,
     cancelRun,
+    closeChatSession,
+  });
+  // A conversation with the profile agent, whose session lives on
+  // Trigger.dev.
+  const chat = await new AgentChatRepository(db).insertChat({
+    userId: user.id,
+    expiresAt: new Date(Date.now() + 86_400_000),
   });
 
   // Some of everything: a position, an imported file, an application with
@@ -109,7 +118,16 @@ async function setup() {
     status: "active",
     now: new Date(),
   });
-  return { db, user, storage, billing, deleteClerkUser, account };
+  return {
+    db,
+    user,
+    storage,
+    billing,
+    deleteClerkUser,
+    closeChatSession,
+    chat,
+    account,
+  };
 }
 
 describe("account", () => {
@@ -170,6 +188,7 @@ describe("account", () => {
 
     expect(ctx.billing.removeForDeletion).toHaveBeenCalledWith(ctx.user.id);
     expect(ctx.deleteClerkUser).toHaveBeenCalledWith(ctx.user.clerkUserId);
+    expect(ctx.closeChatSession).toHaveBeenCalledWith(ctx.chat.id);
     expect(ctx.storage.keys()).toEqual([]);
     for (const table of [
       "users",
@@ -182,6 +201,7 @@ describe("account", () => {
       "ai_keys",
       "credit_lots",
       "source_documents",
+      "profile_chats",
     ]) {
       const result = await ctx.db.execute<{ count: number }>(
         sql.raw(`select count(*)::int as count from ${table}`)

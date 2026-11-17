@@ -1,5 +1,5 @@
 import { blockToLine, type ProfileBlock } from "./blocks";
-import { readStructure } from "./structure";
+import { readStructure, type ProfileStructure } from "./structure";
 
 /**
  * A part of the profile reviewed on its own: a section, or one experience
@@ -13,6 +13,24 @@ export type ProfileChunk = {
   end: number;
   text: string;
 };
+
+/**
+ * Each experience's key, in order: its company and title, so it keeps its
+ * key while its dates are corrected; a second stint with the same title is
+ * numbered.
+ */
+export function experienceKeys(structure: ProfileStructure): string[] {
+  const seen = new Map<string, number>();
+  return structure.experiences.map((experience) => {
+    const name = experience.parsed
+      ? `${experience.parsed.company} — ${experience.parsed.title}`
+      : experience.rawTitle;
+    const key = `experience:${name.toLowerCase()}`;
+    const count = (seen.get(key) ?? 0) + 1;
+    seen.set(key, count);
+    return count === 1 ? key : `${key} #${count}`;
+  });
+}
 
 function text(blocks: ProfileBlock[], start: number, end: number) {
   return blocks.slice(start, end).map(blockToLine).join("\n");
@@ -35,13 +53,10 @@ export function profileChunks(blocks: ProfileBlock[]): ProfileChunk[] {
           text: text(blocks, section.heading, first),
         });
       }
-      for (const experience of structure.experiences) {
-        // An experience keeps its key while its dates are corrected.
-        const name = experience.parsed
-          ? `${experience.parsed.company} — ${experience.parsed.title}`
-          : experience.rawTitle;
+      const keys = experienceKeys(structure);
+      for (const [index, experience] of structure.experiences.entries()) {
         chunks.push({
-          key: `experience:${name.toLowerCase()}`,
+          key: keys[index],
           title: experience.rawTitle,
           start: experience.heading,
           end: experience.end,

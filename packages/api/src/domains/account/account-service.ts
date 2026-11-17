@@ -5,6 +5,7 @@ import { BillingService } from "@repo/api/domains/billing/billing-service";
 import { TasksRepository } from "@repo/api/domains/tasks/tasks-repository";
 import type { DbClient } from "@repo/api/tools/db-client";
 import { getStorage, type Storage } from "@repo/api/tools/storage/storage";
+import { AgentChatRepository } from "@repo/api/domains/profile/agent/agent-chat-repository";
 import { triggerClient } from "@repo/api/tools/trigger/trigger-client";
 import { logger } from "@repo/common/tools/logger";
 
@@ -18,6 +19,7 @@ type Deps = {
   billing: Pick<BillingService, "removeForDeletion">;
   deleteClerkUser: (clerkUserId: string) => Promise<void>;
   cancelRun: (runId: string) => Promise<void>;
+  closeChatSession: (chatId: string) => Promise<void>;
 };
 
 const sameEmail = (a: string, b: string) =>
@@ -43,6 +45,9 @@ export class AccountService {
           await (await clerkClient()).users.deleteUser(clerkUserId);
         }),
       cancelRun: deps.cancelRun ?? ((runId) => triggerClient.cancel(runId)),
+      closeChatSession:
+        deps.closeChatSession ??
+        (async (chatId) => triggerClient.closeSession(chatId)),
     };
   }
 
@@ -90,6 +95,14 @@ export class AccountService {
     )) {
       await this.deps.cancelRun(runId).catch((error: unknown) => {
         logger.warn(logTags, "Could not cancel a run", { runId, error });
+      });
+    }
+    // The agent's sessions on Trigger.dev close with the account (ADR 0007).
+    for (const chatId of await new AgentChatRepository(this.db).listChatIds(
+      userId
+    )) {
+      await this.deps.closeChatSession(chatId).catch((error: unknown) => {
+        logger.warn(logTags, "Could not close a chat session", { error });
       });
     }
     await this.deps.billing.removeForDeletion(userId);

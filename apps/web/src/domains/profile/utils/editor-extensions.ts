@@ -193,7 +193,16 @@ export type EditorDecorationSpec =
       title?: string;
       key: string;
     }
-  | { kind: "widget"; at: number; element: () => HTMLElement; key: string };
+  // A whole block (a line a suggestion would replace).
+  | { kind: "node"; from: number; to: number; className: string; key: string }
+  | {
+      kind: "widget";
+      at: number;
+      element: () => HTMLElement;
+      key: string;
+      // Has buttons of its own: the editor leaves its events alone.
+      interactive?: boolean;
+    };
 
 export const decorationsKey = new PluginKey<DecorationSet>(
   "profileDecorations"
@@ -233,7 +242,24 @@ export function setDecorations(editor: Editor, specs: EditorDecorationSpec[]) {
     if (spec.kind === "widget") {
       if (spec.at < 0 || spec.at > doc.content.size) return [];
       return [
-        Decoration.widget(spec.at, spec.element, { key: spec.key, side: 1 }),
+        Decoration.widget(spec.at, spec.element, {
+          key: spec.key,
+          side: 1,
+          ...(spec.interactive
+            ? { stopEvent: () => true, ignoreSelection: true }
+            : {}),
+        }),
+      ];
+    }
+    if (spec.kind === "node") {
+      if (spec.from >= spec.to || spec.to > doc.content.size) return [];
+      return [
+        Decoration.node(
+          spec.from,
+          spec.to,
+          { class: spec.className },
+          { key: spec.key }
+        ),
       ];
     }
     if (spec.from >= spec.to || spec.to > doc.content.size) return [];

@@ -44,6 +44,7 @@ export function WorkspaceBody({
   layoutId,
   chat,
   panel,
+  flushPanel = false,
   preview,
   previewOpen = false,
 }: {
@@ -51,6 +52,8 @@ export function WorkspaceBody({
   layoutId: string;
   chat: ReactNode;
   panel?: ReactNode;
+  // A wider panel with no padding, which scrolls inside itself (a chat).
+  flushPanel?: boolean;
   preview?: ReactNode;
   previewOpen?: boolean;
 }) {
@@ -96,7 +99,11 @@ export function WorkspaceBody({
         // leaves no empty column behind.
         <aside
           ref={side}
-          className="bg-muted/30 hidden w-80 shrink-0 overflow-y-auto border-l p-4 empty:hidden lg:block xl:w-96"
+          className={
+            flushPanel
+              ? "bg-muted/30 hidden w-96 shrink-0 overflow-hidden border-l empty:hidden lg:block xl:w-[28rem]"
+              : "bg-muted/30 hidden w-80 shrink-0 overflow-y-auto border-l p-4 empty:hidden lg:block xl:w-96"
+          }
         >
           {panel}
         </aside>

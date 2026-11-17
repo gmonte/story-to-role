@@ -86,3 +86,60 @@
   background: color-mix(in oklab, var(--primary) 10%, transparent);
   border-radius: 2px;
 }
+
+/* A suggestion as a tracked change (domains/profile): the lines it replaces
+   struck through, what it writes below them. */
+.profile-editor .profile-suggestion-old {
+  background: color-mix(in oklab, var(--destructive) 10%, transparent);
+  text-decoration: line-through;
+  text-decoration-color: color-mix(in oklab, var(--destructive) 60%, transparent);
+}
+.profile-editor .profile-suggestion {
+  margin: 0.25rem 0 0.5rem;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid color-mix(in oklab, #10b981 40%, transparent);
+  border-radius: 0.5rem;
+  background: color-mix(in oklab, #10b981 8%, transparent);
+  user-select: none;
+}
+.profile-editor .profile-suggestion-new {
+  color: color-mix(in oklab, #047857 85%, var(--foreground));
+}
+.dark .profile-editor .profile-suggestion-new {
+  color: color-mix(in oklab, #6ee7b7 85%, var(--foreground));
+}
+.profile-editor .profile-suggestion-heading {
+  font-weight: 600;
+}
+.profile-editor .profile-suggestion-note {
+  color: var(--muted-foreground);
+  font-size: 0.875rem;
+  font-style: italic;
+}
+.profile-editor .profile-suggestion-footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.375rem;
+  font-size: 0.75rem;
+  line-height: 1rem;
+}
+.profile-editor .profile-suggestion-reason {
+  flex: 1 1 12rem;
+  color: var(--muted-foreground);
+}
+.profile-editor .profile-suggestion-accept,
+.profile-editor .profile-suggestion-reject {
+  padding: 0.125rem 0.625rem;
+  border: 1px solid var(--border);
+  border-radius: 0.375rem;
+  background: var(--background);
+  font-weight: 500;
+  cursor: pointer;
+}
+.profile-editor .profile-suggestion-accept {
+  border-color: transparent;
+  background: var(--primary);
+  color: var(--primary-foreground);
+}

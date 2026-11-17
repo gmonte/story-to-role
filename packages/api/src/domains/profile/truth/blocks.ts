@@ -15,7 +15,12 @@ export type ProfileBlock =
 // spaces count the same when reading.
 const indentUnit = 2;
 
-export function parseBlocks(markdown: string): ProfileBlock[] {
+export function parseBlocks(
+  markdown: string,
+  // A fragment (a suggestion's lines) keeps its depths as written: its
+  // first item may be nested under a line outside it.
+  { fragment = false }: { fragment?: boolean } = {}
+): ProfileBlock[] {
   const blocks: ProfileBlock[] = [];
   for (const raw of markdown.replace(/\r\n?/g, "\n").split("\n")) {
     const line = raw.replace(/\s+$/, "");
@@ -47,7 +52,7 @@ export function parseBlocks(markdown: string): ProfileBlock[] {
 
     blocks.push({ type: "paragraph", text: line.trim() });
   }
-  return normalizeDepths(blocks);
+  return fragment ? blocks : normalizeDepths(blocks);
 }
 
 /** A list item can be at most one level deeper than the item before it. */

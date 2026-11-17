@@ -15,6 +15,7 @@ import {
   maxProfileLength,
   profileDraftSchema,
   profileFindingSchema,
+  profileSuggestionSchema,
   profileVersionSummarySchema,
 } from "./schemas/profile";
 import type { ProfileLanguage } from "./truth/sections";
@@ -176,4 +177,40 @@ export const profileRouter = createTRPCRouter({
     .input(z.object({}))
     .output(profileValidationSchema.nullable())
     .query(({ ctx }) => new ProfileService(db).latestValidation(ctx.userId)),
+
+  suggestions: userProcedure
+    .meta(
+      openApiMeta(
+        "profile",
+        "GET",
+        "/profile/suggestions",
+        "Lists the suggestions waiting for the user"
+      )
+    )
+    .input(z.object({}))
+    .output(z.array(profileSuggestionSchema))
+    .query(({ ctx }) => new ProfileService(db).listSuggestions(ctx.userId)),
+
+  resolveSuggestions: userProcedure
+    .meta(
+      openApiMeta(
+        "profile",
+        "POST",
+        "/profile/suggestions/resolve",
+        "Accepts or rejects suggestions: the given ones, or all pending"
+      )
+    )
+    .input(
+      z.object({
+        resolution: z.enum(["accepted", "rejected"]),
+        profileSuggestionIds: z.array(z.uuid()).max(200).optional(),
+      })
+    )
+    .output(z.object({ resolved: z.number().int() }))
+    .mutation(({ ctx, input }) =>
+      new ProfileService(db).resolveSuggestions({
+        userId: ctx.userId,
+        ...input,
+      })
+    ),
 });

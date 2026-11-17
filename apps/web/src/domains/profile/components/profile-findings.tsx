@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 
-import { ChevronDown, ChevronRight, Wand2 } from "lucide-react";
+import { ChevronDown, ChevronRight, MessageSquare, Wand2 } from "lucide-react";
 
 import { useTranslation } from "@repo/intl/use-translation";
 import type { ProfileFinding } from "@repo/api/domains/profile/truth/lint";
@@ -23,8 +23,15 @@ const shownContent = 8;
 export function ProfileFindings() {
   const t = useTranslation();
   const { findingMessage } = useProfileLabels();
-  const { findings, structure, goToLine, fix, fixWholeFormat } =
-    useProfileEditor();
+  const {
+    blocks,
+    findings,
+    structure,
+    goToLine,
+    fix,
+    fixWholeFormat,
+    talkAbout,
+  } = useProfileEditor();
   const [showAll, setShowAll] = useState(false);
   const [open, setOpen] = useState(true);
 
@@ -63,6 +70,23 @@ export function ProfileFindings() {
         >
           {findingMessage(finding, structure.language)}
         </button>
+        {finding.line !== null && (
+          <button
+            type="button"
+            title={t.formatMessage({ defaultMessage: "Talk about this" })}
+            aria-label={t.formatMessage({ defaultMessage: "Talk about this" })}
+            className="text-muted-foreground hover:text-primary mt-1 opacity-0 group-hover:opacity-100 focus-visible:opacity-100"
+            onClick={() =>
+              finding.line !== null &&
+              talkAbout({
+                quote: blocks[finding.line].text,
+                text: findingMessage(finding, structure.language),
+              })
+            }
+          >
+            <MessageSquare className="size-3.5" />
+          </button>
+        )}
         {finding.fixable && (
           <Button
             size="sm"

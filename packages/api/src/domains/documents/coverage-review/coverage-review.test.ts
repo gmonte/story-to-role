@@ -196,6 +196,37 @@ describe("what code keeps of the coverage review", () => {
     expect(review.gaps).toEqual(["Terraform", "Leadership", "Go"]);
   });
 
+  it("leaves location and work model out: the job preferences answer them", () => {
+    const review = keepReview({
+      draft: {
+        ...empty,
+        partial: [
+          {
+            requirement: "Remote in Brazil",
+            explanation: "Not in the profile.",
+          },
+        ],
+      },
+      content,
+      context,
+      brief: {
+        ...brief,
+        terms: [
+          ...brief.terms,
+          {
+            kind: "requirement",
+            category: "work_model",
+            text: "Remote in Brazil",
+          },
+        ],
+      },
+      purposes,
+      language: "en-US",
+    });
+    expect(review.partial).toEqual([]);
+    expect(review.gaps).not.toContain("Remote in Brazil");
+  });
+
   it("demotes a strong item whose line is not in the document", () => {
     const review = keep({
       strong: [

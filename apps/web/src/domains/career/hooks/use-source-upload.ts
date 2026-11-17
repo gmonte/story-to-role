@@ -3,7 +3,6 @@
 import {
   acceptedDocumentTypes,
   documentLimits,
-  slotStatuses,
   typesByExtension,
 } from "@repo/api/domains/career/documents/document-limits";
 import type { Timeline } from "@repo/api/domains/career/schemas/timeline";
@@ -21,9 +20,6 @@ export const sourceAccept = [
 ].join(",");
 
 export const sourceMegabytes = documentLimits.maxBytes / (1024 * 1024);
-
-const takesSlot = (document: Timeline["documents"][number]) =>
-  (slotStatuses as readonly string[]).includes(document.status);
 
 /**
  * Uploads career sources: format, size and the slots left are checked here
@@ -78,7 +74,7 @@ export function useSourceUpload({
     });
     if (valid.length < files.length) toast.error(invalidFile);
     // As many as fit; the rest wait for a free slot.
-    const free = documentLimits.maxSources - documents.filter(takesSlot).length;
+    const free = documentLimits.maxSources - documents.length;
     if (valid.length > free) toast.error(tooMany);
     for (const file of valid.slice(0, Math.max(free, 0))) void upload(file);
   }

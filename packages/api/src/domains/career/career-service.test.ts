@@ -75,7 +75,7 @@ describe("career profile", () => {
 
     expect(await ctx.timeline()).toMatchObject({
       profile: { privacyNoticeAccepted: true },
-      documents: [{ fileName: "resume.pdf", status: "stored" }],
+      documents: [{ fileName: "resume.pdf" }],
     });
   });
 

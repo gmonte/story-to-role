@@ -60,20 +60,9 @@ export const motivationSplitSchema = z.object({
   ),
 });
 
-export const storyChoiceSchema = z.object({
-  storyId: z.uuid(),
-  problem: z.string(),
-  result: z.string(),
-  position: z.string().nullable(),
-  // Why it fits: the opening's requirements its evidence answers.
-  fits: z.array(z.string()),
-});
-export type StoryChoice = z.infer<typeof storyChoiceSchema>;
-
 export const motivationViewSchema = z.object({
   interviewId: z.uuid().nullable(),
   status: motivationStatusSchema.nullable(),
-  storyId: z.uuid().nullable(),
   // The interviewer is preparing the next question.
   thinking: z.boolean(),
   turns: z.array(

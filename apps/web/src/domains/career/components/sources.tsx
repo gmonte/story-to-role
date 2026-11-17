@@ -3,12 +3,11 @@
 import { useRef, useState, type DragEvent } from "react";
 
 import { useMutation } from "@tanstack/react-query";
-import { FileUp, Sparkles, Trash2 } from "lucide-react";
+import { FileUp, Trash2 } from "lucide-react";
 
 import { documentLimits } from "@repo/api/domains/career/documents/document-limits";
 import type { Timeline } from "@repo/api/domains/career/schemas/timeline";
 import { useTranslation } from "@repo/intl/use-translation";
-import { Badge } from "@repo/web/components/ui/badge";
 import { Button } from "@repo/web/components/ui/button";
 import { toast } from "@repo/web/components/ui/sonner";
 import { cn } from "@repo/web/lib/utils";
@@ -21,9 +20,6 @@ import {
   sourceMegabytes,
   useSourceUpload,
 } from "../hooks/use-source-upload";
-
-const reading = (document: Timeline["documents"][number]) =>
-  document.status === "pending" || document.status === "processing";
 
 /**
  * The files that tell the user's career: resume versions, a LinkedIn PDF,
@@ -57,41 +53,6 @@ export function Sources({
     add(Array.from(event.dataTransfer.files));
   }
 
-  const reasonLabel = (reason: string | null) => {
-    switch (reason) {
-      case "not_a_career_document":
-        return t.formatMessage({
-          defaultMessage: "Doesn't look like a resume",
-        });
-      case "too_many_pages":
-        return t.formatMessage({ defaultMessage: "Too many pages" });
-      case "too_long":
-        return t.formatMessage({ defaultMessage: "Too long" });
-      case "too_short":
-        return t.formatMessage({ defaultMessage: "Too short" });
-      default:
-        return t.formatMessage({ defaultMessage: "Couldn't be read" });
-    }
-  };
-
-  const statusLabel = (document: Timeline["documents"][number]) => {
-    switch (document.status) {
-      case "stored":
-        return t.formatMessage({ defaultMessage: "Saved" });
-      case "pending":
-      case "processing":
-        return t.formatMessage({ defaultMessage: "Reading" });
-      case "processed":
-        return document.kind === "truth_file"
-          ? t.formatMessage({ defaultMessage: "Truth file" })
-          : t.formatMessage({ defaultMessage: "Imported" });
-      case "rejected":
-        return reasonLabel(document.rejectionReason);
-      case "failed":
-        return t.formatMessage({ defaultMessage: "Failed" });
-    }
-  };
-
   return (
     <section className="flex flex-col gap-2">
       <h3 className="text-sm font-medium">
@@ -109,35 +70,18 @@ export function Sources({
             >
               {document.fileName}
             </button>
-            <Badge
-              variant={
-                document.status === "rejected" ? "destructive" : "outline"
-              }
-              className={reading(document) ? "gap-1" : undefined}
+            <Button
+              size="icon"
+              variant="ghost"
+              className="size-6"
+              aria-label={t.formatMessage({
+                defaultMessage: "Remove this source",
+              })}
+              disabled={remove.isPending}
+              onClick={() => remove.mutate({ sourceDocumentId: document.id })}
             >
-              {/* Being read: the AI at work, not a still label. */}
-              {reading(document) && (
-                <Sparkles className="text-primary size-3 animate-pulse" />
-              )}
-              <span className={reading(document) ? "animate-pulse" : undefined}>
-                {statusLabel(document)}
-              </span>
-            </Badge>
-            {/* An import still reads its file. */}
-            {!reading(document) && (
-              <Button
-                size="icon"
-                variant="ghost"
-                className="size-6"
-                aria-label={t.formatMessage({
-                  defaultMessage: "Remove this source",
-                })}
-                disabled={remove.isPending}
-                onClick={() => remove.mutate({ sourceDocumentId: document.id })}
-              >
-                <Trash2 />
-              </Button>
-            )}
+              <Trash2 />
+            </Button>
           </li>
         ))}
       </ul>

@@ -2,7 +2,6 @@ import { z } from "zod";
 
 export const taskTypes = [
   "sample",
-  "chat_turn",
   "analyze_opening",
   "generate_document",
   "extract_style_profile",

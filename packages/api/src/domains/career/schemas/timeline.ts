@@ -5,7 +5,6 @@ import {
   credentialStatusSchema,
   interviewLanguageSchema,
   sourceDocumentKindSchema,
-  sourceDocumentStatusSchema,
   yearMonthSchema,
 } from "./career";
 
@@ -34,8 +33,6 @@ export const sourceDocumentViewSchema = z.object({
   id: z.uuid(),
   kind: sourceDocumentKindSchema,
   fileName: z.string(),
-  status: sourceDocumentStatusSchema,
-  rejectionReason: z.string().nullable(),
   createdAt: z.date(),
 });
 

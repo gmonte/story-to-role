@@ -117,8 +117,6 @@ export class CareerService {
         id: row.id,
         kind: row.kind,
         fileName: cipher.decrypt(row.encryptedFileName),
-        status: row.status,
-        rejectionReason: row.rejectionReason,
         createdAt: row.createdAt,
       })),
     };

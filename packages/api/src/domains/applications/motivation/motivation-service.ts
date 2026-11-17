@@ -8,7 +8,7 @@ import type { RealtimeSubscription } from "@repo/api/domains/tasks/schemas/task"
 import { TasksService } from "@repo/api/domains/tasks/tasks-service";
 import type { DbClient } from "@repo/api/tools/db-client";
 
-import type { MotivationView, StoryChoice } from "../schemas/motivation";
+import type { MotivationView } from "../schemas/motivation";
 import { MotivationRepository } from "./motivation-repository";
 import { awaitingInterviewer } from "./motivation-turns";
 
@@ -18,11 +18,9 @@ const notFound = () => new TRPCError({ code: "NOT_FOUND" });
 const staleTurnMs = 3 * 60_000;
 
 /**
- * The cover letter's motivation interview and story choice (resume spec,
- * "Cover letter inputs"): the story is chosen among the user's approved
- * stories closest to the opening; the interview asks a few short questions
- * in tasks; its points stay in the application or, approved one by one,
- * become career goals or enrich the story.
+ * The cover letter's motivation interview (resume spec, "Cover letter
+ * inputs"): a few short questions asked in tasks; its points stay in the
+ * application or, approved one by one, become career goals.
  */
 export class MotivationService {
   constructor(
@@ -59,7 +57,6 @@ export class MotivationService {
         return {
           interviewId: null,
           status: null,
-          storyId: null,
           thinking: false,
           turns: [],
           points: [],
@@ -75,7 +72,6 @@ export class MotivationService {
       return {
         interviewId: interview.id,
         status: stale ? "failed" : interview.status,
-        storyId: interview.storyId,
         thinking: waiting && !stale,
         turns: turns.map((turn) => ({
           role: turn.role,
@@ -92,19 +88,6 @@ export class MotivationService {
           })),
       };
     });
-  }
-
-  /**
-   * The stories the letter may tell, closest to the opening. None for now:
-   * stories went with the old evidence base.
-   */
-  async storyChoices(input: {
-    userId: string;
-    openingId: string;
-  }): Promise<StoryChoice[]> {
-    await this.requireOpening(input.userId, input.openingId);
-    // Profile_truth replaces this in P8 (docs/plan.md).
-    return [];
   }
 
   /** Starts the interviewer's turn; a start that fails fails the interview. */
@@ -124,11 +107,13 @@ export class MotivationService {
     }
   }
 
-  /** Starts (or starts over) the interview, with the story the letter tells. */
+  /**
+   * Starts (or starts over) the interview. Profile_truth replaces this in
+   * P8 (docs/plan.md): the letter's story will come from the profile.
+   */
   async start(input: {
     userId: string;
     openingId: string;
-    storyId: string | null;
   }): Promise<{ realtime: RealtimeSubscription }> {
     const { profile, opening } = await this.requireOpening(
       input.userId,
@@ -138,12 +123,9 @@ export class MotivationService {
       userId: input.userId,
       type: "motivation_turn",
     });
-    // Profile_truth replaces this in P8 (docs/plan.md): no story exists.
-    if (input.storyId) throw notFound();
     const interview = await new MotivationRepository(this.db).replaceInterview({
       profileId: profile.id,
       openingId: opening.id,
-      storyId: null,
     });
     return this.askNext(input.userId, interview.id);
   }
@@ -187,32 +169,21 @@ export class MotivationService {
   }
 
   /** Skipping: the letter is then marked "could improve with your motivation". */
-  async skip(input: {
-    userId: string;
-    openingId: string;
-    // The story still matters: the letter tells it without the interview.
-    storyId: string | null;
-  }) {
+  async skip(input: { userId: string; openingId: string }) {
     const { profile, opening } = await this.requireOpening(
       input.userId,
       input.openingId
     );
-    // Profile_truth replaces this in P8 (docs/plan.md): no story exists.
-    if (input.storyId) throw notFound();
     await this.db.transaction(async (tx) => {
       const repository = new MotivationRepository(tx);
       const interview = await repository.findInterviewByOpening(opening.id);
       if (interview) {
-        await repository.updateInterview(interview.id, {
-          status: "skipped",
-          storyId: interview.storyId,
-        });
+        await repository.updateInterview(interview.id, { status: "skipped" });
       } else {
         await repository.replaceInterview({
           profileId: profile.id,
           openingId: opening.id,
           status: "skipped",
-          storyId: null,
         });
       }
     });

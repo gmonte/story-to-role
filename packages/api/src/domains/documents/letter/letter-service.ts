@@ -85,9 +85,8 @@ export class LetterService {
       if (input.versionId && existing?.documentId !== document.id) {
         throw notFound();
       }
-      // A letter tells one story (resume spec), once the interview chose
-      // one. Profile_truth replaces this in P8 (docs/plan.md): no stories
-      // exist, so none is required.
+      // A letter tells one story (resume spec). Profile_truth replaces this
+      // in P8 (docs/plan.md): until the profile supplies it, none is required.
       // The resume it accompanies: a version of this application's resume.
       const resume = input.resumeVersionId
         ? await requireUserVersion(tx, input.userId, input.resumeVersionId)

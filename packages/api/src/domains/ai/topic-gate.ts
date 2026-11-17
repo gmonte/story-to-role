@@ -1,13 +1,14 @@
 import { z } from "zod";
 
-import type { ChatContext } from "@repo/api/domains/chat/schemas/chat-message";
-
 import { KeyUnusableError } from "./providers/provider-package";
 import type { AiClient } from "./ai-client";
 
+/** Every chat belongs to a context: there is no general chat. */
+export type ChatContext = "profile" | "opening" | "document";
+
 const contextDescriptions: Record<ChatContext, string> = {
-  career_interview:
-    "a guided interview about the user's own career: their positions, projects, achievements, skills, credentials, goals and how they like to write about them",
+  profile:
+    "the user's own career profile: their experiences, results, tools, education, certifications, competencies, languages, gaps and how they want to be presented",
   opening:
     "one job opening the user may apply to: the opening itself, the company, the user's fit for it, and the resume or cover letter for it",
   document:
@@ -73,30 +74,4 @@ export async function checkTopic({
     if (error instanceof KeyUnusableError) throw error;
     return "off_topic";
   }
-}
-
-export type ChatReply =
-  | { kind: "off_topic" | "blocked_override" }
-  | { kind: "answer"; text: string };
-
-/**
- * A chat turn: off-topic messages get the fixed reply (rendered by the
- * interface in its language) and never reach the main model.
- */
-export async function replyToChatMessage({
-  ai,
-  context,
-  message,
-  answer,
-}: {
-  ai: AiClient;
-  context: ChatContext;
-  message: string;
-  answer: () => Promise<string>;
-}): Promise<ChatReply> {
-  const verdict = await checkTopic({ ai, context, message });
-  if (verdict === "override") return { kind: "blocked_override" };
-  if (verdict === "off_topic") return { kind: "off_topic" };
-
-  return { kind: "answer", text: await answer() };
 }

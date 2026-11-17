@@ -1,5 +1,5 @@
 {
-  "id": "381f1797-840f-4f00-a999-8ba9072f928d",
+  "id": "44e1a031-db62-4364-b9f1-2fe9b781601b",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -1104,96 +1104,6 @@
       "checkConstraints": {},
       "isRLSEnabled": false
     },
-    "public.chat_messages": {
-      "name": "chat_messages",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "uuid",
-          "primaryKey": true,
-          "notNull": true,
-          "default": "gen_random_uuid()"
-        },
-        "createdAt": {
-          "name": "createdAt",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "CURRENT_TIMESTAMP"
-        },
-        "userId": {
-          "name": "userId",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "context": {
-          "name": "context",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "author": {
-          "name": "author",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "kind": {
-          "name": "kind",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'text'"
-        },
-        "encryptedContent": {
-          "name": "encryptedContent",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        }
-      },
-      "indexes": {
-        "chat_messages_user_context_idx": {
-          "name": "chat_messages_user_context_idx",
-          "columns": [
-            {
-              "expression": "userId",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "context",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {
-        "chat_messages_userId_users_id_fk": {
-          "name": "chat_messages_userId_users_id_fk",
-          "tableFrom": "chat_messages",
-          "tableTo": "users",
-          "columnsFrom": ["userId"],
-          "columnsTo": ["id"],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
     "public.career_profiles": {
       "name": "career_profiles",
       "schema": "",
@@ -1571,19 +1481,6 @@
         },
         "encryptedText": {
           "name": "encryptedText",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "status": {
-          "name": "status",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'stored'"
-        },
-        "rejectionReason": {
-          "name": "rejectionReason",
           "type": "text",
           "primaryKey": false,
           "notNull": false
@@ -2961,12 +2858,6 @@
           "primaryKey": false,
           "notNull": false
         },
-        "evidenceId": {
-          "name": "evidenceId",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": false
-        },
         "confirmedAt": {
           "name": "confirmedAt",
           "type": "timestamp with time zone",
@@ -3395,12 +3286,6 @@
           "primaryKey": false,
           "notNull": true,
           "default": "'in_progress'"
-        },
-        "storyId": {
-          "name": "storyId",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": false
         }
       },
       "indexes": {},

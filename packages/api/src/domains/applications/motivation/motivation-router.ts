@@ -12,7 +12,6 @@ import {
 import {
   motivationDecisionSchema,
   motivationViewSchema,
-  storyChoiceSchema,
 } from "../schemas/motivation";
 import { MotivationService } from "./motivation-service";
 
@@ -34,21 +33,6 @@ export const motivationRouter = createTRPCRouter({
       new MotivationService(db).get({ userId: ctx.userId, ...input })
     ),
 
-  storyChoices: userProcedure
-    .meta(
-      openApiMeta(
-        "motivation",
-        "GET",
-        "/openings/by-id/{openingId}/story-choices",
-        "Ranks the user's stories by how close they are to the opening"
-      )
-    )
-    .input(z.object({ openingId: z.uuid() }))
-    .output(z.array(storyChoiceSchema))
-    .query(({ ctx, input }) =>
-      new MotivationService(db).storyChoices({ userId: ctx.userId, ...input })
-    ),
-
   start: userProcedure
     .use(rateLimited("taskStart"))
     .meta(
@@ -56,17 +40,17 @@ export const motivationRouter = createTRPCRouter({
         "motivation",
         "POST",
         "/openings/by-id/{openingId}/motivation",
-        "Starts the motivation interview with the chosen story"
+        "Starts the motivation interview"
       )
     )
-    .input(z.object({ openingId: z.uuid(), storyId: z.uuid().nullable() }))
+    .input(z.object({ openingId: z.uuid() }))
     .output(started)
     .mutation(({ ctx, input }) =>
       new MotivationService(db).start({ userId: ctx.userId, ...input })
     ),
 
   answer: userProcedure
-    // A chat answer, limited like the career interview's messages.
+    // A chat answer: a person types, a script bursts.
     .use(rateLimited("chatMessage"))
     .meta(
       openApiMeta(
@@ -93,10 +77,10 @@ export const motivationRouter = createTRPCRouter({
         "motivation",
         "POST",
         "/openings/by-id/{openingId}/motivation/skip",
-        "Skips the motivation interview, keeping the chosen story"
+        "Skips the motivation interview"
       )
     )
-    .input(z.object({ openingId: z.uuid(), storyId: z.uuid().nullable() }))
+    .input(z.object({ openingId: z.uuid() }))
     .output(okSchema)
     .mutation(async ({ ctx, input }) => {
       await new MotivationService(db).skip({ userId: ctx.userId, ...input });

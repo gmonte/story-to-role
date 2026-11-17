@@ -230,7 +230,7 @@ export class InstructionsService {
 
   /**
    * Removes a kept point from this application, with the overrides it
-   * asked for. A promoted point is evidence now, managed in the career.
+   * asked for.
    */
   async removePoint(input: {
     userId: string;
@@ -247,9 +247,6 @@ export class InstructionsService {
         (row) => row.id === input.instructionPointId
       );
       if (!point || point.status === "removed") throw notFound();
-      if (point.status === "promoted") {
-        throw new TRPCError({ code: "BAD_REQUEST" });
-      }
       await repository.updatePoint(point.id, { status: "removed" });
       await repository.deleteOverrides(
         (await repository.listOverrides(opening.id))

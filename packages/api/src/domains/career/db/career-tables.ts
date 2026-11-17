@@ -11,7 +11,6 @@ import type {
   PositionOrigin,
   PositionStatus,
   SourceDocumentKind,
-  SourceDocumentStatus,
   StartPath,
 } from "../schemas/career";
 
@@ -59,9 +58,6 @@ export const sourceDocumentsTable = createTable(
     mimeType: d.text().notNull(),
     storageKey: d.text().notNull(),
     encryptedText: d.text(),
-    status: d.text().$type<SourceDocumentStatus>().notNull().default("stored"),
-    // Why a file was refused (not a resume, too long…), never its content.
-    rejectionReason: d.text(),
   }),
   (t) => [index("source_documents_profile_id_idx").on(t.profileId)]
 );

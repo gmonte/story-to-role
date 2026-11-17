@@ -46,7 +46,6 @@ export const exportPaths: Record<string, string> = {
   rendered_files: "documents/rendered-files",
   resume_templates: "documents/resume-template",
   style_profiles: "documents/style-profile",
-  chat_messages: "chat/messages",
   tasks: "activity/tasks",
   ai_usage: "billing/ai-usage",
   ai_keys: "billing/own-api-key",

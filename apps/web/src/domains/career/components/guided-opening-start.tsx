@@ -50,7 +50,6 @@ export function GuidedOpeningStart() {
       label: t.formatMessage({ defaultMessage: "The opening" }),
     },
   ] as const;
-  const current = step;
 
   return (
     <div className="mx-auto flex w-full max-w-2xl flex-col gap-6 overflow-y-auto p-6">
@@ -61,13 +60,13 @@ export function GuidedOpeningStart() {
               key={item.key}
               className={cn(
                 "flex items-center gap-2",
-                item.key === current ? "font-medium" : "text-muted-foreground"
+                item.key === step ? "font-medium" : "text-muted-foreground"
               )}
             >
               <span
                 className={cn(
                   "flex size-6 items-center justify-center rounded-full border text-xs",
-                  item.key === current &&
+                  item.key === step &&
                     "border-primary bg-primary text-primary-foreground"
                 )}
               >
@@ -109,18 +108,22 @@ export function GuidedOpeningStart() {
             </div>
             <Sources documents={documents} />
             <div className="flex flex-wrap gap-2">
-              {documents.length > 0 ? (
-                <Button onClick={() => setStep("opening")}>
-                  {t.formatMessage({
-                    defaultMessage: "Continue to the opening",
-                  })}
-                  <ArrowRight />
-                </Button>
-              ) : (
-                <Button variant="ghost" onClick={() => setStep("opening")}>
-                  {t.formatMessage({ defaultMessage: "I don’t have a resume" })}
-                </Button>
-              )}
+              {/* Either way on to the opening: only the wording differs. */}
+              <Button
+                variant={documents.length > 0 ? "default" : "ghost"}
+                onClick={() => setStep("opening")}
+              >
+                {documents.length > 0 ? (
+                  <>
+                    {t.formatMessage({
+                      defaultMessage: "Continue to the opening",
+                    })}
+                    <ArrowRight />
+                  </>
+                ) : (
+                  t.formatMessage({ defaultMessage: "I don’t have a resume" })
+                )}
+              </Button>
             </div>
           </section>
         ))}

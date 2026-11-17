@@ -85,7 +85,6 @@ export class AccountRepository {
       ),
       billing_customers: await byUser(t.billingCustomersTable),
       subscriptions: await byUser(t.subscriptionsTable),
-      chat_messages: await byUser(t.chatMessagesTable),
       career_profiles: profiles,
       source_documents: await byProfile(t.sourceDocumentsTable),
       positions,

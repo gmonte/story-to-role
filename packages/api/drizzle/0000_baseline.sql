@@ -135,16 +135,6 @@ CREATE TABLE IF NOT EXISTS "subscriptions" (
 	CONSTRAINT "subscriptions_stripe_subscription_id_unique" UNIQUE("stripeSubscriptionId")
 );
 --> statement-breakpoint
-CREATE TABLE IF NOT EXISTS "chat_messages" (
-	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
-	"createdAt" timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
-	"userId" uuid NOT NULL,
-	"context" text NOT NULL,
-	"author" text NOT NULL,
-	"kind" text DEFAULT 'text' NOT NULL,
-	"encryptedContent" text
-);
---> statement-breakpoint
 CREATE TABLE IF NOT EXISTS "career_profiles" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"createdAt" timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
@@ -198,9 +188,7 @@ CREATE TABLE IF NOT EXISTS "source_documents" (
 	"encryptedFileName" text NOT NULL,
 	"mimeType" text NOT NULL,
 	"storageKey" text NOT NULL,
-	"encryptedText" text,
-	"status" text DEFAULT 'stored' NOT NULL,
-	"rejectionReason" text
+	"encryptedText" text
 );
 --> statement-breakpoint
 CREATE TABLE IF NOT EXISTS "career_goals" (
@@ -367,7 +355,6 @@ CREATE TABLE IF NOT EXISTS "instruction_points" (
 	"credentialId" uuid,
 	"evidenceKind" text,
 	"encryptedSensitiveItems" text,
-	"evidenceId" uuid,
 	"confirmedAt" timestamp with time zone
 );
 --> statement-breakpoint
@@ -410,7 +397,6 @@ CREATE TABLE IF NOT EXISTS "motivation_interviews" (
 	"profileId" uuid NOT NULL,
 	"openingId" uuid NOT NULL,
 	"status" text DEFAULT 'in_progress' NOT NULL,
-	"storyId" uuid,
 	CONSTRAINT "motivation_interviews_opening_unique" UNIQUE("openingId")
 );
 --> statement-breakpoint
@@ -623,11 +609,6 @@ EXCEPTION
 END $$;--> statement-breakpoint
 DO $$ BEGIN
  ALTER TABLE "subscriptions" ADD CONSTRAINT "subscriptions_userId_users_id_fk" FOREIGN KEY ("userId") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;
-EXCEPTION
- WHEN duplicate_object THEN null;
-END $$;--> statement-breakpoint
-DO $$ BEGIN
- ALTER TABLE "chat_messages" ADD CONSTRAINT "chat_messages_userId_users_id_fk" FOREIGN KEY ("userId") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;
 EXCEPTION
  WHEN duplicate_object THEN null;
 END $$;--> statement-breakpoint
@@ -948,7 +929,6 @@ CREATE INDEX IF NOT EXISTS "credit_entries_lot_id_idx" ON "credit_entries" USING
 CREATE INDEX IF NOT EXISTS "credit_entries_task_id_idx" ON "credit_entries" USING btree ("taskId");--> statement-breakpoint
 CREATE INDEX IF NOT EXISTS "credit_lots_user_id_idx" ON "credit_lots" USING btree ("userId");--> statement-breakpoint
 CREATE INDEX IF NOT EXISTS "subscriptions_user_id_idx" ON "subscriptions" USING btree ("userId");--> statement-breakpoint
-CREATE INDEX IF NOT EXISTS "chat_messages_user_context_idx" ON "chat_messages" USING btree ("userId","context");--> statement-breakpoint
 CREATE INDEX IF NOT EXISTS "credentials_profile_id_idx" ON "credentials" USING btree ("profileId");--> statement-breakpoint
 CREATE INDEX IF NOT EXISTS "positions_profile_id_idx" ON "positions" USING btree ("profileId");--> statement-breakpoint
 CREATE INDEX IF NOT EXISTS "source_documents_profile_id_idx" ON "source_documents" USING btree ("profileId");--> statement-breakpoint

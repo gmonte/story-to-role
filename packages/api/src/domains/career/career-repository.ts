@@ -1,9 +1,8 @@
-import { and, arrayContains, desc, eq, inArray, sql } from "drizzle-orm";
+import { arrayContains, desc, eq, sql } from "drizzle-orm";
 
 import { openingsTable } from "@repo/api/domains/openings/db/openings-tables";
 import type { DbClient } from "@repo/api/tools/db-client";
 
-import { slotStatuses } from "./documents/document-limits";
 import {
   careerProfilesTable,
   credentialsTable,
@@ -34,7 +33,7 @@ export class CareerRepository {
     return rows.length > 0;
   }
 
-  /** Whether the profile holds anything yet: an imported file, a position or an opening. */
+  /** Whether the profile holds anything yet: a source, a position or an opening. */
   async hasStarted(profileId: string) {
     const first = (
       table:
@@ -130,14 +129,11 @@ export class CareerRepository {
       .for("update");
   }
 
-  /** Sources that take a slot of the limit. */
-  async countSlottedDocuments(profileId: string) {
+  /** Every stored source takes a slot of the limit. */
+  async countDocuments(profileId: string) {
     return this.tx.$count(
       sourceDocumentsTable,
-      and(
-        eq(sourceDocumentsTable.profileId, profileId),
-        inArray(sourceDocumentsTable.status, [...slotStatuses])
-      )
+      eq(sourceDocumentsTable.profileId, profileId)
     );
   }
 
@@ -170,15 +166,5 @@ export class CareerRepository {
       .values(document)
       .returning();
     return row;
-  }
-
-  async updateDocument(
-    sourceDocumentId: string,
-    changes: Partial<Insert<typeof sourceDocumentsTable>>
-  ) {
-    await this.tx
-      .update(sourceDocumentsTable)
-      .set(changes)
-      .where(eq(sourceDocumentsTable.id, sourceDocumentId));
   }
 }

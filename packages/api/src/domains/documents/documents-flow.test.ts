@@ -1377,7 +1377,6 @@ describe("resume generation and snapshots", () => {
     const interview = await motivation.replaceInterview({
       profileId: ctx.profile.id,
       openingId: ctx.opening.id,
-      storyId: null,
       status: "finished",
     });
     await motivation.insertPoints([

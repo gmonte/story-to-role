@@ -26,7 +26,7 @@ export async function POST(request: NextRequest) {
   );
   if (!user) return new Response(null, { status: 404 });
 
-  if (!(await upstashRateLimiter.allow("taskStart", user.id))) {
+  if (!(await upstashRateLimiter.allow("sourceUpload", user.id))) {
     return new Response(null, { status: 429 });
   }
 

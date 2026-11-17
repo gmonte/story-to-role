@@ -8,13 +8,12 @@ import {
 /**
  * A point of the application instructions (resume spec, "Application
  * instructions"): a draft until the user confirms it, then kept in this
- * application only or promoted to the evidence base. A removed point stays
- * as a row so its gap answer is not split again.
+ * application only. A removed point stays as a row so its gap answer is
+ * not split again.
  */
 export const instructionPointStatusSchema = z.enum([
   "draft",
   "kept",
-  "promoted",
   "removed",
 ]);
 export type InstructionPointStatus = z.infer<

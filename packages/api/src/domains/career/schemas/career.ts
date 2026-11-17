@@ -11,24 +11,10 @@ export const yearMonthSchema = z
   .regex(/^\d{4}-(0[1-9]|1[0-2])$/, "Use YYYY-MM");
 export type YearMonth = z.infer<typeof yearMonthSchema>;
 
-export const positionStatuses = [
-  "pending",
-  "in_progress",
-  "approved",
-  "removed",
-] as const;
-export const positionStatusSchema = z.enum(positionStatuses);
-export type PositionStatus = z.infer<typeof positionStatusSchema>;
-
-// "truth_file": proposed as imported from the user's own truth file.
-export const positionOrigins = [
-  "imported",
-  "truth_file",
-  "manual",
-  "interview",
-] as const;
-export const positionOriginSchema = z.enum(positionOrigins);
-export type PositionOrigin = z.infer<typeof positionOriginSchema>;
+// A position's column types: until the published profile's extract (P2)
+// writes positions, only "manual" ones are added.
+export type PositionStatus = "pending" | "approved" | "removed";
+export type PositionOrigin = "manual";
 
 /**
  * How the user starts (workspace spec, "Onboarding"): with an opening in
@@ -58,14 +44,3 @@ export type CredentialStatus = z.infer<typeof credentialStatusSchema>;
 
 export const sourceDocumentKindSchema = z.enum(["resume", "truth_file"]);
 export type SourceDocumentKind = z.infer<typeof sourceDocumentKindSchema>;
-
-// "stored": uploaded and kept; nothing reads it yet (P4 re-adds importing).
-export const sourceDocumentStatusSchema = z.enum([
-  "stored",
-  "pending",
-  "processing",
-  "processed",
-  "rejected",
-  "failed",
-]);
-export type SourceDocumentStatus = z.infer<typeof sourceDocumentStatusSchema>;

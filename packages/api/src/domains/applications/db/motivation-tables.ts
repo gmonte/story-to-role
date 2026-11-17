@@ -37,9 +37,6 @@ export const motivationInterviewsTable = createTable(
       .notNull()
       .references(() => openingsTable.id, { onDelete: "cascade" }),
     status: d.text().$type<MotivationStatus>().notNull().default("in_progress"),
-    // The chosen story, when stories existed. Profile_truth replaces this
-    // in P8 (docs/plan.md).
-    storyId: d.uuid(),
   }),
   (t) => [unique("motivation_interviews_opening_unique").on(t.openingId)]
 );

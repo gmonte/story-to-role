@@ -11,7 +11,6 @@ import type {
   LockedFactOverrideView,
 } from "@repo/api/domains/applications/schemas/instructions";
 import { useTranslation } from "@repo/intl/use-translation";
-import { Badge } from "@repo/web/components/ui/badge";
 import { Button } from "@repo/web/components/ui/button";
 import { Checkbox } from "@repo/web/components/ui/checkbox";
 import { Label } from "@repo/web/components/ui/label";
@@ -106,7 +105,7 @@ export function InstructionsReview({
             rows={3}
             placeholder={t.formatMessage({
               defaultMessage:
-                "A detail you just remembered, a different framing of an old position, experience that is not in your evidence…",
+                "A detail you just remembered, a different framing of an old position, experience that is not in your profile…",
             })}
           />
           <div className="flex items-center justify-between gap-2">
@@ -163,9 +162,7 @@ export function ConfirmedInstructions({
       onError,
     })
   );
-  const points = instructions.points.filter(
-    (point) => point.status === "kept" || point.status === "promoted"
-  );
+  const points = instructions.points.filter((point) => point.status === "kept");
   const overrides = instructions.overrides.filter((row) => row.confirmed);
   if (points.length === 0 && overrides.length === 0) return null;
 
@@ -176,14 +173,7 @@ export function ConfirmedInstructions({
           key={point.id}
           className="bg-background flex items-start justify-between gap-2 rounded-md border p-2 text-xs"
         >
-          <span className="flex flex-col gap-1">
-            <span>{point.text}</span>
-            {point.status === "promoted" && (
-              <Badge variant="secondary" className="self-start">
-                {t.formatMessage({ defaultMessage: "Also in your evidence" })}
-              </Badge>
-            )}
-          </span>
+          <span>{point.text}</span>
           {point.status === "kept" && (
             <Button
               size="icon"

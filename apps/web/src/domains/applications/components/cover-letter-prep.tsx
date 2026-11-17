@@ -35,10 +35,9 @@ function useRefreshMotivation() {
 }
 
 /**
- * Before a cover letter (resume spec, "Cover letter inputs"): the story it
- * will tell, chosen among the closest approved stories, and a short
+ * Before a cover letter (resume spec, "Cover letter inputs"): a short
  * motivation interview whose points stay here or, approved one by one,
- * become career goals or story details.
+ * become career goals.
  */
 export function CoverLetterPrep({
   openingId,
@@ -92,7 +91,10 @@ export function CoverLetterPrep({
   }
   if (!data.status || data.status === "failed") {
     return (
-      <StoryChoice openingId={openingId} failed={data.status === "failed"} />
+      <MotivationStart
+        openingId={openingId}
+        failed={data.status === "failed"}
+      />
     );
   }
   if (data.status === "skipped") {
@@ -168,7 +170,7 @@ function WriteLetter({
   );
 }
 
-function StoryChoice({
+function MotivationStart({
   openingId,
   failed,
 }: {
@@ -178,14 +180,6 @@ function StoryChoice({
   const t = useTranslation();
   const trpc = useTRPC();
   const refresh = useRefreshMotivation();
-  const choices = useQuery(
-    trpc.motivation.storyChoices.queryOptions({ openingId })
-  );
-  // The closest story comes chosen; the user may pick another.
-  const [picked, setPicked] = useState<string | null | undefined>(undefined);
-  const storyId =
-    picked === undefined ? (choices.data?.[0]?.storyId ?? null) : picked;
-  const setStoryId = (id: string) => setPicked(id);
   const onError = (error: { message: string }) => toast.error(error.message);
   const start = useMutation(
     trpc.motivation.start.mutationOptions({ onSuccess: refresh, onError })
@@ -194,19 +188,10 @@ function StoryChoice({
     trpc.motivation.skip.mutationOptions({ onSuccess: refresh, onError })
   );
 
+  // Profile_truth replaces this in P8 (docs/plan.md): the story the letter
+  // tells will come from the profile.
   return (
     <section className="flex flex-col gap-3">
-      <div>
-        <h3 className="font-medium">
-          {t.formatMessage({ defaultMessage: "The story your letter tells" })}
-        </h3>
-        <p className="text-muted-foreground text-sm">
-          {t.formatMessage({
-            defaultMessage:
-              "A cover letter is built around one convincing story. These are your approved stories closest to this opening.",
-          })}
-        </p>
-      </div>
       {failed && (
         <p className="text-xs text-red-600">
           {t.formatMessage({
@@ -215,50 +200,16 @@ function StoryChoice({
           })}
         </p>
       )}
-      <div className="grid gap-2">
-        {choices.data?.map((choice) => (
-          <button
-            key={choice.storyId}
-            type="button"
-            onClick={() => setStoryId(choice.storyId)}
-            className={cn(
-              "bg-background flex flex-col gap-1 rounded-lg border p-3 text-left text-sm",
-              storyId === choice.storyId && "border-primary"
-            )}
-          >
-            <span className="font-medium">{choice.problem}</span>
-            <span>{choice.result}</span>
-            {choice.position && (
-              <span className="text-muted-foreground text-xs">
-                {choice.position}
-              </span>
-            )}
-            <span className="text-muted-foreground text-xs">
-              {choice.fits.length > 0
-                ? t.formatMessage(
-                    { defaultMessage: "Fits: {requirements}" },
-                    { requirements: choice.fits.join(", ") }
-                  )
-                : t.formatMessage({
-                    defaultMessage:
-                      "Its evidence is among the closest to this opening.",
-                  })}
-            </span>
-          </button>
-        ))}
-        {choices.data?.length === 0 && (
-          <p className="text-muted-foreground text-sm">
-            {t.formatMessage({
-              defaultMessage:
-                "No approved stories yet. The interview can still collect your motivation.",
-            })}
-          </p>
-        )}
-      </div>
+      <p className="text-muted-foreground text-sm">
+        {t.formatMessage({
+          defaultMessage:
+            "Three to five short questions about why you want this opening, by voice or text.",
+        })}
+      </p>
       <div className="flex gap-2">
         <Button
           disabled={start.isPending}
-          onClick={() => start.mutate({ openingId, storyId })}
+          onClick={() => start.mutate({ openingId })}
         >
           {t.formatMessage({
             defaultMessage: "Start the motivation interview",
@@ -267,17 +218,11 @@ function StoryChoice({
         <Button
           variant="ghost"
           disabled={skip.isPending}
-          onClick={() => skip.mutate({ openingId, storyId })}
+          onClick={() => skip.mutate({ openingId })}
         >
           {t.formatMessage({ defaultMessage: "Skip it" })}
         </Button>
       </div>
-      <p className="text-muted-foreground text-xs">
-        {t.formatMessage({
-          defaultMessage:
-            "Three to five short questions about why you want this opening, by voice or text.",
-        })}
-      </p>
     </section>
   );
 }
@@ -304,7 +249,7 @@ function Skipped({ openingId }: { openingId: string }) {
         size="sm"
         variant="outline"
         disabled={start.isPending}
-        onClick={() => start.mutate({ openingId, storyId: null })}
+        onClick={() => start.mutate({ openingId })}
       >
         {t.formatMessage({ defaultMessage: "Do the interview" })}
       </Button>
@@ -484,9 +429,7 @@ function PointsReview({
         <Button
           variant="ghost"
           disabled={start.isPending}
-          onClick={() =>
-            start.mutate({ openingId, storyId: motivation.storyId })
-          }
+          onClick={() => start.mutate({ openingId })}
         >
           {t.formatMessage({ defaultMessage: "Start over" })}
         </Button>

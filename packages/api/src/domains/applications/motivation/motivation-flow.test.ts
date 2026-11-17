@@ -120,13 +120,7 @@ describe("motivation interview", () => {
   it("interviews in turns and saves only approved goals", async () => {
     const ctx = await setup();
     const ids = { userId: ctx.user.id, openingId: ctx.opening.id };
-    // Profile_truth replaces this in P8 (docs/plan.md): no stories exist.
-    expect(await ctx.motivation.storyChoices(ids)).toEqual([]);
-    await expect(
-      ctx.motivation.start({ ...ids, storyId: crypto.randomUUID() })
-    ).rejects.toMatchObject({ code: "NOT_FOUND" });
-
-    await ctx.motivation.start({ ...ids, storyId: null });
+    await ctx.motivation.start(ids);
     expect(ctx.trigger.trigger).toHaveBeenLastCalledWith(
       "motivation_turn",
       expect.anything()
@@ -237,7 +231,6 @@ describe("motivation interview", () => {
     await ctx.motivation.skip({
       userId: ctx.user.id,
       openingId: ctx.opening.id,
-      storyId: null,
     });
     expect(
       await ctx.motivation.get({

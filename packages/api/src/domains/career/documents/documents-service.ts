@@ -52,8 +52,7 @@ export class DocumentsService {
       // Counted under a lock: files dropped together can't overshoot.
       await career.lockProfile(profile.id);
       if (
-        (await career.countSlottedDocuments(profile.id)) >=
-        documentLimits.maxSources
+        (await career.countDocuments(profile.id)) >= documentLimits.maxSources
       ) {
         throw new TRPCError({ code: "CONFLICT" });
       }
@@ -67,7 +66,6 @@ export class DocumentsService {
       return career.insertDocument({
         profileId: profile.id,
         kind: "resume",
-        status: "stored",
         encryptedFileName: cipher.encrypt(input.fileName.slice(0, 255)),
         mimeType,
         storageKey,

@@ -15,7 +15,7 @@ ADR 0001 holds unchanged, with a new source: the AI may only use approved accoun
 
 ## Consequences
 
-- Fact-by-fact review, the folding of repeated facts across files and the evidence kinds leave the interview. Importing a file proposes a draft account per position (merging what each file says), approved like any new version.
+- Fact-by-fact review, the folding of repeated facts across files and the evidence kinds leave the interview. Importing a file proposes a draft version of a position's account only when the file says something new about it (a position it brings first gets a first draft); a file that only restates the account leaves it as it is.
 - Locked facts (employer, title, dates), credentials and sensitive items stay as they are; sensitive items are flagged in the account and applied in code to everything generated from it.
 - Existing evidence, stories and interview turns seed the first draft account of each position, for the user to approve; nothing already approved is lost.
 - The fit check, resume and cover letter generation read accounts instead of evidence: their specs change with this one.

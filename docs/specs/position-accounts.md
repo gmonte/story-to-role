@@ -31,8 +31,10 @@ Clicking a position opens its space beside the chat, one page:
 
 ## Imports
 
-- A resume, LinkedIn PDF or truth file proposes, for each position it mentions, a draft account built from that file's passages (and merged with the account the position already has, without repeating what it already says). Conflicting locked facts (title, dates) are still picked side by side.
-- The draft is approved as a version, like any other; the "approve imported positions" shortcut approves the drafts as they are.
+- A resume, LinkedIn PDF or truth file proposes a draft version of a position's account only when it says something that account doesn't: a new fact, a figure, a tool, a project. The draft folds the new passages into the account, without repeating what it already says. A file that only restates what the account holds leaves it as it is: no new version.
+- A position the file brings for the first time gets a first draft account built from the file's passages.
+- Conflicting locked facts (title, dates) are still picked side by side.
+- A draft is approved as a version, like any other; the "approve imported positions" shortcut approves the drafts as they are.
 
 ## Generation
 
@@ -60,7 +62,7 @@ Each existing position gets a first draft account written from its approved evid
 - [ ] A position's space shows its approved account, editable, with its versions.
 - [ ] The interviewer proposes a richer version from the conversation; the user approves, edits or discards it, shown as a diff.
 - [ ] A proposed version adds nothing the user did not say, and every new figure appears in the user's words.
-- [ ] Importing a file proposes a draft account per position, merged with the existing one.
+- [ ] Importing a file proposes a draft version only for positions where it brings something new, merged with the existing account; a file that only restates an account leaves it unchanged.
 - [ ] Skills are extracted from each newly approved version.
 - [ ] Resumes and cover letters are generated from accounts, with bullets chosen for the focus, each line traced to the account, and a line with an unstated figure rejected.
 - [ ] Existing positions get a first draft account from their evidence and conversations.

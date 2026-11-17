@@ -16,6 +16,7 @@ import { documentsRouter } from "./domains/documents/documents-router";
 import { letterRouter } from "./domains/documents/letter/letter-router";
 import { libraryRouter } from "./domains/documents/library/library-router";
 import { writingRouter } from "./domains/documents/writing/writing-router";
+import { profileRouter } from "./domains/profile/profile-router";
 import { openingsRouter } from "./domains/openings/openings-router";
 import { tasksRouter } from "./domains/tasks/tasks-router";
 import { usersRouter } from "./domains/users/users-router";
@@ -34,6 +35,7 @@ export const appRouter = createTRPCRouter({
   motivation: motivationRouter,
   openings: openingsRouter,
   overrides: overridesRouter,
+  profile: profileRouter,
   research: researchRouter,
   tasks: tasksRouter,
   tracker: trackerRouter,

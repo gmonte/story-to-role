@@ -1,1 +1,84 @@
 @import "@repo/web/globals.css";
+
+/* The profile editor (domains/profile): flat blocks styled as the method's
+   Markdown reads, findings underlined, hints in grey. */
+.profile-editor {
+  font-size: 15px;
+  line-height: 1.75rem;
+}
+.profile-editor h1 {
+  margin: 0.5rem 0 1rem;
+  font-size: 1.875rem;
+  line-height: 2.25rem;
+  font-weight: 600;
+  letter-spacing: -0.025em;
+}
+.profile-editor h2 {
+  margin: 2rem 0 0.5rem;
+  padding-bottom: 0.25rem;
+  border-bottom: 1px solid var(--border);
+  font-size: 1.25rem;
+  line-height: 1.75rem;
+  font-weight: 600;
+  letter-spacing: -0.025em;
+}
+.profile-editor h3 {
+  margin: 1.5rem 0 0.25rem;
+  font-size: 1rem;
+  font-weight: 600;
+}
+.profile-editor p {
+  margin: 0.25rem 0;
+}
+.profile-editor [data-profile-quote] {
+  padding-left: 0.75rem;
+  border-left: 2px solid var(--border);
+  color: var(--muted-foreground);
+  font-size: 0.875rem;
+  font-style: italic;
+}
+.profile-editor [data-profile-item] {
+  position: relative;
+  padding-left: 1.25rem;
+}
+.profile-editor [data-profile-item]::before {
+  content: "•";
+  position: absolute;
+  left: 0.25rem;
+  color: var(--muted-foreground);
+}
+.profile-editor [data-profile-item][data-depth="1"]::before,
+.profile-editor [data-profile-item][data-depth="3"]::before {
+  content: "◦";
+}
+.profile-editor [data-profile-item][data-depth="1"] {
+  margin-left: 1.25rem;
+}
+.profile-editor [data-profile-item][data-depth="2"] {
+  margin-left: 2.5rem;
+}
+.profile-editor [data-profile-item][data-depth="3"] {
+  margin-left: 3.75rem;
+}
+.profile-editor [data-profile-item][data-depth="4"] {
+  margin-left: 5rem;
+}
+.profile-editor .profile-finding {
+  text-underline-offset: 4px;
+}
+.profile-editor .profile-finding-format {
+  text-decoration: underline wavy var(--destructive);
+}
+.profile-editor .profile-finding-content {
+  text-decoration: underline dotted 2px color-mix(in oklab, #f59e0b 70%, transparent);
+}
+.profile-editor .profile-label-hint {
+  color: var(--muted-foreground);
+}
+.profile-editor .profile-section-hint {
+  margin: 0.25rem 0;
+  color: var(--muted-foreground);
+  font-size: 0.875rem;
+  font-style: italic;
+  user-select: none;
+}

@@ -3,7 +3,7 @@
 import { useEffect, useRef } from "react";
 
 import { useMutation } from "@tanstack/react-query";
-import { MessageSquare, MoreHorizontal, PanelRightOpen } from "lucide-react";
+import { MessageSquare, MoreHorizontal } from "lucide-react";
 
 import type { DepthLevel } from "@repo/api/domains/career/depth";
 import type { PositionView } from "@repo/api/domains/career/schemas/timeline";
@@ -55,6 +55,11 @@ export function PositionCard({
   const { openPosition, setOpenPosition, prefillDraft } = useCareerWorkspace();
   const onError = (error: { message: string }) => toast.error(error.message);
 
+  const openSpace = () =>
+    setOpenPosition({
+      positionId: position.id,
+      tab: position.draftsToReview > 0 ? "review" : "overview",
+    });
   // Open in the pane beside the chat: marked, and brought into view.
   const reviewed = openPosition?.positionId === position.id;
   const card = useRef<HTMLDivElement>(null);
@@ -86,8 +91,42 @@ export function PositionCard({
   return (
     <div
       ref={card}
+      // The card opens the position's space (what was approved, what is
+      // left to review, its own chat); its buttons and menu keep their own.
+      role={removed ? undefined : "button"}
+      tabIndex={removed ? undefined : 0}
+      aria-label={
+        removed
+          ? undefined
+          : t.formatMessage(
+              { defaultMessage: "Open {title} at {employer}" },
+              { title: position.title, employer: position.employer }
+            )
+      }
+      onClick={(event) => {
+        const inner = (event.target as HTMLElement).closest(
+          "button, a, input, textarea, [role=menuitem]"
+        );
+        // Clicks from the card's dialogs and menus (portals elsewhere in
+        // the page) reach it through React: they don't count.
+        const inside = event.currentTarget.contains(event.target as Node);
+        if (!removed && inside && (!inner || inner === event.currentTarget)) {
+          openSpace();
+        }
+      }}
+      onKeyDown={(event) => {
+        if (
+          !removed &&
+          event.target === event.currentTarget &&
+          event.key === "Enter"
+        ) {
+          openSpace();
+        }
+      }}
       className={cn(
         "bg-background flex flex-col gap-2 rounded-lg border p-3",
+        !removed &&
+          "hover:border-foreground/30 cursor-pointer transition-colors",
         reviewed && "border-primary ring-primary/40 ring-2"
       )}
     >
@@ -293,22 +332,6 @@ export function PositionCard({
           >
             <MessageSquare />
             {t.formatMessage({ defaultMessage: "Talk about it" })}
-          </Button>
-          {/* Its space: what was approved, what is left to review, its
-              own chat. */}
-          <Button
-            size="sm"
-            variant="outline"
-            className="flex-1"
-            onClick={() =>
-              setOpenPosition({
-                positionId: position.id,
-                tab: position.draftsToReview > 0 ? "review" : "overview",
-              })
-            }
-          >
-            <PanelRightOpen />
-            {t.formatMessage({ defaultMessage: "Open" })}
           </Button>
         </div>
       )}

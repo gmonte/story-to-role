@@ -8,7 +8,7 @@ So each position now has an **account**: a text in the user's voice telling what
 
 What is derived from the account, and when:
 
-- **Skills** are extracted from the approved account whenever a new version is approved, as an index the fit check and the library search read.
+- **A fact index** (skills, achievements, figures, tools, what the user did not do, each pointing to its passage) is rebuilt whenever a new version is approved; the fit check and the library search read it. The user never edits it: they edit the account.
 - **Resume bullets are not stored.** They are written when a document is generated, from the accounts, chosen and phrased for that document's focus: a general resume takes each position's strongest points; a resume focused on React Native draws the mobile achievements.
 
 ADR 0001 holds unchanged, with a new source: the AI may only use approved accounts, application instructions and approved company facts. A generated line must be backed by an approved account, and every figure in it must appear in that account; code checks it, as it checks figures against evidence today.
@@ -16,7 +16,8 @@ ADR 0001 holds unchanged, with a new source: the AI may only use approved accoun
 ## Consequences
 
 - Fact-by-fact review, the folding of repeated facts across files and the evidence kinds leave the interview. Importing a file proposes a draft version of a position's account only when the file says something new about it (a position it brings first gets a first draft); a file that only restates the account leaves it as it is.
-- Locked facts (employer, title, dates), credentials and sensitive items stay as they are; sensitive items are flagged in the account and applied in code to everything generated from it.
+- The account follows the meu-emprego-novo method: free text, guided by the interviewer toward what it was like there, what the user did, the challenges and what they did not do; figures carry highlighter marks (`[medido]`, `[estimado]`, `[sem número]`, `[a confirmar]`) that decide in code how each may be used.
+- Each account has its own "do not include" list; locked facts (employer, title, dates), credentials and the career-wide sensitive review stay as they are.
 - Existing evidence, stories and interview turns seed the first draft account of each position, for the user to approve; nothing already approved is lost.
 - The fit check, resume and cover letter generation read accounts instead of evidence: their specs change with this one.
 - The trace of a generated line points to the passage of the account version it came from.

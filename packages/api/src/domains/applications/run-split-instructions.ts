@@ -2,7 +2,7 @@ import type { AiClient } from "@repo/api/domains/ai/ai-client";
 import { CareerRepository } from "@repo/api/domains/career/career-repository";
 import { yearMonthSchema } from "@repo/api/domains/career/schemas/career";
 import type { UserCipher } from "@repo/api/domains/encryption/user-cipher";
-import { findQuote } from "@repo/api/domains/interview/quotes/verify-quote";
+import { findQuote } from "@repo/api/utils/text/verify-quote";
 import type { DbClient } from "@repo/api/tools/db-client";
 
 import { InstructionsRepository } from "./instructions-repository";

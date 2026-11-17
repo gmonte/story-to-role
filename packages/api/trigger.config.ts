@@ -119,9 +119,6 @@ export default defineConfig({
   dirs: [
     "./src/domains/tasks/tasks",
     "./src/domains/chat/tasks",
-    "./src/domains/interview/tasks",
-    "./src/domains/career-chat/tasks",
-    "./src/domains/career/tasks",
     "./src/domains/openings/tasks",
     "./src/domains/documents/tasks",
     "./src/domains/applications/tasks",

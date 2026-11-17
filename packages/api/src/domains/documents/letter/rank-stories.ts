@@ -6,6 +6,7 @@ import { mentions } from "@repo/api/domains/profile/truth/lint";
 import type { DbClient } from "@repo/api/tools/db-client";
 
 import { loadCareerContext } from "../generation/load-career-context";
+import { withheld } from "../generation/profile-source";
 import { loadOpeningBrief } from "../generation/run-generate-resume";
 
 /** How many stories are offered (resume spec, "Story choice"). */
@@ -55,8 +56,12 @@ export async function rankStories(input: {
     filter,
   });
   if (!context.profileVersionId) return [];
+  // A result whose figure can't be told is no story to lead a letter.
   const stories = context.evidence.filter(
-    (line) => line.kind === "achievement" && line.positionId
+    (line) =>
+      line.kind === "achievement" &&
+      line.positionId &&
+      !line.text.includes(withheld)
   );
   if (stories.length === 0) return [];
 
@@ -107,7 +112,8 @@ export async function rankStories(input: {
     ];
     return {
       lineId: line.id,
-      text: line.text,
+      // As the user wrote it, without the field's label.
+      text: line.text.replace(/^[^:]{1,40}:\s*/, ""),
       position: position
         ? {
             positionId: position.id,

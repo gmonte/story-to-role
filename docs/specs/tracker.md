@@ -33,7 +33,7 @@ The method's simple metrics, over the applications of a period the user picks:
 
 - response rate per resume version;
 - response rate per source;
-- average time from applying to the first response;
+- median time from applying to the first response;
 - how many high-fit openings (see the fit check's band) turned into an interview.
 
 ## Statuses and events

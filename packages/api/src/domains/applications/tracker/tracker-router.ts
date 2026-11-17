@@ -3,12 +3,20 @@ import { z } from "zod";
 import { db } from "@repo/api/tools/db";
 import { ok, okSchema, openApiMeta } from "@repo/api/tools/openapi";
 import { createTRPCRouter, userProcedure } from "@repo/api/tools/trpc";
+import { templateLanguage } from "@repo/api/domains/profile/template-language";
 
-import { applicationStatusSchema } from "../schemas/application";
+import {
+  applicationSourceSchema,
+  applicationStatusSchema,
+  applicationTypeSchema,
+} from "../schemas/application";
 import {
   applicationDetailSchema,
+  metricsPeriodSchema,
   reminderSchema,
+  resumeVersionRefSchema,
   trackedApplicationSchema,
+  trackerMetricsSchema,
   trackerSettingsSchema,
 } from "../schemas/tracker";
 import { TrackerService } from "./tracker-service";
@@ -151,6 +159,108 @@ export const trackerRouter = createTRPCRouter({
     .output(z.object({ applicationId: z.uuid(), openingId: z.uuid() }))
     .mutation(({ ctx, input }) =>
       new TrackerService(db).createExternal({ userId: ctx.userId, ...input })
+    ),
+
+  updateDetails: userProcedure
+    .meta(
+      openApiMeta(
+        "tracker",
+        "PUT",
+        "/applications/by-id/{applicationId}/details",
+        "Saves the method's fields of an application (omitted fields stay, null clears)"
+      )
+    )
+    .input(
+      applicationInput.extend({
+        source: applicationSourceSchema.nullable().optional(),
+        sourceDetail: z.string().max(200).nullable().optional(),
+        applicationType: applicationTypeSchema.nullable().optional(),
+        // The resume version an external application was sent with.
+        resumeVersionId: z.uuid().nullable().optional(),
+        nextStep: z.string().max(2000).nullable().optional(),
+        notes: z.string().max(10_000).nullable().optional(),
+        declineReason: z.string().max(2000).nullable().optional(),
+      })
+    )
+    .output(okSchema)
+    .mutation(async ({ ctx, input }) => {
+      await new TrackerService(db).updateDetails({
+        userId: ctx.userId,
+        ...input,
+      });
+      return ok;
+    }),
+
+  resumeVersions: userProcedure
+    .meta(
+      openApiMeta(
+        "tracker",
+        "GET",
+        "/applications/resume-versions",
+        "Lists the resume versions an external application can be marked as sent with"
+      )
+    )
+    .input(z.object({}))
+    .output(z.array(resumeVersionRefSchema))
+    .query(({ ctx }) =>
+      new TrackerService(db).resumeVersionOptions(ctx.userId)
+    ),
+
+  metrics: userProcedure
+    .meta(
+      openApiMeta(
+        "tracker",
+        "GET",
+        "/tracker/metrics",
+        "Response rates, time to first response and high-fit interviews over a period"
+      )
+    )
+    .input(z.object({ period: metricsPeriodSchema }))
+    .output(trackerMetricsSchema)
+    .query(({ ctx, input }) =>
+      new TrackerService(db).metrics({ userId: ctx.userId, ...input })
+    ),
+
+  addDeclineReasonAsRule: userProcedure
+    .meta(
+      openApiMeta(
+        "tracker",
+        "POST",
+        "/applications/by-id/{applicationId}/decline-reason/discard-rule",
+        "Adds the decline reason to the discard rules of the job preferences"
+      )
+    )
+    .input(applicationInput)
+    .output(z.object({ text: z.string() }))
+    .mutation(({ ctx, input }) =>
+      new TrackerService(db).addDeclineReasonAsRule({
+        userId: ctx.userId,
+        language: templateLanguage(ctx),
+        ...input,
+      })
+    ),
+
+  excludeCompany: userProcedure
+    .meta(
+      openApiMeta(
+        "tracker",
+        "POST",
+        "/applications/by-id/{applicationId}/exclude-company",
+        "Adds the application's company to the excluded companies of the job preferences"
+      )
+    )
+    .input(
+      applicationInput.extend({
+        date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+      })
+    )
+    .output(z.object({ company: z.string() }))
+    .mutation(({ ctx, input }) =>
+      new TrackerService(db).excludeCompany({
+        userId: ctx.userId,
+        language: templateLanguage(ctx),
+        ...input,
+      })
     ),
 
   reminders: userProcedure

@@ -19,6 +19,8 @@ type ReminderInput = {
   status: ApplicationStatus;
   appliedAt: Date | null;
   lastActivityAt: Date;
+  // The user's own note on what comes next, shown with the nudge.
+  nextStep?: string | null;
   nextEvent: { occurredAt: Date; text: string | null } | null;
 };
 
@@ -81,7 +83,7 @@ export function computeReminders(input: {
             application.lastActivityAt.getTime() +
               input.settings.noResponseDays * day
           ),
-          text: null,
+          text: application.nextStep ?? null,
         });
       } else if (
         application.status === "applied" &&
@@ -96,7 +98,7 @@ export function computeReminders(input: {
           kind: "follow_up",
           days: sinceApplied,
           date: null,
-          text: null,
+          text: application.nextStep ?? null,
         });
       }
     }

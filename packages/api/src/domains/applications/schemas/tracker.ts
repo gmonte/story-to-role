@@ -5,7 +5,11 @@ import {
   outputLanguageSchema,
 } from "@repo/api/domains/documents/schemas/document";
 
-import { applicationStatusSchema } from "./application";
+import {
+  applicationSourceSchema,
+  applicationStatusSchema,
+  applicationTypeSchema,
+} from "./application";
 
 /**
  * A timeline entry: a status change, or something that happened (or will:
@@ -43,6 +47,10 @@ export const trackedApplicationSchema = z.object({
   statusChangedAt: z.date(),
   lastActivityAt: z.date(),
   appliedAt: z.date().nullable(),
+  // The method's fields; next step is free text (encrypted, never in a prompt).
+  source: applicationSourceSchema.nullable(),
+  applicationType: applicationTypeSchema.nullable(),
+  nextStep: z.string().nullable(),
   // The next dated event still ahead, if any.
   nextEvent: z
     .object({ occurredAt: z.date(), text: z.string().nullable() })
@@ -50,7 +58,22 @@ export const trackedApplicationSchema = z.object({
 });
 export type TrackedApplication = z.infer<typeof trackedApplicationSchema>;
 
+/** A resume version, as the tracker names it. */
+export const resumeVersionRefSchema = z.object({
+  versionId: z.uuid(),
+  label: z.string().nullable(),
+  language: outputLanguageSchema,
+});
+export type ResumeVersionRef = z.infer<typeof resumeVersionRefSchema>;
+
 export const applicationDetailSchema = trackedApplicationSchema.extend({
+  sourceDetail: z.string().nullable(),
+  notes: z.string().nullable(),
+  declineReason: z.string().nullable(),
+  // The resume sent: from the submissions when sent from StoryToRole,
+  // else the one picked by hand (external applications).
+  resumeSent: resumeVersionRefSchema.nullable(),
+  resumeSentAutomatically: z.boolean(),
   events: z.array(applicationEventSchema),
   submissions: z.array(applicationSubmissionSchema),
 });
@@ -79,3 +102,43 @@ export const reminderSchema = z.object({
   text: z.string().nullable(),
 });
 export type Reminder = z.infer<typeof reminderSchema>;
+
+export const metricsPeriodSchema = z.enum(["30d", "90d", "all"]);
+export type MetricsPeriod = z.infer<typeof metricsPeriodSchema>;
+
+const metricsGroup = {
+  sent: z.number().int(),
+  responded: z.number().int(),
+};
+
+/**
+ * The method's simple metrics (tracker spec, "Metrics"), over the
+ * applications sent in a period. Computed from structured fields only.
+ */
+export const trackerMetricsSchema = z.object({
+  period: metricsPeriodSchema,
+  sent: z.number().int(),
+  responded: z.number().int(),
+  interviews: z.number().int(),
+  byResume: z.array(
+    z.object({
+      // Null groups the applications whose resume isn't recorded.
+      versionId: z.uuid().nullable(),
+      label: z.string().nullable(),
+      language: outputLanguageSchema.nullable(),
+      ...metricsGroup,
+    })
+  ),
+  bySource: z.array(
+    z.object({ source: applicationSourceSchema.nullable(), ...metricsGroup })
+  ),
+  // The median days from applying to the first response, and how many
+  // applications it rests on.
+  medianDaysToResponse: z.number().nullable(),
+  daysToResponseSample: z.number().int(),
+  highFit: z.object({
+    total: z.number().int(),
+    interviews: z.number().int(),
+  }),
+});
+export type TrackerMetrics = z.infer<typeof trackerMetricsSchema>;

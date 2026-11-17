@@ -13,6 +13,10 @@ import type { DbClient } from "@repo/api/tools/db-client";
 import { getStorage, type Storage } from "@repo/api/tools/storage/storage";
 
 import { decryptDocument } from "../snapshot-content";
+import {
+  assertSendable,
+  FrozenContexts,
+} from "../coverage-review/snapshot-coverage";
 import { DocumentsRepository } from "../documents-repository";
 import { requireUserVersion } from "../require-version";
 import { fileNamer } from "./file-namer";
@@ -44,11 +48,42 @@ export class PdfService {
     return this.storageOverride ?? getStorage();
   }
 
+  /**
+   * A download is the document leaving the platform: a resume whose official
+   * snapshot has coverage findings is refused (resume spec, "Coverage
+   * review").
+   */
+  private async requireSendable(
+    tx: DbClient,
+    userId: string,
+    version: Version,
+    document: Document,
+    latest: Parameters<typeof assertSendable>[0]["snapshot"],
+    contexts?: FrozenContexts
+  ) {
+    await assertSendable({
+      db: tx,
+      cipher: await getUserCipher(tx, userId),
+      profileId: document.profileId,
+      document,
+      version,
+      snapshot: latest,
+      contexts,
+    });
+  }
+
   /** Renders the version's official snapshot unless it is ready or rendering. */
-  private async ensureRendered(tx: DbClient, userId: string, version: Version) {
+  private async ensureRendered(
+    tx: DbClient,
+    userId: string,
+    version: Version,
+    document: Document,
+    contexts?: FrozenContexts
+  ) {
     const repository = new DocumentsRepository(tx);
     const latest = await repository.latestSnapshot(version.id);
     if (!latest) throw new TRPCError({ code: "NOT_FOUND" });
+    await this.requireSendable(tx, userId, version, document, latest, contexts);
     if (await repository.findRenderedFile(latest.id, pdfTemplate)) return true;
     if (!(await new TasksRepository(tx).activeTask(latest.id, "render_pdf"))) {
       await this.tasks.start({
@@ -61,12 +96,19 @@ export class PdfService {
   }
 
   async request(input: { userId: string; versionId: string }) {
-    const { version } = await requireUserVersion(
+    const { version, document } = await requireUserVersion(
       this.db,
       input.userId,
       input.versionId
     );
-    return { ready: await this.ensureRendered(this.db, input.userId, version) };
+    return {
+      ready: await this.ensureRendered(
+        this.db,
+        input.userId,
+        version,
+        document
+      ),
+    };
   }
 
   private async applicationVersions(userId: string, openingId: string) {
@@ -92,15 +134,28 @@ export class PdfService {
 
   /** Starts what is missing for the application's ZIP; ready when none is. */
   async prepareApplication(input: { userId: string; openingId: string }) {
-    const { versions } = await this.applicationVersions(
+    const { documents, versions } = await this.applicationVersions(
       input.userId,
       input.openingId
     );
     if (versions.length === 0) throw new TRPCError({ code: "NOT_FOUND" });
     let ready = true;
+    // One reading of the frozen profile for all the application's documents.
+    const contexts = new FrozenContexts(
+      this.db,
+      await getUserCipher(this.db, input.userId),
+      documents[0].profileId
+    );
     for (const version of versions) {
+      const document = documents.find((row) => row.id === version.documentId)!;
       ready =
-        (await this.ensureRendered(this.db, input.userId, version)) && ready;
+        (await this.ensureRendered(
+          this.db,
+          input.userId,
+          version,
+          document,
+          contexts
+        )) && ready;
     }
     return { ready };
   }
@@ -113,10 +168,18 @@ export class PdfService {
   ) {
     const repository = new DocumentsRepository(this.db);
     const latest = await repository.latestSnapshot(version.id);
-    const file =
-      latest && (await repository.findRenderedFile(latest.id, pdfTemplate));
+    if (!latest) return null;
+    await assertSendable({
+      db: this.db,
+      cipher,
+      profileId: document.profileId,
+      document,
+      version,
+      snapshot: latest,
+    });
+    const file = await repository.findRenderedFile(latest.id, pdfTemplate);
     const stored = file && (await this.storage.get(file.storageKey));
-    if (!latest || !stored) return null;
+    if (!stored) return null;
     const nameFor = await fileNamer(this.db, cipher, document);
     return {
       bytes: Buffer.from(cipher.decrypt(stored.toString()), "base64"),

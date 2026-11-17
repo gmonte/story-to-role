@@ -35,6 +35,23 @@ export function stableId(...parts: string[]) {
   ].join("-");
 }
 
+/**
+ * A position's id: the same in every profile version for as long as its
+ * employer, title and start stay the same.
+ */
+export function positionIdOf(
+  careerProfileId: string,
+  title: { company: string; title: string; range: { start: string } }
+) {
+  return stableId(
+    careerProfileId,
+    "position",
+    normalizeLabel(title.company),
+    normalizeLabel(title.title),
+    title.range.start
+  );
+}
+
 export type SourcePosition = {
   id: string;
   employer: string;
@@ -75,6 +92,8 @@ export type SourceCredential = {
  */
 export type ProfileSource = {
   profileVersionId: string;
+  // The version's number, as the editor shows it.
+  profileVersionNumber: number;
   header: ResumeHeaderFields;
   positions: SourcePosition[];
   evidence: SourceEvidence[];
@@ -189,13 +208,7 @@ export function readProfileSource(input: {
     rawTitle: experience.rawTitle,
     position: experience.parsed
       ? {
-          id: stableId(
-            input.careerProfileId,
-            "position",
-            normalizeLabel(experience.parsed.company),
-            normalizeLabel(experience.parsed.title),
-            experience.parsed.range.start
-          ),
+          id: positionIdOf(input.careerProfileId, experience.parsed),
           employer: experience.parsed.company,
           title: experience.parsed.title,
           startDate: experience.parsed.range.start,
@@ -337,6 +350,7 @@ export function readProfileSource(input: {
 
   return {
     profileVersionId: profile.versionId,
+    profileVersionNumber: profile.number,
     header,
     positions: experiences
       .flatMap((experience) => experience.position ?? [])

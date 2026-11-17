@@ -57,6 +57,13 @@
       "when": 1794935026519,
       "tag": "0007_add_generation_settings_and_frozen_profile",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1794949612943,
+      "tag": "0008_add_coverage_reviews",
+      "breakpoints": true
     }
   ]
 }

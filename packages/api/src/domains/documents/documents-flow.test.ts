@@ -30,8 +30,12 @@ import { MotivationRepository } from "@repo/api/domains/applications/motivation/
 import { ResearchRepository } from "@repo/api/domains/applications/research/research-repository";
 import { runSplitInstructions } from "@repo/api/domains/applications/run-split-instructions";
 import { createLocalStorage } from "@repo/api/tools/storage/local-storage";
+import { TrackerService } from "@repo/api/domains/applications/tracker/tracker-service";
+import { ProfileRepository } from "@repo/api/domains/profile/profile-repository";
+import { readSuggestionContent } from "@repo/api/domains/profile/suggestions/propose-suggestion";
 
 import { AdaptationService } from "./adaptation/adaptation-service";
+import type { CoverageReviewDraft } from "./coverage-review/coverage-review";
 import { LibraryService } from "./library/library-service";
 import { embedStaleVersions } from "./similar/embed-versions";
 import { runAdaptDocument } from "./adaptation/run-adapt-document";
@@ -129,6 +133,24 @@ const reviewRated = (rating: number) => ({
   inconsistencies: [],
   advice: ["Be more concrete"],
 });
+
+/** What the coverage reviewer answers unless a test scripts it. */
+const emptyCoverage: CoverageReviewDraft = {
+  strong: [],
+  partial: [],
+  gaps: [],
+  inconsistencies: [],
+  suggestions: [],
+};
+
+/** The resume lines as the reviewer's prompt lists them: text → line id. */
+const reviewedLineIds = (system: string) =>
+  new Map(
+    [...system.matchAll(/\[([^\]\s]+)\] (.+)/g)].map((match) => [
+      match[2].trim(),
+      match[1],
+    ])
+  );
 
 async function setup({
   markdown = profileMarkdown(),
@@ -293,6 +315,10 @@ async function setup({
     ratings: number[];
     /** This month (YYYY-MM), for what "recent" is measured from. */
     today?: string;
+    /** The coverage review, given the resume's lines by text. */
+    coverage?: (lines: Map<string, string>) => CoverageReviewDraft;
+    /** The coverage review call fails (a provider error). */
+    coverageFails?: boolean;
   };
   const request = {
     userId: user.id,
@@ -324,6 +350,10 @@ async function setup({
       object: ({ system }) => {
         if (system.startsWith("You review")) {
           return reviewRated(ratings.shift() ?? 5);
+        }
+        if (system.startsWith("You audit")) {
+          if (script.coverageFails) throw new Error("provider down");
+          return script.coverage?.(reviewedLineIds(system)) ?? emptyCoverage;
         }
         return drafts.shift();
       },
@@ -511,8 +541,8 @@ describe("resume generation and snapshots", () => {
       generationId
     );
     expect(rounds.map((r) => r.rating)).toEqual([5, 9]);
-    // Strategist, one editor, two reviews.
-    expect(fake.generateObject).toHaveBeenCalledTimes(4);
+    // Strategist, one editor, two reviews, the coverage review.
+    expect(fake.generateObject).toHaveBeenCalledTimes(5);
   });
 
   it("skips review rounds when the first draft already reaches the target", async () => {
@@ -525,8 +555,9 @@ describe("resume generation and snapshots", () => {
       drafts: [ctx.draft([line])],
       ratings: [9],
     });
-    // Strategist and one review; no editor round was paid for.
-    expect(fake.generateObject).toHaveBeenCalledTimes(2);
+    // Strategist, one review and the coverage review; no editor round was
+    // paid for.
+    expect(fake.generateObject).toHaveBeenCalledTimes(3);
   });
 
   it("prints the profile's facts, leaves out what it must not use and locks credentials", async () => {
@@ -638,6 +669,342 @@ describe("resume generation and snapshots", () => {
       view.documents[0].generation!.id
     );
     expect(rounds.map((round) => round.rating)).toEqual([1, 1]);
+  });
+
+  it("keeps a finished resume when its coverage review fails", async () => {
+    const ctx = await setup();
+    const [deploy] = ctx.evidence;
+    const { generationId } = await ctx.generate("quick", {
+      drafts: [
+        ctx.draft([
+          {
+            text: "Cut deploy time by 40% with Kubernetes.",
+            evidence_ids: [deploy.id],
+          },
+        ]),
+      ],
+      ratings: [9],
+      coverageFails: true,
+    });
+    const repository = new DocumentsRepository(ctx.db);
+    const generation = await repository.findGeneration(generationId);
+    expect(generation).toMatchObject({ status: "completed" });
+    // Saved without a review; the code checks still run on it.
+    expect(
+      await repository.latestCoverageReview(generation.versionId!)
+    ).toBeNull();
+    const view = await ctx.documents.forOpening({
+      userId: ctx.user.id,
+      openingId: ctx.opening.id,
+    });
+    expect(view.documents[0].versions[0].coverage).toMatchObject({
+      findings: [],
+      review: null,
+    });
+  });
+
+  it("reviews each generated resume's coverage, never covering a gap, and ends with the method's statement", async () => {
+    const ctx = await setup();
+    const [deploy] = ctx.evidence;
+    const [team] = await ctx.keepInstructions(["Led a team of 5 engineers"]);
+    const deployText = "Cut deploy time by 40% with Kubernetes.";
+    const teamText = "Led a team of 5 engineers.";
+    const { generationId } = await ctx.generate("quick", {
+      drafts: [
+        ctx.draft([
+          { text: deployText, evidence_ids: [deploy.id] },
+          { text: teamText, evidence_ids: [team.id] },
+        ]),
+      ],
+      ratings: [9],
+      coverage: (lines) => ({
+        strong: [
+          {
+            requirement: "Kubernetes",
+            line_id: lines.get(deployText)!,
+            evidence_id: deploy.id,
+          },
+          // An instruction is not a profile line: no evidence in the profile.
+          {
+            requirement: "K8s operators",
+            line_id: lines.get(teamText)!,
+            evidence_id: team.id,
+          },
+        ],
+        partial: [],
+        gaps: [],
+        inconsistencies: [
+          {
+            line_id: lines.get(teamText)!,
+            explanation: "The profile says nothing.",
+          },
+        ],
+        suggestions: [
+          // Names the gap: never kept, however it is worded.
+          {
+            kind: "reorder",
+            line_id: null,
+            text: "Mention Go in the summary.",
+          },
+          { kind: "reorder", line_id: null, text: "Add a Terraform bullet." },
+          {
+            kind: "reorder",
+            line_id: lines.get(teamText)!,
+            text: "Open with the team line.",
+          },
+          {
+            kind: "profile",
+            line_id: lines.get(teamText)!,
+            text: "The team of 5 is not in the profile's Globex results.",
+          },
+          // Already in the profile: nothing to send.
+          { kind: "profile", line_id: lines.get(deployText)!, text: "Add it." },
+        ],
+      }),
+    });
+
+    const view = await ctx.documents.forOpening({
+      userId: ctx.user.id,
+      openingId: ctx.opening.id,
+    });
+    const [version] = view.documents[0].versions;
+    const [deployLine, teamLine] = experienceOf(version.content).lines;
+    const proof = {
+      evidenceId: deploy.id,
+      text: deploy.text,
+      source: { kind: "position", title: "Tech Lead", employer: "Globex" },
+    };
+    // Every cited profile line, read from the frozen version: the result
+    // the bullet and summary cite, and the competency line the skills cite.
+    expect(version.trace).toEqual([
+      proof,
+      {
+        evidenceId: ctx.lineOf("I master").id,
+        text: "I master: Kubernetes, Terraform",
+        source: null,
+      },
+    ]);
+    expect(version.coverage).toMatchObject({
+      findings: [],
+      reviewedSnapshotId: version.snapshot.id,
+      current: true,
+    });
+    const review = version.coverage!.review!;
+    expect(review).toMatchObject({
+      sources: {
+        profileVersionNumber: 1,
+        purpose: {
+          kind: "opening",
+          title: "Platform Engineer",
+          company: "Hooli",
+        },
+        instructions: 1,
+      },
+      preserved: [
+        {
+          positionId: ctx.positionId,
+          employer: "Globex",
+          title: "Tech Lead",
+          startDate: "2021-03",
+          endDate: null,
+          bullets: 2,
+        },
+      ],
+      strong: [
+        {
+          requirement: "Kubernetes",
+          lineId: deployLine.id,
+          lineText: deployText,
+          evidence: proof,
+        },
+      ],
+      partial: [
+        {
+          requirement: "K8s operators",
+          explanation: "no evidence in the profile",
+        },
+      ],
+      gaps: ["Go"],
+      inconsistencies: [
+        {
+          lineId: teamLine.id,
+          lineText: teamText,
+          explanation: "The profile says nothing.",
+        },
+      ],
+      suggestions: [
+        {
+          kind: "reorder",
+          lineId: teamLine.id,
+          lineText: teamText,
+          text: "Open with the team line.",
+        },
+        {
+          kind: "profile",
+          lineId: teamLine.id,
+          lineText: teamText,
+          text: "The team of 5 is not in the profile's Globex results.",
+        },
+      ],
+      statement:
+        "This review does not claim that every mandatory requirement is met.",
+    });
+    const stored = await new DocumentsRepository(ctx.db).latestCoverageReview(
+      version.id
+    );
+    expect(stored?.review).toMatchObject({
+      id: review.id,
+      generationId,
+      snapshotId: version.snapshot.id,
+      profileVersionId: version.snapshot && stored?.snapshot.profileVersionId,
+    });
+
+    // "Send to my profile": the user's statement goes to the draft's Globex
+    // results as a suggestion, nothing more.
+    const { profileSuggestionId } = await ctx.documents.sendToProfile({
+      userId: ctx.user.id,
+      coverageReviewId: review.id,
+      lineId: teamLine.id,
+    });
+    const profiles = new ProfileRepository(ctx.db);
+    const profileDocument = await profiles.findDocument(ctx.user.id, "profile");
+    const pending = await profiles.listPendingSuggestions(profileDocument.id);
+    expect(
+      pending.map((row) => ({
+        id: row.id,
+        origin: row.origin,
+        ...readSuggestionContent(ctx.cipher, row),
+      }))
+    ).toEqual([
+      {
+        id: profileSuggestionId,
+        origin: "application",
+        part: "experience:globex — tech lead",
+        find: "  - Cut cloud costs by 30% [estimated].",
+        replace:
+          "  - Cut cloud costs by 30% [estimated].\n  - Led a team of 5 engineers.",
+        reason: "The team of 5 is not in the profile's Globex results.",
+      },
+    ]);
+    // A profile-backed line has no suggestion to send.
+    await expect(
+      ctx.documents.sendToProfile({
+        userId: ctx.user.id,
+        coverageReviewId: review.id,
+        lineId: deployLine.id,
+      })
+    ).rejects.toMatchObject({ code: "BAD_REQUEST" });
+    // Another user's review is not theirs to send.
+    const other = await createTestUser("grace@example.com");
+    await new CareerService(ctx.db).getOrCreateProfile({
+      userId: other.id,
+      defaultLanguage: "en-US",
+    });
+    await expect(
+      ctx.documents.sendToProfile({
+        userId: other.id,
+        coverageReviewId: review.id,
+        lineId: teamLine.id,
+      })
+    ).rejects.toMatchObject({ code: "NOT_FOUND" });
+  });
+
+  it("blocks a resume with a figure the profile doesn't mark measured until it is fixed", async () => {
+    const ctx = await setup();
+    const line = {
+      text: "Led a team of 5 engineers.",
+      evidence_ids: [ctx.evidence[1].id],
+    };
+    await ctx.generate("quick", { drafts: [ctx.draft([line])], ratings: [9] });
+    const pdfs = new PdfService(ctx.db, new TasksService(ctx.db, ctx.trigger));
+    const tracker = new TrackerService(ctx.db);
+    const forOpening = () =>
+      ctx.documents.forOpening({
+        userId: ctx.user.id,
+        openingId: ctx.opening.id,
+      });
+    const view = async () => (await forOpening()).documents[0].versions[0];
+    const applicationId = (await forOpening()).application!.id;
+    const clean = await view();
+    expect(clean.coverage).toMatchObject({ findings: [], current: true });
+
+    // The user types a result the profile marks only as estimated.
+    const entry = experienceOf(clean.content);
+    await ctx.documents.saveEdit({
+      userId: ctx.user.id,
+      versionId: clean.id,
+      baseSnapshotId: clean.snapshot.id,
+      content: {
+        ...resumeOf(clean.content),
+        sections: resumeOf(clean.content).sections.map((section) =>
+          section.kind === "experience"
+            ? {
+                ...section,
+                entries: [
+                  {
+                    ...entry,
+                    lines: [
+                      ...entry.lines,
+                      {
+                        id: "costs",
+                        text: "Cut costs by 30%.",
+                        origin: { kind: "manual" as const },
+                      },
+                    ],
+                  },
+                ],
+              }
+            : section
+        ),
+      },
+    });
+    const edited = await view();
+    expect(edited.coverage).toMatchObject({
+      findings: [
+        {
+          code: "figure",
+          lineId: "costs",
+          positionId: ctx.positionId,
+          text: "Cut costs by 30%.",
+          params: { figures: "30%" },
+        },
+      ],
+      // The review is of the generated snapshot, not of the edit.
+      reviewedSnapshotId: clean.snapshot.id,
+      current: false,
+    });
+    // Nothing leaves the platform: no download, no ZIP, no sending.
+    const blocked = { code: "PRECONDITION_FAILED" };
+    const userId = ctx.user.id;
+    await expect(
+      pdfs.request({ userId, versionId: clean.id })
+    ).rejects.toMatchObject(blocked);
+    await expect(
+      pdfs.prepareApplication({ userId, openingId: ctx.opening.id })
+    ).rejects.toMatchObject(blocked);
+    await expect(
+      pdfs.readApplicationZip({ userId, openingId: ctx.opening.id })
+    ).rejects.toMatchObject(blocked);
+    await expect(
+      tracker.markApplied({ userId, applicationId, versionIds: [clean.id] })
+    ).rejects.toMatchObject(blocked);
+    expect(ctx.trigger.trigger).not.toHaveBeenCalledWith(
+      "render_pdf",
+      expect.anything()
+    );
+
+    // Taking the figure out unblocks it.
+    await ctx.documents.undo({ userId, versionId: clean.id });
+    expect((await view()).coverage?.findings).toEqual([]);
+    expect(await pdfs.request({ userId, versionId: clean.id })).toEqual({
+      ready: false,
+    });
+    await tracker.markApplied({
+      userId,
+      applicationId,
+      versionIds: [clean.id],
+    });
+    expect((await forOpening()).application?.status).toBe("applied");
   });
 
   it("keeps snapshots as a stack: edits, undo, restore, duplicate", async () => {
@@ -2135,9 +2502,10 @@ describe("resume generation and snapshots", () => {
       ratings: [6],
       today,
     });
+    // The adjuster, then the coverage review; no review round.
     expect(
       fake.generateObject.mock.calls.map(([call]) => call.system.slice(0, 10))
-    ).toEqual(["You adjust"]);
+    ).toEqual(["You adjust", "You audit "]);
     expect(fake.generateObject.mock.calls[0][0].system).toContain(
       `bullet [${deployLine.id}] Cut deploy time by 40% with Kubernetes.`
     );
@@ -2255,8 +2623,8 @@ describe("resume generation and snapshots", () => {
       ],
       ratings: [],
     });
-    // One call: the adjuster; nothing is reviewed.
-    expect(fake.generateObject).toHaveBeenCalledTimes(1);
+    // The adjuster and the coverage review; no review round rates it.
+    expect(fake.generateObject).toHaveBeenCalledTimes(2);
     expect(
       await new DocumentsRepository(ctx.db).listReviewRounds(generationId)
     ).toEqual([]);

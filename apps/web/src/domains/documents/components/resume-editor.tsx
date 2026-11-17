@@ -378,6 +378,7 @@ function SectionBody({
   const line = (row: { id: string; text: string; origin: LineOrigin }) => (
     <TracedLine
       key={row.id}
+      lineId={row.id}
       origin={row.origin}
       trace={trace}
       traceIndex={traceIndex}
@@ -416,7 +417,12 @@ function SectionBody({
             const ownerId =
               "positionId" in entry ? entry.positionId : entry.projectId;
             return (
-              <div key={ownerId} className="flex flex-col gap-1">
+              // The anchor a coverage finding about this entry scrolls to.
+              <div
+                key={ownerId}
+                data-position-id={ownerId}
+                className="flex flex-col gap-1 rounded-sm"
+              >
                 {"positionId" in entry ? (
                   <NotedLine
                     trace={trace}
@@ -516,11 +522,13 @@ type TraceIndex = {
 
 /** A line with its origin on hover, colored by origin in trace mode. */
 function TracedLine({
+  lineId,
   origin,
   trace,
   traceIndex,
   children,
 }: {
+  lineId: string;
   origin: LineOrigin;
   trace: boolean;
   traceIndex: TraceIndex;
@@ -542,6 +550,8 @@ function TracedLine({
     <Tooltip>
       <TooltipTrigger asChild>
         <div
+          // The anchor a coverage finding about this line scrolls to.
+          data-line-id={lineId}
           className={cn(
             "rounded-sm border-l-2 border-transparent pl-1.5",
             trace && originTone[origin.kind]
@@ -571,47 +581,43 @@ function TracedLine({
               </div>
             ))}
             {sources.map((source) => (
-              <div key={source.evidenceId} className="flex flex-col gap-0.5">
-                <span>
-                  {t.formatMessage(
-                    { defaultMessage: "“{quote}”" },
-                    { quote: source.quote }
-                  )}
-                </span>
-                <span className="opacity-70">
-                  {source.source?.kind === "position"
-                    ? t.formatMessage(
-                        {
-                          defaultMessage:
-                            "{title} · {employer} · approved {date}",
-                        },
-                        {
-                          title: source.source.title,
-                          employer: source.source.employer,
-                          date: t.formatDate(source.approvedAt),
-                        }
-                      )
-                    : source.source?.kind === "credential"
-                      ? t.formatMessage(
-                          { defaultMessage: "{title} · approved {date}" },
-                          {
-                            title: source.source.title,
-                            date: t.formatDate(source.approvedAt),
-                          }
-                        )
-                      : t.formatMessage(
-                          { defaultMessage: "approved {date}" },
-                          { date: t.formatDate(source.approvedAt) }
-                        )}
-                </span>
-              </div>
+              <ProfilePassage key={source.evidenceId} passage={source} />
             ))}
           </div>
         ) : (
-          t.formatMessage({ defaultMessage: "From your published profile" })
+          t.formatMessage({ defaultMessage: "From your profile" })
         )}
       </TooltipContent>
     </Tooltip>
+  );
+}
+
+/**
+ * A passage of the profile a line rests on (resume spec, "Trace in the
+ * editor"): its text, and the position it belongs to when it has one.
+ */
+export function ProfilePassage({ passage }: { passage: EvidenceTrace }) {
+  const t = useTranslation();
+  return (
+    <div className="flex flex-col gap-0.5">
+      <span>
+        {t.formatMessage(
+          { defaultMessage: "“{quote}”" },
+          { quote: passage.text }
+        )}
+      </span>
+      <span className="opacity-70">
+        {passage.source
+          ? t.formatMessage(
+              { defaultMessage: "From your profile · {title}, {employer}" },
+              {
+                title: passage.source.title,
+                employer: passage.source.employer,
+              }
+            )
+          : t.formatMessage({ defaultMessage: "From your profile" })}
+      </span>
+    </div>
   );
 }
 

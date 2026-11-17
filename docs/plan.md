@@ -135,9 +135,13 @@ Acceptance:
 
 - Every generated document gets the method's coverage review against its frozen profile, in its price: code checks that block (locked facts, counts and pages per the form, `[medido]` figures, communication rules, what the user did not do, very old experiences) and the AI part (strong and partial coverage with passages, gaps not invented, inconsistencies, the final statement); an omitted true fact becomes a profile suggestion.
 
+- Note: the code checks are not stored: they run live on each resume version's official snapshot, against the profile version that snapshot froze (the one published now when it carries none), the settings of the generation that wrote the version and the opening's requirements (or the focus), so a user edit that adds an unmarked figure shows a finding at once. A rendered PDF's measured pages count when the file exists; the estimate before. Every finding blocks the document from leaving the platform (the PDF download, the application's ZIP and marking the application as sent refuse it); the editor's preview is not blocked. "What I did not do" is checked by the names the profile knows (competencies, studied competencies and the tools of every experience), never on free text, and only for lines of that position.
+- Note: the AI part runs once per generation (a new version or an adjustment), on the final content, in the generation's price, and is not run again after edits: the view says which snapshot it reviewed and whether that is the official one. It sees the resume with its line ids, the requirements with the fit check, the profile lines the document cites plus the fit check's, and the instructions, never the whole profile. Code keeps a strong item only when its line is in the document and its profile line is of the frozen version and cited by that line or tied by the fit check to that requirement (else it is partial, "no evidence in the profile"); every requirement left is a gap; a suggestion naming a gap, or a reorder asking to add or claim anything, is dropped; a "profile" suggestion is kept only for a bullet resting on the user's own words (an instruction or a manual edit). Code writes the sources, what was preserved and the final statement.
+- Note: "send to my profile" takes a kept "profile" suggestion and proposes the bullet under the Results of its experience in the current draft (origin `application`); the experience is found by the position's derived id, so a renamed one is refused rather than guessed. The cover letter's review comes with P8; the trace in the editor now reads the frozen version's lines.
+
 Acceptance:
-- [ ] A document with a figure the profile doesn't mark `[medido]` is blocked.
-- [ ] The review never suggests covering a gap and ends with the method's statement.
+- [x] A document with a figure the profile doesn't mark `[medido]` is blocked.
+- [x] The review never suggests covering a gap and ends with the method's statement.
 
 ### P8: Cover letter, instructions and gap answers
 

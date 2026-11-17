@@ -47,8 +47,13 @@ export type CareerContext = {
   // The published version everything here was read from (ADR 0008); null
   // when the user has published none.
   profileVersionId: string | null;
+  profileVersionNumber: number | null;
   header: ResumeHeaderFields;
   positions: ContextPosition[];
+  // The titles code accepts for each position besides the one printed:
+  // the profile's own when an approved equivalent replaced it (a document
+  // written before the approval still prints the original).
+  acceptedTitles: Map<string, string[]>;
   evidence: ContextEvidence[];
   credentials: ContextCredential[];
   skills: Array<{ id: string; name: string; evidenceIds: string[] }>;
@@ -215,11 +220,33 @@ export async function loadCareerContext(input: {
     ...position,
     title: equivalents.get(position.id) ?? position.title,
   }));
+  // An override on the title is the only title this application prints.
+  const overriddenTitles = new Set(
+    overrides
+      .filter((row) => row.field === "title")
+      .map((row) => row.positionId)
+  );
+  const acceptedTitles = new Map(
+    positions.flatMap((position) =>
+      overriddenTitles.has(position.id)
+        ? []
+        : [
+            [
+              position.id,
+              [
+                ...new Set([position.title, equivalents.get(position.id)]),
+              ].filter((title): title is string => !!title),
+            ] as const,
+          ]
+    )
+  );
 
   return {
     profileVersionId: source?.profileVersionId ?? null,
+    profileVersionNumber: source?.profileVersionNumber ?? null,
     header: source?.header ?? emptyHeader,
     positions: applyLockedFactOverrides(titled, overrides),
+    acceptedTitles,
     evidence,
     credentials,
     skills: source?.skills ?? [],

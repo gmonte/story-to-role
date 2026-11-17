@@ -20,6 +20,8 @@ import { useDocumentLabels } from "../hooks/use-document-labels";
 import { useOpeningDocuments } from "../hooks/use-opening-documents";
 import { useSelectedVersion } from "../hooks/use-selected-version";
 import { AdaptVersionDialog } from "./adapt-version-dialog";
+import { CoverageReviewBlock } from "./coverage-review";
+import { oldestWithBullets } from "../utils/version-checks";
 import { DownloadZipButton } from "./download-zip-button";
 import { GenerateResumeDialog } from "./generate-resume-dialog";
 import { OutdatedNotice, SyncProposal } from "./language-sync";
@@ -196,8 +198,9 @@ export function GenerationProgress({
       />
     );
   }
-  // Step 1 drafts and the last step saves; the ones between are rounds.
-  const rounds = progress ? progress.totalSteps - 2 : 0;
+  // Step 1 drafts, then the rounds, the coverage review and saving: an
+  // adjustment runs no round, so it has three steps.
+  const rounds = progress ? progress.totalSteps - 3 : 0;
   const round = progress?.label === "review_round" ? progress.step - 1 : 0;
   const steps = [
     {
@@ -218,6 +221,12 @@ export function GenerationProgress({
               { round: Math.max(round, 1), total: rounds }
             )
           : t.formatMessage({ defaultMessage: "Reviewing and tightening" }),
+    },
+    {
+      key: "coverage_review",
+      label: t.formatMessage({
+        defaultMessage: "Reviewing coverage against your profile",
+      }),
     },
     {
       key: "saving",
@@ -243,8 +252,10 @@ export function GenerationProgress({
 }
 
 /**
- * What comes with a version: what its latest generation emphasized (or,
- * for an adjustment, changed), the length warning and the ATS check.
+ * What comes with a version: its coverage review (a resume's), what its
+ * latest generation emphasized (or, for an adjustment, changed), the length
+ * warning on the estimate (until a resume's PDF is measured, when an
+ * overflow becomes a finding) and the ATS check.
  */
 export function VersionChecks({ version }: { version: VersionView }) {
   const t = useTranslation();
@@ -253,22 +264,25 @@ export function VersionChecks({ version }: { version: VersionView }) {
 
   return (
     <div className="flex flex-col gap-2">
-      {version.pages > version.maxPages && (
-        <p className="rounded-lg border border-amber-500/40 bg-amber-500/10 p-2.5 text-xs">
-          {t.formatMessage(
-            {
-              defaultMessage:
-                "{measured, select, yes {{pages} pages in the PDF} other {About {pages} pages}}: over the page limit this document was written with ({limit}). {position, select, none {Turn off an optional section.} other {Trim the bullets of {position}, your oldest position, or turn off an optional section.}}",
-            },
-            {
-              limit: version.maxPages,
-              measured: version.pdf.ready ? "yes" : "no",
-              pages: t.formatNumber(version.pages),
-              position: oldestWithBullets(version) ?? "none",
-            }
-          )}
-        </p>
-      )}
+      <CoverageReviewBlock version={version} />
+      {/* Measured over the limit, a resume shows it as a finding instead. */}
+      {version.pages > version.maxPages &&
+        !(version.coverage && version.pdf.ready) && (
+          <p className="rounded-lg border border-amber-500/40 bg-amber-500/10 p-2.5 text-xs">
+            {t.formatMessage(
+              {
+                defaultMessage:
+                  "{measured, select, yes {{pages} pages in the PDF} other {About {pages} pages}}: over the page limit this document was written with ({limit}). {position, select, none {Turn off an optional section.} other {Trim the bullets of {position}, your oldest position, or turn off an optional section.}}",
+              },
+              {
+                limit: version.maxPages,
+                measured: version.pdf.ready ? "yes" : "no",
+                pages: t.formatNumber(version.pages),
+                position: oldestWithBullets(version) ?? "none",
+              }
+            )}
+          </p>
+        )}
       {emphasis && (
         <div className="bg-background flex flex-col gap-1.5 rounded-lg border p-2.5 text-xs">
           <p className="text-sm font-medium">
@@ -330,13 +344,4 @@ export function VersionChecks({ version }: { version: VersionView }) {
       )}
     </div>
   );
-}
-
-/** Where trimming costs least: the oldest position that still has bullets. */
-function oldestWithBullets(version: VersionView) {
-  if (version.content.kind !== "resume") return null;
-  const entries = version.content.sections.flatMap((section) =>
-    section.kind === "experience" ? section.entries : []
-  );
-  return entries.findLast((entry) => entry.lines.length > 0)?.employer ?? null;
 }

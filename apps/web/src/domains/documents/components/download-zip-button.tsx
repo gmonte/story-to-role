@@ -11,6 +11,7 @@ import { toast } from "@repo/web/components/ui/sonner";
 import { useTRPC } from "~/tools/trpc/client";
 
 import { useRefreshDocuments } from "../hooks/use-opening-documents";
+import { hasFindings } from "../utils/version-checks";
 
 /** The application as one ZIP: every version's PDF, named after the opening. */
 export function DownloadZipButton({
@@ -31,8 +32,25 @@ export function DownloadZipButton({
   );
   const ready = versions.every((version) => version.pdf.ready);
   const rendering = versions.some((version) => version.pdf.rendering);
+  // One document with coverage findings holds the whole ZIP (resume spec,
+  // "Coverage review"); the server refuses it too.
+  const blocked = versions.some(hasFindings);
+  const blockedTitle = t.formatMessage({
+    defaultMessage: "Fix the coverage findings before downloading.",
+  });
 
-  return ready ? (
+  return blocked ? (
+    <Button
+      size="sm"
+      variant="outline"
+      className="self-start"
+      disabled
+      title={blockedTitle}
+    >
+      <Download />
+      {t.formatMessage({ defaultMessage: "Download all (ZIP)" })}
+    </Button>
+  ) : ready ? (
     <Button size="sm" variant="outline" className="self-start" asChild>
       <a href={`/api/openings/${openingId}/documents-zip`}>
         <Download />

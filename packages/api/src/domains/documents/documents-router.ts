@@ -208,6 +208,21 @@ export const documentsRouter = createTRPCRouter({
       return ok;
     }),
 
+  sendToProfile: userProcedure
+    .meta(
+      openApiMeta(
+        "documents",
+        "POST",
+        "/coverage-reviews/by-id/{coverageReviewId}/profile-suggestion",
+        "Proposes a reviewed line as a suggestion in the profile's draft"
+      )
+    )
+    .input(z.object({ coverageReviewId: z.uuid(), lineId: z.string() }))
+    .output(z.object({ profileSuggestionId: z.uuid() }))
+    .mutation(({ ctx, input }) =>
+      new DocumentsService(db).sendToProfile({ userId: ctx.userId, ...input })
+    ),
+
   requestPdf: userProcedure
     .use(rateLimited("taskStart"))
     .meta(

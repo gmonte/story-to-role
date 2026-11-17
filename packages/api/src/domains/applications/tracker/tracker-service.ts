@@ -2,6 +2,11 @@ import { TRPCError } from "@trpc/server";
 
 import { CareerRepository } from "@repo/api/domains/career/career-repository";
 import {
+  assertSendable,
+  FrozenContexts,
+} from "@repo/api/domains/documents/coverage-review/snapshot-coverage";
+import { DocumentsRepository } from "@repo/api/domains/documents/documents-repository";
+import {
   getUserCipher,
   type UserCipher,
 } from "@repo/api/domains/encryption/user-cipher";
@@ -216,6 +221,29 @@ export class TrackerService {
       );
       if (sent.length !== input.versionIds.length || sent.length === 0) {
         throw new TRPCError({ code: "BAD_REQUEST" });
+      }
+      // Sending is the document leaving the platform: a resume with
+      // coverage findings is refused (resume spec, "Coverage review").
+      const documents = new DocumentsRepository(tx);
+      const cipher = await getUserCipher(tx, input.userId);
+      const contexts = new FrozenContexts(tx, cipher, profile.id);
+      for (const row of sent) {
+        const version = await documents.findVersion(row.versionId);
+        const document =
+          version && (await documents.findDocument(version.documentId));
+        const snapshot = await documents.findSnapshot(row.snapshotId);
+        if (!version || !document || !snapshot) {
+          throw new TRPCError({ code: "NOT_FOUND" });
+        }
+        await assertSendable({
+          db: tx,
+          cipher,
+          profileId: profile.id,
+          document,
+          version,
+          snapshot,
+          contexts,
+        });
       }
       const changed = await this.changeStatus(tx, {
         applicationId: row.application.id,

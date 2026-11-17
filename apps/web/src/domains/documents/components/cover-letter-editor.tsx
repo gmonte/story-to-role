@@ -33,6 +33,7 @@ import { DownloadPdfDialog } from "./download-pdf-dialog";
 import { GenerateLetterDialog } from "./generate-letter-dialog";
 import { SyncProposal } from "./language-sync";
 import { EditableText, originTone } from "./editing";
+import { ProfilePassage } from "./resume-editor";
 import { VersionHistorySheet } from "./version-history-sheet";
 
 /**
@@ -332,12 +333,7 @@ function SourcedParagraph({
         ) : (
           <div className="flex flex-col gap-2">
             {evidence.map((row) => (
-              <span key={row.evidenceId}>
-                {t.formatMessage(
-                  { defaultMessage: "“{quote}”" },
-                  { quote: row.quote }
-                )}
-              </span>
+              <ProfilePassage key={row.evidenceId} passage={row} />
             ))}
             {facts.map((row) => (
               <span key={row.id}>

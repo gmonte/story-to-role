@@ -76,6 +76,8 @@ export async function runInterviewTurn(
       sessionId: session.id,
       role: "assistant",
       kind,
+      // Answering the career chat's orchestrator, not the user directly.
+      via: userTurn.via,
       encryptedContent: content ? cipher.encrypt(content) : null,
       language: userTurn.language,
       tokenCount: content ? estimateTokens(content) : 0,

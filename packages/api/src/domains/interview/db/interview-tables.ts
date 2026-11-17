@@ -88,6 +88,10 @@ export const interviewTurnsTable = createTable(
       .references(() => interviewSessionsTable.id, { onDelete: "cascade" }),
     role: d.text().$type<TurnRole>().notNull(),
     kind: d.text().$type<TurnKind>().notNull().default("text"),
+    // Relayed by the career chat's orchestrator (the user spoke there, or
+    // the interviewer answered it); null when said in this position's own
+    // chat.
+    via: d.text().$type<"career_chat">(),
     encryptedContent: d.text(),
     language: d.text().$type<InterviewLanguage>().notNull(),
     tokenCount: d.integer().notNull().default(0),

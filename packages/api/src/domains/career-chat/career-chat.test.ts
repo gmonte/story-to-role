@@ -6,6 +6,7 @@ import { MockLanguageModelV3 } from "ai/test";
 import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { CareerService } from "@repo/api/domains/career/career-service";
+import { interviewTurnsTable } from "@repo/api/domains/interview/db/interview-tables";
 import { recordCareerEvent } from "@repo/api/domains/career/record-career-event";
 import { EvidenceRepository } from "@repo/api/domains/evidence/evidence-repository";
 import { CareerRepository } from "@repo/api/domains/career/career-repository";
@@ -195,6 +196,11 @@ describe("career chat", () => {
     );
 
     expect(text).toBe("How big was the platform team at Acme?");
+    // Each interviewer's session marks what came through the general chat:
+    // the user's words and its own answer to the orchestrator.
+    const turns = await ctx.db.select().from(interviewTurnsTable);
+    expect(turns.length).toBeGreaterThan(0);
+    expect(turns.every((turn) => turn.via === "career_chat")).toBe(true);
     const interview = new InterviewRepository(ctx.db);
     const cipher = await getUserCipher(ctx.db, ctx.user.id);
     const profile = await new CareerService(ctx.db).requireProfile(ctx.user.id);

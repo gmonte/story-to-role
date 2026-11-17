@@ -52,16 +52,13 @@ export function PositionCard({
   const labels = useCareerLabels();
   const trpc = useTRPC();
   const refresh = useRefreshCareer();
-  const { openPosition, setOpenPosition, prefillDraft } = useCareerWorkspace();
+  const { openPositionId, setOpenPositionId, prefillDraft } =
+    useCareerWorkspace();
   const onError = (error: { message: string }) => toast.error(error.message);
 
-  const openSpace = () =>
-    setOpenPosition({
-      positionId: position.id,
-      tab: position.draftsToReview > 0 ? "review" : "overview",
-    });
+  const openSpace = () => setOpenPositionId(position.id);
   // Open in the pane beside the chat: marked, and brought into view.
-  const reviewed = openPosition?.positionId === position.id;
+  const reviewed = openPositionId === position.id;
   const card = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (reviewed) card.current?.scrollIntoView({ block: "nearest" });

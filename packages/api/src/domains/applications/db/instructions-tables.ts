@@ -6,10 +6,7 @@ import {
   credentialsTable,
   positionsTable,
 } from "@repo/api/domains/career/db/career-tables";
-import {
-  evidenceTable,
-  sensitiveItemsTable,
-} from "@repo/api/domains/evidence/db/evidence-tables";
+import { sensitiveItemsTable } from "@repo/api/domains/evidence/db/evidence-tables";
 import type {
   EvidenceKind,
   SensitivityChoice,
@@ -97,9 +94,9 @@ export const instructionPointsTable = createTable(
     evidenceKind: d.text().$type<EvidenceKind>(),
     // Flagged names and figures, inserted as sensitive items on promotion.
     encryptedSensitiveItems: d.text(),
-    evidenceId: d
-      .uuid()
-      .references(() => evidenceTable.id, { onDelete: "set null" }),
+    // The fact a promotion created, when evidence existed. Profile_truth
+    // replaces this in P8 (docs/plan.md).
+    evidenceId: d.uuid(),
     confirmedAt: d.timestamp({ withTimezone: true }),
   }),
   (t) => [index("instruction_points_opening_id_idx").on(t.openingId)]

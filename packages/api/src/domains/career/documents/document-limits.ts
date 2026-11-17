@@ -10,7 +10,12 @@ export const documentLimits = {
 };
 
 /** Sources that take one of the slots: rejected or failed ones don't. */
-export const slotStatuses = ["pending", "processing", "processed"] as const;
+export const slotStatuses = [
+  "stored",
+  "pending",
+  "processing",
+  "processed",
+] as const;
 
 export const acceptedDocumentTypes = {
   "application/pdf": "pdf",

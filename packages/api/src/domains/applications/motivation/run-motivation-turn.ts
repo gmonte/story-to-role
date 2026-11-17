@@ -3,7 +3,7 @@ import { checkTopic } from "@repo/api/domains/ai/topic-gate";
 import { CareerRepository } from "@repo/api/domains/career/career-repository";
 import type { UserCipher } from "@repo/api/domains/encryption/user-cipher";
 import { EvidenceRepository } from "@repo/api/domains/evidence/evidence-repository";
-import { findQuote } from "@repo/api/domains/interview/quotes/verify-quote";
+import { findQuote } from "@repo/api/utils/text/verify-quote";
 import { OpeningsRepository } from "@repo/api/domains/openings/openings-repository";
 import type { DbClient } from "@repo/api/tools/db-client";
 import type { MisuseGuard } from "@repo/api/tools/misuse-guard";
@@ -114,13 +114,13 @@ export async function runMotivationTurn(deps: {
     );
     const decryptOptional = (value: string | null | undefined) =>
       value ? cipher.decrypt(value) : null;
-    const evidence = new EvidenceRepository(db);
-    const story = interview.storyId
-      ? await evidence.findStory({
-          profileId: profile.id,
-          storyId: interview.storyId,
-        })
-      : null;
+    // Profile_truth replaces this in P8 (docs/plan.md): no story exists.
+    const story: {
+      problem: string;
+      action: string;
+      partners: string | null;
+      result: string;
+    } | null = null;
 
     if (regular < motivationSettings.maxAnswers) {
       const facts = (
@@ -128,9 +128,9 @@ export async function runMotivationTurn(deps: {
       )
         .filter((fact) => fact.approvedAt)
         .map((fact) => cipher.decrypt(fact.encryptedText));
-      const goals = (await evidence.listCareerGoals(profile.id)).map((goal) =>
-        cipher.decrypt(goal.encryptedText)
-      );
+      const goals = (
+        await new EvidenceRepository(db).listCareerGoals(profile.id)
+      ).map((goal) => cipher.decrypt(goal.encryptedText));
       const { object } = await ai.generateObject({
         purpose: "motivation_question",
         role: "writing",
@@ -151,12 +151,7 @@ export async function runMotivationTurn(deps: {
                 title: decryptOptional(opening?.encryptedTitle),
                 company: decryptOptional(opening?.encryptedCompany),
               },
-              story: story && {
-                problem: cipher.decrypt(story.encryptedProblem),
-                action: cipher.decrypt(story.encryptedAction),
-                partners: decryptOptional(story.encryptedPartners),
-                result: cipher.decrypt(story.encryptedResult),
-              },
+              story,
               companyFacts: facts,
               goalsAlreadyShared: goals,
               interview: turns

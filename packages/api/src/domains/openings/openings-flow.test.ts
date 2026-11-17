@@ -10,11 +10,7 @@ import {
   positionsTable,
 } from "@repo/api/domains/career/db/career-tables";
 import { getUserCipher } from "@repo/api/domains/encryption/user-cipher";
-import {
-  evidenceTable,
-  sensitiveItemsTable,
-  skillsTable,
-} from "@repo/api/domains/evidence/db/evidence-tables";
+import { sensitiveItemsTable } from "@repo/api/domains/evidence/db/evidence-tables";
 import { loadSensitiveFilter } from "@repo/api/domains/evidence/sensitive/load-sensitive-filter";
 import { TasksService } from "@repo/api/domains/tasks/tasks-service";
 import { createTestUser } from "@repo/api/test/create-test-user";
@@ -56,13 +52,13 @@ const extraction = {
 async function setup() {
   const db = await getTestDatabase();
   const user = await createTestUser();
-  const career = new CareerService(db, { start: vi.fn() } as never);
+  const career = new CareerService(db);
   const profile = await career.getOrCreateProfile({
     userId: user.id,
     defaultLanguage: "en-US",
   });
   // A junior history: one short position.
-  const { positionId } = await career.addPosition({
+  await career.addPosition({
     userId: user.id,
     position: {
       employer: "Acme",
@@ -71,21 +67,6 @@ async function setup() {
     },
   });
   const cipher = await getUserCipher(db, user.id);
-  await db.insert(evidenceTable).values(
-    [
-      ["tool", "Kubernetes deployments for 12 services"],
-      ["achievement", "Led Project Phoenix migration"],
-      ["achievement", "Organized the office party"],
-    ].map(([kind, text]) => ({
-      profileId: profile.id,
-      positionId,
-      kind: kind as "tool" | "achievement",
-      encryptedText: cipher.encrypt(text),
-      encryptedSourceQuote: cipher.encrypt(text),
-      language: "en-US" as const,
-      approvedAt: new Date(),
-    }))
-  );
   const trigger = {
     trigger: vi.fn(async () => ({ runId: "run", accessToken: "t" })),
   };
@@ -158,41 +139,33 @@ describe("openings and fit check", () => {
     await closeTestDatabase();
   });
 
-  it("shows a band, requirements linked to evidence and gaps, with no percentage", async () => {
+  it("shows a band and, with no passages to retrieve, gaps, with no percentage", async () => {
     const ctx = await setup();
     const { openingId } = await ctx.openings.createFromText({
       userId: ctx.user.id,
       description: posting,
     });
-    let prompt = "";
+    let retrieved: ReturnType<typeof parseJudgmentPrompt> = [];
 
+    // Profile_truth replaces this in P5 (docs/plan.md): no evidence exists,
+    // so no requirement lists a passage and each comes out as a gap.
     await ctx.analyze(
       openingId,
       fitScript((system) => {
-        prompt = system;
+        retrieved = parseJudgmentPrompt(system);
         return {
-          items: parseJudgmentPrompt(system).map((term) => {
-            const kubernetes = term.evidence.find((e) =>
-              e.line.includes("Kubernetes")
-            );
-            return term.text.includes("Kubernetes") && kubernetes
-              ? {
-                  term_id: term.termId,
-                  verdict: "met",
-                  evidence_ids: [kubernetes.id],
-                  explanation: "Runs Kubernetes",
-                }
-              : {
-                  term_id: term.termId,
-                  verdict: "gap",
-                  evidence_ids: [],
-                  explanation: "Not shown",
-                };
-          }),
+          items: retrieved.map((term) => ({
+            term_id: term.termId,
+            verdict: "gap",
+            evidence_ids: [],
+            explanation: "Not shown",
+          })),
         };
       })
     );
 
+    expect(retrieved).toHaveLength(3);
+    expect(retrieved.every((term) => term.evidence.length === 0)).toBe(true);
     const detail = await ctx.openings.get({ userId: ctx.user.id, openingId });
     expect(detail).toMatchObject({
       status: "analyzed",
@@ -201,22 +174,13 @@ describe("openings and fit check", () => {
       suggestedTone: "direct",
     });
     expect(detail.fitCheck?.band).toBe("low");
-    const kubernetes = detail.fitCheck!.items.find(
-      (item) => item.term === "Kubernetes"
-    )!;
-    expect(kubernetes).toMatchObject({ verdict: "met" });
-    expect(kubernetes.evidence.map((e) => e.text)).toEqual([
-      "Kubernetes deployments for 12 services",
-    ]);
     expect(
       detail.fitCheck!.items.filter((item) => item.verdict === "gap")
-    ).toHaveLength(2);
-    // The evidence carries its position and period, so seniority reads right.
-    expect(prompt).toContain("(Junior Developer, 2023-01 to present)");
+    ).toHaveLength(3);
     expect(JSON.stringify(detail)).not.toMatch(/percent|%/i);
   });
 
-  it("shows the judge the approved history, credentials and skills", async () => {
+  it("shows the judge the approved history and credentials", async () => {
     const ctx = await setup();
     await ctx.db
       .update(positionsTable)
@@ -236,10 +200,6 @@ describe("openings and fit check", () => {
         encryptedTitle: ctx.cipher.encrypt("Unapproved Cert"),
       },
     ]);
-    await ctx.db.insert(skillsTable).values({
-      profileId: ctx.profile.id,
-      encryptedName: ctx.cipher.encrypt("Terraform"),
-    });
     const { openingId } = await ctx.openings.createFromText({
       userId: ctx.user.id,
       description: posting,
@@ -258,7 +218,6 @@ describe("openings and fit check", () => {
       "- position: Junior Developer, 2023-01 to present"
     );
     expect(prompt).toContain("- language: English (C1)");
-    expect(prompt).toContain("- skill: Terraform");
     expect(prompt).not.toContain("Unapproved Cert");
   });
 
@@ -417,6 +376,12 @@ describe("openings and fit check", () => {
 
   it("leaves excluded items out of the judgment", async () => {
     const ctx = await setup();
+    await ctx.db.insert(credentialsTable).values({
+      profileId: ctx.profile.id,
+      kind: "certification",
+      encryptedTitle: ctx.cipher.encrypt("Project Phoenix Award"),
+      approvedAt: new Date(),
+    });
     await ctx.db.insert(sensitiveItemsTable).values({
       profileId: ctx.profile.id,
       kind: "codename",
@@ -448,9 +413,7 @@ describe("openings and fit check", () => {
       description: posting,
     });
     const grace = await createTestUser("grace@example.com");
-    await new CareerService(ctx.db, {
-      start: vi.fn(),
-    } as never).getOrCreateProfile({
+    await new CareerService(ctx.db).getOrCreateProfile({
       userId: grace.id,
       defaultLanguage: "en-US",
     });

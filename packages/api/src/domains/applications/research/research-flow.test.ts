@@ -27,9 +27,10 @@ vi.mock("@repo/common/env/web.env", () => ({
 async function setup() {
   const db = await getTestDatabase();
   const user = await createTestUser();
-  const profile = await new CareerService(db, {
-    start: vi.fn(),
-  } as never).getOrCreateProfile({ userId: user.id, defaultLanguage: "en-US" });
+  const profile = await new CareerService(db).getOrCreateProfile({
+    userId: user.id,
+    defaultLanguage: "en-US",
+  });
   const cipher = await getUserCipher(db, user.id);
   const opening = await new OpeningsRepository(db).insertOpening({
     profileId: profile.id,
@@ -161,9 +162,7 @@ describe("company research", () => {
   it("refuses another user's opening and lets a dead run be replaced", async () => {
     const ctx = await setup();
     const stranger = await createTestUser("eve@example.com");
-    await new CareerService(ctx.db, {
-      start: vi.fn(),
-    } as never).getOrCreateProfile({
+    await new CareerService(ctx.db).getOrCreateProfile({
       userId: stranger.id,
       defaultLanguage: "en-US",
     });

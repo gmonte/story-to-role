@@ -6,8 +6,6 @@ import {
   getUserCipher,
   type UserCipher,
 } from "@repo/api/domains/encryption/user-cipher";
-import { EvidenceRepository } from "@repo/api/domains/evidence/evidence-repository";
-import { defaultSensitivityChoice } from "@repo/api/domains/evidence/schemas/evidence";
 import { OpeningsRepository } from "@repo/api/domains/openings/openings-repository";
 import type { RealtimeSubscription } from "@repo/api/domains/tasks/schemas/task";
 import { TasksService } from "@repo/api/domains/tasks/tasks-service";
@@ -18,7 +16,6 @@ import { loadPendingGapAnswers } from "./load-gap-answers";
 import {
   type ApplicationInstructions,
   flaggedSensitiveItemSchema,
-  type InstructionDecision,
   positionFieldOf,
 } from "./schemas/instructions";
 
@@ -34,8 +31,8 @@ const sensitiveItemsOf = (cipher: UserCipher, encrypted: string | null) =>
 /**
  * Application instructions (resume spec, "Application instructions"):
  * what the user states for one application, split into points they keep
- * here or promote to the evidence base, and the locked-fact overrides
- * they confirm for this application only.
+ * here, and the locked-fact overrides they confirm for this application
+ * only.
  */
 export class InstructionsService {
   constructor(
@@ -193,109 +190,31 @@ export class InstructionsService {
   }
 
   /**
-   * The user's review of the drafts: promoted points become evidence with
-   * their own words as the quote, through the same approval as interview
-   * evidence (flagged names go to the sensitive-data review); the others
-   * stay in this application. Overrides not confirmed are dropped.
+   * The user's review of the drafts: every point stays in this application
+   * (promoting one to the career is gone with the evidence base). Overrides
+   * not confirmed are dropped.
    */
   async confirm(input: {
     userId: string;
     openingId: string;
-    decisions: InstructionDecision[];
     confirmedLockedFactOverrideIds: string[];
   }) {
-    const { profile, opening } = await this.requireOpening(
+    const { opening } = await this.requireOpening(
       input.userId,
       input.openingId
     );
     await this.db.transaction(async (tx) => {
       const repository = new InstructionsRepository(tx);
-      const evidence = new EvidenceRepository(tx);
-      const career = new CareerRepository(tx);
-      const cipher = await getUserCipher(tx, input.userId);
       const confirmedAt = new Date();
-      const positionIds = new Set(
-        (await career.listPositions(profile.id))
-          .filter((position) => position.status === "approved")
-          .map((position) => position.id)
-      );
-      const credentialIds = new Set(
-        (await career.listCredentials(profile.id))
-          .filter((credential) => credential.approvedAt)
-          .map((credential) => credential.id)
-      );
-      const decisions = new Map(
-        input.decisions.map((d) => [d.instructionPointId, d])
-      );
       const pending = (await repository.listOverrides(opening.id)).filter(
         (row) => !row.confirmedAt
       );
 
-      // Locked: a second submit finds no drafts left, so nothing is promoted twice.
-      const drafts = await repository.lockDraftPoints(opening.id);
-      for (const point of drafts) {
-        const decision = decisions.get(point.id);
-        const positionId =
-          decision?.positionId && positionIds.has(decision.positionId)
-            ? decision.positionId
-            : null;
-        const credentialId =
-          !positionId &&
-          decision?.credentialId &&
-          credentialIds.has(decision.credentialId)
-            ? decision.credentialId
-            : null;
-        if (!decision?.promote) {
-          await repository.updatePoint(point.id, {
-            status: "kept",
-            confirmedAt,
-          });
-          continue;
-        }
-        // A locked-fact change belongs to this application, never the base.
-        const asksForOverride = pending.some(
-          (row) => row.instructionPointId === point.id
-        );
-        if ((!positionId && !credentialId) || asksForOverride) {
-          throw new TRPCError({ code: "BAD_REQUEST" });
-        }
-        const [row] = await evidence.insertEvidence([
-          {
-            profileId: profile.id,
-            positionId,
-            credentialId,
-            kind: decision.evidenceKind ?? point.evidenceKind ?? "achievement",
-            // Edited wording, as on the interview's approval screen; the
-            // quote stays the user's original words.
-            encryptedText: decision.text
-              ? cipher.encrypt(decision.text)
-              : point.encryptedText,
-            encryptedSourceQuote: point.encryptedText,
-            language: profile.interviewLanguage,
-            approvedAt: confirmedAt,
-          },
-        ]);
-        await evidence.insertSensitiveItems(
-          sensitiveItemsOf(cipher, point.encryptedSensitiveItems).map(
-            (item) => ({
-              profileId: profile.id,
-              positionId,
-              kind: item.kind,
-              encryptedOriginal: cipher.encrypt(item.original),
-              choice: defaultSensitivityChoice(item.kind),
-              encryptedGeneralized: item.suggestedGeneralization
-                ? cipher.encrypt(item.suggestedGeneralization)
-                : null,
-            })
-          )
-        );
-        await repository.updatePoint(point.id, {
-          status: "promoted",
-          positionId,
-          credentialId,
-          evidenceId: row.id,
-          confirmedAt,
-        });
+      // Profile_truth replaces this in P8 (docs/plan.md): "send to my
+      // profile" will turn a point into a profile suggestion.
+      // Locked: a second submit finds no drafts left.
+      for (const point of await repository.lockDraftPoints(opening.id)) {
+        await repository.updatePoint(point.id, { status: "kept", confirmedAt });
       }
 
       const confirmed = new Set(input.confirmedLockedFactOverrideIds);

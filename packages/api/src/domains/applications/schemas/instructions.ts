@@ -130,15 +130,3 @@ export const applicationInstructionsSchema = z.object({
 export type ApplicationInstructions = z.infer<
   typeof applicationInstructionsSchema
 >;
-
-/** The user's decision on one draft point. */
-export const instructionDecisionSchema = z.object({
-  instructionPointId: z.uuid(),
-  promote: z.boolean(),
-  // The wording to keep as evidence, when the user edited it.
-  text: z.string().trim().min(1).max(1000).nullable(),
-  positionId: z.uuid().nullable(),
-  credentialId: z.uuid().nullable(),
-  evidenceKind: evidenceKindSchema.nullable(),
-});
-export type InstructionDecision = z.infer<typeof instructionDecisionSchema>;

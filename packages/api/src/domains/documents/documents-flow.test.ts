@@ -14,14 +14,8 @@ import {
 } from "@repo/api/domains/career/db/career-tables";
 import { CareerService } from "@repo/api/domains/career/career-service";
 import { getUserCipher } from "@repo/api/domains/encryption/user-cipher";
-import {
-  evidenceTable,
-  sensitiveItemsTable,
-  storiesTable,
-} from "@repo/api/domains/evidence/db/evidence-tables";
-import { CareerRepository } from "@repo/api/domains/career/career-repository";
+import { sensitiveItemsTable } from "@repo/api/domains/evidence/db/evidence-tables";
 import { loadSensitiveFilter } from "@repo/api/domains/evidence/sensitive/load-sensitive-filter";
-import { loadCareerContext } from "@repo/api/domains/documents/generation/load-career-context";
 import { OpeningsRepository } from "@repo/api/domains/openings/openings-repository";
 import { TasksService } from "@repo/api/domains/tasks/tasks-service";
 import { createTestUser } from "@repo/api/test/create-test-user";
@@ -35,7 +29,6 @@ import { InstructionsRepository } from "@repo/api/domains/applications/instructi
 import { InstructionsService } from "@repo/api/domains/applications/instructions-service";
 import { MotivationRepository } from "@repo/api/domains/applications/motivation/motivation-repository";
 import { ResearchRepository } from "@repo/api/domains/applications/research/research-repository";
-import type { InstructionDecision } from "@repo/api/domains/applications/schemas/instructions";
 import { runSplitInstructions } from "@repo/api/domains/applications/run-split-instructions";
 import { createLocalStorage } from "@repo/api/tools/storage/local-storage";
 
@@ -64,7 +57,7 @@ vi.mock("@repo/common/env/web.env", () => ({
 async function setup() {
   const db = await getTestDatabase();
   const user = await createTestUser();
-  const career = new CareerService(db, { start: vi.fn() } as never);
+  const career = new CareerService(db);
   const profile = await career.getOrCreateProfile({
     userId: user.id,
     defaultLanguage: "en-US",
@@ -82,23 +75,9 @@ async function setup() {
     .set({ status: "approved", approvedAt: new Date() })
     .where(eq(positionsTable.id, positionId));
   const cipher = await getUserCipher(db, user.id);
-  const evidence = await db
-    .insert(evidenceTable)
-    .values(
-      [
-        ["achievement", "Cut deploy time by 40% with Kubernetes at Initrode"],
-        ["responsibility", "Led a team of 5 engineers"],
-      ].map(([kind, text]) => ({
-        profileId: profile.id,
-        positionId,
-        kind: kind as "achievement" | "responsibility",
-        encryptedText: cipher.encrypt(text),
-        encryptedSourceQuote: cipher.encrypt(`I said: ${text}`),
-        language: "en-US" as const,
-        approvedAt: new Date(),
-      }))
-    )
-    .returning();
+  // Profile_truth replaces this in P6 (docs/plan.md): no evidence exists,
+  // so these ids back nothing and code drops the lines citing them.
+  const evidence = [{ id: crypto.randomUUID() }, { id: crypto.randomUUID() }];
   await db.insert(credentialsTable).values({
     profileId: profile.id,
     kind: "language",
@@ -156,19 +135,48 @@ async function setup() {
     ],
   });
 
+  /**
+   * Points the user kept for this application: until profile_truth (P6),
+   * the only source a resume line can rest on.
+   */
+  async function keepInstructions(texts: string[]) {
+    const repository = new InstructionsRepository(db);
+    await repository.insertPoints(
+      texts.map((text, index) => ({
+        profileId: profile.id,
+        openingId: opening.id,
+        source: "written" as const,
+        sequence: index + 1,
+        encryptedText: cipher.encrypt(text),
+        status: "kept" as const,
+        confirmedAt: new Date(),
+      }))
+    );
+    const points = await repository.listPoints(opening.id);
+    return texts.map(
+      (text) =>
+        points.find((point) => cipher.decrypt(point.encryptedText) === text)!
+    );
+  }
+
   const trigger = {
     trigger: vi.fn(async () => ({ runId: "run", accessToken: "t" })),
   };
   const documents = new DocumentsService(db, new TasksService(db, trigger));
 
-  const draft = (bullets: ResumeDraft["experience"][number]["bullets"]) => ({
+  // `sourceId` backs the summary and skills: a kept point's id, or by
+  // default one that backs nothing.
+  const draft = (
+    bullets: ResumeDraft["experience"][number]["bullets"],
+    sourceId = evidence[0].id
+  ) => ({
     title_line: "Platform Engineer | Kubernetes",
     summary: {
       text: "Engineer who cut deploy time by 40%.",
-      evidence_ids: [evidence[0].id],
+      evidence_ids: [sourceId],
     },
     skills: [
-      { label: "Core", items: ["Kubernetes"], evidence_ids: [evidence[0].id] },
+      { label: "Core", items: ["Kubernetes"], evidence_ids: [sourceId] },
     ],
     experience: [{ position_id: positionId, context: null, bullets }],
     projects: [],
@@ -236,6 +244,7 @@ async function setup() {
     draft,
     generate,
     runScripted,
+    keepInstructions,
   };
 }
 
@@ -262,25 +271,34 @@ describe("resume generation and snapshots", () => {
     await closeTestDatabase();
   });
 
-  it("generates with locked facts, evidence trace and an ATS check, keeping the best round", async () => {
+  it("generates with locked facts, a source trace and an ATS check, keeping the best round", async () => {
     const ctx = await setup();
-    const [kubernetes, team] = ctx.evidence;
+    const [kubernetes, team] = await ctx.keepInstructions([
+      "Cut deploy time by 40% with Kubernetes at Initrode",
+      "Led a team of 5 engineers",
+    ]);
     const { generationId } = await ctx.generate("quick", {
       drafts: [
-        ctx.draft([
-          {
-            text: "Cut deploy time by 40% with Kubernetes.",
-            evidence_ids: [kubernetes.id],
-          },
-        ]),
-        ctx.draft([
-          {
-            text: "Cut deploy time by 40% with Kubernetes.",
-            evidence_ids: [kubernetes.id],
-          },
-          { text: "Led a team of 5 engineers.", evidence_ids: [team.id] },
-          { text: "Saved $2M a year.", evidence_ids: [team.id] },
-        ]),
+        ctx.draft(
+          [
+            {
+              text: "Cut deploy time by 40% with Kubernetes.",
+              evidence_ids: [kubernetes.id],
+            },
+          ],
+          kubernetes.id
+        ),
+        ctx.draft(
+          [
+            {
+              text: "Cut deploy time by 40% with Kubernetes.",
+              evidence_ids: [kubernetes.id],
+            },
+            { text: "Led a team of 5 engineers.", evidence_ids: [team.id] },
+            { text: "Saved $2M a year.", evidence_ids: [team.id] },
+          ],
+          kubernetes.id
+        ),
       ],
       ratings: [6, 8],
     });
@@ -321,17 +339,14 @@ describe("resume generation and snapshots", () => {
     ]);
     expect(version.pages).toBeLessThanOrEqual(2);
 
-    // Every line traces to evidence with the user's quote.
-    expect(entry.lines.every((line) => line.origin.kind === "evidence")).toBe(
-      true
-    );
-    expect(version.trace).toContainEqual(
-      expect.objectContaining({
-        evidenceId: team.id,
-        quote: "I said: Led a team of 5 engineers",
-        source: { kind: "position", title: "Tech Lead", employer: "Globex" },
-      })
-    );
+    // Every line traces to the user's own words.
+    expect(
+      entry.lines.every((line) => line.origin.kind === "instruction")
+    ).toBe(true);
+    expect(version.instructionTrace).toContainEqual({
+      instructionId: team.id,
+      text: "Led a team of 5 engineers",
+    });
     expect(version.atsCheck).toEqual({
       matched: ["Kubernetes"],
       useOpeningTerm: ["K8s operators"],
@@ -346,51 +361,6 @@ describe("resume generation and snapshots", () => {
       [0, 6, false],
       [1, 8, true],
     ]);
-  });
-
-  it("gives the writer a file fact's original wording", async () => {
-    const ctx = await setup();
-    const document = await new CareerRepository(ctx.db).insertDocument({
-      profileId: ctx.profile.id,
-      kind: "resume",
-      encryptedFileName: ctx.cipher.encrypt("resume.pdf"),
-      mimeType: "application/pdf",
-      storageKey: "users/x/documents/y",
-    });
-    const [fromFile] = await ctx.db
-      .insert(evidenceTable)
-      .values({
-        profileId: ctx.profile.id,
-        positionId: ctx.positionId,
-        kind: "achievement",
-        encryptedText: ctx.cipher.encrypt("Reduziu o tempo de deploy em 40%"),
-        encryptedSourceQuote: ctx.cipher.encrypt(
-          "cut deploy time by 40% [medido] with blue-green releases"
-        ),
-        language: "pt-BR",
-        sourceDocumentId: document.id,
-        approvedAt: new Date(),
-      })
-      .returning();
-
-    const context = await loadCareerContext({
-      db: ctx.db,
-      cipher: ctx.cipher,
-      profileId: ctx.profile.id,
-      filter: await loadSensitiveFilter({
-        db: ctx.db,
-        cipher: ctx.cipher,
-        profileId: ctx.profile.id,
-      }),
-    });
-
-    const wording = (id: string) =>
-      context.evidence.find((row) => row.id === id)?.sourceWording;
-    expect(wording(fromFile.id)).toBe(
-      "cut deploy time by 40% with blue-green releases"
-    );
-    // Interview facts quote the user's own message: nothing to add.
-    expect(wording(ctx.evidence[0].id)).toBeNull();
   });
 
   it("stops Thorough early once the target rating is reached", async () => {
@@ -488,18 +458,21 @@ describe("resume generation and snapshots", () => {
       ),
       choice: "exclude",
     });
+    const [team] = await ctx.keepInstructions([
+      "Led a team of 5 engineers at Initrode",
+    ]);
     await ctx.generate("quick", {
       drafts: [
         ctx.draft([
           {
             text: "Led a team of 5 engineers at Initrode.",
-            evidence_ids: [ctx.evidence[1].id],
+            evidence_ids: [team.id],
           },
         ]),
         ctx.draft([
           {
             text: "Led a team of 5 engineers at Initrode.",
-            evidence_ids: [ctx.evidence[1].id],
+            evidence_ids: [team.id],
           },
         ]),
       ],
@@ -511,20 +484,23 @@ describe("resume generation and snapshots", () => {
     });
     const content = view.documents[0].versions[0].content;
     expect(JSON.stringify(content)).not.toContain("Initrode");
-    // The evidence resting on the excluded client never entered the prompt.
-    expect(
-      view.documents[0].versions[0].trace.map((t) => t.evidenceId)
-    ).not.toContain(ctx.evidence[0].id);
   });
 
   it("keeps snapshots as a stack: edits, undo, restore, duplicate", async () => {
     const ctx = await setup();
+    const [kubernetes, team] = await ctx.keepInstructions([
+      "Cut deploy time by 40% with Kubernetes at Initrode",
+      "Led a team of 5 engineers",
+    ]);
     const line = {
       text: "Led a team of 5 engineers.",
-      evidence_ids: [ctx.evidence[1].id],
+      evidence_ids: [team.id],
     };
     await ctx.generate("quick", {
-      drafts: [ctx.draft([line]), ctx.draft([line])],
+      drafts: [
+        ctx.draft([line], kubernetes.id),
+        ctx.draft([line], kubernetes.id),
+      ],
       ratings: [7, 6],
     });
     const load = async () =>
@@ -557,7 +533,7 @@ describe("resume generation and snapshots", () => {
       kind: "manual",
     });
     expect(resumeOf(current.content).sections[0]).toMatchObject({
-      line: { origin: { kind: "evidence" } },
+      line: { origin: { kind: "instruction" } },
     });
 
     // A stale base is refused; so is editing a locked fact.
@@ -631,9 +607,7 @@ describe("resume generation and snapshots", () => {
       })
     ).documents[0].versions;
     const stranger = await createTestUser("eve@example.com");
-    await new CareerService(ctx.db, {
-      start: vi.fn(),
-    } as never).getOrCreateProfile({
+    await new CareerService(ctx.db).getOrCreateProfile({
       userId: stranger.id,
       defaultLanguage: "en-US",
     });
@@ -648,7 +622,7 @@ describe("resume generation and snapshots", () => {
     ).rejects.toMatchObject({ code: "NOT_FOUND" });
   });
 
-  it("splits instructions into points: promoted ones become evidence, overrides apply", async () => {
+  it("splits instructions into points that stay in the application, overrides apply", async () => {
     const ctx = await setup();
     const instructions = new InstructionsService(
       ctx.db,
@@ -803,42 +777,11 @@ describe("resume generation and snapshots", () => {
     ).rejects.toMatchObject({ code: "PRECONDITION_FAILED" });
 
     const [migration, emphasis, titleChange, gap] = review.points;
-    const decide = (
-      instructionPointId: string,
-      changes: Partial<InstructionDecision> = {}
-    ): InstructionDecision => ({
-      instructionPointId,
-      promote: false,
-      text: null,
-      positionId: null,
-      credentialId: null,
-      evidenceKind: null,
-      ...changes,
-    });
-    // A locked-fact change stays in this application: never promoted.
-    await expect(
-      instructions.confirm({
-        userId: ctx.user.id,
-        openingId: ctx.opening.id,
-        decisions: [
-          decide(titleChange.id, { promote: true, positionId: ctx.positionId }),
-        ],
-        confirmedLockedFactOverrideIds: [],
-      })
-    ).rejects.toMatchObject({ code: "BAD_REQUEST" });
+    // Profile_truth replaces this in P8 (docs/plan.md): no point is promoted
+    // to the career; every draft stays in this application.
     await instructions.confirm({
       userId: ctx.user.id,
       openingId: ctx.opening.id,
-      decisions: [
-        decide(migration.id, {
-          promote: true,
-          // Edited on the approval screen; the quote keeps the original.
-          text: "Led the Kubernetes migration in 2021 at Initrode",
-          positionId: ctx.positionId,
-          evidenceKind: "achievement",
-        }),
-        decide(gap.id),
-      ],
       confirmedLockedFactOverrideIds: review.overrides.map((row) => row.id),
     });
     await instructions.removePoint({
@@ -846,35 +789,15 @@ describe("resume generation and snapshots", () => {
       openingId: ctx.opening.id,
       instructionPointId: emphasis.id,
     });
-
-    const promoted = (
-      await ctx.db
-        .select()
-        .from(evidenceTable)
-        .where(eq(evidenceTable.positionId, ctx.positionId))
-    ).find(
-      (row) =>
-        ctx.cipher.decrypt(row.encryptedText) ===
-        "Led the Kubernetes migration in 2021 at Initrode"
-    );
-    expect(promoted).toBeDefined();
-    expect(ctx.cipher.decrypt(promoted!.encryptedSourceQuote)).toBe(
-      "I led the Kubernetes migration in 2021 at Initrode"
-    );
-    const sensitive = await ctx.db.select().from(sensitiveItemsTable);
-    expect(
-      sensitive.map((row) => [
-        ctx.cipher.decrypt(row.encryptedOriginal),
-        row.choice,
-      ])
-    ).toEqual([["Initrode", "generalize"]]);
+    // Nothing reached the career's sensitive items.
+    expect(await ctx.db.select().from(sensitiveItemsTable)).toEqual([]);
 
     const after = await instructions.get({
       userId: ctx.user.id,
       openingId: ctx.opening.id,
     });
     expect(after.points.map((row) => row.status)).toEqual([
-      "promoted",
+      "kept",
       "kept",
       "kept",
     ]);
@@ -887,7 +810,7 @@ describe("resume generation and snapshots", () => {
           { text: "Built a CLI in Go.", evidence_ids: [gap.id] },
           {
             text: "Led the Kubernetes migration in 2021.",
-            evidence_ids: [promoted!.id],
+            evidence_ids: [migration.id],
           },
         ]),
         ctx.draft([{ text: "Built a CLI in Go.", evidence_ids: [gap.id] }]),
@@ -907,26 +830,22 @@ describe("resume generation and snapshots", () => {
     });
     expect(entry.lines.map((line) => [line.text, line.origin.kind])).toEqual([
       ["Built a CLI in Go.", "instruction"],
-      ["Led the Kubernetes migration in 2021.", "evidence"],
+      ["Led the Kubernetes migration in 2021.", "instruction"],
     ]);
     expect(version.instructionTrace).toEqual([
       { instructionId: gap.id, text: "I built a CLI in Go at Globex" },
+      {
+        instructionId: migration.id,
+        text: "I led the Kubernetes migration in 2021 at Initrode",
+      },
     ]);
 
-    // Removing the point that asked for an override removes the override;
-    // a promoted point is evidence now and stays.
+    // Removing the point that asked for an override removes the override.
     await instructions.removePoint({
       userId: ctx.user.id,
       openingId: ctx.opening.id,
       instructionPointId: titleChange.id,
     });
-    await expect(
-      instructions.removePoint({
-        userId: ctx.user.id,
-        openingId: ctx.opening.id,
-        instructionPointId: migration.id,
-      })
-    ).rejects.toMatchObject({ code: "BAD_REQUEST" });
     expect(
       await instructions.get({ userId: ctx.user.id, openingId: ctx.opening.id })
     ).toMatchObject({ overrides: [] });
@@ -934,15 +853,21 @@ describe("resume generation and snapshots", () => {
 
   it("adapts into another language, approves a title and syncs changes", async () => {
     const ctx = await setup();
-    const [kubernetes, team] = ctx.evidence;
+    const [kubernetes, team] = await ctx.keepInstructions([
+      "Cut deploy time by 40% with Kubernetes at Initrode",
+      "Led a team of 5 engineers",
+    ]);
     const line = (text: string, id: string) => ({ text, evidence_ids: [id] });
     await ctx.generate("quick", {
       drafts: [
-        ctx.draft([
-          line("Cut deploy time by 40% with Kubernetes.", kubernetes.id),
-          line("Led a team of 5 engineers.", team.id),
-        ]),
-        ctx.draft([line("Led a team of 5 engineers.", team.id)]),
+        ctx.draft(
+          [
+            line("Cut deploy time by 40% with Kubernetes.", kubernetes.id),
+            line("Led a team of 5 engineers.", team.id),
+          ],
+          kubernetes.id
+        ),
+        ctx.draft([line("Led a team of 5 engineers.", team.id)], kubernetes.id),
       ],
       ratings: [8, 5],
     });
@@ -1405,7 +1330,7 @@ describe("resume generation and snapshots", () => {
 
   it("writes a cover letter from approved sources and keeps it in step with its resume", async () => {
     const ctx = await setup();
-    const [kubernetes, team] = ctx.evidence;
+    const [team] = await ctx.keepInstructions(["Led a team of 5 engineers"]);
     await ctx.generate("quick", {
       drafts: [
         ctx.draft([
@@ -1424,20 +1349,9 @@ describe("resume generation and snapshots", () => {
       });
     const [resumeVersion] = (await view()).documents[0].versions;
 
-    // The letter's inputs: a story, an approved company fact, the interview.
-    const [story] = await ctx.db
-      .insert(storiesTable)
-      .values({
-        profileId: ctx.profile.id,
-        positionId: ctx.positionId,
-        encryptedProblem: ctx.cipher.encrypt("Deploys took hours"),
-        encryptedAction: ctx.cipher.encrypt("Moved services to Kubernetes"),
-        encryptedResult: ctx.cipher.encrypt("Deploys in minutes"),
-        language: "en-US",
-        evidenceIds: [kubernetes.id],
-        approvedAt: new Date(),
-      })
-      .returning();
+    // The letter's inputs: an approved company fact and the interview.
+    // Profile_truth replaces this in P8 (docs/plan.md): no story exists, so
+    // the story paragraph rests on what the user said in the interview.
     const research = await new ResearchRepository(ctx.db).insertResearch({
       profileId: ctx.profile.id,
       openingId: ctx.opening.id,
@@ -1463,7 +1377,7 @@ describe("resume generation and snapshots", () => {
     const interview = await motivation.replaceInterview({
       profileId: ctx.profile.id,
       openingId: ctx.opening.id,
-      storyId: story.id,
+      storyId: null,
       status: "finished",
     });
     await motivation.insertPoints([
@@ -1474,8 +1388,19 @@ describe("resume generation and snapshots", () => {
         encryptedText: ctx.cipher.encrypt("I use Hooli every day"),
         status: "kept",
       },
+      {
+        profileId: ctx.profile.id,
+        interviewId: interview.id,
+        kind: "story_detail",
+        encryptedText: ctx.cipher.encrypt(
+          "At Globex deploys took hours, so I moved our services to Kubernetes"
+        ),
+        status: "kept",
+      },
     ]);
-    const [point] = await motivation.listPoints(interview.id);
+    const points = await motivation.listPoints(interview.id);
+    const point = points.find((row) => row.kind === "company")!;
+    const detail = points.find((row) => row.kind === "story_detail")!;
 
     const letters = new LetterService(
       ctx.db,
@@ -1540,7 +1465,7 @@ describe("resume generation and snapshots", () => {
     const storyParagraph = cite(
       "At Globex, deploys took hours, so I moved our services to Kubernetes.",
       {
-        evidence_ids: [kubernetes.id],
+        motivation_point_ids: [detail.id],
       }
     );
     const closing = cite("I use Hooli every day and would love to talk.", {
@@ -1575,7 +1500,7 @@ describe("resume generation and snapshots", () => {
     expect(fake.generateObject).toHaveBeenCalledTimes(2);
     const prompt = fake.generateObject.mock.calls[0][0];
     expect(prompt.system).toContain("one convincing story");
-    expect(JSON.stringify(prompt)).toContain("Deploys took hours");
+    expect(JSON.stringify(prompt)).toContain("deploys took hours");
 
     const letterDocument = () =>
       view().then(
@@ -1592,7 +1517,7 @@ describe("resume generation and snapshots", () => {
         },
         {
           text: storyParagraph.text,
-          origin: { kind: "letter", evidenceIds: [kubernetes.id] },
+          origin: { kind: "letter", motivationPointIds: [detail.id] },
         },
         {
           text: closing.text,
@@ -1643,7 +1568,7 @@ describe("resume generation and snapshots", () => {
           opening,
           cite(
             "At Globex, as a staff-level engineer, I moved our services to Kubernetes.",
-            { evidence_ids: [kubernetes.id] }
+            { motivation_point_ids: [detail.id] }
           ),
           closing,
         ],

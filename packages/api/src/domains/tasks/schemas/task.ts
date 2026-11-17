@@ -3,15 +3,6 @@ import { z } from "zod";
 export const taskTypes = [
   "sample",
   "chat_turn",
-  "interview_turn",
-  // One message of the career chat: the orchestrator and the position
-  // agents it hands the message to (one or more, in parallel).
-  "career_chat_turn",
-  // "What the AI understood" about a session's drafts.
-  "understand_session",
-  "import_document",
-  "summarize_position",
-  "draft_narrative",
   "analyze_opening",
   "generate_document",
   "extract_style_profile",

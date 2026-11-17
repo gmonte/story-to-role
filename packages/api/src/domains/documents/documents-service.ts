@@ -381,7 +381,16 @@ export class DocumentsService {
     const career = new CareerRepository(tx);
     const positions = await career.listPositions(profileId);
     const credentials = await career.listCredentials(profileId);
-    const evidence = await new EvidenceRepository(tx).listEvidence(profileId);
+    // Profile_truth replaces this in P7 (docs/plan.md): no evidence exists,
+    // so no line traces to a fact.
+    const evidence: Array<{
+      id: string;
+      positionId: string | null;
+      credentialId: string | null;
+      encryptedText: string;
+      encryptedSourceQuote: string;
+      approvedAt: Date;
+    }> = [];
     const equivalents = await new DocumentsRepository(tx).listTitleEquivalents(
       profileId
     );

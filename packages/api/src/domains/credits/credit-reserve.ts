@@ -51,20 +51,21 @@ export async function creditReserve(db: DbClient, userId: string, now: Date) {
   return creditCap("generate_document", { positions });
 }
 
-/** Only the interview may never spend what the reserve keeps. */
-export const keepsReserve = (type: TaskType) =>
-  type === "interview_turn" || type === "career_chat_turn";
+/**
+ * The actions that may never spend what the reserve keeps. None since the
+ * guided interview and career chat were removed; the profile agent (P3,
+ * docs/plan.md) joins it.
+ */
+const reserveKeepers: ReadonlySet<TaskType> = new Set<TaskType>();
+export const keepsReserve = (type: TaskType) => reserveKeepers.has(type);
 
-// Within this many interview turns of the reserve, the interviewer wraps up.
+// Within this many conversation turns of the reserve, the balance is near it.
 const wrapUpTurns = 5;
 
-/**
- * Whether the balance approaches the reserve: the interviewer is then told
- * to wrap up the current position with what was said.
- */
+/** Whether the balance approaches the reserve (the credit meter warns). */
 export async function nearReserve(db: DbClient, userId: string, now: Date) {
   const reserve = await creditReserve(db, userId, now);
   if (reserve === 0) return false;
   const available = await spendableTotal(db, userId, "any", now);
-  return available - reserve < wrapUpTurns * creditCap("interview_turn");
+  return available - reserve < wrapUpTurns * creditCap("chat_turn");
 }

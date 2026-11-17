@@ -1,19 +1,6 @@
-import {
-  and,
-  asc,
-  cosineDistance,
-  desc,
-  eq,
-  inArray,
-  isNotNull,
-  isNull,
-  ne,
-  or,
-} from "drizzle-orm";
+import { and, asc, desc, eq, inArray } from "drizzle-orm";
 
 import { applicationsTable } from "@repo/api/domains/applications/db/applications-tables";
-import { positionsTable } from "@repo/api/domains/career/db/career-tables";
-import { evidenceTable } from "@repo/api/domains/evidence/db/evidence-tables";
 import type { DbClient } from "@repo/api/tools/db-client";
 
 import {
@@ -199,65 +186,5 @@ export class OpeningsRepository {
         answeredAt: new Date(),
       })
       .where(eq(fitCheckItemsTable.id, input.fitCheckItemId));
-  }
-
-  /** Approved evidence without a vector yet. */
-  listEvidenceWithoutEmbedding(profileId: string) {
-    return this.tx
-      .select({
-        id: evidenceTable.id,
-        encryptedText: evidenceTable.encryptedText,
-      })
-      .from(evidenceTable)
-      .where(
-        and(
-          eq(evidenceTable.profileId, profileId),
-          isNull(evidenceTable.embedding)
-        )
-      );
-  }
-
-  async setEvidenceEmbedding(input: {
-    evidenceId: string;
-    embedding: number[];
-  }) {
-    await this.tx
-      .update(evidenceTable)
-      .set({ embedding: input.embedding })
-      .where(eq(evidenceTable.id, input.evidenceId));
-  }
-
-  /**
-   * The user's evidence closest to a vector (cosine), skipping evidence of
-   * removed positions: retrieval for one fit check term.
-   */
-  nearestEvidence(input: {
-    profileId: string;
-    embedding: number[];
-    limit: number;
-  }) {
-    const distance = cosineDistance(evidenceTable.embedding, input.embedding);
-    return this.tx
-      .select({
-        id: evidenceTable.id,
-        kind: evidenceTable.kind,
-        encryptedText: evidenceTable.encryptedText,
-        positionId: evidenceTable.positionId,
-        distance,
-      })
-      .from(evidenceTable)
-      .leftJoin(positionsTable, eq(positionsTable.id, evidenceTable.positionId))
-      .where(
-        and(
-          eq(evidenceTable.profileId, input.profileId),
-          isNotNull(evidenceTable.embedding),
-          or(
-            isNull(evidenceTable.positionId),
-            ne(positionsTable.status, "removed")
-          )
-        )
-      )
-      .orderBy(distance)
-      .limit(input.limit);
   }
 }

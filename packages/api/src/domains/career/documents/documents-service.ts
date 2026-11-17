@@ -1,12 +1,10 @@
 import { TRPCError } from "@trpc/server";
 
 import { getUserCipher } from "@repo/api/domains/encryption/user-cipher";
-import { TasksService } from "@repo/api/domains/tasks/tasks-service";
 import type { DbClient } from "@repo/api/tools/db-client";
 import { getStorage, type Storage } from "@repo/api/tools/storage/storage";
 
 import { CareerRepository } from "../career-repository";
-import { recordCareerEvent } from "../record-career-event";
 import {
   documentLimits,
   documentTypeOf,
@@ -16,13 +14,13 @@ import {
 import { previewDocument, renderPdfPage } from "./document-preview";
 
 /**
- * The user's sources: each file is stored encrypted with the user's key, its
- * import task receives only the document id, and its preview is read-only.
+ * The user's sources: each file is stored encrypted with the user's key and
+ * its preview is read-only. Uploading only stores the file for now; P4
+ * (docs/plan.md) re-adds importing it as suggestions.
  */
 export class DocumentsService {
   constructor(
     private readonly db: DbClient,
-    private readonly tasks = new TasksService(db),
     private readonly storage: Storage = getStorage()
   ) {}
 
@@ -49,11 +47,6 @@ export class DocumentsService {
     if (!profile.privacyNoticeAcceptedAt) {
       throw new TRPCError({ code: "PRECONDITION_FAILED" });
     }
-    await this.tasks.assertAffordable({
-      userId: input.userId,
-      type: "import_document",
-    });
-
     const document = await this.db.transaction(async (tx) => {
       const career = new CareerRepository(tx);
       // Counted under a lock: files dropped together can't overshoot.
@@ -73,42 +66,21 @@ export class DocumentsService {
       );
       return career.insertDocument({
         profileId: profile.id,
-        // Until the import reads it: confidentiality rules make it a truth file.
         kind: "resume",
+        status: "stored",
         encryptedFileName: cipher.encrypt(input.fileName.slice(0, 255)),
         mimeType,
         storageKey,
       });
     });
 
-    const { realtime } = await this.tasks.start({
-      userId: input.userId,
-      type: "import_document",
-      subjectId: document.id,
-    });
-    return { sourceDocumentId: document.id, realtime };
+    return { sourceDocumentId: document.id };
   }
 
-  /**
-   * Removes a source and its file, freeing its slot. What was already
-   * extracted from it stays: evidence and drafts only lose the link.
-   */
+  /** Removes a source and its file, freeing its slot. */
   async remove(input: { userId: string; sourceDocumentId: string }) {
     const document = await this.requireDocument(input);
-    // Its import still reads the file.
-    if (document.status === "pending" || document.status === "processing") {
-      throw new TRPCError({ code: "CONFLICT" });
-    }
-    await this.db.transaction(async (tx) => {
-      await new CareerRepository(tx).deleteDocument(document.id);
-      const cipher = await getUserCipher(tx, input.userId);
-      await recordCareerEvent(tx, {
-        userId: input.userId,
-        profileId: document.profileId,
-        kind: "source_removed",
-        summary: `removed the source file ${cipher.decrypt(document.encryptedFileName)} (what was extracted from it stays)`,
-      });
-    });
+    await new CareerRepository(this.db).deleteDocument(document.id);
     await this.storage.delete(document.storageKey);
   }
 

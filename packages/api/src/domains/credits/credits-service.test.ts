@@ -1,7 +1,5 @@
 import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { CareerRepository } from "@repo/api/domains/career/career-repository";
-import { TasksService } from "@repo/api/domains/tasks/tasks-service";
 import { createTestUser } from "@repo/api/test/create-test-user";
 import {
   clearTestDatabase,
@@ -20,9 +18,6 @@ vi.mock("@repo/api/tools/trigger/trigger-client", () => ({
 }));
 
 const now = new Date("2026-11-15T12:00:00Z");
-const fakeTrigger = () => ({
-  trigger: vi.fn(async () => ({ runId: "run_1", accessToken: "token" })),
-});
 
 async function setup(credits = 0) {
   const db = await getTestDatabase();
@@ -66,38 +61,6 @@ describe("credits service", () => {
       creditCap("generate_document", { positions: 0 })
     );
     expect(summary.courtesy).toBeNull();
-  });
-
-  it("never lets the interview spend the credits kept for the resume", async () => {
-    const ctx = await setup();
-    const reserve = creditCap("generate_document", { positions: 0 });
-    await grantCredits(ctx.db, {
-      userId: ctx.user.id,
-      source: "welcome",
-      amount: reserve + 2,
-      origin: `welcome:${ctx.user.id}`,
-      expiresAt: null,
-    });
-    await new CareerRepository(ctx.db).insertProfileIfMissing({
-      userId: ctx.user.id,
-      interviewLanguage: "en-US",
-    });
-    const tasks = new TasksService(ctx.db, fakeTrigger());
-
-    await expect(
-      tasks.start({ userId: ctx.user.id, type: "interview_turn" })
-    ).rejects.toMatchObject({
-      code: "PAYMENT_REQUIRED",
-      cause: { needed: 3, available: 2, kept: reserve },
-    });
-    // The resume itself may use them.
-    await expect(
-      tasks.start({
-        userId: ctx.user.id,
-        type: "generate_document",
-        hints: { positions: 0 },
-      })
-    ).resolves.toBeDefined();
   });
 
   it("grants a courtesy plan, replaces it, and ends it with its credits", async () => {

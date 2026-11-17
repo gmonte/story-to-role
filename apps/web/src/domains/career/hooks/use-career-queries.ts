@@ -11,9 +11,8 @@ export function useTimeline() {
 }
 
 /**
- * Refreshes everything the career screen shows after a change, the credit
- * meter included: imports are uploaded outside tRPC, so nothing else tells
- * it a reservation opened or settled.
+ * Refreshes everything the career screen shows after a change: sources are
+ * uploaded outside tRPC, so nothing else tells it one arrived.
  */
 export function useRefreshCareer() {
   const trpc = useTRPC();
@@ -22,7 +21,5 @@ export function useRefreshCareer() {
   return () =>
     Promise.all([
       queryClient.invalidateQueries({ queryKey: trpc.career.pathKey() }),
-      queryClient.invalidateQueries({ queryKey: trpc.interview.pathKey() }),
-      queryClient.invalidateQueries({ queryKey: trpc.credits.pathKey() }),
     ]);
 }

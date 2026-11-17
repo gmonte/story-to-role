@@ -20,18 +20,15 @@ import {
   sourceAccept,
   sourceMegabytes,
   useSourceUpload,
-  type SourceImport,
 } from "../hooks/use-source-upload";
-import { useOptionalCareerWorkspace } from "./career-workspace-context";
-import { ImportProgress } from "./import-progress";
 
 const reading = (document: Timeline["documents"][number]) =>
   document.status === "pending" || document.status === "processing";
 
 /**
  * The files that tell the user's career: resume versions, a LinkedIn PDF,
- * notes or a truth file, uploaded or dropped here. Each import runs in a
- * task that works out the kind of file; the timeline refreshes when it ends.
+ * notes or a truth file, uploaded or dropped here. Each is stored for now;
+ * P4 (docs/plan.md) re-adds reading them into the profile.
  */
 export function Sources({
   documents,
@@ -44,16 +41,7 @@ export function Sources({
   const trpc = useTRPC();
   const refresh = useRefreshCareer();
   const input = useRef<HTMLInputElement>(null);
-  // In My career the chat shows the imports; on its own, this panel does.
-  const workspace = useOptionalCareerWorkspace();
-  const [running, setRunning] = useState<SourceImport[]>([]);
-  const { add } = useSourceUpload({
-    documents,
-    onStarted: (started) =>
-      workspace
-        ? workspace.startImport(started)
-        : setRunning((current) => [...current, started]),
-  });
+  const { add } = useSourceUpload({ documents });
   const [dragging, setDragging] = useState(false);
 
   const remove = useMutation(
@@ -88,6 +76,8 @@ export function Sources({
 
   const statusLabel = (document: Timeline["documents"][number]) => {
     switch (document.status) {
+      case "stored":
+        return t.formatMessage({ defaultMessage: "Saved" });
       case "pending":
       case "processing":
         return t.formatMessage({ defaultMessage: "Reading" });
@@ -141,10 +131,6 @@ export function Sources({
                 className="size-6"
                 aria-label={t.formatMessage({
                   defaultMessage: "Remove this source",
-                })}
-                title={t.formatMessage({
-                  defaultMessage:
-                    "Remove this source. What was already extracted from it stays.",
                 })}
                 disabled={remove.isPending}
                 onClick={() => remove.mutate({ sourceDocumentId: document.id })}
@@ -200,19 +186,6 @@ export function Sources({
           event.target.value = "";
         }}
       />
-      {running.map((run) => (
-        <ImportProgress
-          key={run.runId}
-          {...run}
-          fileName={run.fileName}
-          onDone={() => {
-            setRunning((current) =>
-              current.filter((r) => r.runId !== run.runId)
-            );
-            void refresh();
-          }}
-        />
-      ))}
     </section>
   );
 }

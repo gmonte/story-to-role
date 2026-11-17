@@ -57,7 +57,7 @@ export function StartChoice() {
       }),
       description: t.formatMessage({
         defaultMessage:
-          "Import your files and tell your story position by position in the career interview. Openings come after.",
+          "Upload your files and build your career profile. Openings come after.",
       }),
     },
   ];

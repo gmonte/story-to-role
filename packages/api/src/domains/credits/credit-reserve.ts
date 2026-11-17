@@ -53,10 +53,12 @@ export async function creditReserve(db: DbClient, userId: string, now: Date) {
 
 /**
  * Working on the profile never spends what the reserve keeps (billing
- * spec, "Credit meter"): only the agent's messages and validation hold it.
+ * spec, "Credit meter"): the agent's messages, validation and imports.
  */
 export const keepsReserve = (type: TaskType) =>
-  type === "profile_agent_turn" || type === "validate_profile";
+  type === "profile_agent_turn" ||
+  type === "validate_profile" ||
+  type === "import_document";
 
 // Within this many agent messages of the reserve, the balance is near it.
 const wrapUpTurns = 5;

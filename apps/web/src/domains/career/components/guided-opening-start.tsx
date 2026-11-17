@@ -2,8 +2,9 @@
 
 import { useState } from "react";
 
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { ArrowRight } from "lucide-react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 
 import { useTranslation } from "@repo/intl/use-translation";
@@ -22,8 +23,9 @@ import { PrivacyNotice } from "./privacy-notice";
  * "I have an opening in mind" (workspace spec, "Onboarding"; ADR 0006):
  * the current resume or truth file first, kept with the sources, or an
  * explicit "I don't have one"; then the opening, whose page shows the fit
- * check, asks about what the opening needs and writes the resume. Until
- * profile_truth (P1 to P5, docs/plan.md) a source is only stored.
+ * check, asks about what the opening needs and writes the resume. The
+ * upload proposes the profile's first draft, which the user reviews and
+ * publishes in My career (P5, docs/plan.md, reads the published profile).
  */
 export function GuidedOpeningStart() {
   const t = useTranslation();
@@ -37,6 +39,7 @@ export function GuidedOpeningStart() {
       onError: (error) => toast.error(error.message),
     })
   );
+  const published = useQuery(trpc.profile.draft.queryOptions({}));
   if (!timeline.data) return null;
   const { profile, documents } = timeline.data;
 
@@ -102,28 +105,42 @@ export function GuidedOpeningStart() {
               <p className="text-muted-foreground text-sm">
                 {t.formatMessage({
                   defaultMessage:
-                    "Upload your resume, your LinkedIn PDF or a text file about your career. It stays with your sources in My career.",
+                    "Upload your resume, your LinkedIn PDF or a text file about your career. It is read into a first draft of your profile, which you review and publish in My career.",
                 })}
               </p>
             </div>
             <Sources documents={documents} />
+            {/* ADR 0006: the profile is reviewed and published before the
+                opening, since the fit check reads the published version. */}
             <div className="flex flex-wrap gap-2">
-              {/* Either way on to the opening: only the wording differs. */}
-              <Button
-                variant={documents.length > 0 ? "default" : "ghost"}
-                onClick={() => setStep("opening")}
-              >
-                {documents.length > 0 ? (
-                  <>
+              {published.data?.publishedVersion ? (
+                <Button onClick={() => setStep("opening")}>
+                  {t.formatMessage({
+                    defaultMessage: "Continue to the opening",
+                  })}
+                  <ArrowRight />
+                </Button>
+              ) : documents.length > 0 ? (
+                <>
+                  <Button asChild>
+                    <Link href="/app/career">
+                      {t.formatMessage({
+                        defaultMessage: "Review and publish my profile",
+                      })}
+                      <ArrowRight />
+                    </Link>
+                  </Button>
+                  <Button variant="ghost" onClick={() => setStep("opening")}>
                     {t.formatMessage({
-                      defaultMessage: "Continue to the opening",
+                      defaultMessage: "Go to the opening without publishing",
                     })}
-                    <ArrowRight />
-                  </>
-                ) : (
-                  t.formatMessage({ defaultMessage: "I don’t have a resume" })
-                )}
-              </Button>
+                  </Button>
+                </>
+              ) : (
+                <Button variant="ghost" onClick={() => setStep("opening")}>
+                  {t.formatMessage({ defaultMessage: "I don’t have a resume" })}
+                </Button>
+              )}
             </div>
           </section>
         ))}

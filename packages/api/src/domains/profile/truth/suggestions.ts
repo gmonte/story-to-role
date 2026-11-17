@@ -199,6 +199,51 @@ export function applyChange(
   ];
 }
 
+/**
+ * A change made inside the lines a waiting suggestion writes (its
+ * `replace`), for a newer version of that suggestion: the lines to replace
+ * must be there exactly once; an empty `find` adds at the end. Null when it
+ * doesn't apply or changes nothing.
+ */
+export function rewriteFragment(
+  fragment: string,
+  find: string,
+  replace: string
+): string | null {
+  const blocks = parseFragment(fragment);
+  const wanted = parseFragment(find);
+  const written = parseFragment(replace);
+  if (!wanted.length) {
+    if (!written.length || matches(blocks, written, 0, blocks.length).length) {
+      return null;
+    }
+    return [...blocks, ...written].map(blockToLine).join("\n");
+  }
+  const [at, ...others] = matches(blocks, wanted, 0, blocks.length);
+  if (at === undefined || others.length) return null;
+  // The new lines sit at the depth of the first one they replace.
+  const base = blocks[at].type === "item" ? blocks[at].depth : 0;
+  const shallowest = Math.min(
+    ...written.flatMap((block) => (block.type === "item" ? [block.depth] : []))
+  );
+  const shaped = written.map((block): ProfileBlock => {
+    if (block.type === "paragraph" && blocks[at].type === "item") {
+      return { type: "item", depth: base, text: block.text };
+    }
+    return block.type === "item"
+      ? { ...block, depth: block.depth - shallowest + base }
+      : block;
+  });
+  const next = [
+    ...blocks.slice(0, at),
+    ...shaped,
+    ...blocks.slice(at + wanted.length),
+  ]
+    .map(blockToLine)
+    .join("\n");
+  return next === blocks.map(blockToLine).join("\n") ? null : next;
+}
+
 const numberPattern = /\p{Nd}+(?:[.,]\p{Nd}+)*%?/gu;
 
 function figures(text: string) {

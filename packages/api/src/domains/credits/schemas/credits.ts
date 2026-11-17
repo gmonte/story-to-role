@@ -68,6 +68,7 @@ export const creditSummarySchema = z.object({
     styleProfile: z.number().int(),
     motivationTurn: z.number().int(),
     agentMessage: z.number().int(),
+    sourceImport: z.number().int(),
   }),
   courtesy: z
     .object({ monthlyCredits: z.number().int(), endsAt: z.date().nullable() })

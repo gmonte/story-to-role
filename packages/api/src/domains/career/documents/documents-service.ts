@@ -1,6 +1,8 @@
 import { TRPCError } from "@trpc/server";
 
 import { getUserCipher } from "@repo/api/domains/encryption/user-cipher";
+import { importSettings } from "@repo/api/domains/profile/import/import-settings";
+import { TasksRepository } from "@repo/api/domains/tasks/tasks-repository";
 import type { DbClient } from "@repo/api/tools/db-client";
 import { getStorage, type Storage } from "@repo/api/tools/storage/storage";
 
@@ -15,8 +17,8 @@ import { previewDocument, renderPdfPage } from "./document-preview";
 
 /**
  * The user's sources: each file is stored encrypted with the user's key and
- * its preview is read-only. Uploading only stores the file for now; P4
- * (docs/plan.md) re-adds importing it as suggestions.
+ * its preview is read-only. Reading it into the profile is the import
+ * (profile domain), started when the file is uploaded.
  */
 export class DocumentsService {
   constructor(
@@ -78,6 +80,17 @@ export class DocumentsService {
   /** Removes a source and its file, freeing its slot. */
   async remove(input: { userId: string; sourceDocumentId: string }) {
     const document = await this.requireDocument(input);
+    // A file being read stays until its import ends.
+    if (
+      document.importStatus === "importing" &&
+      (await new TasksRepository(this.db).activeTask(
+        document.id,
+        "import_document",
+        importSettings.staleAfterMs
+      ))
+    ) {
+      throw new TRPCError({ code: "CONFLICT" });
+    }
     await new CareerRepository(this.db).deleteDocument(document.id);
     await this.storage.delete(document.storageKey);
   }

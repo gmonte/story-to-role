@@ -14,5 +14,6 @@ What keeps the exposure small:
 
 ## Consequences
 
+- What the agent says without a model call goes through the same conversation: a reply decided by code (off topic, out of credits) and the summary of a finished import, which the page asks for with a `catch_up` action and the agent says once, at no cost.
 - The privacy spec and notice say that the agent's messages pass through Trigger.dev for up to 7 days.
 - Credits are reserved and settled per message, not per run.

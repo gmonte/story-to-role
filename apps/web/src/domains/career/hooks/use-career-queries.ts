@@ -7,7 +7,16 @@ import { useTRPC } from "~/tools/trpc/client";
 /** The timeline query, shared by every career component. */
 export function useTimeline() {
   const trpc = useTRPC();
-  return useQuery(trpc.career.timeline.queryOptions({}));
+  return useQuery({
+    ...trpc.career.timeline.queryOptions({}),
+    // An import under way reports its steps: followed until it ends.
+    refetchInterval: (query) =>
+      query.state.data?.documents.some(
+        (document) => document.importStatus === "importing"
+      )
+        ? 2000
+        : false,
+  });
 }
 
 /**

@@ -1,10 +1,14 @@
 import { z } from "zod";
 
+import { taskProgressSchema } from "@repo/api/domains/tasks/schemas/task";
+
 import {
   credentialKindSchema,
   credentialStatusSchema,
   interviewLanguageSchema,
   sourceDocumentKindSchema,
+  sourceImportRejectionSchema,
+  sourceImportStatusSchema,
   yearMonthSchema,
 } from "./career";
 
@@ -34,6 +38,12 @@ export const sourceDocumentViewSchema = z.object({
   kind: sourceDocumentKindSchema,
   fileName: z.string(),
   createdAt: z.date(),
+  // Reading it into profile suggestions: null until an import starts.
+  importStatus: sourceImportStatusSchema.nullable(),
+  importRejection: sourceImportRejectionSchema.nullable(),
+  importProgress: taskProgressSchema.nullable(),
+  // The agent hasn't said the import's summary in the chat yet.
+  summaryPending: z.boolean(),
 });
 
 /** Read-only: a PDF is shown as page images, anything else as plain text. */

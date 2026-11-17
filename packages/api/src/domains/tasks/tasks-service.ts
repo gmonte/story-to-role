@@ -44,9 +44,11 @@ const asPaymentRequired = (error: unknown) => {
 const keptFor = (tx: DbClient, userId: string, type: TaskType, now: Date) =>
   keepsReserve(type) ? creditReserve(tx, userId, now) : Promise.resolve(0);
 
-// Tasks that run one at a time per user (their task caps the key). None
-// since importing was removed; P4 (docs/plan.md) re-adds importing.
-const queuedPerUser: ReadonlySet<TaskType> = new Set<TaskType>();
+// Tasks that run one at a time per user (their task caps the key): an
+// import compares with the suggestions the one before it left waiting.
+const queuedPerUser: ReadonlySet<TaskType> = new Set<TaskType>([
+  "import_document",
+]);
 
 export class TasksService {
   constructor(

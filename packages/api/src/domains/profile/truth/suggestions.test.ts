@@ -7,6 +7,7 @@ import {
   locateChange,
   normalizeChange,
   partText,
+  rewriteFragment,
   ungivenFigures,
 } from "./suggestions";
 
@@ -199,6 +200,41 @@ describe("a suggested change", () => {
         replace: "x",
       })
     ).toBeNull();
+  });
+});
+
+describe("a change inside a waiting suggestion", () => {
+  const waiting =
+    "### Gama — Júnior (2019-02 a 2022-02)\n- Tecnologias: Python\n- Resultados:\n  - Relatórios diários [sem número].";
+
+  it("rewrites its lines or adds at its end", () => {
+    expect(
+      rewriteFragment(
+        waiting,
+        "Tecnologias: Python",
+        "Tecnologias: Python, SQL"
+      )
+    ).toContain("- Tecnologias: Python, SQL\n- Resultados:");
+    expect(
+      rewriteFragment(
+        waiting,
+        "  - Relatórios diários [sem número].",
+        "- Relatórios diários [sem número].\n- Cortei 40% do tempo [a confirmar]."
+      )
+    ).toMatch(
+      /- Resultados:\n {2}- Relatórios diários \[sem número\]\.\n {2}- Cortei 40% do tempo \[a confirmar\]\.$/
+    );
+    expect(rewriteFragment(waiting, "", "- O que NÃO fiz:")).toMatch(
+      /\n- O que NÃO fiz:$/
+    );
+  });
+
+  it("is nothing when its lines aren't there, or nothing changes", () => {
+    expect(rewriteFragment(waiting, "- Tecnologias: Java", "x")).toBeNull();
+    expect(
+      rewriteFragment(waiting, "- Tecnologias: Python", "- Tecnologias: Python")
+    ).toBeNull();
+    expect(rewriteFragment(waiting, "", "- Tecnologias: Python")).toBeNull();
   });
 });
 

@@ -4,9 +4,20 @@ import { useEffect, useRef, useState, type FormEvent } from "react";
 
 import { useChat } from "@ai-sdk/react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useTriggerChatTransport } from "@trigger.dev/sdk/chat/react";
+import {
+  useChatActions,
+  useTriggerChatTransport,
+} from "@trigger.dev/sdk/chat/react";
 import type { UIMessage } from "ai";
-import { ArrowUp, Loader2, Quote, Sparkles, Square, X } from "lucide-react";
+import {
+  ArrowUp,
+  Loader2,
+  Paperclip,
+  Quote,
+  Sparkles,
+  Square,
+  X,
+} from "lucide-react";
 
 import {
   composeAgentMessage,
@@ -20,7 +31,16 @@ import { Button } from "@repo/web/components/ui/button";
 import { toast } from "@repo/web/components/ui/sonner";
 import { Textarea } from "@repo/web/components/ui/textarea";
 
+import { SourceImportStatus } from "~/domains/career/components/source-import-status";
 import { VoiceInputButton } from "~/domains/career/components/voice-input-button";
+import {
+  useRefreshCareer,
+  useTimeline,
+} from "~/domains/career/hooks/use-career-queries";
+import {
+  sourceAccept,
+  useSourceUpload,
+} from "~/domains/career/hooks/use-source-upload";
 import { CreditCost } from "~/domains/credits/components/credit-cost";
 import { useCredits } from "~/domains/credits/hooks/use-credits";
 import { useTRPC } from "~/tools/trpc/client";
@@ -113,7 +133,7 @@ function Conversation({
     // A session under way: reconnect to it instead of starting one.
     sessions: session ? { [chatId]: session } : undefined,
   });
-  const { messages, sendMessage, status, error, stop } = useChat({
+  const { messages, sendMessage, setMessages, status, error, stop } = useChat({
     id: chatId,
     messages: initialMessages,
     transport,
@@ -128,6 +148,54 @@ function Conversation({
     },
   });
   const busy = status === "submitted" || status === "streaming";
+  const { sendAction } = useChatActions({ sendMessage });
+
+  // Files attached here are sources like any other: each is read into
+  // suggestions for the profile.
+  const timeline = useTimeline();
+  const refreshCareer = useRefreshCareer();
+  const documents = timeline.data?.documents ?? [];
+  const fileInput = useRef<HTMLInputElement>(null);
+  const { add } = useSourceUpload({ documents, beforeUpload: saveNow });
+  const importing = documents.filter(
+    (document) => document.importStatus === "importing"
+  );
+
+  // The agent sums up an import that ended (here or while the page was
+  // away): the page asks for it once the chat is free.
+  // Which summaries are waiting: asked for once (twice if the first try
+  // fails), never in a loop when one can't be said.
+  const unsaid = documents
+    .filter((document) => document.summaryPending)
+    .map((document) => document.id)
+    .sort()
+    .join(",");
+  const asking = useRef(false);
+  const asked = useRef(new Map<string, number>());
+  const catchUp = useRef<() => void>(undefined);
+  catchUp.current = () => {
+    if (asking.current || (asked.current.get(unsaid) ?? 0) >= 2) return;
+    asking.current = true;
+    asked.current.set(unsaid, (asked.current.get(unsaid) ?? 0) + 1);
+    // The answer to a request without a message continues the last
+    // assistant message: an empty one takes it, so earlier ones stay.
+    setMessages((current) => [
+      ...current,
+      { id: `catch-up-${Date.now()}`, role: "assistant", parts: [] },
+    ]);
+    void sendAction({ type: "catch_up" }).finally(async () => {
+      // The stored transcript catches up what the stream may have missed;
+      // what the stream showed stays, as the store may not have it yet.
+      const stored = (await loadProfileChat()).messages;
+      setMessages((current) => withStored(current, stored));
+      // The sources say it was said before another request may go.
+      await refreshCareer();
+      asking.current = false;
+    });
+  };
+  useEffect(() => {
+    if (unsaid && !busy) catchUp.current?.();
+  }, [unsaid, busy]);
 
   // A passage or a finding sent here from the document: its words go to the
   // composer, ready to send.
@@ -175,6 +243,14 @@ function Conversation({
     void send(text);
   }
 
+  // The import's cost shows where the file is attached, too.
+  const attachLabel = t.formatMessage(
+    {
+      defaultMessage:
+        "Attach a resume or a text file (read into suggestions: up to {credits, plural, =0 {no credits} one {# credit} other {# credits}} each)",
+    },
+    { credits: credits.data?.estimates.sourceImport ?? 0 }
+  );
   const interviewRequest = t.formatMessage({
     defaultMessage:
       "Interview me to fill in my profile, one position at a time.",
@@ -208,7 +284,9 @@ function Conversation({
               t.formatMessage({ defaultMessage: "the profile" }),
           }
         )
-    : t.formatMessage({ defaultMessage: "Thinking…" });
+    : last?.id.startsWith("catch-up-")
+      ? t.formatMessage({ defaultMessage: "Summing up what the file added…" })
+      : t.formatMessage({ defaultMessage: "Thinking…" });
   const streamingText =
     status === "streaming" &&
     last?.role === "assistant" &&
@@ -231,7 +309,7 @@ function Conversation({
                 message={message}
                 partTitle={partTitle}
               />
-            ) : (
+            ) : message.parts.length === 0 ? null : (
               <li key={message.id} className="flex flex-col gap-2 self-start">
                 {message.parts.map((part, index) => {
                   if (part.type === "text" && part.text) {
@@ -279,6 +357,11 @@ function Conversation({
               </li>
             )
           )}
+          {importing.map((document) => (
+            <li key={document.id} className="w-full self-start">
+              <SourceImportStatus document={document} />
+            </li>
+          ))}
           {busy && !streamingText && (
             <li
               role="status"
@@ -305,6 +388,17 @@ function Conversation({
       </div>
 
       <form onSubmit={onSubmit} className="border-t p-3">
+        <input
+          ref={fileInput}
+          type="file"
+          accept={sourceAccept}
+          multiple
+          hidden
+          onChange={(event) => {
+            add(Array.from(event.target.files ?? []));
+            event.target.value = "";
+          }}
+        />
         {credits.data?.nearReserve && (
           <p className="mb-2 text-xs text-amber-600">
             {t.formatMessage({
@@ -373,6 +467,17 @@ function Conversation({
               </button>
             )}
             <span className="mr-auto" />
+            <Button
+              type="button"
+              size="icon"
+              variant="ghost"
+              className="size-8"
+              aria-label={attachLabel}
+              title={attachLabel}
+              onClick={() => fileInput.current?.click()}
+            >
+              <Paperclip />
+            </Button>
             <VoiceInputButton
               language={t.locale === "pt-BR" ? "pt-BR" : "en-US"}
               value={text}
@@ -466,4 +571,19 @@ function Introduction({
       </Button>
     </li>
   );
+}
+
+/**
+ * The stored messages, then the local ones the store doesn't have yet (just
+ * streamed, saved a moment later); an empty one the answer never filled
+ * goes.
+ */
+function withStored(local: UIMessage[], stored: UIMessage[]) {
+  const ids = new Set(stored.map((message) => message.id));
+  return [
+    ...stored,
+    ...local.filter(
+      (message) => !ids.has(message.id) && message.parts.length > 0
+    ),
+  ];
 }

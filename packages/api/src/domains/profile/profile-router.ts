@@ -4,6 +4,7 @@ import { db } from "@repo/api/tools/db";
 import { openApiMeta } from "@repo/api/tools/openapi";
 import {
   createTRPCRouter,
+  rateLimited,
   userProcedure,
   type TRPCContext,
 } from "@repo/api/tools/trpc";
@@ -146,6 +147,7 @@ export const profileRouter = createTRPCRouter({
     .query(({ ctx }) => new ProfileService(db).validationEstimate(ctx.userId)),
 
   validate: userProcedure
+    .use(rateLimited("taskStart"))
     .meta(
       openApiMeta(
         "profile",

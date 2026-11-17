@@ -12,9 +12,8 @@ import {
 import { parseBlocks, serializeBlocks } from "../truth/blocks";
 import { changedChunks, profileIndex } from "../truth/chunks";
 import { extractProfile } from "../truth/extract";
+import { languageNames } from "../truth/sections";
 import { readStructure } from "../truth/structure";
-
-const languageNames = { "pt-BR": "Brazilian Portuguese", "en-US": "English" };
 
 export const validationSteps = ["reading", "reviewing", "checking"] as const;
 

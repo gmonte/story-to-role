@@ -309,9 +309,7 @@ export class DocumentsService {
     );
     // Each snapshot's text is read against the profile version it froze.
     const contexts = new FrozenContexts(tx, cipher, document.profileId);
-    const application = document.applicationId
-      ? await repository.findApplication(document.applicationId)
-      : null;
+    const openingId = await contexts.openingOf(document.applicationId);
     const views: VersionView[] = [];
     for (const version of versions) {
       const latest = await repository.latestSnapshot(version.id);
@@ -331,13 +329,15 @@ export class DocumentsService {
             document,
             version,
             snapshot: latest,
+            written,
+            rendered,
           })
         : null;
       const frozen =
         coverage?.context ??
         (await contexts.load({
           profileVersionId: latest.profileVersionId,
-          openingId: application?.openingId ?? null,
+          openingId,
           language: version.language,
         }));
       views.push({
@@ -587,14 +587,12 @@ export class DocumentsService {
     const review = coverageReviewContentSchema.parse(
       JSON.parse(cipher.decrypt(stored.review.encryptedContent))
     );
+    const reviewed = decryptResume(cipher, stored.snapshot);
     const lines = new Map(
-      writtenLines(decryptResume(cipher, stored.snapshot)).map((line) => [
-        line.id,
-        line.text,
-      ])
+      writtenLines(reviewed).map((line) => [line.id, line.text])
     );
     const evidence = new Map(
-      evidenceTrace(decryptResume(cipher, stored.snapshot), input.context, {
+      evidenceTrace(reviewed, input.context, {
         all: true,
       }).map((row) => [row.evidenceId, row])
     );

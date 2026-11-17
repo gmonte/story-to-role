@@ -270,6 +270,22 @@ describe("what code keeps of the coverage review", () => {
           line_id: null,
           text: "Open with the leadership line.",
         },
+        // Asking to put something in, in either language.
+        {
+          kind: "reorder",
+          line_id: null,
+          text: "Insira um bullet sobre módulos Terraform.",
+        },
+        {
+          kind: "reorder",
+          line_id: null,
+          text: "Destaque a experiência com Terraform no resumo.",
+        },
+        {
+          kind: "reorder",
+          line_id: null,
+          text: "Highlight the Terraform work up front.",
+        },
       ],
     });
     expect(review.gaps).toEqual(["Go"]);
@@ -340,6 +356,7 @@ describe("what code keeps of the coverage review", () => {
         startDate: "2021-03",
         endDate: null,
         bullets: 3,
+        relevance: null,
       },
     ]);
     expect(english.statement).toBe(

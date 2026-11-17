@@ -35,7 +35,7 @@ import {
 import { toast } from "@repo/web/components/ui/sonner";
 
 import { useDocumentLabels } from "~/domains/documents/hooks/use-document-labels";
-import { hasFindings } from "~/domains/documents/components/coverage-review";
+import { hasFindings } from "~/domains/documents/utils/version-checks";
 import { useOpeningDocuments } from "~/domains/documents/hooks/use-opening-documents";
 import { useTRPC } from "~/tools/trpc/client";
 import { useOpening } from "~/domains/openings/hooks/use-opening";

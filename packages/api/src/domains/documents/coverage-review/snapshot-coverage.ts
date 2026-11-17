@@ -10,7 +10,7 @@ import {
   type CareerContext,
   loadCareerContext,
 } from "../generation/load-career-context";
-import { purposesOf } from "../generation/resume-prompts";
+import { type OpeningBrief, purposesOf } from "../generation/resume-prompts";
 import { loadOpeningBrief } from "../generation/run-generate-resume";
 import { pdfTemplate } from "../rendering/pdf-template";
 import {
@@ -20,7 +20,7 @@ import {
 } from "../schemas/generation-settings";
 import type { OutputLanguage } from "../schemas/document";
 import { decryptResume } from "../snapshot-content";
-import { checkDocument, type CoverageFinding } from "./check-document";
+import { checkDocument } from "./check-document";
 
 type Snapshot = NonNullable<
   Awaited<ReturnType<DocumentsRepository["findSnapshot"]>>
@@ -31,10 +31,13 @@ type Document = NonNullable<
 
 /**
  * What a snapshot's checks read, loaded once per profile version, opening
- * and language within one request (a view lists several versions).
+ * and language within one request (a view lists several versions, and the
+ * ZIP or a submission checks several documents).
  */
 export class FrozenContexts {
   private readonly contexts = new Map<string, Promise<CareerContext>>();
+  private readonly briefs = new Map<string, Promise<OpeningBrief>>();
+  private readonly applications = new Map<string, Promise<string | null>>();
 
   constructor(
     private readonly db: DbClient,
@@ -78,6 +81,38 @@ export class FrozenContexts {
     }
     return context;
   }
+
+  /** The opening a document's application is for, if it has one. */
+  openingOf(applicationId: string | null): Promise<string | null> {
+    if (!applicationId) return Promise.resolve(null);
+    let opening = this.applications.get(applicationId);
+    if (!opening) {
+      opening = new DocumentsRepository(this.db)
+        .findApplication(applicationId)
+        .then((row) => row?.openingId ?? null);
+      this.applications.set(applicationId, opening);
+    }
+    return opening;
+  }
+
+  /**
+   * The opening as the checks read it, its fit check's lines resolved in
+   * the frozen version's.
+   */
+  brief(openingId: string, context: CareerContext): Promise<OpeningBrief> {
+    const key = [openingId, context.profileVersionId].join(":");
+    let brief = this.briefs.get(key);
+    if (!brief) {
+      brief = loadOpeningBrief({
+        db: this.db,
+        cipher: this.cipher,
+        openingId,
+        evidenceOfPassage: context.evidenceOfPassage,
+      });
+      this.briefs.set(key, brief);
+    }
+    return brief;
+  }
 }
 
 /**
@@ -86,11 +121,16 @@ export class FrozenContexts {
  */
 export async function writtenSettings(
   repository: DocumentsRepository,
-  version: { id: string; documentId: string }
+  version: { id: string; documentId: string },
+  // The version's latest written generation, when the caller has it.
+  written?: { settings: GenerationSettings | null } | null
 ): Promise<GenerationSettings> {
-  const written = await repository.latestWrittenGeneration(version.id);
+  const own =
+    written === undefined
+      ? await repository.latestWrittenGeneration(version.id)
+      : written;
   const settings =
-    written?.settings ?? (await repository.writtenSettings(version.documentId));
+    own?.settings ?? (await repository.writtenSettings(version.documentId));
   return generationSettingsSchema
     .catch(defaultGenerationSettings)
     .parse(settings ?? defaultGenerationSettings);
@@ -110,46 +150,45 @@ export async function snapshotCoverage(input: {
   document: Pick<Document, "id" | "applicationId" | "encryptedFocus">;
   version: { id: string; documentId: string; language: OutputLanguage };
   snapshot: Pick<Snapshot, "id" | "encryptedContent" | "profileVersionId">;
+  // What the caller already read: the version's latest written generation
+  // and the snapshot's rendered file.
+  written?: { settings: GenerationSettings | null } | null;
+  rendered?: { pages: number } | null;
   /** This month (YYYY-MM): what "recent" is measured from. */
   today?: string;
 }) {
-  const { db, cipher } = input;
-  const repository = new DocumentsRepository(db);
+  const { cipher } = input;
+  const repository = new DocumentsRepository(input.db);
   const content = decryptResume(cipher, input.snapshot);
-  const application = input.document.applicationId
-    ? await repository.findApplication(input.document.applicationId)
-    : null;
+  const openingId = await input.contexts.openingOf(
+    input.document.applicationId
+  );
   const context = await input.contexts.load({
     profileVersionId: input.snapshot.profileVersionId,
-    openingId: application?.openingId ?? null,
+    openingId,
     language: input.version.language,
   });
   const focus = input.document.encryptedFocus
     ? cipher.decrypt(input.document.encryptedFocus)
     : null;
-  const brief = application
-    ? await loadOpeningBrief({
-        db,
-        cipher,
-        openingId: application.openingId,
-        evidenceOfPassage: context.evidenceOfPassage,
-      })
+  const brief = openingId
+    ? await input.contexts.brief(openingId, context)
     : { title: focus, company: null, terms: [], fitCheck: [], focus };
   const purposes: Purpose[] = purposesOf(brief);
-  const rendered = await repository.findRenderedFile(
-    input.snapshot.id,
-    pdfTemplate
-  );
+  const rendered =
+    input.rendered === undefined
+      ? await repository.findRenderedFile(input.snapshot.id, pdfTemplate)
+      : input.rendered;
   const findings = checkDocument({
     content,
     context,
-    settings: await writtenSettings(repository, input.version),
+    settings: await writtenSettings(repository, input.version, input.written),
     today: input.today ?? new Date().toISOString().slice(0, 7),
     purposes,
     targetTitle: brief.focus ? null : brief.title,
     pages: rendered?.pages ?? null,
   });
-  return { content, context, brief, purposes, findings };
+  return { context, findings };
 }
 
 /**
@@ -164,12 +203,16 @@ export async function assertSendable(input: {
   document: Document;
   version: { id: string; documentId: string; language: OutputLanguage };
   snapshot: Pick<Snapshot, "id" | "encryptedContent" | "profileVersionId">;
-}): Promise<CoverageFinding[]> {
+  // Shared by the caller when it checks several documents at once.
+  contexts?: FrozenContexts;
+}) {
   // The cover letter's review comes with its own slice (docs/plan.md, P8).
-  if (input.document.kind !== "resume") return [];
+  if (input.document.kind !== "resume") return;
   const { findings } = await snapshotCoverage({
     ...input,
-    contexts: new FrozenContexts(input.db, input.cipher, input.profileId),
+    contexts:
+      input.contexts ??
+      new FrozenContexts(input.db, input.cipher, input.profileId),
   });
   if (findings.length > 0) {
     throw new TRPCError({
@@ -177,5 +220,4 @@ export async function assertSendable(input: {
       message: "The document has coverage findings to fix before it can leave.",
     });
   }
-  return findings;
 }

@@ -12,6 +12,7 @@ const P3 = "00000000-0000-4000-8000-000000000003";
 const E1 = "00000000-0000-4000-8000-0000000000e1";
 const E2 = "00000000-0000-4000-8000-0000000000e2";
 const E3 = "00000000-0000-4000-8000-0000000000e3";
+const E5 = "00000000-0000-4000-8000-0000000000e5";
 const E4 = "00000000-0000-4000-8000-0000000000e4";
 const I1 = "00000000-0000-4000-8000-0000000000a1";
 
@@ -81,8 +82,9 @@ const context: CareerContext = {
       `Cut deploy time by 40%. Cut costs by ${withheld}.`,
       "Cut deploy time by 40%. Cut costs by ."
     ),
-    line(E2, P1, "tool", "Tools: Kubernetes, Terraform"),
+    line(E2, P1, "tool", "Tools: Kubernetes"),
     line(E3, P2, "responsibility", "Built services in Node.js."),
+    line(E5, P2, "tool", "Tools: Node.js, Terraform"),
     line(E4, P3, "responsibility", "Wrote COBOL batch jobs."),
   ],
   credentials: [],
@@ -345,6 +347,41 @@ describe("the coverage review's code checks", () => {
     ]);
   });
 
+  it("lets a line name its position's years, a locked fact", () => {
+    const content = resume([
+      entry(P1, [
+        { id: "y", text: "Running Kubernetes at Globex since 2021." },
+      ]),
+    ]);
+    expect(check(content)).toEqual([]);
+  });
+
+  it("blocks on pages only once the PDF is measured", () => {
+    const long = resume([
+      entry(
+        P1,
+        Array.from({ length: 3 }, (_, index) => ({
+          id: `l${index}`,
+          text: "Cut deploy time by 40%.",
+        }))
+      ),
+    ]);
+    const pages = (measured: number | null) =>
+      checkDocument({
+        content: long,
+        context,
+        settings: { ...defaultGenerationSettings, resumeMaxPages: 1 },
+        today,
+        purposes: [],
+        pages: measured,
+      }).filter((finding) => finding.code === "pages");
+    // An estimate is too rough to block: the editor warns on it instead.
+    expect(pages(null)).toEqual([]);
+    expect(pages(2)).toMatchObject([
+      { code: "pages", params: { pages: 2, maxPages: 1 } },
+    ]);
+  });
+
   it("lets the opening's title carry its own numbers on the title line", () => {
     const titled = (titleLine: string) => {
       const base = resume([]);
@@ -409,6 +446,30 @@ describe("the coverage review's code checks", () => {
         },
       },
     ]);
+  });
+
+  it("lets a name pass that the position's own lines use", () => {
+    // Globex lists Terraform among its tools and says it never ran it in
+    // production: naming Terraform there is no claim to block.
+    const used: CareerContext = {
+      ...context,
+      evidence: [
+        ...context.evidence,
+        line(E2, P1, "tool", "Tools: Kubernetes, Terraform"),
+      ],
+    };
+    const content = resume([
+      entry(P1, [{ id: "t", text: "Wrote Terraform modules." }]),
+    ]);
+    expect(
+      checkDocument({
+        content,
+        context: used,
+        settings: defaultGenerationSettings,
+        today,
+        purposes: [],
+      }).map((finding) => finding.code)
+    ).toEqual([]);
   });
 
   it("lets a tool merely named in another position's not-done line pass", () => {

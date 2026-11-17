@@ -11,7 +11,7 @@ import { toast } from "@repo/web/components/ui/sonner";
 import { useTRPC } from "~/tools/trpc/client";
 
 import { useRefreshDocuments } from "../hooks/use-opening-documents";
-import { hasFindings } from "./coverage-review";
+import { hasFindings } from "../utils/version-checks";
 
 /** The application as one ZIP: every version's PDF, named after the opening. */
 export function DownloadZipButton({

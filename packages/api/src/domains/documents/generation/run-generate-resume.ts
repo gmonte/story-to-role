@@ -11,6 +11,7 @@ import { loadSensitiveFilter } from "@repo/api/domains/evidence/sensitive/load-s
 import { OpeningsRepository } from "@repo/api/domains/openings/openings-repository";
 import type { TaskProgress } from "@repo/api/domains/tasks/schemas/task";
 import type { DbClient } from "@repo/api/tools/db-client";
+import { logger } from "@repo/common/tools/logger";
 import { foldAccents } from "@repo/api/utils/text/fold-accents";
 import type { Storage } from "@repo/api/tools/storage/storage";
 
@@ -414,8 +415,9 @@ export async function runGenerateResume(deps: {
       .filter((line) => line && filter.findForbiddenTerms(line).length === 0)
       .slice(0, maxEmphasisLines);
 
-    // The coverage review, once, on the final content; a key that ran out
-    // leaves the document without one.
+    // The coverage review, once, on the final content. It never costs the
+    // document: if it fails (a key that ran out, a provider error), the
+    // resume is saved without one, and the code checks still run on it.
     let coverage: CoverageReviewContent | null = null;
     if (!stoppedBy) {
       await progress(totalRounds + 2, "coverage_review");
@@ -429,8 +431,14 @@ export async function runGenerateResume(deps: {
           language: generation.language,
         });
       } catch (error) {
-        if (!(error instanceof KeyUnusableError)) throw error;
-        stoppedBy = error;
+        if (error instanceof KeyUnusableError) {
+          stoppedBy = error;
+        } else {
+          logger.warn(["documents"], "Coverage review failed", {
+            generationId: generation.id,
+            error: error instanceof Error ? error.name : "unknown",
+          });
+        }
       }
     }
 

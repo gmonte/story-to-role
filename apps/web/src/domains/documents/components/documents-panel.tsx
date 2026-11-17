@@ -20,7 +20,8 @@ import { useDocumentLabels } from "../hooks/use-document-labels";
 import { useOpeningDocuments } from "../hooks/use-opening-documents";
 import { useSelectedVersion } from "../hooks/use-selected-version";
 import { AdaptVersionDialog } from "./adapt-version-dialog";
-import { CoverageReviewBlock, oldestWithBullets } from "./coverage-review";
+import { CoverageReviewBlock } from "./coverage-review";
+import { oldestWithBullets } from "../utils/version-checks";
 import { DownloadZipButton } from "./download-zip-button";
 import { GenerateResumeDialog } from "./generate-resume-dialog";
 import { OutdatedNotice, SyncProposal } from "./language-sync";
@@ -253,8 +254,8 @@ export function GenerationProgress({
 /**
  * What comes with a version: its coverage review (a resume's), what its
  * latest generation emphasized (or, for an adjustment, changed), the length
- * warning (of a document without a coverage review, whose findings carry
- * it) and the ATS check.
+ * warning on the estimate (until a resume's PDF is measured, when an
+ * overflow becomes a finding) and the ATS check.
  */
 export function VersionChecks({ version }: { version: VersionView }) {
   const t = useTranslation();
@@ -264,22 +265,24 @@ export function VersionChecks({ version }: { version: VersionView }) {
   return (
     <div className="flex flex-col gap-2">
       <CoverageReviewBlock version={version} />
-      {!version.coverage && version.pages > version.maxPages && (
-        <p className="rounded-lg border border-amber-500/40 bg-amber-500/10 p-2.5 text-xs">
-          {t.formatMessage(
-            {
-              defaultMessage:
-                "{measured, select, yes {{pages} pages in the PDF} other {About {pages} pages}}: over the page limit this document was written with ({limit}). {position, select, none {Turn off an optional section.} other {Trim the bullets of {position}, your oldest position, or turn off an optional section.}}",
-            },
-            {
-              limit: version.maxPages,
-              measured: version.pdf.ready ? "yes" : "no",
-              pages: t.formatNumber(version.pages),
-              position: oldestWithBullets(version) ?? "none",
-            }
-          )}
-        </p>
-      )}
+      {/* Measured over the limit, a resume shows it as a finding instead. */}
+      {version.pages > version.maxPages &&
+        !(version.coverage && version.pdf.ready) && (
+          <p className="rounded-lg border border-amber-500/40 bg-amber-500/10 p-2.5 text-xs">
+            {t.formatMessage(
+              {
+                defaultMessage:
+                  "{measured, select, yes {{pages} pages in the PDF} other {About {pages} pages}}: over the page limit this document was written with ({limit}). {position, select, none {Turn off an optional section.} other {Trim the bullets of {position}, your oldest position, or turn off an optional section.}}",
+              },
+              {
+                limit: version.maxPages,
+                measured: version.pdf.ready ? "yes" : "no",
+                pages: t.formatNumber(version.pages),
+                position: oldestWithBullets(version) ?? "none",
+              }
+            )}
+          </p>
+        )}
       {emphasis && (
         <div className="bg-background flex flex-col gap-1.5 rounded-lg border p-2.5 text-xs">
           <p className="text-sm font-medium">

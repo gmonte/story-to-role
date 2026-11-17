@@ -12,14 +12,11 @@ import {
   type ProfileBlock,
 } from "@repo/api/domains/profile/truth/blocks";
 import { experienceKeys } from "@repo/api/domains/profile/truth/chunks";
-import {
-  experienceFieldLabels,
-  normalizeLabel,
-} from "@repo/api/domains/profile/truth/sections";
+import { experienceFieldLabels } from "@repo/api/domains/profile/truth/sections";
 import { readStructure } from "@repo/api/domains/profile/truth/structure";
 import type { DbClient } from "@repo/api/tools/db-client";
 
-import { stableId } from "../generation/profile-source";
+import { positionIdOf } from "../generation/profile-source";
 
 /**
  * Proposes a resume line as a result of its experience in the user's
@@ -45,13 +42,8 @@ export async function sendLineToProfile(input: {
   const index = structure.experiences.findIndex(
     (experience) =>
       experience.parsed &&
-      stableId(
-        input.careerProfileId,
-        "position",
-        normalizeLabel(experience.parsed.company),
-        normalizeLabel(experience.parsed.title),
-        experience.parsed.range.start
-      ) === input.positionId
+      positionIdOf(input.careerProfileId, experience.parsed) ===
+        input.positionId
   );
   if (index < 0) {
     throw new TRPCError({
@@ -89,9 +81,21 @@ export async function sendLineToProfile(input: {
           blockToLine(added),
         ].join("\n"),
       };
+  // Accepted already: the profile has it.
+  if (blocks.some((block) => block.text.trim() === text.trim())) {
+    throw new TRPCError({
+      code: "CONFLICT",
+      message: "Your profile already has this line.",
+    });
+  }
   const pending = (await repository.listPendingSuggestions(document.id)).map(
     (row) => ({ id: row.id, ...readSuggestionContent(input.cipher, row) })
   );
+  // Sent already and still waiting: the same suggestion, not a second one.
+  const waiting = pending.find((row) =>
+    row.replace.split("\n").some((line) => line.includes(text))
+  );
+  if (waiting) return { profileSuggestionId: waiting.id };
   const proposed = await proposeSuggestion({
     db: input.db,
     cipher: input.cipher,

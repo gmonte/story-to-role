@@ -13,7 +13,10 @@ import type { DbClient } from "@repo/api/tools/db-client";
 import { getStorage, type Storage } from "@repo/api/tools/storage/storage";
 
 import { decryptDocument } from "../snapshot-content";
-import { assertSendable } from "../coverage-review/snapshot-coverage";
+import {
+  assertSendable,
+  FrozenContexts,
+} from "../coverage-review/snapshot-coverage";
 import { DocumentsRepository } from "../documents-repository";
 import { requireUserVersion } from "../require-version";
 import { fileNamer } from "./file-namer";
@@ -55,7 +58,8 @@ export class PdfService {
     userId: string,
     version: Version,
     document: Document,
-    latest: Parameters<typeof assertSendable>[0]["snapshot"]
+    latest: Parameters<typeof assertSendable>[0]["snapshot"],
+    contexts?: FrozenContexts
   ) {
     await assertSendable({
       db: tx,
@@ -64,6 +68,7 @@ export class PdfService {
       document,
       version,
       snapshot: latest,
+      contexts,
     });
   }
 
@@ -72,12 +77,13 @@ export class PdfService {
     tx: DbClient,
     userId: string,
     version: Version,
-    document: Document
+    document: Document,
+    contexts?: FrozenContexts
   ) {
     const repository = new DocumentsRepository(tx);
     const latest = await repository.latestSnapshot(version.id);
     if (!latest) throw new TRPCError({ code: "NOT_FOUND" });
-    await this.requireSendable(tx, userId, version, document, latest);
+    await this.requireSendable(tx, userId, version, document, latest, contexts);
     if (await repository.findRenderedFile(latest.id, pdfTemplate)) return true;
     if (!(await new TasksRepository(tx).activeTask(latest.id, "render_pdf"))) {
       await this.tasks.start({
@@ -134,11 +140,22 @@ export class PdfService {
     );
     if (versions.length === 0) throw new TRPCError({ code: "NOT_FOUND" });
     let ready = true;
+    // One reading of the frozen profile for all the application's documents.
+    const contexts = new FrozenContexts(
+      this.db,
+      await getUserCipher(this.db, input.userId),
+      documents[0].profileId
+    );
     for (const version of versions) {
       const document = documents.find((row) => row.id === version.documentId)!;
       ready =
-        (await this.ensureRendered(this.db, input.userId, version, document)) &&
-        ready;
+        (await this.ensureRendered(
+          this.db,
+          input.userId,
+          version,
+          document,
+          contexts
+        )) && ready;
     }
     return { ready };
   }

@@ -24,7 +24,7 @@ import { toast } from "@repo/web/components/ui/sonner";
 import { useTRPC } from "~/tools/trpc/client";
 
 import { useRefreshDocuments } from "../hooks/use-opening-documents";
-import { hasFindings } from "./coverage-review";
+import { hasFindings } from "../utils/version-checks";
 
 /**
  * Downloading the official snapshot as PDF (resume spec, "Download"): it

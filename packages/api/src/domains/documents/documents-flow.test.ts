@@ -317,6 +317,8 @@ async function setup({
     today?: string;
     /** The coverage review, given the resume's lines by text. */
     coverage?: (lines: Map<string, string>) => CoverageReviewDraft;
+    /** The coverage review call fails (a provider error). */
+    coverageFails?: boolean;
   };
   const request = {
     userId: user.id,
@@ -350,6 +352,7 @@ async function setup({
           return reviewRated(ratings.shift() ?? 5);
         }
         if (system.startsWith("You audit")) {
+          if (script.coverageFails) throw new Error("provider down");
           return script.coverage?.(reviewedLineIds(system)) ?? emptyCoverage;
         }
         return drafts.shift();
@@ -666,6 +669,38 @@ describe("resume generation and snapshots", () => {
       view.documents[0].generation!.id
     );
     expect(rounds.map((round) => round.rating)).toEqual([1, 1]);
+  });
+
+  it("keeps a finished resume when its coverage review fails", async () => {
+    const ctx = await setup();
+    const [deploy] = ctx.evidence;
+    const { generationId } = await ctx.generate("quick", {
+      drafts: [
+        ctx.draft([
+          {
+            text: "Cut deploy time by 40% with Kubernetes.",
+            evidence_ids: [deploy.id],
+          },
+        ]),
+      ],
+      ratings: [9],
+      coverageFails: true,
+    });
+    const repository = new DocumentsRepository(ctx.db);
+    const generation = await repository.findGeneration(generationId);
+    expect(generation).toMatchObject({ status: "completed" });
+    // Saved without a review; the code checks still run on it.
+    expect(
+      await repository.latestCoverageReview(generation.versionId!)
+    ).toBeNull();
+    const view = await ctx.documents.forOpening({
+      userId: ctx.user.id,
+      openingId: ctx.opening.id,
+    });
+    expect(view.documents[0].versions[0].coverage).toMatchObject({
+      findings: [],
+      review: null,
+    });
   });
 
   it("reviews each generated resume's coverage, never covering a gap, and ends with the method's statement", async () => {

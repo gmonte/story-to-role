@@ -1,7 +1,10 @@
 import { TRPCError } from "@trpc/server";
 
 import { CareerRepository } from "@repo/api/domains/career/career-repository";
-import { assertSendable } from "@repo/api/domains/documents/coverage-review/snapshot-coverage";
+import {
+  assertSendable,
+  FrozenContexts,
+} from "@repo/api/domains/documents/coverage-review/snapshot-coverage";
 import { DocumentsRepository } from "@repo/api/domains/documents/documents-repository";
 import {
   getUserCipher,
@@ -223,6 +226,7 @@ export class TrackerService {
       // coverage findings is refused (resume spec, "Coverage review").
       const documents = new DocumentsRepository(tx);
       const cipher = await getUserCipher(tx, input.userId);
+      const contexts = new FrozenContexts(tx, cipher, profile.id);
       for (const row of sent) {
         const version = await documents.findVersion(row.versionId);
         const document =
@@ -238,6 +242,7 @@ export class TrackerService {
           document,
           version,
           snapshot,
+          contexts,
         });
       }
       const changed = await this.changeStatus(tx, {

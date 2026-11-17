@@ -25,13 +25,10 @@ import { cn } from "@repo/web/lib/utils";
 import { useTRPC } from "~/tools/trpc/client";
 
 import { focusDocumentLine } from "../utils/focus-line";
+import { oldestWithBullets } from "../utils/version-checks";
 import { ProfilePassage } from "./resume-editor";
 
 type Finding = CoverageView["findings"][number];
-
-/** Whether the version's official snapshot has findings that block it. */
-export const hasFindings = (version: VersionView) =>
-  (version.coverage?.findings.length ?? 0) > 0;
 
 /**
  * A resume version's coverage review (resume spec, "Coverage review"): the
@@ -85,7 +82,8 @@ export function CoverageReviewBlock({ version }: { version: VersionView }) {
               })}
             </p>
           )}
-          <ReviewSections review={review} version={version} />
+          {/* A new review starts with nothing sent. */}
+          <ReviewSections key={review.id} review={review} version={version} />
         </>
       ) : (
         <p className="text-muted-foreground">
@@ -227,15 +225,6 @@ function useFindingText(finding: Finding, version: VersionView) {
   }
 }
 
-/** Where trimming costs least: the oldest position that still has bullets. */
-export function oldestWithBullets(version: VersionView) {
-  if (version.content.kind !== "resume") return null;
-  const entries = version.content.sections.flatMap((section) =>
-    section.kind === "experience" ? section.entries : []
-  );
-  return entries.findLast((entry) => entry.lines.length > 0)?.employer ?? null;
-}
-
 /** The AI review, a collapsible section per block of the method's report. */
 function ReviewSections({
   review,
@@ -265,7 +254,16 @@ function ReviewSections({
           }
         );
       },
-      onError: (error) => toast.error(error.message),
+      onError: (error) =>
+        toast.error(
+          error.data?.code === "CONFLICT"
+            ? t.formatMessage({
+                defaultMessage: "Your profile already has this line.",
+              })
+            : t.formatMessage({
+                defaultMessage: "This line couldn't be sent to your profile.",
+              })
+        ),
     })
   );
   const { sources } = review;
@@ -340,6 +338,14 @@ function ReviewSections({
                   ),
                   bullets: entry.bullets,
                 }
+              )}
+              {entry.relevance && (
+                <span className="text-muted-foreground block">
+                  {t.formatMessage(
+                    { defaultMessage: "Included for: {requirement}" },
+                    { requirement: entry.relevance }
+                  )}
+                </span>
               )}
             </li>
           ))}

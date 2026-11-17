@@ -6,7 +6,6 @@ import { matchPurpose, type Purpose } from "../generation/assemble-resume";
 import type { CareerContext } from "../generation/load-career-context";
 import { withheld } from "../generation/profile-source";
 import {
-  estimatePages,
   lockedFactViolations,
   type WrittenLine,
   writtenLines,
@@ -86,7 +85,8 @@ export function checkDocument(input: {
   purposes: Purpose[];
   // The opening's title, which code prints on the title line as written.
   targetTitle?: string | null;
-  // The rendered PDF's measured pages when a file exists; else estimated.
+  // The rendered PDF's measured pages. Without a file there is no finding:
+  // an estimate is too rough to block (the editor warns on it instead).
   pages?: number | null;
 }): CoverageFinding[] {
   const { content, context, settings } = input;
@@ -161,8 +161,8 @@ export function checkDocument(input: {
     }
   }
 
-  const pages = input.pages ?? estimatePages(content);
-  if (pages > settings.resumeMaxPages) {
+  const pages = input.pages ?? null;
+  if (pages !== null && pages > settings.resumeMaxPages) {
     findings.push({
       code: "pages",
       lineId: null,
@@ -181,14 +181,24 @@ export function checkDocument(input: {
       ...toolNames(context.evidence),
     ]),
   ];
-  const deniedNames = (positionId: string | null) => {
-    const notDone = positionById.get(positionId ?? "")?.notDone ?? [];
-    return notDone.flatMap((text) =>
-      knownNames
-        .filter((name) => mentions(text, name))
-        .map((name) => ({ name, notDone: text }))
+  // A name the position's own lines use otherwise ("Tools: Terraform" with
+  // "did not run Terraform in production") was used there: not denied.
+  const usedAt = (positionId: string, name: string) =>
+    context.evidence.some(
+      (row) => row.positionId === positionId && mentions(row.text, name)
     );
-  };
+  const deniedByPosition = new Map(
+    context.positions.map((position) => [
+      position.id,
+      position.notDone.flatMap((text) =>
+        knownNames
+          .filter((name) => mentions(text, name) && !usedAt(position.id, name))
+          .map((name) => ({ name, notDone: text }))
+      ),
+    ])
+  );
+  const deniedNames = (positionId: string | null) =>
+    deniedByPosition.get(positionId ?? "") ?? [];
   // Only what the profile marks measured backs a figure: the lines of the
   // line's position (any position, for the summary or a competency group)
   // and the instructions that may back it.
@@ -197,6 +207,12 @@ export function checkDocument(input: {
     ...(line.id === "title_line" && input.targetTitle
       ? [input.targetTitle]
       : []),
+    // A position's years are locked facts a line may name ("since 2019").
+    ...context.positions
+      .filter((position) => !line.positionId || position.id === line.positionId)
+      .map(
+        (position) => `${position.startDate ?? ""} ${position.endDate ?? ""}`
+      ),
     ...context.evidence
       .filter((row) => !line.positionId || row.positionId === line.positionId)
       .map((row) => row.figures),

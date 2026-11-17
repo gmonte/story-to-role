@@ -16,19 +16,19 @@ import type { ResumeContent } from "../schemas/resume-content";
 
 /** What the reviewing model answers (the method's prompt 05, blocks 3–6). */
 export const coverageReviewDraftSchema = z.object({
-  strong: z
-    .array(
-      z.object({
-        requirement: z.string(),
-        line_id: z.string(),
-        evidence_id: z.string(),
-      })
-    )
-    .catch([]),
-  partial: z
-    .array(z.object({ requirement: z.string(), explanation: z.string() }))
-    .catch([]),
-  gaps: z.array(z.string()).catch([]),
+  // No fallback for a block: a malformed answer is no review at all, never
+  // one whose every requirement turned into a gap.
+  strong: z.array(
+    z.object({
+      requirement: z.string(),
+      line_id: z.string(),
+      evidence_id: z.string(),
+    })
+  ),
+  partial: z.array(
+    z.object({ requirement: z.string(), explanation: z.string() })
+  ),
+  gaps: z.array(z.string()),
   inconsistencies: z
     .array(z.object({ line_id: z.string(), explanation: z.string() }))
     .catch([]),
@@ -66,6 +66,8 @@ export const coverageReviewContentSchema = z.object({
       startDate: z.string().nullable(),
       endDate: z.string().nullable(),
       bullets: z.number().int(),
+      // A very old experience: the requirement it entered the document for.
+      relevance: z.string().nullable().catch(null),
     })
   ),
   strong: z.array(
@@ -111,7 +113,7 @@ const normalize = (text: string) => foldAccents(text).toLowerCase().trim();
 // A suggestion that asks to put something in the document is never kept:
 // the review suggests reordering, or updating the profile.
 const addingWords =
-  /\b(add|adds|adding|include|includes|including|insert|inserting|claim|claims|claiming|state|mention|mentions|mentioning|acrescent\w*|adicion\w*|inclu[ai]\w*|afirm\w*|aleg\w*|mencion\w*|citar|cite)\b/iu;
+  /(?<![\p{L}])(add\w*|include\w*|including|insert\w*|claim\w*|states?|stating|mention\w*|highlight\w*|write|writing|put|feature|showcase\w*|emphasi[sz]e\w*|acrescent\w*|adicion\w*|inclu\w*|inser\w*|insir\w*|afirm\w*|aleg\w*|mencion\w*|cit[ae]\w*|destaqu\w*|destac\w*|escrev\w*|coloqu\w*|coloc\w*|ressalt\w*|enfatiz\w*)(?![\p{L}])/iu;
 
 /**
  * Keeps of the model's review only what holds against the document and the
@@ -260,6 +262,7 @@ export function keepReview(input: {
             startDate: entry.startDate,
             endDate: entry.endDate,
             bullets: entry.lines.length,
+            relevance: entry.relevance ?? null,
           }))
         : []
     ),

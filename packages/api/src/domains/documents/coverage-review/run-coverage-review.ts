@@ -38,18 +38,8 @@ export async function reviewCoverage(input: {
     system: coverageReviewPrompt(input),
     messages: [{ role: "user", content: "Review the resume's coverage." }],
   });
-  // An answer that isn't a review reviews nothing.
-  const parsed = coverageReviewDraftSchema.safeParse(object);
-  return keepReview({
-    ...input,
-    draft: parsed.success
-      ? parsed.data
-      : {
-          strong: [],
-          partial: [],
-          gaps: [],
-          inconsistencies: [],
-          suggestions: [],
-        },
-  });
+  // An answer that isn't a review is no review: the document is saved
+  // without one rather than with invented gaps.
+  if (!object) throw new Error("The coverage review returned no review");
+  return keepReview({ ...input, draft: object });
 }

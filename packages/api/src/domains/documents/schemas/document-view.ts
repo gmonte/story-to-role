@@ -74,6 +74,8 @@ export const coverageReviewViewSchema = z.object({
       startDate: z.string().nullable(),
       endDate: z.string().nullable(),
       bullets: z.number().int(),
+      // A very old experience: the requirement it entered the document for.
+      relevance: z.string().nullable(),
     })
   ),
   // Requirement → resume line → profile line that proves it.

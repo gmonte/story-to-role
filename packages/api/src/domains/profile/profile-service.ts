@@ -11,12 +11,14 @@ import { ProfileRepository } from "./profile-repository";
 import type {
   ProfileDocumentKind,
   ProfileDraft,
+  ProfileSuggestion,
   ProfileVersionSummary,
 } from "./schemas/profile";
 import {
   validationReportSchema,
   type ProfileValidation,
 } from "./schemas/validation";
+import { readSuggestionContent } from "./suggestions/propose-suggestion";
 import { parseBlocks, serializeBlocks } from "./truth/blocks";
 import { changedChunks } from "./truth/chunks";
 import { extractProfile, profilePassages } from "./truth/extract";
@@ -398,5 +400,42 @@ export class ProfileService {
       markdown,
       baseRevision: input.baseRevision,
     });
+  }
+
+  /** The suggestions waiting for the user to accept or reject. */
+  async listSuggestions(userId: string): Promise<ProfileSuggestion[]> {
+    const repository = new ProfileRepository(this.db);
+    const document = await repository.findDocument(userId, kind);
+    if (!document) return [];
+    const cipher = await getUserCipher(this.db, userId);
+    return (await repository.listPendingSuggestions(document.id)).map(
+      (row) => ({
+        id: row.id,
+        origin: row.origin,
+        createdAt: row.createdAt,
+        ...readSuggestionContent(cipher, row),
+      })
+    );
+  }
+
+  /**
+   * Records what the user did with suggestions: the given ones, or every
+   * pending one. An accepted change reaches the draft through the editor,
+   * which applied it (one undo step) and saves it like any edit.
+   */
+  async resolveSuggestions(input: {
+    userId: string;
+    resolution: "accepted" | "rejected";
+    profileSuggestionIds?: string[];
+  }) {
+    const repository = new ProfileRepository(this.db);
+    const document = await repository.findDocument(input.userId, kind);
+    if (!document) throw new TRPCError({ code: "NOT_FOUND" });
+    const resolved = await repository.resolveSuggestions({
+      documentId: document.id,
+      resolution: input.resolution,
+      profileSuggestionIds: input.profileSuggestionIds,
+    });
+    return { resolved };
   }
 }

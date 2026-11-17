@@ -1,4 +1,4 @@
-import { metadata, runs, tasks } from "@trigger.dev/sdk";
+import { metadata, runs, sessions, tasks } from "@trigger.dev/sdk";
 
 import type { TaskProgress } from "@repo/api/domains/tasks/schemas/task";
 
@@ -22,6 +22,15 @@ export const triggerClient = {
   /** Stops a run (the account it works for is being deleted). */
   async cancel(runId: string) {
     await runs.cancel(runId);
+  },
+
+  /**
+   * Closes a profile agent chat's session (its account is being deleted).
+   * There is no delete: its streams age out with the retention window
+   * (ADR 0007).
+   */
+  async closeSession(chatId: string) {
+    await sessions.close(chatId, { reason: "account deleted" });
   },
 
   /** Inside a run: mirrors progress to the browser through Realtime. */

@@ -65,6 +65,7 @@ export class CreditsService {
           research: creditCap("research_company"),
           styleProfile: creditCap("extract_style_profile"),
           motivationTurn: creditCap("motivation_turn"),
+          agentMessage: creditCap("profile_agent_turn"),
         },
         courtesy: courtesy
           ? { monthlyCredits: courtesy.monthlyCredits, endsAt: courtesy.endsAt }

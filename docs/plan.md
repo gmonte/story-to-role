@@ -69,7 +69,7 @@ Acceptance:
 
 - One button, two steps: Validate (an AI review of what changed since the last published version, the user's credits, estimate first; findings on their passages with "Talk about this"; competency levels proposed) and Publish (a numbered version; with or without validating; format errors block, quality findings don't).
 - The extracted structure of each published version (experiences with locked facts, credentials, competencies by level, languages, gaps, communication rules, marked figures) and its passages' embeddings.
-- Note: a finding's "Talk about this" arrives with the agent (P3); until then each finding opens its passage. An accepted competency level edits the draft directly, as one undo step; P3's tracked suggestions take over.
+- Note: an accepted competency level edits the draft directly, as one undo step (it moves a name between two lines, which a suggestion's single passage doesn't express); findings get "Talk about this" with the agent (P3).
 - Note: `loadPublishedProfile` is the one reader of a published version (extract, passages, Markdown) for P5–P8.
 
 Acceptance:
@@ -80,6 +80,11 @@ Acceptance:
 
 - One agent per user on `chat.agent` (ADR 0007): a selected passage or a finding's "Talk about this" reaches it as a quote; each turn carries the passage, its section, the index, the known gaps and the communication rules; a tool reads other sections.
 - It interviews per the method (at most three questions per message, never suggesting numbers, figure origins and what the user did not do asked) and changes the profile only through suggestions shown in place, accepted or rejected one by one or all at once; "Interview me" fills a new profile the same way. Charged per message.
+
+- Note: a suggestion is a `ProfileChange` (a part's key, the lines it replaces, the lines it writes) plus its reason; it is located again in the text as the user edits, and one whose lines were edited away can only be rejected; a newer suggestion on the same lines supersedes the one waiting. Two rules are code, not prompt: a reply is cut after its third question mark, and a suggestion with a number found neither in the profile nor in the user's messages is refused. A message about a passage carries it as leading `> ` quote lines.
+- Note: profile work (agent messages, validation) never spends the Free plan's credit reserve, as the interview didn't.
+- Note: a turn reserves its credits before the topic gate runs, since the gate's call is part of the message's cost (as the old chat did): an off-topic message with no credits left gets the out-of-credits reply. The figure rule compares numbers, not their meaning: a percentage must be given as one, but a number given for one thing can be proposed for another, which the user sees in the tracked change before accepting it.
+- Note: validation's competency levels stay in the review panel (accept or reject there); they are not `profile_suggestions` rows.
 
 Acceptance:
 - [ ] Selecting a passage opens the agent with it; its suggestions show as tracked changes and only accepted ones reach the draft.

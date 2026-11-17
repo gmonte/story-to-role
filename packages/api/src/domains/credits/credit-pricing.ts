@@ -86,6 +86,9 @@ export function creditCap(type: TaskType, hints: CapHints = {}): number {
       const base = Math.min(110, 30 + 5 * (hints.positions ?? 5));
       return base * level * (hints.thorough ? 2 : 1);
     }
+    case "profile_agent_turn":
+      // The topic gate plus the agent's reply: about 2, capped at 3.
+      return 3;
     case "validate_profile":
       // About 5 for one changed part, up to 20 or so for a whole profile.
       return Math.min(25, 3 + 2 * Math.max(1, hints.parts ?? 1));

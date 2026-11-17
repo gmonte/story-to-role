@@ -12,6 +12,7 @@ export const taskTypes = [
   "motivation_turn",
   "validate_profile",
   "embed_profile",
+  "profile_agent_turn",
 ] as const;
 export const taskTypeSchema = z.enum(taskTypes);
 export type TaskType = z.infer<typeof taskTypeSchema>;

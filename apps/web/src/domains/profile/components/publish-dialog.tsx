@@ -219,7 +219,7 @@ export function PublishDialog({
                 <p className="text-xs text-amber-600">
                   {t.formatMessage({
                     defaultMessage:
-                      "Your credits are close to the reserve kept for your resume: validating now uses part of it.",
+                      "Your credits are close to the reserve kept for your resume.",
                   })}
                 </p>
               )}

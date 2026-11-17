@@ -11,8 +11,10 @@ import {
   type ReactNode,
 } from "react";
 
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEditor, type Editor } from "@tiptap/react";
 
+import { useTranslation } from "@repo/intl/use-translation";
 import {
   parseBlocks,
   serializeBlocks,
@@ -33,7 +35,18 @@ import {
   readStructure,
   type ProfileStructure,
 } from "@repo/api/domains/profile/truth/structure";
-import type { ProfileDraft } from "@repo/api/domains/profile/schemas/profile";
+import {
+  applyChange,
+  listParts,
+  locateChange,
+} from "@repo/api/domains/profile/truth/suggestions";
+import type {
+  ProfileDraft,
+  ProfileSuggestion,
+} from "@repo/api/domains/profile/schemas/profile";
+import { toast } from "@repo/web/components/ui/sonner";
+
+import { useTRPC } from "~/tools/trpc/client";
 
 import { useDraftAutosave, type SaveStatus } from "../hooks/use-profile-draft";
 import { useProfileLabels } from "../hooks/use-profile-labels";
@@ -49,6 +62,10 @@ import {
   setDecorations,
   type EditorDecorationSpec,
 } from "../utils/editor-extensions";
+import { suggestionWidget } from "../utils/suggestion-widget";
+
+// The most of a passage a message quotes.
+export const maxQuoteCharacters = 1500;
 
 // Lint runs after the user pauses this long, not on every keystroke.
 const lintDelayMs = 150;
@@ -72,6 +89,30 @@ type ProfileEditorState = {
   // The last validation's findings, where their passages are now.
   reviewFindings: LocatedReviewFinding[];
   applyCompetencyLevel: (name: string, level: CompetencyLevel) => void;
+  // The suggestions waiting, with the lines each would replace now (null
+  // when its lines were edited away).
+  suggestions: LocatedSuggestion[];
+  acceptSuggestions: (profileSuggestionIds?: string[]) => void;
+  rejectSuggestions: (profileSuggestionIds?: string[]) => void;
+  refreshSuggestions: () => void;
+  // What the agent's composer is about: a passage, and words to start from.
+  agentTopic: AgentTopic | null;
+  // `line` is where the passage starts, which tells its part.
+  talkAbout: (topic: { quote: string; line: number; text?: string }) => void;
+  clearAgentQuote: () => void;
+};
+
+export type LocatedSuggestion = ProfileSuggestion & {
+  range: { start: number; end: number } | null;
+};
+
+// `id` changes with every request, so the same passage can be asked twice.
+export type AgentTopic = {
+  id: number;
+  quote: string | null;
+  // The key of the part of the profile the passage is in.
+  part: string | null;
+  text: string;
 };
 
 const ProfileEditorContext = createContext<ProfileEditorState | null>(null);
@@ -151,6 +192,9 @@ export function ProfileEditorProvider({
   draft: ProfileDraft;
   children: ReactNode;
 }) {
+  const t = useTranslation();
+  const trpc = useTRPC();
+  const queryClient = useQueryClient();
   const { findingMessage, sectionHints } = useProfileLabels();
   const autosave = useDraftAutosave(draft);
   const [blocks, setBlocks] = useState(() => parseBlocks(draft.markdown));
@@ -185,6 +229,30 @@ export function ProfileEditorProvider({
     [validation.data, blocks]
   );
 
+  const suggestionsQuery = useQuery(trpc.profile.suggestions.queryOptions({}));
+  const suggestions = useMemo<LocatedSuggestion[]>(
+    () =>
+      (suggestionsQuery.data ?? []).map((suggestion) => ({
+        ...suggestion,
+        range: locateChange(blocks, suggestion),
+      })),
+    [suggestionsQuery.data, blocks]
+  );
+  const { mutate: resolveSuggestions } = useMutation(
+    trpc.profile.resolveSuggestions.mutationOptions()
+  );
+  const [agentTopic, setAgentTopic] = useState<AgentTopic | null>(null);
+  // The widgets in the text call the latest handlers.
+  const suggestionHandlers = useRef<{
+    accept: (profileSuggestionId: string) => void;
+    reject: (profileSuggestionId: string) => void;
+  } | null>(null);
+  const suggestionLabels = {
+    accept: t.formatMessage({ defaultMessage: "Accept" }),
+    reject: t.formatMessage({ defaultMessage: "Reject" }),
+    removal: t.formatMessage({ defaultMessage: "Remove the lines above" }),
+  };
+
   // The findings and hints drawn over the text follow every lint.
   useEffect(() => {
     if (!editor || editor.isDestroyed) return;
@@ -217,6 +285,38 @@ export function ProfileEditorProvider({
         key: `review-${index}`,
       });
     });
+    // Each suggestion as a tracked change: the lines it replaces struck
+    // through, and what it writes below them with Accept and Reject.
+    for (const suggestion of suggestions) {
+      const { range } = suggestion;
+      if (!range) continue;
+      for (let line = range.start; line < range.end; line++) {
+        const from = positions[line];
+        specs.push({
+          kind: "node",
+          from,
+          to: from + (doc.nodeAt(from)?.nodeSize ?? 0),
+          className: "profile-suggestion-old",
+          key: `suggestion-old-${suggestion.id}-${line}`,
+        });
+      }
+      specs.push({
+        kind: "widget",
+        at:
+          range.end < positions.length
+            ? positions[range.end]
+            : doc.content.size,
+        interactive: true,
+        element: () =>
+          suggestionWidget(suggestion, suggestionLabels, {
+            accept: (profileSuggestionId) =>
+              suggestionHandlers.current?.accept(profileSuggestionId),
+            reject: (profileSuggestionId) =>
+              suggestionHandlers.current?.reject(profileSuggestionId),
+          }),
+        key: `suggestion-${suggestion.id}`,
+      });
+    }
     blocks.forEach((block, line) => {
       if (block.type !== "item") return;
       const hint = labelHint.exec(block.text);
@@ -240,7 +340,7 @@ export function ProfileEditorProvider({
         element: () => {
           const element = document.createElement("div");
           element.className = "profile-section-hint";
-          element.setAttribute("data-profile-hint", "");
+          element.setAttribute("data-profile-aside", "");
           element.contentEditable = "false";
           element.textContent = hint;
           return element;
@@ -251,7 +351,7 @@ export function ProfileEditorProvider({
     setDecorations(editor, specs);
     // findingMessage and sectionHints change with the interface language only.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [editor, blocks, findings, structure, reviewFindings]);
+  }, [editor, blocks, findings, structure, reviewFindings, suggestions]);
 
   const currentBlocks = useCallback(
     () => (editor ? docToBlocks(editor.state.doc) : blocks),
@@ -281,6 +381,98 @@ export function ProfileEditorProvider({
     [editor]
   );
 
+  /** Saves what is in the editor now, resolving to the saved revision. */
+  const saveNow = async () => {
+    if (editor) {
+      clearTimeout(lintTimer.current);
+      const next = docToBlocks(editor.state.doc);
+      setBlocks(next);
+      autosave.change(serializeBlocks(next));
+    }
+    return autosave.saveNow();
+  };
+
+  const forgetSuggestions = (ids: string[]) =>
+    queryClient.setQueryData(
+      trpc.profile.suggestions.queryKey({}),
+      (current: ProfileSuggestion[] | undefined) =>
+        current?.filter((suggestion) => !ids.includes(suggestion.id))
+    );
+
+  const refreshSuggestions = () =>
+    void queryClient.invalidateQueries({
+      queryKey: trpc.profile.suggestions.queryKey({}),
+    });
+
+  // The answer didn't reach the server: the list shows what it still holds
+  // (a change already in the text no longer fits, and can be rejected).
+  const suggestionsNotRecorded = () => {
+    refreshSuggestions();
+    toast.error(
+      t.formatMessage({
+        defaultMessage:
+          "Your answer to the suggestion couldn't be saved. Try again.",
+      })
+    );
+  };
+
+  /**
+   * Applies the given suggestions (all of them by default) to the text as
+   * one undo step; those whose lines are gone stay waiting.
+   */
+  const acceptSuggestions = (profileSuggestionIds?: string[]) => {
+    if (!editor) return;
+    let next = currentBlocks();
+    const applied: string[] = [];
+    for (const suggestion of suggestions) {
+      if (
+        profileSuggestionIds &&
+        !profileSuggestionIds.includes(suggestion.id)
+      ) {
+        continue;
+      }
+      const changed = applyChange(next, suggestion);
+      if (!changed) continue;
+      next = changed;
+      applied.push(suggestion.id);
+    }
+    if (!applied.length) {
+      toast.error(
+        t.formatMessage({
+          defaultMessage:
+            "The text changed since this was suggested, so it can't be applied. Reject it, or ask the agent again.",
+        })
+      );
+      return;
+    }
+    applyBlocks(editor, next);
+    forgetSuggestions(applied);
+    // Recorded once the draft holds the change: if the save fails, the
+    // suggestion is still waiting after a reload, like the text it changed.
+    void saveNow().then((revision) => {
+      if (revision === null) return;
+      resolveSuggestions(
+        { resolution: "accepted", profileSuggestionIds: applied },
+        { onError: suggestionsNotRecorded }
+      );
+    });
+  };
+
+  const rejectSuggestions = (profileSuggestionIds?: string[]) => {
+    const ids = profileSuggestionIds ?? suggestions.map((s) => s.id);
+    if (!ids.length) return;
+    forgetSuggestions(ids);
+    resolveSuggestions(
+      { resolution: "rejected", profileSuggestionIds: ids },
+      { onError: suggestionsNotRecorded }
+    );
+  };
+
+  suggestionHandlers.current = {
+    accept: (profileSuggestionId) => acceptSuggestions([profileSuggestionId]),
+    reject: (profileSuggestionId) => rejectSuggestions([profileSuggestionId]),
+  };
+
   const value: ProfileEditorState = {
     editor,
     blocks,
@@ -289,15 +481,7 @@ export function ProfileEditorProvider({
     saveStatus: autosave.status,
     draft,
     markdown: () => serializeBlocks(currentBlocks()),
-    saveNow: async () => {
-      if (editor) {
-        clearTimeout(lintTimer.current);
-        const next = docToBlocks(editor.state.doc);
-        setBlocks(next);
-        autosave.change(serializeBlocks(next));
-      }
-      return autosave.saveNow();
-    },
+    saveNow,
     revision: () => autosave.revision.current,
     resetTo: (next) => {
       autosave.reset(next);
@@ -332,6 +516,26 @@ export function ProfileEditorProvider({
       );
       if (match) applyBlocks(editor, fixFinding(fresh, match));
     },
+    suggestions,
+    acceptSuggestions,
+    rejectSuggestions,
+    refreshSuggestions,
+    agentTopic,
+    talkAbout: ({ quote, line, text }) =>
+      setAgentTopic({
+        id: Date.now(),
+        // A long selection is about its start; the agent reads the rest.
+        quote: quote.slice(0, maxQuoteCharacters),
+        // The innermost part holding the line: an experience before its
+        // section.
+        part:
+          listParts(currentBlocks()).findLast(
+            (part) => line >= part.start && line < part.end
+          )?.key ?? null,
+        text: text ?? "",
+      }),
+    clearAgentQuote: () =>
+      setAgentTopic((topic) => topic && { ...topic, quote: null, part: null }),
     reviewFindings,
     applyCompetencyLevel: (name, level) => {
       if (!editor) return;

@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, isNull, max } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNull, max } from "drizzle-orm";
 
 import type { DbClient } from "@repo/api/tools/db-client";
 
@@ -6,6 +6,7 @@ import {
   profileDocumentsTable,
   profileExtractsTable,
   profilePassagesTable,
+  profileSuggestionsTable,
   profileValidationsTable,
   profileVersionsTable,
 } from "./db/profile-tables";
@@ -209,5 +210,69 @@ export class ProfileRepository {
       .update(profilePassagesTable)
       .set({ embedding })
       .where(eq(profilePassagesTable.id, passageId));
+  }
+
+  async insertSuggestion(suggestion: Insert<typeof profileSuggestionsTable>) {
+    const [row] = await this.tx
+      .insert(profileSuggestionsTable)
+      .values(suggestion)
+      .returning();
+    return row;
+  }
+
+  /** The suggestions waiting for the user, oldest first. */
+  listPendingSuggestions(documentId: string) {
+    return this.tx
+      .select()
+      .from(profileSuggestionsTable)
+      .where(
+        and(
+          eq(profileSuggestionsTable.documentId, documentId),
+          eq(profileSuggestionsTable.status, "pending")
+        )
+      )
+      .orderBy(asc(profileSuggestionsTable.createdAt));
+  }
+
+  /** The last suggestions the user rejected, newest first. */
+  listRejectedSuggestions(documentId: string, limit: number) {
+    return this.tx
+      .select()
+      .from(profileSuggestionsTable)
+      .where(
+        and(
+          eq(profileSuggestionsTable.documentId, documentId),
+          eq(profileSuggestionsTable.status, "rejected")
+        )
+      )
+      .orderBy(desc(profileSuggestionsTable.resolvedAt))
+      .limit(limit);
+  }
+
+  /**
+   * Ends pending suggestions of the document (accepted or rejected by the
+   * user, or superseded by a newer one): the given ones, or all of them.
+   * Returns how many changed.
+   */
+  async resolveSuggestions(input: {
+    documentId: string;
+    resolution: "accepted" | "rejected" | "superseded";
+    profileSuggestionIds?: string[];
+  }) {
+    if (input.profileSuggestionIds?.length === 0) return 0;
+    const resolved = await this.tx
+      .update(profileSuggestionsTable)
+      .set({ status: input.resolution, resolvedAt: new Date() })
+      .where(
+        and(
+          eq(profileSuggestionsTable.documentId, input.documentId),
+          eq(profileSuggestionsTable.status, "pending"),
+          input.profileSuggestionIds
+            ? inArray(profileSuggestionsTable.id, input.profileSuggestionIds)
+            : undefined
+        )
+      )
+      .returning({ id: profileSuggestionsTable.id });
+    return resolved.length;
   }
 }

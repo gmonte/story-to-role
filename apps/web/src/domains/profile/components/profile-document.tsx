@@ -10,7 +10,7 @@ import {
 
 import type { Editor } from "@tiptap/core";
 import { EditorContent } from "@tiptap/react";
-import { GripVertical, Plus } from "lucide-react";
+import { GripVertical, Plus, Sparkles } from "lucide-react";
 
 import { useTranslation } from "@repo/intl/use-translation";
 import type { ProfileEntryKind } from "@repo/api/domains/profile/truth/insert";
@@ -25,6 +25,7 @@ import {
 import { cn } from "@repo/web/lib/utils";
 
 import { useProfileLabels } from "../hooks/use-profile-labels";
+import { blockPositions } from "../utils/editor-doc";
 import { EntryDialog } from "./entry-dialog";
 import { useProfileEditor } from "./profile-editor-context";
 
@@ -45,7 +46,7 @@ type BlockKind = "heading2" | "heading3" | "item" | "paragraph";
 function blockAt(editor: Editor, clientY: number) {
   const children = Array.from(editor.view.dom.children) as HTMLElement[];
   for (const element of children) {
-    if (element.hasAttribute("data-profile-hint")) continue;
+    if (element.hasAttribute("data-profile-aside")) continue;
     const rect = element.getBoundingClientRect();
     if (clientY >= rect.top - 4 && clientY <= rect.bottom + 4) {
       const pos = editor.view.posAtDOM(element, 0);
@@ -66,7 +67,7 @@ function nodeStart(editor: Editor, index: number) {
 function dropIndex(editor: Editor, clientY: number) {
   const children = (
     Array.from(editor.view.dom.children) as HTMLElement[]
-  ).filter((element) => !element.hasAttribute("data-profile-hint"));
+  ).filter((element) => !element.hasAttribute("data-profile-aside"));
   for (let i = 0; i < children.length; i++) {
     const rect = children[i].getBoundingClientRect();
     if (clientY < rect.top + rect.height / 2)
@@ -105,7 +106,13 @@ type SlashMenu = { query: string; from: number; left: number; top: number };
 export function ProfileDocument() {
   const t = useTranslation();
   const { entryLabels } = useProfileLabels();
-  const { editor, insert } = useProfileEditor();
+  const { editor, insert, talkAbout } = useProfileEditor();
+  const [selection, setSelection] = useState<{
+    text: string;
+    line: number;
+    left: number;
+    top: number;
+  } | null>(null);
   const wrapper = useRef<HTMLDivElement>(null);
   const [hovered, setHovered] = useState<{ index: number; top: number } | null>(
     null
@@ -176,6 +183,37 @@ export function ProfileDocument() {
     editor.on("transaction", update);
     return () => {
       editor.off("transaction", update);
+    };
+  }, [editor]);
+
+  // Selected text gets a floating bar whose button sends the passage to
+  // the agent (profile spec, "Selection").
+  useEffect(() => {
+    if (!editor) return;
+    const update = () => {
+      const { from, to, empty } = editor.state.selection;
+      const box = wrapper.current?.getBoundingClientRect();
+      const text = empty ? "" : editor.state.doc.textBetween(from, to, "\n");
+      if (!text.trim() || !box || !editor.isFocused) return setSelection(null);
+      const start = editor.view.coordsAtPos(from);
+      setSelection({
+        text: text.trim(),
+        // The document line the selection starts in.
+        line: Math.max(
+          blockPositions(editor.state.doc).findLastIndex(
+            (position) => position <= from
+          ),
+          0
+        ),
+        left: Math.max(start.left - box.left, 64),
+        top: start.top - box.top - 36,
+      });
+    };
+    editor.on("selectionUpdate", update);
+    editor.on("blur", update);
+    return () => {
+      editor.off("selectionUpdate", update);
+      editor.off("blur", update);
     };
   }, [editor]);
 
@@ -348,6 +386,22 @@ export function ProfileDocument() {
           className="bg-primary pointer-events-none absolute right-6 left-16 h-0.5 rounded"
           style={{ top: drag.top - 1 }}
         />
+      )}
+      {selection && (
+        <button
+          type="button"
+          className="bg-popover text-popover-foreground hover:bg-accent absolute z-20 flex items-center gap-1.5 rounded-md border px-2 py-1 text-xs font-medium shadow-md"
+          style={{ left: selection.left, top: selection.top }}
+          // The selection stays while the button is pressed.
+          onMouseDown={(event) => event.preventDefault()}
+          onClick={() => {
+            talkAbout({ quote: selection.text, line: selection.line });
+            setSelection(null);
+          }}
+        >
+          <Sparkles className="text-primary size-3.5" />
+          {t.formatMessage({ defaultMessage: "Talk about this" })}
+        </button>
       )}
       <EditorContent editor={editor} />
       {slash && slashOptions.length > 0 && (

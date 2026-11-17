@@ -34,6 +34,10 @@ export function PrivacyNotice() {
     }),
     t.formatMessage({
       defaultMessage:
+        "Your messages to the profile agent, and its replies, pass through our task platform (Trigger.dev) and stay there for up to 7 days; our own copy is encrypted and deleted after 7 days.",
+    }),
+    t.formatMessage({
+      defaultMessage:
         "Avoid client data under NDA, salaries, other people's personal data, health and family matters.",
     }),
     t.formatMessage({

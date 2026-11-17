@@ -1,4 +1,5 @@
 import { CareerRepository } from "@repo/api/domains/career/career-repository";
+import type { TaskType } from "@repo/api/domains/tasks/schemas/task";
 import type { DbClient } from "@repo/api/tools/db-client";
 
 import { spendableTotal } from "./credit-ledger";
@@ -50,15 +51,20 @@ export async function creditReserve(db: DbClient, userId: string, now: Date) {
   return creditCap("generate_document", { positions });
 }
 
-// Within this many conversation turns of the reserve, the balance is near
-// it. A turn's cap until the profile agent's message has its own (P3).
+/**
+ * Working on the profile never spends what the reserve keeps (billing
+ * spec, "Credit meter"): only the agent's messages and validation hold it.
+ */
+export const keepsReserve = (type: TaskType) =>
+  type === "profile_agent_turn" || type === "validate_profile";
+
+// Within this many agent messages of the reserve, the balance is near it.
 const wrapUpTurns = 5;
-const turnCap = 3;
 
 /** Whether the balance approaches the reserve (the credit meter warns). */
 export async function nearReserve(db: DbClient, userId: string, now: Date) {
   const reserve = await creditReserve(db, userId, now);
   if (reserve === 0) return false;
   const available = await spendableTotal(db, userId, "any", now);
-  return available - reserve < wrapUpTurns * turnCap;
+  return available - reserve < wrapUpTurns * creditCap("profile_agent_turn");
 }

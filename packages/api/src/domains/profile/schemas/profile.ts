@@ -43,3 +43,36 @@ export type ProfileDraft = z.infer<typeof profileDraftSchema>;
 
 // Generous for a long career; the editor keeps a profile well below it.
 export const maxProfileLength = 200_000;
+
+/** Who proposed a suggestion (profile spec, "Data model"). */
+export const profileSuggestionOriginSchema = z.enum([
+  "agent",
+  "import",
+  "validation",
+  "application",
+]);
+export type ProfileSuggestionOrigin = z.infer<
+  typeof profileSuggestionOriginSchema
+>;
+
+export const profileSuggestionStatusSchema = z.enum([
+  "pending",
+  "accepted",
+  "rejected",
+  // A newer suggestion rewrote the same lines before the user answered.
+  "superseded",
+]);
+export type ProfileSuggestionStatus = z.infer<
+  typeof profileSuggestionStatusSchema
+>;
+
+export const profileSuggestionSchema = z.object({
+  id: z.uuid(),
+  origin: profileSuggestionOriginSchema,
+  createdAt: z.date(),
+  part: z.string(),
+  find: z.string(),
+  replace: z.string(),
+  reason: z.string(),
+});
+export type ProfileSuggestion = z.infer<typeof profileSuggestionSchema>;

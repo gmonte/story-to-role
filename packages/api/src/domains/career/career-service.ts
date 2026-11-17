@@ -27,6 +27,7 @@ import {
   positionInputSchema,
   type CredentialInput,
   type CredentialView,
+  type PositionDetail,
   type PositionInput,
   type PositionView,
   type Timeline,
@@ -343,6 +344,125 @@ export class CareerService {
     summary: string
   ) {
     return recordCareerEvent(tx, { ...input, summary });
+  }
+
+  /**
+   * A position's space: its latest summary (what the AI understood once it
+   * was approved), its approved facts with their sources, its stories and
+   * the skills its facts back.
+   */
+  async getPositionDetail(input: {
+    userId: string;
+    positionId: string;
+  }): Promise<PositionDetail> {
+    const profile = await this.requireProfile(input.userId);
+    return this.db.transaction(async (tx) => {
+      const career = new CareerRepository(tx);
+      const evidence = new EvidenceRepository(tx);
+      const position = await career.findPosition({
+        profileId: profile.id,
+        positionId: input.positionId,
+      });
+      if (!position) throw notFound();
+      const cipher = await getUserCipher(tx, input.userId);
+      const [summaries, facts, stories, skills, documents] = await Promise.all([
+        career.latestSummaries([position.id]),
+        evidence.listEvidenceForPosition(position.id),
+        evidence.listStories(profile.id),
+        evidence.listSkills(profile.id),
+        career.listDocuments(profile.id),
+      ]);
+      const fileNames = new Map(
+        documents.map((row) => [row.id, cipher.decrypt(row.encryptedFileName)])
+      );
+      const factIds = new Set(facts.map((row) => row.id));
+      return {
+        summary: summaries[0]
+          ? cipher.decrypt(summaries[0].encryptedSummary)
+          : null,
+        facts: facts.map((row) => ({
+          id: row.id,
+          kind: row.kind,
+          text: cipher.decrypt(row.encryptedText),
+          quote: cipher.decrypt(row.encryptedSourceQuote),
+          fileName: row.sourceDocumentId
+            ? (fileNames.get(row.sourceDocumentId) ?? null)
+            : null,
+          lowDetail: row.lowDetail,
+        })),
+        stories: stories
+          .filter((row) => row.positionId === position.id)
+          .map((row) => ({
+            id: row.id,
+            problem: cipher.decrypt(row.encryptedProblem),
+            action: cipher.decrypt(row.encryptedAction),
+            partners: row.encryptedPartners
+              ? cipher.decrypt(row.encryptedPartners)
+              : null,
+            result: cipher.decrypt(row.encryptedResult),
+          })),
+        skills: skills
+          .filter((row) => row.evidenceIds.some((id) => factIds.has(id)))
+          .map((row) => cipher.decrypt(row.encryptedName)),
+      };
+    });
+  }
+
+  /** The user owns their facts: an approved one can be reworded. */
+  async updateFact(input: {
+    userId: string;
+    evidenceId: string;
+    text: string;
+  }) {
+    const profile = await this.requireProfile(input.userId);
+    await this.db.transaction(async (tx) => {
+      const evidence = new EvidenceRepository(tx);
+      const row = await evidence.findEvidence({
+        profileId: profile.id,
+        evidenceId: input.evidenceId,
+      });
+      if (!row) throw notFound();
+      const cipher = await getUserCipher(tx, input.userId);
+      await evidence.updateEvidenceText(row.id, cipher.encrypt(input.text));
+      await this.event(
+        tx,
+        { userId: input.userId, profileId: profile.id, kind: "fact_edited" },
+        `reworded a fact${await this.factPlace(tx, cipher, row)}: "${cipher.decrypt(row.encryptedText)}" became "${input.text}"`
+      );
+    });
+  }
+
+  /** Removes an approved fact, and drops it from the stories and skills citing it. */
+  async removeFact(input: { userId: string; evidenceId: string }) {
+    const profile = await this.requireProfile(input.userId);
+    await this.db.transaction(async (tx) => {
+      const evidence = new EvidenceRepository(tx);
+      const row = await evidence.findEvidence({
+        profileId: profile.id,
+        evidenceId: input.evidenceId,
+      });
+      if (!row) throw notFound();
+      const cipher = await getUserCipher(tx, input.userId);
+      await evidence.deleteEvidence(row.id);
+      await this.event(
+        tx,
+        { userId: input.userId, profileId: profile.id, kind: "fact_removed" },
+        `removed a fact${await this.factPlace(tx, cipher, row)}: "${cipher.decrypt(row.encryptedText)}"`
+      );
+    });
+  }
+
+  private async factPlace(
+    tx: DbClient,
+    cipher: UserCipher,
+    fact: { profileId: string; positionId: string | null }
+  ) {
+    if (!fact.positionId) return "";
+    const row = await new CareerRepository(tx).findPosition({
+      profileId: fact.profileId,
+      positionId: fact.positionId,
+    });
+    return row ? ` of ${describePositionRow(cipher, row)}` : "";
   }
 
   async addPosition(input: { userId: string; position: PositionInput }) {

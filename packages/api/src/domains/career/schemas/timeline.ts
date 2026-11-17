@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+import { evidenceKindSchema } from "@repo/api/domains/evidence/schemas/evidence";
+
 import { depthLevels } from "../depth";
 import {
   interviewLanguageSchema,
@@ -141,3 +143,31 @@ export const timelineSchema = z.object({
   evidenceLanguages: z.array(interviewLanguageSchema),
 });
 export type Timeline = z.infer<typeof timelineSchema>;
+
+/** One approved fact of a position, with where it came from. */
+export const positionFactSchema = z.object({
+  id: z.uuid(),
+  kind: evidenceKindSchema,
+  text: z.string(),
+  quote: z.string(),
+  // The file it came from, or null when the user told it in a chat.
+  fileName: z.string().nullable(),
+  lowDetail: z.boolean(),
+});
+
+/** A position's space: what the AI understood and everything approved. */
+export const positionDetailSchema = z.object({
+  summary: z.string().nullable(),
+  facts: z.array(positionFactSchema),
+  stories: z.array(
+    z.object({
+      id: z.uuid(),
+      problem: z.string(),
+      action: z.string(),
+      partners: z.string().nullable(),
+      result: z.string(),
+    })
+  ),
+  skills: z.array(z.string()),
+});
+export type PositionDetail = z.infer<typeof positionDetailSchema>;

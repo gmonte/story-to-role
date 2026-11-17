@@ -1,4 +1,4 @@
-import { and, eq, inArray } from "drizzle-orm";
+import { and, arrayContains, eq, inArray, sql } from "drizzle-orm";
 
 import type { DbClient } from "@repo/api/tools/db-client";
 
@@ -153,6 +153,43 @@ export class EvidenceRepository {
       .update(sensitiveItemsTable)
       .set({ positionId: input.toPositionId })
       .where(eq(sensitiveItemsTable.positionId, input.fromPositionId));
+  }
+
+  async findEvidence(input: { profileId: string; evidenceId: string }) {
+    const [row] = await this.tx
+      .select()
+      .from(evidenceTable)
+      .where(
+        and(
+          eq(evidenceTable.profileId, input.profileId),
+          eq(evidenceTable.id, input.evidenceId)
+        )
+      );
+    return row;
+  }
+
+  async updateEvidenceText(evidenceId: string, encryptedText: string) {
+    await this.tx
+      .update(evidenceTable)
+      .set({ encryptedText })
+      .where(eq(evidenceTable.id, evidenceId));
+  }
+
+  /** Deletes a fact and drops it from the stories and skills citing it. */
+  async deleteEvidence(evidenceId: string) {
+    await this.tx
+      .update(storiesTable)
+      .set({
+        evidenceIds: sql`array_remove(${storiesTable.evidenceIds}, ${evidenceId}::uuid)`,
+      })
+      .where(arrayContains(storiesTable.evidenceIds, [evidenceId]));
+    await this.tx
+      .update(skillsTable)
+      .set({
+        evidenceIds: sql`array_remove(${skillsTable.evidenceIds}, ${evidenceId}::uuid)`,
+      })
+      .where(arrayContains(skillsTable.evidenceIds, [evidenceId]));
+    await this.tx.delete(evidenceTable).where(eq(evidenceTable.id, evidenceId));
   }
 
   async moveCredentialContent(input: {

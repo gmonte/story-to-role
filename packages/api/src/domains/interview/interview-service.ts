@@ -256,6 +256,9 @@ export class InterviewService {
     });
     const turn = await this.addUserTurn({ ...input, message });
     if (!turn) throw new TRPCError({ code: "PRECONDITION_FAILED" });
+    // Told in the position's own chat: the general chat knows it on its
+    // next turn.
+    await this.recordPositionChat({ ...input, message });
 
     const { realtime } = await this.tasks.start({
       userId: input.userId,
@@ -263,6 +266,34 @@ export class InterviewService {
       subjectId: turn.id,
     });
     return { realtime };
+  }
+
+  private async recordPositionChat(input: {
+    userId: string;
+    sessionId: string;
+    message: string;
+  }) {
+    const { profile, session } = await this.requireOpenSession(
+      input.userId,
+      input.sessionId
+    );
+    if (!session.positionId) return;
+    const position = await new CareerRepository(this.db).findPosition({
+      profileId: profile.id,
+      positionId: session.positionId,
+    });
+    if (!position) return;
+    const cipher = await getUserCipher(this.db, input.userId);
+    const excerpt =
+      input.message.length > 200
+        ? `${input.message.slice(0, 200)}…`
+        : input.message;
+    await recordCareerEvent(this.db, {
+      userId: input.userId,
+      profileId: profile.id,
+      kind: "position_chat",
+      summary: `told the interviewer of ${cipher.decrypt(position.encryptedTitle)} at ${cipher.decrypt(position.encryptedEmployer)}, in that position's own chat: "${excerpt}"`,
+    });
   }
 
   /**

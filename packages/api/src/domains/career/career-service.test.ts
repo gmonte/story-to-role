@@ -3,7 +3,10 @@ import { randomBytes } from "node:crypto";
 import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { getUserCipher } from "@repo/api/domains/encryption/user-cipher";
-import { evidenceTable } from "@repo/api/domains/evidence/db/evidence-tables";
+import {
+  evidenceTable,
+  skillsTable,
+} from "@repo/api/domains/evidence/db/evidence-tables";
 import { createTestUser } from "@repo/api/test/create-test-user";
 import {
   clearTestDatabase,
@@ -255,5 +258,80 @@ describe("career timeline", () => {
     // Its evidence came along.
     const rows = await ctx.db.select().from(evidenceTable);
     expect(rows.map((row) => row.credentialId)).toEqual([kept]);
+  });
+
+  it("shows a position's facts, stories and skills, and lets them change", async () => {
+    const ctx = await setup();
+    await ctx.career.acceptPrivacyNotice(ctx.user.id);
+    const { positionId } = await ctx.career.addPosition({
+      userId: ctx.user.id,
+      position: {
+        employer: "Acme",
+        title: "Staff Engineer",
+        startDate: "2021-01",
+      },
+    });
+    const cipher = await getUserCipher(ctx.db, ctx.user.id);
+    const [fact] = await ctx.db
+      .insert(evidenceTable)
+      .values({
+        profileId: ctx.profile.id,
+        positionId,
+        kind: "achievement",
+        encryptedText: cipher.encrypt("Cut deploys from 2h to 15min"),
+        encryptedSourceQuote: cipher.encrypt("from 2 hours to 15 minutes"),
+        language: "en-US",
+        approvedAt: new Date(),
+      })
+      .returning();
+    await ctx.db.insert(skillsTable).values({
+      profileId: ctx.profile.id,
+      encryptedName: cipher.encrypt("Kubernetes"),
+      evidenceIds: [fact.id],
+    });
+
+    const detail = await ctx.career.getPositionDetail({
+      userId: ctx.user.id,
+      positionId,
+    });
+    expect(detail).toMatchObject({
+      summary: null,
+      facts: [
+        {
+          id: fact.id,
+          text: "Cut deploys from 2h to 15min",
+          quote: "from 2 hours to 15 minutes",
+          // Told in a chat, not from a file.
+          fileName: null,
+        },
+      ],
+      skills: ["Kubernetes"],
+    });
+
+    await ctx.career.updateFact({
+      userId: ctx.user.id,
+      evidenceId: fact.id,
+      text: "Cut deploys from 2 hours to 15 minutes",
+    });
+    expect(
+      (await ctx.career.getPositionDetail({ userId: ctx.user.id, positionId }))
+        .facts[0]?.text
+    ).toBe("Cut deploys from 2 hours to 15 minutes");
+
+    // Removed: gone, and no longer backing the skill.
+    await ctx.career.removeFact({ userId: ctx.user.id, evidenceId: fact.id });
+    expect(
+      await ctx.career.getPositionDetail({ userId: ctx.user.id, positionId })
+    ).toMatchObject({ facts: [], skills: [] });
+
+    // Another user's fact is not found.
+    const eve = await createTestUser("eve@example.com");
+    await new CareerService(ctx.db).getOrCreateProfile({
+      userId: eve.id,
+      defaultLanguage: "en-US",
+    });
+    await expect(
+      ctx.career.getPositionDetail({ userId: eve.id, positionId })
+    ).rejects.toMatchObject({ code: "NOT_FOUND" });
   });
 });

@@ -38,7 +38,7 @@ export function ApprovalScreen({ session }: { session: SessionView }) {
   const labels = useCareerLabels();
   const trpc = useTRPC();
   const refresh = useRefreshCareer();
-  const { setActiveSessionId } = useCareerWorkspace();
+  const { openPosition, setOpenPosition } = useCareerWorkspace();
   const [decisions, setDecisions] = useState<Record<string, Decision>>({});
   const [editing, setEditing] = useState<string | null>(null);
   const timeline = useTimeline();
@@ -58,9 +58,10 @@ export function ApprovalScreen({ session }: { session: SessionView }) {
 
   const approve = useMutation(
     trpc.interview.approveExtraction.mutationOptions({
-      onSuccess: async ({ nextSessionId }) => {
+      onSuccess: async () => {
         await refresh();
-        setActiveSessionId(nextSessionId);
+        // Reviewed: the position's space shows what is now approved.
+        if (openPosition) setOpenPosition({ ...openPosition, tab: "overview" });
         toast.success(
           t.formatMessage({ defaultMessage: "Saved to your career." })
         );

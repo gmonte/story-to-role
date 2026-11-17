@@ -18,6 +18,7 @@ import {
   type InterviewLanguage,
 } from "./schemas/career";
 import {
+  positionDetailSchema,
   credentialInputSchema,
   documentPreviewSchema,
   positionInputSchema,
@@ -218,6 +219,58 @@ export const careerRouter = createTRPCRouter({
         userId: ctx.userId,
         ...input,
       });
+      return ok;
+    }),
+
+  positionDetail: userProcedure
+    .meta(
+      openApiMeta(
+        "career",
+        "GET",
+        "/positions/by-id/{positionId}/detail",
+        "A position's summary, approved facts, stories and skills"
+      )
+    )
+    .input(z.object({ positionId: z.uuid() }))
+    .output(positionDetailSchema)
+    .query(({ ctx, input }) =>
+      new CareerService(db).getPositionDetail({ userId: ctx.userId, ...input })
+    ),
+
+  updateFact: userProcedure
+    .meta(
+      openApiMeta(
+        "career",
+        "PUT",
+        "/facts/by-id/{evidenceId}",
+        "Rewords an approved fact"
+      )
+    )
+    .input(
+      z.object({
+        evidenceId: z.uuid(),
+        text: z.string().trim().min(1).max(1000),
+      })
+    )
+    .output(okSchema)
+    .mutation(async ({ ctx, input }) => {
+      await new CareerService(db).updateFact({ userId: ctx.userId, ...input });
+      return ok;
+    }),
+
+  removeFact: userProcedure
+    .meta(
+      openApiMeta(
+        "career",
+        "DELETE",
+        "/facts/by-id/{evidenceId}",
+        "Removes an approved fact"
+      )
+    )
+    .input(z.object({ evidenceId: z.uuid() }))
+    .output(okSchema)
+    .mutation(async ({ ctx, input }) => {
+      await new CareerService(db).removeFact({ userId: ctx.userId, ...input });
       return ok;
     }),
 

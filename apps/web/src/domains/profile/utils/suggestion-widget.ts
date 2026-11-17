@@ -26,12 +26,16 @@ function button(label: string, className: string, onClick: () => void) {
 export function suggestionWidget(
   suggestion: ProfileSuggestion,
   labels: SuggestionWidgetLabels,
-  handlers: { accept: (id: string) => void; reject: (id: string) => void }
+  handlers: {
+    accept: (profileSuggestionId: string) => void;
+    reject: (profileSuggestionId: string) => void;
+  }
 ) {
   const root = document.createElement("div");
   root.className = "profile-suggestion";
-  // Not a block of the document: the margin's handle skips it.
-  root.setAttribute("data-profile-hint", "");
+  // Beside the document's blocks, not one of them: the margin's handle
+  // skips it.
+  root.setAttribute("data-profile-aside", "");
   root.setAttribute("data-suggestion-id", suggestion.id);
   root.contentEditable = "false";
 

@@ -77,7 +77,11 @@ export function ProfileReview() {
               type="button"
               className="text-primary flex items-center gap-1 px-2 pb-1 text-xs hover:underline"
               onClick={() =>
-                talkAbout({ quote: finding.quote, text: finding.message })
+                talkAbout({
+                  quote: finding.quote,
+                  line: finding.line,
+                  text: finding.message,
+                })
               }
             >
               <MessageSquare className="size-3" />

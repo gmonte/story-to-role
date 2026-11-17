@@ -30,19 +30,24 @@ export class AgentChatService {
    */
   async current(userId: string, now = new Date()) {
     await this.requireNotice(userId);
-    const chats = new AgentChatRepository(this.db);
-    // A session about to expire isn't handed out for a new turn.
-    const chat =
-      (await chats.findCurrentChat(
-        userId,
-        new Date(now.getTime() + agentSettings.expiryMarginMs)
-      )) ??
-      (await chats.insertChat({
-        userId,
-        expiresAt: new Date(
-          now.getTime() + agentSettings.retentionDays * dayMs
-        ),
-      }));
+    // Under a lock on the user: two tabs opening at once share one chat.
+    const chat = await this.db.transaction(async (tx) => {
+      const chats = new AgentChatRepository(tx);
+      await chats.lockUser(userId);
+      // A session about to expire isn't handed out for a new turn.
+      return (
+        (await chats.findCurrentChat(
+          userId,
+          new Date(now.getTime() + agentSettings.expiryMarginMs)
+        )) ??
+        (await chats.insertChat({
+          userId,
+          expiresAt: new Date(
+            now.getTime() + agentSettings.retentionDays * dayMs
+          ),
+        }))
+      );
+    });
     if (!chat) throw new Error("The agent's conversation could not be created");
     const { messages } = await createAgentTranscriptStorage(this.db).load({
       chatId: chat.id,

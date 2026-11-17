@@ -27,6 +27,15 @@ export type AgentPromptInput = {
 const list = (items: string[]) =>
   items.length ? items.map((item) => `- ${item}`).join("\n") : "(none)";
 
+const tagNames = "passage|part|index|gaps|rules|waiting|rejected";
+
+/**
+ * The person's text between tags, as data: a tag of ours written inside it
+ * is dropped, so it can't close its block and speak as instructions.
+ */
+const data = (tag: string, text: string) =>
+  `<${tag}>\n${text.replace(new RegExp(`</?(?:${tagNames})>`, "gi"), "")}\n</${tag}>`;
+
 const oneLine = (text: string) =>
   text.replace(/\s*\n\s*/g, " / ").slice(0, 200);
 
@@ -55,10 +64,11 @@ export function buildAgentPrompt(input: AgentPromptInput) {
     "- Never ask for documents, passwords, bank details or an employer's confidential information.",
     "- When an employer is covered, say what is still missing there; when the interview ends, list the known gaps.",
     "- Asked to “interview me”, start from the most recent position in the index (or ask for the most recent job's company, title and dates when there is none) and go position by position.",
+    "- When the person has no position yet (a first job, a career change), ask what they want to work with and which notable experiences they have in that area: projects, studies, volunteering, freelance work. Each goes in as an experience, titled by what it was.",
     "",
     "## How the profile changes",
     "- You change nothing yourself. Propose each change with suggest_change: the person sees it in the text as a tracked change and accepts or rejects it. Then say in one sentence what you proposed and that it waits for them in the text. Never say a change was made.",
-    "- Propose as soon as the person gave you what a change needs; don't wait for the end of the interview. One call per passage; several small suggestions beat one large one.",
+    "- Propose as soon as the person gave you what a change needs; don't wait for the end of the interview. One call per passage; several small suggestions beat one large one. A new suggestion on lines that already have one waiting replaces it, so to improve a waiting suggestion, propose the whole line again from the profile's current lines.",
     "- Before changing a part you haven't read in this turn, read it with read_part, and copy the lines to change exactly into `find`. Leave `find` empty to add at the end of a part.",
     `- Write in the profile's language and format, like the lines you read. List lines start with “- ”; lines under a label are indented two spaces. A new experience goes to part “experience” with an empty \`find\`: its title “### Company — Title (YYYY-MM ${words.to} YYYY-MM)” (“${words.present}” for the current one), then the labelled lines: ${fields.map((field) => `“- ${field}:”`).join(", ")}.`,
     "- Use the person's own words. A figure goes in only as they wrote it: a number they never wrote is refused.",
@@ -71,31 +81,45 @@ export function buildAgentPrompt(input: AgentPromptInput) {
     `Today is ${input.today}.`,
     "",
     "## The profile's index (part key | title)",
-    input.parts.map((part) => `${part.key} | ${part.title}`).join("\n") ||
-      "(the profile is empty)",
+    data(
+      "index",
+      input.parts.map((part) => `${part.key} | ${part.title}`).join("\n") ||
+        "(the profile is empty)"
+    ),
     "",
     "## Known gaps",
-    list(input.gaps),
+    data("gaps", list(input.gaps)),
     "",
     "## Communication rules",
-    `Never include: ${input.rules.neverInclude.join("; ") || "(none)"}`,
-    `Never claim: ${input.rules.neverClaim.join("; ") || "(none)"}`,
+    data(
+      "rules",
+      [
+        `Never include: ${input.rules.neverInclude.join("; ") || "(none)"}`,
+        `Never claim: ${input.rules.neverClaim.join("; ") || "(none)"}`,
+      ].join("\n")
+    ),
     "",
     "## Suggestions waiting for the person (not in the profile yet)",
-    list(
-      input.pending.map(
-        (suggestion) =>
-          `${suggestion.part}: ${oneLine(suggestion.replace) || "(remove lines)"}`
+    data(
+      "waiting",
+      list(
+        input.pending.map(
+          (suggestion) =>
+            `${suggestion.part}: ${oneLine(suggestion.replace) || "(remove lines)"}`
+        )
       )
     ),
     ...(input.rejected.length
       ? [
           "",
           "## Suggestions the person rejected lately (don't propose them again)",
-          list(
-            input.rejected.map(
-              (suggestion) =>
-                `${suggestion.part}: ${oneLine(suggestion.replace)}`
+          data(
+            "rejected",
+            list(
+              input.rejected.map(
+                (suggestion) =>
+                  `${suggestion.part}: ${oneLine(suggestion.replace)}`
+              )
             )
           ),
         ]
@@ -103,15 +127,15 @@ export function buildAgentPrompt(input: AgentPromptInput) {
     "",
     ...(input.quote
       ? [
-          "## The passage the person is talking about",
-          `<passage>\n${input.quote.text}\n</passage>`,
+          "## The passage the conversation is about (the person's latest selection)",
+          data("passage", input.quote.text),
           ...(input.quote.part && input.quote.partText
             ? [
                 `It is in part “${input.quote.part.key}”, which reads:`,
-                `<part>\n${input.quote.partText}\n</part>`,
+                data("part", input.quote.partText),
               ]
             : [
-                "It isn't in the profile as quoted; read the part it may belong to before changing anything.",
+                "Its part isn't certain (the passage was edited, or the same line is in several parts): read the part it may belong to, or ask which one, before changing anything.",
               ]),
         ]
       : [

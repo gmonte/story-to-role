@@ -80,6 +80,7 @@ export function ProfileFindings() {
               finding.line !== null &&
               talkAbout({
                 quote: blocks[finding.line].text,
+                line: finding.line,
                 text: findingMessage(finding, structure.language),
               })
             }

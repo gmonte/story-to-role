@@ -30,7 +30,7 @@ import {
   mintProfileChatToken,
   startProfileChatSession,
 } from "../actions/profile-agent-actions";
-import { useProfileEditor } from "./profile-editor-context";
+import { maxQuoteCharacters, useProfileEditor } from "./profile-editor-context";
 
 type ChatSession = { publicAccessToken: string; lastEventId?: string };
 
@@ -107,8 +107,9 @@ function Conversation({
 
   const transport = useTriggerChatTransport<typeof profileAgent>({
     task: "profile_agent",
-    accessToken: ({ chatId: id }) => mintProfileChatToken(id),
-    startSession: ({ chatId: id }) => startProfileChatSession({ chatId: id }),
+    accessToken: (session) => mintProfileChatToken(session.chatId),
+    startSession: (session) =>
+      startProfileChatSession({ chatId: session.chatId }),
     // A session under way: reconnect to it instead of starting one.
     sessions: session ? { [chatId]: session } : undefined,
   });
@@ -162,7 +163,9 @@ function Conversation({
       );
       return;
     }
-    void sendMessage({ text: composeAgentMessage(quote, words) });
+    void sendMessage({
+      text: composeAgentMessage(quote, words, agentTopic?.part),
+    });
     setText("");
     clearAgentQuote();
   }
@@ -171,6 +174,11 @@ function Conversation({
     event.preventDefault();
     void send(text);
   }
+
+  const interviewRequest = t.formatMessage({
+    defaultMessage:
+      "Interview me to fill in my profile, one position at a time.",
+  });
 
   const partTitle = (key: string | undefined) =>
     listParts(blocks)
@@ -213,19 +221,16 @@ function Conversation({
           {messages.length === 0 && (
             <Introduction
               disabled={busy}
-              onInterview={() =>
-                void send(
-                  t.formatMessage({
-                    defaultMessage:
-                      "Interview me to fill in my profile, one position at a time.",
-                  })
-                )
-              }
+              onInterview={() => void send(interviewRequest)}
             />
           )}
           {messages.map((message) =>
             message.role === "user" ? (
-              <UserMessage key={message.id} message={message} />
+              <UserMessage
+                key={message.id}
+                message={message}
+                partTitle={partTitle}
+              />
             ) : (
               <li key={message.id} className="flex flex-col gap-2 self-start">
                 {message.parts.map((part, index) => {
@@ -311,8 +316,13 @@ function Conversation({
         {quote && (
           <div className="bg-muted/60 mb-2 flex items-start gap-2 rounded-md border px-2.5 py-1.5 text-xs">
             <Quote className="text-muted-foreground mt-0.5 size-3.5 shrink-0" />
-            <span className="line-clamp-3 flex-1 whitespace-pre-wrap">
-              {quote}
+            <span className="min-w-0 flex-1">
+              {agentTopic?.part && (
+                <span className="text-muted-foreground block font-medium">
+                  {partTitle(agentTopic.part)}
+                </span>
+              )}
+              <span className="line-clamp-3 whitespace-pre-wrap">{quote}</span>
             </span>
             <button
               type="button"
@@ -331,7 +341,10 @@ function Conversation({
             ref={input}
             rows={2}
             value={text}
-            maxLength={agentSettings.maxMessageCharacters}
+            // The quote travels in the message: the two share its limit.
+            maxLength={
+              agentSettings.maxMessageCharacters - maxQuoteCharacters - 100
+            }
             onChange={(event) => setText(event.target.value)}
             onKeyDown={(event) => {
               if (event.key === "Enter" && !event.shiftKey) onSubmit(event);
@@ -348,10 +361,18 @@ function Conversation({
             className="max-h-40 resize-none border-0 pb-10 shadow-none focus-visible:ring-0"
           />
           <div className="absolute right-2 bottom-2 left-3 flex items-center gap-1">
-            <CreditCost
-              className="mr-auto"
-              credits={credits.data?.estimates.agentMessage}
-            />
+            <CreditCost credits={credits.data?.estimates.agentMessage} />
+            {messages.length > 0 && (
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => void send(interviewRequest)}
+                className="text-muted-foreground hover:text-foreground mr-auto ml-2 text-xs underline-offset-2 hover:underline disabled:opacity-50"
+              >
+                {t.formatMessage({ defaultMessage: "Interview me" })}
+              </button>
+            )}
+            <span className="mr-auto" />
             <VoiceInputButton
               language={t.locale === "pt-BR" ? "pt-BR" : "en-US"}
               value={text}
@@ -387,18 +408,26 @@ function Conversation({
   );
 }
 
-/** The user's message: the passage it is about, then their words. */
-function UserMessage({ message }: { message: UIMessage }) {
-  const { quote, text } = splitAgentMessage(
+/** The user's message: the passage it is about, where from, then their words. */
+function UserMessage({
+  message,
+  partTitle,
+}: {
+  message: UIMessage;
+  partTitle: (key: string | undefined) => string;
+}) {
+  const { quote, part, text } = splitAgentMessage(
     message.parts
-      .flatMap((part) => (part.type === "text" ? [part.text] : []))
+      .flatMap((piece) => (piece.type === "text" ? [piece.text] : []))
       .join("")
   );
+  const from = part ? partTitle(part) : "";
   return (
     <li className="bg-muted max-w-[90%] self-end rounded-2xl px-3.5 py-2 text-sm whitespace-pre-wrap">
       {quote && (
-        <span className="text-muted-foreground mb-1 line-clamp-3 block border-l-2 pl-2 text-xs">
-          {quote}
+        <span className="text-muted-foreground mb-1 block border-l-2 pl-2 text-xs">
+          {from && <span className="block font-medium">{from}</span>}
+          <span className="line-clamp-3">{quote}</span>
         </span>
       )}
       {text}

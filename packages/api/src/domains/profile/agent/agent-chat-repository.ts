@@ -1,5 +1,6 @@
 import { and, asc, desc, eq, gt, lt, max } from "drizzle-orm";
 
+import { usersTable } from "@repo/api/domains/users/db/users-tables";
 import type { DbClient } from "@repo/api/tools/db-client";
 
 import {
@@ -11,6 +12,15 @@ type Insert<T extends { $inferInsert: unknown }> = T["$inferInsert"];
 
 export class AgentChatRepository {
   constructor(private readonly tx: DbClient) {}
+
+  /** Holds the user's row for the rest of the transaction. */
+  async lockUser(userId: string) {
+    await this.tx
+      .select({ id: usersTable.id })
+      .from(usersTable)
+      .where(eq(usersTable.id, userId))
+      .for("update");
+  }
 
   async findChat(chatId: string) {
     const [row] = await this.tx

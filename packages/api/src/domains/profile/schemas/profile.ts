@@ -59,6 +59,8 @@ export const profileSuggestionStatusSchema = z.enum([
   "pending",
   "accepted",
   "rejected",
+  // A newer suggestion rewrote the same lines before the user answered.
+  "superseded",
 ]);
 export type ProfileSuggestionStatus = z.infer<
   typeof profileSuggestionStatusSchema

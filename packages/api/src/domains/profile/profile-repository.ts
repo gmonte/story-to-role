@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, inArray, isNull, max, ne } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNull, max } from "drizzle-orm";
 
 import type { DbClient } from "@repo/api/tools/db-client";
 
@@ -234,15 +234,15 @@ export class ProfileRepository {
       .orderBy(asc(profileSuggestionsTable.createdAt));
   }
 
-  /** The last suggestions the user accepted or rejected, newest first. */
-  listResolvedSuggestions(documentId: string, limit: number) {
+  /** The last suggestions the user rejected, newest first. */
+  listRejectedSuggestions(documentId: string, limit: number) {
     return this.tx
       .select()
       .from(profileSuggestionsTable)
       .where(
         and(
           eq(profileSuggestionsTable.documentId, documentId),
-          ne(profileSuggestionsTable.status, "pending")
+          eq(profileSuggestionsTable.status, "rejected")
         )
       )
       .orderBy(desc(profileSuggestionsTable.resolvedAt))
@@ -250,24 +250,25 @@ export class ProfileRepository {
   }
 
   /**
-   * Accepts or rejects pending suggestions of the document: the given ones,
-   * or all of them. Returns how many changed.
+   * Ends pending suggestions of the document (accepted or rejected by the
+   * user, or superseded by a newer one): the given ones, or all of them.
+   * Returns how many changed.
    */
   async resolveSuggestions(input: {
     documentId: string;
-    status: "accepted" | "rejected";
-    suggestionIds?: string[];
+    resolution: "accepted" | "rejected" | "superseded";
+    profileSuggestionIds?: string[];
   }) {
-    if (input.suggestionIds?.length === 0) return 0;
+    if (input.profileSuggestionIds?.length === 0) return 0;
     const resolved = await this.tx
       .update(profileSuggestionsTable)
-      .set({ status: input.status, resolvedAt: new Date() })
+      .set({ status: input.resolution, resolvedAt: new Date() })
       .where(
         and(
           eq(profileSuggestionsTable.documentId, input.documentId),
           eq(profileSuggestionsTable.status, "pending"),
-          input.suggestionIds
-            ? inArray(profileSuggestionsTable.id, input.suggestionIds)
+          input.profileSuggestionIds
+            ? inArray(profileSuggestionsTable.id, input.profileSuggestionIds)
             : undefined
         )
       )

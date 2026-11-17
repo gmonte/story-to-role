@@ -114,7 +114,8 @@ function experiencePosition(
 /**
  * The lines a change replaces in the document as it is now ({start, end},
  * equal for an addition), or null when it is stale: its lines were edited
- * away, or its part is gone and they are nowhere (or in several places).
+ * away or appear more than once, its part is gone and they are nowhere
+ * sure, or what it adds is already there.
  * Lines are matched by their text, whatever their list marker or depth.
  */
 export function locateChange(
@@ -125,7 +126,10 @@ export function locateChange(
   const wanted = parseFragment(change.find);
   if (!wanted.length) {
     if (!part) return null;
-    const [first] = parseFragment(change.replace);
+    const adding = parseFragment(change.replace);
+    // Already there (accepted before, or typed by the user): nothing to add.
+    if (matches(blocks, adding, part.start, part.end).length) return null;
+    const [first] = adding;
     const at =
       part.key === "experience" &&
       first?.type === "heading" &&
@@ -134,17 +138,15 @@ export function locateChange(
         : part.end;
     return { start: at, end: at };
   }
-  if (part) {
-    const [inPart] = matches(blocks, wanted, part.start, part.end);
-    if (inPart !== undefined) {
-      return { start: inPart, end: inPart + wanted.length };
-    }
-  }
-  // The part was renamed or the lines moved: only a single match is safe.
-  const anywhere = matches(blocks, wanted, 0, blocks.length);
-  return anywhere.length === 1
-    ? { start: anywhere[0], end: anywhere[0] + wanted.length }
-    : null;
+  // Only a single match is safe: in the part, or, when the part was renamed
+  // or the lines moved, in the whole document.
+  const found = part ? matches(blocks, wanted, part.start, part.end) : [];
+  const [at, ...others] = found.length
+    ? found
+    : matches(blocks, wanted, 0, blocks.length);
+  return at === undefined || others.length
+    ? null
+    : { start: at, end: at + wanted.length };
 }
 
 /**
@@ -197,7 +199,7 @@ export function applyChange(
   ];
 }
 
-const numberPattern = /\d+(?:[.,]\d+)*/g;
+const numberPattern = /\p{Nd}+(?:[.,]\p{Nd}+)*%?/gu;
 
 function figures(text: string) {
   return (
@@ -205,6 +207,8 @@ function figures(text: string) {
       text
         // A date's month is written by the format, not given as a number.
         .replace(/\b(\d{4})-(0[1-9]|1[0-2])(-\d{2})?\b/g, "$1")
+        // A percentage is its own figure: "40" given doesn't give "40%".
+        .replace(/(\p{Nd})\s*(?:%|por cento|percent)/giu, "$1%")
         .match(numberPattern) ?? []
     ).map((figure) => figure.replace(/,/g, "."))
   );
@@ -213,7 +217,10 @@ function figures(text: string) {
 /**
  * The numbers in a proposed text that appear in none of the sources (the
  * profile, the user's own messages): the AI may only write figures the user
- * gave (profile spec, principle 2). A date's month passes with its year.
+ * gave (profile spec, principle 2). A date's month passes with its year,
+ * and a percentage only when given as one. It compares figures, not their
+ * meaning: a number given for one thing can be written for another, which
+ * the user sees when accepting the change.
  */
 export function ungivenFigures(text: string, sources: string[]): string[] {
   const given = new Set(sources.flatMap(figures));

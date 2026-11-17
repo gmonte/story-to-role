@@ -6,6 +6,7 @@ import { KeyUnusableError } from "@repo/api/domains/ai/providers/provider-packag
 import { finishTask } from "@repo/api/domains/tasks/run-task";
 import { db } from "@repo/api/tools/db";
 import { redisMisuseGuard } from "@repo/api/tools/misuse-guard";
+import { upstashRateLimiter } from "@repo/api/tools/rate-limit";
 
 import { createAgentTranscriptStorage } from "../agent/agent-transcript-storage";
 import { runAgentTurn, type OpenTurn } from "../agent/run-agent-turn";
@@ -61,6 +62,7 @@ export const profileAgent = chat.agent({
       {
         db,
         misuse: redisMisuseGuard,
+        rateLimiter: upstashRateLimiter,
         streamText,
         reportSuggestion: (profileSuggestionId) =>
           chat.response.write({

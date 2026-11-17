@@ -25,6 +25,7 @@ import {
 import { cn } from "@repo/web/lib/utils";
 
 import { useProfileLabels } from "../hooks/use-profile-labels";
+import { blockPositions } from "../utils/editor-doc";
 import { EntryDialog } from "./entry-dialog";
 import { useProfileEditor } from "./profile-editor-context";
 
@@ -45,7 +46,7 @@ type BlockKind = "heading2" | "heading3" | "item" | "paragraph";
 function blockAt(editor: Editor, clientY: number) {
   const children = Array.from(editor.view.dom.children) as HTMLElement[];
   for (const element of children) {
-    if (element.hasAttribute("data-profile-hint")) continue;
+    if (element.hasAttribute("data-profile-aside")) continue;
     const rect = element.getBoundingClientRect();
     if (clientY >= rect.top - 4 && clientY <= rect.bottom + 4) {
       const pos = editor.view.posAtDOM(element, 0);
@@ -66,7 +67,7 @@ function nodeStart(editor: Editor, index: number) {
 function dropIndex(editor: Editor, clientY: number) {
   const children = (
     Array.from(editor.view.dom.children) as HTMLElement[]
-  ).filter((element) => !element.hasAttribute("data-profile-hint"));
+  ).filter((element) => !element.hasAttribute("data-profile-aside"));
   for (let i = 0; i < children.length; i++) {
     const rect = children[i].getBoundingClientRect();
     if (clientY < rect.top + rect.height / 2)
@@ -108,6 +109,7 @@ export function ProfileDocument() {
   const { editor, insert, talkAbout } = useProfileEditor();
   const [selection, setSelection] = useState<{
     text: string;
+    line: number;
     left: number;
     top: number;
   } | null>(null);
@@ -196,6 +198,13 @@ export function ProfileDocument() {
       const start = editor.view.coordsAtPos(from);
       setSelection({
         text: text.trim(),
+        // The document line the selection starts in.
+        line: Math.max(
+          blockPositions(editor.state.doc).findLastIndex(
+            (position) => position <= from
+          ),
+          0
+        ),
         left: Math.max(start.left - box.left, 64),
         top: start.top - box.top - 36,
       });
@@ -386,7 +395,7 @@ export function ProfileDocument() {
           // The selection stays while the button is pressed.
           onMouseDown={(event) => event.preventDefault()}
           onClick={() => {
-            talkAbout({ quote: selection.text });
+            talkAbout({ quote: selection.text, line: selection.line });
             setSelection(null);
           }}
         >

@@ -157,6 +157,32 @@ describe("a suggested change", () => {
     ).toEqual({ start: 11, end: 12 });
   });
 
+  it("adds nothing that is already there", () => {
+    expect(
+      locateChange(blocks(), {
+        part: "gaps",
+        find: "",
+        replace: "- Nuvem em produção.",
+      })
+    ).toBeNull();
+  });
+
+  it("is stale when its lines appear twice in its part", () => {
+    const twice = parseBlocks(
+      profile.replace(
+        "- O que NÃO fiz:\n",
+        "- Tecnologias: Python\n- O que NÃO fiz:\n"
+      )
+    );
+    expect(
+      locateChange(twice, {
+        part: "experience:beta — backend",
+        find: "- Tecnologias: Python",
+        replace: "x",
+      })
+    ).toBeNull();
+  });
+
   it("is stale when its lines are gone or ambiguous", () => {
     expect(
       locateChange(blocks(), {
@@ -182,7 +208,14 @@ describe("figures the user never gave", () => {
       ungivenFigures("Reduzi de 1,8 s para 0,6 s e economizei 40%", [
         "o tempo foi de 1.8 s para 0,6 s",
       ])
-    ).toEqual(["40"]);
+    ).toEqual(["40%"]);
+  });
+
+  it("takes a percentage only when it was given as one", () => {
+    expect(ungivenFigures("Reduzi 40%", ["um time de 40 pessoas"])).toEqual([
+      "40%",
+    ]);
+    expect(ungivenFigures("Reduzi 40%", ["uns 40 por cento"])).toEqual([]);
   });
 
   it("lets months of a date through when the year was given", () => {

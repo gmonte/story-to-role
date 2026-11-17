@@ -18,7 +18,7 @@ import {
   validationReportSchema,
   type ProfileValidation,
 } from "./schemas/validation";
-import type { SuggestionContent } from "./suggestions/propose-suggestion";
+import { readSuggestionContent } from "./suggestions/propose-suggestion";
 import { parseBlocks, serializeBlocks } from "./truth/blocks";
 import { changedChunks } from "./truth/chunks";
 import { extractProfile, profilePassages } from "./truth/extract";
@@ -413,9 +413,7 @@ export class ProfileService {
         id: row.id,
         origin: row.origin,
         createdAt: row.createdAt,
-        ...(JSON.parse(
-          cipher.decrypt(row.encryptedContent)
-        ) as SuggestionContent),
+        ...readSuggestionContent(cipher, row),
       })
     );
   }
@@ -435,8 +433,8 @@ export class ProfileService {
     if (!document) throw new TRPCError({ code: "NOT_FOUND" });
     const resolved = await repository.resolveSuggestions({
       documentId: document.id,
-      status: input.resolution,
-      suggestionIds: input.profileSuggestionIds,
+      resolution: input.resolution,
+      profileSuggestionIds: input.profileSuggestionIds,
     });
     return { resolved };
   }

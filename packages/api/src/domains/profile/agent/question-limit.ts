@@ -21,7 +21,11 @@ export function limitQuestions<TOOLS extends ToolSet>(
         }
         let kept = "";
         for (const char of chunk.text) {
-          if (char === "?" || (inQuestionMark && char === "!")) {
+          if (
+            char === "?" ||
+            char === "？" ||
+            (inQuestionMark && char === "!")
+          ) {
             if (!inQuestionMark) questions++;
             inQuestionMark = true;
             if (questions <= max) kept += char;

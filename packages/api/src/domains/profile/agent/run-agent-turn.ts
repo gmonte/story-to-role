@@ -18,23 +18,19 @@ import { TasksRepository } from "@repo/api/domains/tasks/tasks-repository";
 import { TasksService } from "@repo/api/domains/tasks/tasks-service";
 import type { DbClient } from "@repo/api/tools/db-client";
 import type { MisuseGuard } from "@repo/api/tools/misuse-guard";
+import type { RateLimiter } from "@repo/api/tools/rate-limit";
 import { findQuote } from "@repo/api/utils/text/verify-quote";
 
 import { ProfileRepository } from "../profile-repository";
 import {
   proposeSuggestion,
-  type ProposalRefusal,
-  type SuggestionContent,
+  readSuggestionContent,
+  type SuggestionRefusal,
 } from "../suggestions/propose-suggestion";
 import { parseBlocks, type ProfileBlock } from "../truth/blocks";
 import { extractProfile } from "../truth/extract";
 import { readStructure } from "../truth/structure";
-import {
-  listParts,
-  partText,
-  type ProfileChange,
-  type ProfilePart,
-} from "../truth/suggestions";
+import { listParts, partText, type ProfilePart } from "../truth/suggestions";
 import { AgentChatRepository } from "./agent-chat-repository";
 import { splitAgentMessage } from "./agent-message";
 import { buildAgentPrompt } from "./agent-prompt";
@@ -56,6 +52,7 @@ export type OpenTurn = {
 export type AgentTurnDeps = {
   db: DbClient;
   misuse: MisuseGuard;
+  rateLimiter: RateLimiter;
   streamText: typeof streamTextFn;
   // The agent's model instead of the turn's own (tests pass a mock).
   model?: (modelId: string) => LanguageModel;
@@ -66,21 +63,18 @@ export type AgentTurnDeps = {
 // How many rejected suggestions the agent is reminded of.
 const rememberedRejections = 5;
 
-const refusals: Record<ProposalRefusal["kind"], string> = {
-  empty:
-    "Nothing to change: give the lines to replace, the new lines, or both.",
-  notFound:
-    "Those lines aren't in that part as written. Read the part with read_part and copy the lines exactly, or leave `find` empty to add at its end.",
-  unchanged: "The new lines are the same as the ones they replace.",
-  overlapsPending:
-    "Those lines already have a suggestion waiting for the person. Tell them to accept or reject it in the text first.",
-  ungivenFigures: "",
-};
-
-function refusalText(refusal: ProposalRefusal) {
-  return refusal.kind === "ungivenFigures"
-    ? `Refused: the person never wrote ${refusal.figures.join(", ")}. Write the figure exactly as they did, or ask them for it; never supply a number yourself.`
-    : refusals[refusal.kind];
+/** Why a suggestion was refused, for the model to do better. */
+function refusalText(refusal: SuggestionRefusal) {
+  switch (refusal.kind) {
+    case "empty":
+      return "Nothing to change: give the lines to replace, the new lines, or both.";
+    case "notFound":
+      return "Those lines aren't in that part exactly once as written (or what you add is already there). Read the part with read_part and copy the lines exactly, with a neighbouring line when they repeat; leave `find` empty to add at its end.";
+    case "unchanged":
+      return "The new lines are the same as the ones they replace.";
+    case "ungivenFigures":
+      return `Refused: the person never wrote ${refusal.figures.join(", ")}. Write the figure exactly as they did, or ask them for it; never supply a number yourself.`;
+  }
 }
 
 /** Every user message of the conversation: the words figures may come from. */
@@ -96,23 +90,45 @@ function userWords(messages: ModelMessage[]) {
   );
 }
 
-/** The part the quoted passage is in: an experience before its section. */
-function partOfQuote(
+/**
+ * The passage the conversation is about: the latest one the user quoted,
+ * so follow-up answers keep it until they select another. Its part is the
+ * one the message names when the passage is still there; otherwise the
+ * only part that holds it (the same line may be in several experiences,
+ * and then none is sure).
+ */
+function quotedPassage(
   blocks: ProfileBlock[],
   parts: ProfilePart[],
-  quote: string
+  messages: ModelMessage[]
 ) {
-  const firstLine = quote.split("\n")[0];
-  const candidates = [
-    ...parts.filter((part) => part.kind === "experience"),
-    ...parts.filter((part) => part.kind === "section"),
-  ];
-  return (
-    candidates.find((part) => {
-      const text = partText(blocks, part.key);
-      return text && findQuote(text, firstLine);
-    }) ?? null
-  );
+  const quoted = userWords(messages)
+    .map(splitAgentMessage)
+    .findLast((message) => message.quote);
+  if (!quoted?.quote) return null;
+  const firstLine = quoted.quote.split("\n")[0];
+  const holding = parts.filter((part) => {
+    const text = partText(blocks, part.key);
+    return text && findQuote(text, firstLine);
+  });
+  const part =
+    holding.find((candidate) => candidate.key === quoted.part) ??
+    (holding.length === 1 ? holding[0] : null);
+  return {
+    text: quoted.quote,
+    part,
+    partText: part && partText(blocks, part.key),
+  };
+}
+
+/**
+ * The last `size` messages, starting at a user message: a window that
+ * opened on a tool result would leave it without its call.
+ */
+function historyWindow(messages: ModelMessage[], size: number) {
+  const window = messages.slice(-size);
+  const firstUser = window.findIndex((message) => message.role === "user");
+  return firstUser > 0 ? window.slice(firstUser) : window;
 }
 
 /**
@@ -151,6 +167,8 @@ export async function runAgentTurn(
     result: deps.streamText({
       model: fixedReplyModel(text),
       messages: startingWithUser(input.messages),
+      // No spans here either: they would carry the conversation (ADR 0007).
+      experimental_telemetry: { isEnabled: false },
     }),
     turn: null as OpenTurn | null,
   });
@@ -158,6 +176,14 @@ export async function runAgentTurn(
   if (!message) return fixed(fixedReply("off_topic", replyLanguage));
   if (message.length > agentSettings.maxMessageCharacters) {
     return fixed(fixedReply("too_long", replyLanguage));
+  }
+  // Messages per minute and per day (AI platform spec, guardrail 7).
+  const allowed = await Promise.all([
+    deps.rateLimiter.allow("chatMessage", userId),
+    deps.rateLimiter.allow("chatMessagesPerDay", userId),
+  ]);
+  if (allowed.includes(false)) {
+    return fixed(fixedReply("too_many", replyLanguage));
   }
 
   let task;
@@ -201,27 +227,22 @@ export async function runAgentTurn(
     }
 
     const repository = new ProfileRepository(db);
-    const content = (row: { encryptedContent: string }) =>
-      JSON.parse(cipher.decrypt(row.encryptedContent)) as SuggestionContent;
     const pending = (await repository.listPendingSuggestions(document.id)).map(
-      content
+      (row) => ({ id: row.id, ...readSuggestionContent(cipher, row) })
     );
     const rejected = (
-      await repository.listResolvedSuggestions(
+      await repository.listRejectedSuggestions(
         document.id,
         rememberedRejections
       )
-    )
-      .filter((row) => row.status === "rejected")
-      .map(content);
+    ).map((row) => readSuggestionContent(cipher, row));
 
     const parts = listParts(blocks);
     const extract = extractProfile(blocks);
-    const { quote } = splitAgentMessage(message);
-    const quotedPart = quote ? partOfQuote(blocks, parts, quote) : null;
     const sources = userWords(input.messages);
-    // What this turn proposes also blocks a second rewrite of its lines.
-    const waiting: ProfileChange[] = [...pending];
+    // What waits for the user, this turn's suggestions included: a newer
+    // one on the same lines takes the older one's place.
+    let waiting = [...pending];
     let proposing: Promise<unknown> = Promise.resolve();
 
     const tools = {
@@ -259,11 +280,11 @@ export async function runAgentTurn(
               "One short sentence shown to the person with the change, in their language"
             ),
         }),
-        execute: ({ part, find, replace, reason }) =>
+        execute: ({ part, find, replace, reason }) => {
           // One at a time: calls of the same step run together, and each
           // must see what the one before it left waiting.
-          (proposing = proposing.then(async () => {
-            const proposal = await proposeSuggestion({
+          const result = proposing.then(async () => {
+            const suggested = await proposeSuggestion({
               db,
               cipher,
               documentId: document.id,
@@ -274,16 +295,26 @@ export async function runAgentTurn(
               sources,
               pending: waiting,
             });
-            if (!proposal.ok) return { error: refusalText(proposal.refusal) };
-            waiting.push(proposal.suggestion);
-            deps.reportSuggestion(proposal.suggestion.id);
+            if (!suggested.ok) return { error: refusalText(suggested.refusal) };
+            waiting = [
+              ...waiting.filter(
+                (other) => !suggested.supersededIds.includes(other.id)
+              ),
+              suggested.suggestion,
+            ];
+            deps.reportSuggestion(suggested.suggestion.id);
             return {
               proposed: true,
+              replacedEarlierSuggestion: suggested.supersededIds.length > 0,
               // For the page, to open the change in the text.
-              profileSuggestionId: proposal.suggestion.id,
+              profileSuggestionId: suggested.suggestion.id,
               note: "It waits for the person in the text; nothing changed yet.",
             };
-          })),
+          });
+          // A call that failed doesn't fail the ones after it.
+          proposing = result.catch(() => undefined);
+          return result;
+        },
       }),
     };
 
@@ -296,18 +327,14 @@ export async function runAgentTurn(
           parts,
           gaps: extract.gaps,
           rules: extract.rules,
-          quote: quote
-            ? {
-                text: quote,
-                part: quotedPart,
-                partText: quotedPart && partText(blocks, quotedPart.key),
-              }
-            : null,
+          quote: quotedPassage(blocks, parts, input.messages),
           pending,
           rejected,
         }),
         messages: startingWithUser(
-          withoutReasoning(input.messages.slice(-agentSettings.historyWindow))
+          withoutReasoning(
+            historyWindow(input.messages, agentSettings.historyWindow)
+          )
         ),
         tools,
         stopWhen: stepCountIs(agentSettings.maxSteps),

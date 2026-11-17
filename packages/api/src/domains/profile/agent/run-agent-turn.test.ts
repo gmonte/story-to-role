@@ -1,6 +1,6 @@
 import { randomBytes } from "node:crypto";
 
-import { streamText, type LanguageModel } from "ai";
+import { streamText, type LanguageModel, type ModelMessage } from "ai";
 import { MockLanguageModelV3 } from "ai/test";
 import { eq } from "drizzle-orm";
 import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
@@ -18,6 +18,7 @@ import {
   getTestDatabase,
 } from "@repo/api/test/pglite";
 import type { MisuseGuard } from "@repo/api/tools/misuse-guard";
+import type { RateLimiter } from "@repo/api/tools/rate-limit";
 
 import { ProfileService } from "../profile-service";
 import { AgentChatService } from "./agent-chat-service";
@@ -159,16 +160,22 @@ async function setup({ credits }: { credits?: number } = {}) {
   const reported: string[] = [];
   gate = fakeProviderPackage({ object: () => ({ verdict: "on_topic" }) });
 
-  async function say(text: string, model: LanguageModel) {
+  async function say(
+    text: string,
+    model: LanguageModel,
+    earlier: ModelMessage[] = [],
+    rateLimiter: RateLimiter = { allow: async () => true }
+  ) {
     const { result, turn } = await runAgentTurn(
       {
         db,
         misuse,
+        rateLimiter,
         streamText,
         model: () => model,
         reportSuggestion: (id) => reported.push(id),
       },
-      { chatId, messages: [{ role: "user", content: text }] }
+      { chatId, messages: [...earlier, { role: "user", content: text }] }
     );
     const reply = await result.text;
     // As the chat agent does when the turn completes.
@@ -211,6 +218,95 @@ describe("the profile agent", () => {
     expect(system).toContain("Projeto Fênix");
     // Another part's content stays out until the agent reads it.
     expect(system).not.toContain("Dev backend.");
+  });
+
+  it("keeps the passage for the answers that follow it", async () => {
+    const ctx = await setup();
+    const { model, prompts } = agentModel([], "Anotado.");
+    await ctx.say("Foi no checkout, e fui eu.", model, [
+      {
+        role: "user",
+        content: composeAgentMessage(
+          "Melhorei a performance [sem número].",
+          "Como deixo isso mais claro?"
+        ),
+      },
+      { role: "assistant", content: "O que mudou na prática?" },
+    ]);
+    const system = systemOf(prompts[0]);
+    expect(system).toContain("Melhorei a performance [sem número].");
+    expect(system).toContain("experience:beta — backend");
+  });
+
+  it("takes the part the message names when the line is in several", async () => {
+    const ctx = await setup();
+    const second = profile.replace(
+      "## Formação",
+      "### Gama — Júnior (2019-02 a 2022-02)\n\n- Tecnologias: Python\n- O que NÃO fiz: nada de front.\n\n## Formação"
+    );
+    await ctx.profiles.saveDraft({
+      userId: ctx.user.id,
+      markdown: second,
+      baseRevision: 1,
+    });
+    const named = agentModel([], "Ok.");
+    await ctx.say(
+      composeAgentMessage(
+        "Tecnologias: Python",
+        "Faltou alguma?",
+        "experience:gama — júnior"
+      ),
+      named.model
+    );
+    expect(systemOf(named.prompts[0])).toContain("nada de front");
+
+    // Unnamed, the line is in both experiences: no part is assumed.
+    const unnamed = agentModel([], "Ok.");
+    await ctx.say(
+      composeAgentMessage("Tecnologias: Python", "Faltou alguma?"),
+      unnamed.model
+    );
+    const system = systemOf(unnamed.prompts[0]);
+    expect(system).toContain("Its part isn't certain");
+    expect(system).not.toContain("nada de front");
+  });
+
+  it("never opens the model's history on a tool result", async () => {
+    const ctx = await setup();
+    const { model, prompts } = agentModel([], "Ok.");
+    const turns: ModelMessage[] = Array.from({ length: 9 }, (_, index) => [
+      { role: "user" as const, content: `Mensagem ${index}` },
+      { role: "assistant" as const, content: `Resposta ${index}` },
+    ]).flat();
+    await ctx.say("E agora?", model, [
+      ...turns.slice(0, 3),
+      {
+        role: "assistant",
+        content: [
+          {
+            type: "tool-call",
+            toolCallId: "c1",
+            toolName: "read_part",
+            input: { part: "identity" },
+          },
+        ],
+      },
+      {
+        role: "tool",
+        content: [
+          {
+            type: "tool-result",
+            toolCallId: "c1",
+            toolName: "read_part",
+            output: { type: "json", value: { text: "x" } },
+          },
+        ],
+      },
+      ...turns.slice(3, 17),
+    ]);
+    const sent = prompts[0] as Array<{ role: string }>;
+    expect(sent.find((m) => m.role !== "system")?.role).toBe("user");
+    expect(sent.some((m) => m.role === "tool")).toBe(false);
   });
 
   it("reads another part through its tool", async () => {
@@ -311,14 +407,14 @@ describe("the profile agent", () => {
     expect(await ctx.profiles.listSuggestions(ctx.user.id)).toHaveLength(1);
   });
 
-  it("never lets two pending suggestions rewrite the same lines", async () => {
+  it("replaces a waiting suggestion with a newer one on the same lines", async () => {
     const ctx = await setup();
     const change = {
       part: "experience:beta — backend",
       find: "- Tecnologias: Python",
       reason: "r",
     };
-    const { model, prompts } = agentModel(
+    const { model } = agentModel(
       [
         [
           {
@@ -327,15 +423,17 @@ describe("the profile agent", () => {
           },
           {
             name: "suggest_change",
-            input: { ...change, replace: "- Tecnologias: Python, Rust" },
+            input: { ...change, replace: "- Tecnologias: Python, Go, Rust" },
           },
         ],
       ],
       "Pronto."
     );
     await ctx.say("Usei Python, Go e Rust.", model);
-    expect(await ctx.profiles.listSuggestions(ctx.user.id)).toHaveLength(1);
-    expect(JSON.stringify(prompts[1])).toContain("already have a suggestion");
+    const waiting = await ctx.profiles.listSuggestions(ctx.user.id);
+    expect(waiting.map((suggestion) => suggestion.replace)).toEqual([
+      "- Tecnologias: Python, Go, Rust",
+    ]);
   });
 
   it("cuts the reply after its third question", async () => {
@@ -356,6 +454,17 @@ describe("the profile agent", () => {
     expect(text).toContain("perfil profissional");
     expect(prompts).toHaveLength(0);
     expect(ctx.recordBlocked).toHaveBeenCalledWith(ctx.user.id);
+  });
+
+  it("holds back a burst of messages before anything is charged", async () => {
+    const ctx = await setup();
+    const { model, prompts } = agentModel([], "never");
+    const { text, turn } = await ctx.say("Trabalhei na Beta.", model, [], {
+      allow: async (name) => name !== "chatMessage",
+    });
+    expect(text).toContain("muitas mensagens");
+    expect(turn).toBeNull();
+    expect(prompts).toHaveLength(0);
   });
 
   it("reserves credits per message, settles them, and stops when they run out", async () => {

@@ -9,9 +9,12 @@ import { env } from "@repo/common/env/web.env";
  * REDIS_KEY_PREFIX.
  */
 export const rateLimits = {
-  // Answers in a conversation (the motivation interview) and the tasks they
-  // start: a person types, a script bursts.
+  // Answers in a conversation (the motivation interview, the profile agent)
+  // and the tasks they start: a person types, a script bursts.
   chatMessage: Ratelimit.slidingWindow(10, "1 m"),
+  // The profile agent's messages per day (AI platform spec, guardrail 7):
+  // far above an interview's pace, a threshold to tune with use.
+  chatMessagesPerDay: Ratelimit.slidingWindow(400, "1 d"),
   // Starting any other task (generations, research, the sample task).
   taskStart: Ratelimit.slidingWindow(5, "1 m"),
   // Source files uploaded (the most a user keeps is 5 at once).

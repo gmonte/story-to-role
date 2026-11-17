@@ -5,6 +5,7 @@ export type FixedReplyKind =
   | "blocked_override"
   | "cooldown"
   | "too_long"
+  | "too_many"
   | "out_of_credits";
 
 /**
@@ -22,6 +23,8 @@ const replies: Record<ProfileLanguage, Record<FixedReplyKind, string>> = {
       "Let's take a short break. I'll be available again in a few minutes.",
     too_long:
       "That message is too long for me to read at once. Send it in smaller parts, one position at a time.",
+    too_many:
+      "That's a lot of messages in a short time. Give me a moment and send it again.",
     out_of_credits:
       "You're out of credits for the agent right now. Subscribe for monthly credits or buy a pack, then come back to this message. The editor, its linter and Fix format stay free.",
   },
@@ -34,6 +37,8 @@ const replies: Record<ProfileLanguage, Record<FixedReplyKind, string>> = {
       "Vamos fazer uma pausa curta. Volto a ficar disponível em alguns minutos.",
     too_long:
       "Essa mensagem é longa demais para eu ler de uma vez. Envie em partes menores, um cargo por vez.",
+    too_many:
+      "São muitas mensagens em pouco tempo. Me dê um instante e envie de novo.",
     out_of_credits:
       "Seus créditos para o agente acabaram por agora. Assine para ter créditos todo mês ou compre um pacote, e volte a esta mensagem. O editor, o linter e o Corrigir formato continuam gratuitos.",
   },

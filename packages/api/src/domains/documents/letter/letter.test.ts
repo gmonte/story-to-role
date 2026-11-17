@@ -10,9 +10,10 @@ import {
 } from "./assemble-letter";
 
 const E1 = "00000000-0000-4000-8000-0000000000e1";
+const E2 = "00000000-0000-4000-8000-0000000000e2";
 const F1 = "00000000-0000-4000-8000-0000000000f1";
 const M1 = "00000000-0000-4000-8000-0000000000d1";
-const G1 = "00000000-0000-4000-8000-0000000000a1";
+const I1 = "00000000-0000-4000-8000-0000000000a1";
 
 const sources: LetterSources = {
   evidence: [
@@ -20,10 +21,16 @@ const sources: LetterSources = {
       id: E1,
       text: "Moved 12 services to Kubernetes, cutting deploys from 2 hours to 15 minutes",
     },
+    {
+      // The estimate is withheld from the writer: its figures aren't shown.
+      id: E2,
+      text: "Cut cloud costs [figure withheld]",
+      figures: "Cut cloud costs",
+    },
   ],
   companyFacts: [{ id: F1, text: "Hooli opened a Lisbon office in 2026." }],
   motivationPoints: [{ id: M1, text: "I use the product every time I travel" }],
-  careerGoals: [{ id: G1, text: "I look for small teams" }],
+  instructions: [{ id: I1, text: "I managed 8 people at Globex" }],
 };
 
 const header = {
@@ -46,7 +53,7 @@ const paragraph = (
       | "evidence_ids"
       | "company_fact_ids"
       | "motivation_point_ids"
-      | "career_goal_ids",
+      | "instruction_ids",
       string[]
     >
   >
@@ -55,7 +62,7 @@ const paragraph = (
   evidence_ids: [],
   company_fact_ids: [],
   motivation_point_ids: [],
-  career_goal_ids: [],
+  instruction_ids: [],
   ...ids,
 });
 
@@ -67,7 +74,7 @@ describe("assembling a cover letter", () => {
           "When Hooli opened its Lisbon office in 2026, I saw a team I want to join.",
           {
             company_fact_ids: [F1],
-            career_goal_ids: [G1],
+            instruction_ids: [I1],
           }
         ),
         paragraph(
@@ -88,14 +95,14 @@ describe("assembling a cover letter", () => {
         evidenceIds: [],
         companyFactIds: [F1],
         motivationPointIds: [],
-        careerGoalIds: [G1],
+        instructionIds: [I1],
       },
       {
         kind: "letter",
         evidenceIds: [E1],
         companyFactIds: [],
         motivationPointIds: [],
-        careerGoalIds: [],
+        instructionIds: [],
       },
     ]);
     expect(content.header).toEqual(header);
@@ -137,6 +144,51 @@ describe("assembling a cover letter", () => {
     ]);
   });
 
+  it("rests on the user's instructions, and carries only figures its sources show", () => {
+    const { content, refused } = assembleLetter({
+      draft: draft([
+        paragraph("At Globex I managed 8 people.", { instruction_ids: [I1] }),
+        // The estimate was withheld from the writer: its figure isn't shown.
+        paragraph("I cut cloud costs by 30%.", { evidence_ids: [E2] }),
+        paragraph("I cut cloud costs [estimated].", { evidence_ids: [E2] }),
+        paragraph("Since 2021 I have led Kubernetes work.", {
+          evidence_ids: [E1],
+        }),
+      ]),
+      sources,
+      header,
+      years: ["2021-03 "],
+      language: "en-US",
+    });
+    expect(refused.map((row) => row.reason)).toEqual([
+      "unsupported_figure",
+      "unsupported_figure",
+    ]);
+    expect(content.paragraphs.map((line) => line.origin)).toEqual([
+      expect.objectContaining({ kind: "letter", instructionIds: [I1] }),
+      expect.objectContaining({ evidenceIds: [E1] }),
+    ]);
+  });
+
+  it("refuses a paragraph the rules forbid, given what it cites", () => {
+    const { refused } = assembleLetter({
+      draft: draft([
+        paragraph("I used Hooli every day.", { motivation_point_ids: [M1] }),
+        paragraph("I used Terraform.", { evidence_ids: [E1] }),
+      ]),
+      sources,
+      header,
+      language: "en-US",
+      isForbidden: (text, cited) =>
+        text.includes("Hooli") ||
+        (text.includes("Terraform") && cited.evidenceIds.includes(E1)),
+    });
+    expect(refused.map((row) => row.reason)).toEqual([
+      "forbidden_term",
+      "forbidden_term",
+    ]);
+  });
+
   it("estimates a long letter over one page", () => {
     const long = assembleLetter({
       draft: draft(
@@ -169,7 +221,7 @@ describe("editing a cover letter", () => {
           evidenceIds: [E1],
           companyFactIds: [],
           motivationPointIds: [],
-          careerGoalIds: [],
+          instructionIds: [],
         },
       },
       {
@@ -180,7 +232,7 @@ describe("editing a cover letter", () => {
           evidenceIds: [],
           companyFactIds: [F1],
           motivationPointIds: [],
-          careerGoalIds: [],
+          instructionIds: [],
         },
       },
     ],

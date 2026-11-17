@@ -179,14 +179,24 @@ export class OpeningsRepository {
     return row;
   }
 
+  /**
+   * Records what the user decided about a gap: an answer (a story), or
+   * that they really lack it.
+   */
   async answerFitCheckItem(input: {
     fitCheckItemId: string;
-    encryptedGapAnswer: string;
+    encryptedGapAnswer?: string;
+    lackConfirmedAt?: Date | null;
   }) {
     await this.tx
       .update(fitCheckItemsTable)
       .set({
-        encryptedGapAnswer: input.encryptedGapAnswer,
+        ...(input.encryptedGapAnswer
+          ? { encryptedGapAnswer: input.encryptedGapAnswer }
+          : {}),
+        ...(input.lackConfirmedAt !== undefined
+          ? { lackConfirmedAt: input.lackConfirmedAt }
+          : {}),
         answeredAt: new Date(),
       })
       .where(eq(fitCheckItemsTable.id, input.fitCheckItemId));

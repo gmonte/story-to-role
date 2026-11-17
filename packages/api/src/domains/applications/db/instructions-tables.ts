@@ -88,6 +88,9 @@ export const instructionPointsTable = createTable(
     // Flagged names and figures in the point.
     encryptedSensitiveItems: d.text(),
     confirmedAt: d.timestamp({ withTimezone: true }),
+    // When the user sent it to their profile as a suggestion; it stays in
+    // this application either way.
+    sentToProfileAt: d.timestamp({ withTimezone: true }),
   }),
   (t) => [index("instruction_points_opening_id_idx").on(t.openingId)]
 );

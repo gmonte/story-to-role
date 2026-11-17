@@ -37,6 +37,10 @@ export const motivationInterviewsTable = createTable(
       .notNull()
       .references(() => openingsTable.id, { onDelete: "cascade" }),
     status: d.text().$type<MotivationStatus>().notNull().default("in_progress"),
+    // The story the letter will tell (a results line of the profile it was
+    // chosen from), so the interview can ask about its turning point.
+    storyPositionId: d.uuid(),
+    encryptedStory: d.text(),
   }),
   (t) => [unique("motivation_interviews_opening_unique").on(t.openingId)]
 );

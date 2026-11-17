@@ -25,7 +25,7 @@ The method's columns, beyond company, title, link and status:
 | Notes | Free text |
 | Decline reason (the user's) | Why the user gave up; it can become a rule in the job preferences document, which screening reads |
 
-Recruiter names, emails and phone numbers stay only in the tracker, encrypted with the user's key, and never reach any prompt.
+There is no field for recruiter contacts. Notes and next steps are free text, where names, emails and phone numbers end up: they are encrypted with the user's key and never reach any prompt. Anything the AI reads of the tracker is its structured fields (source, application type, resume sent, status, dates, decline reason).
 
 ## Metrics
 

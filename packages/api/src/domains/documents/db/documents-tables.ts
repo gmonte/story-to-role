@@ -161,6 +161,9 @@ export const generationsTable = createTable(
       .uuid()
       .references(() => documentVersionsTable.id, { onDelete: "set null" }),
     resumeSnapshotId: d.uuid(),
+    // A cover letter's story: the results line of the frozen profile the
+    // user chose (by its derived id).
+    storyLineId: d.uuid(),
     encryptedSyncPlan: d.text(),
     encryptedProposal: d.text(),
     // The published profile version the document was written from, frozen

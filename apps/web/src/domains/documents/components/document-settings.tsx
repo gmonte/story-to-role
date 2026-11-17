@@ -21,10 +21,13 @@ import { GenerationSettingsFields } from "./generation-settings-fields";
 export function DocumentSettings({
   value,
   onChange,
+  letter = false,
 }: {
   /** Undefined until the user's defaults are read. */
   value: GenerationSettings | undefined;
   onChange: (value: GenerationSettings) => void;
+  /** A cover letter: shows the letter's fields. */
+  letter?: boolean;
 }) {
   const t = useTranslation();
   if (!value) return null;
@@ -37,7 +40,11 @@ export function DocumentSettings({
         {t.formatMessage({ defaultMessage: "Settings for this document" })}
       </CollapsibleTrigger>
       <CollapsibleContent className="mt-2 grid gap-2.5">
-        <GenerationSettingsFields value={value} onChange={onChange} />
+        <GenerationSettingsFields
+          value={value}
+          onChange={onChange}
+          letter={letter}
+        />
         <p className="text-muted-foreground text-xs">
           {t.formatMessage({
             defaultMessage:

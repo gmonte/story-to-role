@@ -10,7 +10,10 @@ import {
 } from "@repo/api/tools/trpc";
 
 import { InstructionsService } from "./instructions-service";
-import { applicationInstructionsSchema } from "./schemas/instructions";
+import {
+  applicationInstructionsSchema,
+  instructionSendResultSchema,
+} from "./schemas/instructions";
 
 export const instructionsRouter = createTRPCRouter({
   get: userProcedure
@@ -50,23 +53,22 @@ export const instructionsRouter = createTRPCRouter({
         "instructions",
         "POST",
         "/openings/by-id/{openingId}/instructions/confirm",
-        "Keeps every draft point and confirms overrides"
+        "Keeps every draft point, sends the chosen ones to the profile as suggestions and confirms overrides"
       )
     )
     .input(
       z.object({
         openingId: z.uuid(),
         confirmedLockedFactOverrideIds: z.array(z.uuid()),
+        // Points to also suggest to the profile's draft ("send to my
+        // profile"); the others stay in this application only.
+        sentToProfileInstructionPointIds: z.array(z.uuid()).default([]),
       })
     )
-    .output(okSchema)
-    .mutation(async ({ ctx, input }) => {
-      await new InstructionsService(db).confirm({
-        userId: ctx.userId,
-        ...input,
-      });
-      return ok;
-    }),
+    .output(z.object({ sent: z.array(instructionSendResultSchema) }))
+    .mutation(({ ctx, input }) =>
+      new InstructionsService(db).confirm({ userId: ctx.userId, ...input })
+    ),
 
   removePoint: userProcedure
     .meta(

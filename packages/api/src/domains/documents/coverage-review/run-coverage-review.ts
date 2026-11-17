@@ -4,6 +4,7 @@ import type { Purpose } from "../generation/assemble-resume";
 import type { CareerContext } from "../generation/load-career-context";
 import type { OpeningBrief } from "../generation/resume-prompts";
 import type { OutputLanguage } from "../schemas/document";
+import type { CoverLetterContent } from "../schemas/cover-letter-content";
 import type { ResumeContent } from "../schemas/resume-content";
 import {
   type CoverageReviewContent,
@@ -17,14 +18,14 @@ const reviewMaxTokens = 4000;
 
 /**
  * The AI part of the coverage review (resume spec, "Coverage review"; the
- * method's prompt 05), once per generated resume, in the generation's
+ * method's prompt 05), once per generated resume or cover letter, in the generation's
  * price: one call that sees the final content, the requirements (or the
  * focus) with the fit check, the profile lines the document cites and the
  * instructions. Code keeps only what holds (`keepReview`).
  */
 export async function reviewCoverage(input: {
   ai: AiClient;
-  content: ResumeContent;
+  content: ResumeContent | CoverLetterContent;
   context: CareerContext;
   brief: OpeningBrief;
   purposes: Purpose[];
@@ -36,7 +37,15 @@ export async function reviewCoverage(input: {
     maxTokens: reviewMaxTokens,
     schema: coverageReviewDraftSchema,
     system: coverageReviewPrompt(input),
-    messages: [{ role: "user", content: "Review the resume's coverage." }],
+    messages: [
+      {
+        role: "user",
+        content:
+          input.content.kind === "resume"
+            ? "Review the resume's coverage."
+            : "Review the cover letter's coverage.",
+      },
+    ],
   });
   // An answer that isn't a review is no review: the document is saved
   // without one rather than with invented gaps.

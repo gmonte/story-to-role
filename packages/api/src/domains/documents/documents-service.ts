@@ -7,7 +7,6 @@ import {
   getUserCipher,
   type UserCipher,
 } from "@repo/api/domains/encryption/user-cipher";
-import { EvidenceRepository } from "@repo/api/domains/evidence/evidence-repository";
 import { OpeningsRepository } from "@repo/api/domains/openings/openings-repository";
 import type { Tone } from "@repo/api/domains/openings/schemas/opening";
 import type { RealtimeSubscription } from "@repo/api/domains/tasks/schemas/task";
@@ -23,6 +22,8 @@ import { outdatedVersions } from "./adaptation/sync-status";
 import {
   type CoverageReviewContent,
   coverageReviewContentSchema,
+  bestFactFor,
+  ownWordsFacts,
 } from "./coverage-review/coverage-review";
 import { sendLineToProfile } from "./coverage-review/send-to-profile";
 import {
@@ -35,7 +36,7 @@ import {
   estimatePages,
   resumeText,
 } from "./generation/resume-checks";
-import { decryptResume, decryptDocument } from "./snapshot-content";
+import { decryptDocument } from "./snapshot-content";
 import { proposalDiff } from "./adaptation/three-way-merge";
 import { fileNamer } from "./rendering/file-namer";
 import { pdfTemplate } from "./rendering/pdf-template";
@@ -321,18 +322,16 @@ export class DocumentsService {
       );
       const isResume = content.kind === "resume";
       const written = await repository.latestWrittenGeneration(version.id);
-      const coverage = isResume
-        ? await snapshotCoverage({
-            db: tx,
-            cipher,
-            contexts,
-            document,
-            version,
-            snapshot: latest,
-            written,
-            rendered,
-          })
-        : null;
+      const coverage = await snapshotCoverage({
+        db: tx,
+        cipher,
+        contexts,
+        document,
+        version,
+        snapshot: latest,
+        written,
+        rendered,
+      });
       const frozen =
         coverage?.context ??
         (await contexts.load({
@@ -358,7 +357,8 @@ export class DocumentsService {
         maxPages: isResume
           ? ((written?.settings ?? documentSettings)?.resumeMaxPages ??
             defaultGenerationSettings.resumeMaxPages)
-          : defaultGenerationSettings.letterMaxPages,
+          : ((written?.settings ?? documentSettings)?.letterMaxPages ??
+            defaultGenerationSettings.letterMaxPages),
         pdf: {
           ready: !!rendered,
           rendering:
@@ -383,12 +383,10 @@ export class DocumentsService {
           : null,
         trace: evidenceTrace(content, frozen),
         instructionTrace: trace.instructionsFor(content),
-        coverage: coverage
-          ? await this.coverageView(repository, cipher, version, latest, {
-              findings: coverage.findings,
-              context: frozen,
-            })
-          : null,
+        coverage: await this.coverageView(repository, cipher, version, latest, {
+          findings: coverage.findings,
+          context: frozen,
+        }),
         outdated: outdated.get(version.id) ?? [],
         titleProposals: isResume
           ? trace.titleProposalsFor(content, version.language)
@@ -494,7 +492,9 @@ export class DocumentsService {
       instructionsFor(content: DocumentContent) {
         const ids = new Set(
           documentLines(content).flatMap((line) =>
-            line.origin.kind === "instruction" ? line.origin.instructionIds : []
+            line.origin.kind === "instruction" || line.origin.kind === "letter"
+              ? line.origin.instructionIds
+              : []
           )
         );
         return [...ids].flatMap((id) => {
@@ -502,7 +502,7 @@ export class DocumentsService {
           return text === undefined ? [] : [{ instructionId: id, text }];
         });
       },
-      /** A letter's other sources: approved facts, points and goals. */
+      /** A letter's other sources: approved facts and motivation points. */
       async letterSources() {
         const facts = openingId
           ? await new ResearchRepository(tx).listFacts(openingId)
@@ -513,9 +513,6 @@ export class DocumentsService {
         const points = interview
           ? await new MotivationRepository(tx).listPoints(interview.id)
           : [];
-        const goals = await new EvidenceRepository(tx).listCareerGoals(
-          profileId
-        );
         return {
           companyFacts: facts.map((fact) => ({
             id: fact.id,
@@ -525,10 +522,6 @@ export class DocumentsService {
           motivationPoints: points.map((point) => ({
             id: point.id,
             text: cipher.decrypt(point.encryptedText),
-          })),
-          careerGoals: goals.map((goal) => ({
-            id: goal.id,
-            text: cipher.decrypt(goal.encryptedText),
           })),
         };
       },
@@ -587,7 +580,7 @@ export class DocumentsService {
     const review = coverageReviewContentSchema.parse(
       JSON.parse(cipher.decrypt(stored.review.encryptedContent))
     );
-    const reviewed = decryptResume(cipher, stored.snapshot);
+    const reviewed = decryptDocument(cipher, stored.snapshot);
     const lines = new Map(
       writtenLines(reviewed).map((line) => [line.id, line.text])
     );
@@ -651,19 +644,35 @@ export class DocumentsService {
     const suggestion = review.suggestions.find(
       (item) => item.kind === "profile" && item.lineId === input.lineId
     );
-    const line = writtenLines(decryptResume(cipher, found.snapshot)).find(
+    const line = writtenLines(decryptDocument(cipher, found.snapshot)).find(
       (candidate) => candidate.id === input.lineId
     );
-    if (!suggestion || !line?.positionId) {
-      throw new TRPCError({ code: "BAD_REQUEST" });
-    }
+    if (!suggestion || !line) throw new TRPCError({ code: "BAD_REQUEST" });
+    // The fact is the line's (a resume bullet) or the instruction's (what a
+    // letter paragraph rests on), under the position it is about.
+    const context = await new FrozenContexts(this.db, cipher, profile.id).load({
+      profileVersionId: found.snapshot.profileVersionId,
+      openingId: found.document.applicationId
+        ? ((
+            await new DocumentsRepository(this.db).findApplication(
+              found.document.applicationId
+            )
+          )?.openingId ?? null)
+        : null,
+      language: found.version.language,
+    });
+    const facts = ownWordsFacts(line, context.instructions);
+    if (facts.length === 0) throw new TRPCError({ code: "BAD_REQUEST" });
+    // A paragraph may rest on several instructions: the one the review's
+    // suggestion speaks of (most words in common), else the first.
+    const fact = bestFactFor(facts, suggestion.text);
     return sendLineToProfile({
       db: this.db,
       cipher,
       userId: input.userId,
       careerProfileId: profile.id,
-      positionId: line.positionId,
-      text: line.text,
+      positionId: fact.positionId,
+      text: fact.text,
       reason: suggestion.text,
     });
   }

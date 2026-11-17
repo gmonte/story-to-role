@@ -201,6 +201,17 @@ function useFindingText(finding: Finding, version: VersionView) {
           age: str("age"),
         }
       );
+    case "paragraphs":
+      return t.formatMessage(
+        {
+          defaultMessage:
+            "The letter has {count, plural, =0 {no paragraphs} one {# paragraph} other {# paragraphs}}, over the {limit} this document was written with. Merge or cut a paragraph.",
+        },
+        {
+          count: Number(params.count ?? 0),
+          limit: Number(params.limit ?? 0),
+        }
+      );
     case "pages":
       return t.formatMessage(
         {

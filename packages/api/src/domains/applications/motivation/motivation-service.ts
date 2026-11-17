@@ -2,13 +2,17 @@ import { TRPCError } from "@trpc/server";
 
 import { CareerRepository } from "@repo/api/domains/career/career-repository";
 import { getUserCipher } from "@repo/api/domains/encryption/user-cipher";
-import { EvidenceRepository } from "@repo/api/domains/evidence/evidence-repository";
+import { loadProfileSource } from "@repo/api/domains/documents/generation/load-profile-source";
+import { suggestLine } from "@repo/api/domains/profile/suggestions/suggest-line";
 import { OpeningsRepository } from "@repo/api/domains/openings/openings-repository";
 import type { RealtimeSubscription } from "@repo/api/domains/tasks/schemas/task";
 import { TasksService } from "@repo/api/domains/tasks/tasks-service";
 import type { DbClient } from "@repo/api/tools/db-client";
 
-import type { MotivationView } from "../schemas/motivation";
+import type {
+  MotivationSendResult,
+  MotivationView,
+} from "../schemas/motivation";
 import { MotivationRepository } from "./motivation-repository";
 import { awaitingInterviewer } from "./motivation-turns";
 
@@ -20,7 +24,9 @@ const staleTurnMs = 3 * 60_000;
 /**
  * The cover letter's motivation interview (resume spec, "Cover letter
  * inputs"): a few short questions asked in tasks; its points stay in the
- * application or, approved one by one, become career goals.
+ * application or, chosen one by one, become suggestions in the profile's
+ * draft: points about the user for its career direction, details of the
+ * letter's story for that story's experience.
  */
 export class MotivationService {
   constructor(
@@ -108,12 +114,14 @@ export class MotivationService {
   }
 
   /**
-   * Starts (or starts over) the interview. Profile_truth replaces this in
-   * P8 (docs/plan.md): the letter's story will come from the profile.
+   * Starts (or starts over) the interview. With the story the letter will
+   * tell (a results line of the published profile, from `letter.stories`),
+   * it also asks about its turning point.
    */
   async start(input: {
     userId: string;
     openingId: string;
+    storyLineId?: string;
   }): Promise<{ realtime: RealtimeSubscription }> {
     const { profile, opening } = await this.requireOpening(
       input.userId,
@@ -123,9 +131,25 @@ export class MotivationService {
       userId: input.userId,
       type: "motivation_turn",
     });
+    const cipher = await getUserCipher(this.db, input.userId);
+    const story = input.storyLineId
+      ? (
+          await loadProfileSource({
+            db: this.db,
+            cipher,
+            profileId: profile.id,
+          })
+        )?.evidence.find(
+          (line) => line.id === input.storyLineId && line.kind === "achievement"
+        )
+      : null;
+    if (input.storyLineId && !story)
+      throw new TRPCError({ code: "BAD_REQUEST" });
     const interview = await new MotivationRepository(this.db).replaceInterview({
       profileId: profile.id,
       openingId: opening.id,
+      storyPositionId: story?.positionId ?? null,
+      encryptedStory: story ? cipher.encrypt(story.text) : null,
     });
     return this.askNext(input.userId, interview.id);
   }
@@ -190,21 +214,24 @@ export class MotivationService {
   }
 
   /**
-   * The user's decision on each goal: saved, it becomes a career goal;
-   * otherwise (and every story detail) it stays in this application.
+   * The user's decision on each point (resume spec, "Cover letter
+   * inputs"): a point about the user saved goes to the profile's draft as a
+   * suggestion for the career direction line under Professional identity,
+   * and a saved detail of the story as one for that story's experience;
+   * never a change, the user accepts it there. Everything else, and what
+   * the draft refuses, stays in this application.
    */
   async confirm(input: {
     userId: string;
     openingId: string;
     decisions: Array<{ motivationPointId: string; save: boolean }>;
-  }) {
+  }): Promise<{ sent: MotivationSendResult[] }> {
     const { profile, opening } = await this.requireOpening(
       input.userId,
       input.openingId
     );
-    await this.db.transaction(async (tx) => {
+    const { interview, toSend } = await this.db.transaction(async (tx) => {
       const repository = new MotivationRepository(tx);
-      const evidence = new EvidenceRepository(tx);
       const found = await repository.findInterviewByOpening(opening.id);
       const interview = found && (await repository.lockInterview(found.id));
       if (interview?.status !== "finished") {
@@ -215,34 +242,65 @@ export class MotivationService {
           .filter((decision) => decision.save)
           .map((decision) => decision.motivationPointId)
       );
+      // Locked: a second submit finds no drafts left.
       const drafts = (await repository.listPoints(interview.id)).filter(
         (point) => point.status === "draft"
       );
-      const approvedAt = new Date();
-
-      const goals = drafts.filter(
-        (point) => point.kind === "goal" && saved.has(point.id)
-      );
-      await evidence.insertCareerGoals(
-        goals.map((point) => ({
-          profileId: profile.id,
-          encryptedText: point.encryptedText,
-          language: profile.interviewLanguage,
-          source: "motivation_interview" as const,
-          sourcePointId: point.id,
-          approvedAt,
-        }))
-      );
-      // Profile_truth replaces this in P8 (docs/plan.md): a story detail
-      // has no story to enrich, so it stays in this application.
-      const promoted = goals.map((point) => point.id);
-      await repository.updatePoints(promoted, { status: "promoted" });
       await repository.updatePoints(
-        drafts
-          .filter((point) => !promoted.includes(point.id))
-          .map((point) => point.id),
+        drafts.map((point) => point.id),
         { status: "kept" }
       );
+      // This review's drafts, and the points kept by an earlier one whose
+      // suggestion never got created (a failure): a retry sends them again.
+      return {
+        interview,
+        toSend: (await repository.listPoints(interview.id)).filter(
+          (point) =>
+            point.status === "kept" &&
+            point.kind !== "company" &&
+            saved.has(point.id)
+        ),
+      };
     });
+    if (toSend.length === 0) return { sent: [] };
+
+    const cipher = await getUserCipher(this.db, input.userId);
+    const title = [opening.encryptedCompany, opening.encryptedTitle]
+      .map((value) => (value ? cipher.decrypt(value) : ""))
+      .filter(Boolean)
+      .join(" — ");
+    const repository = new MotivationRepository(this.db);
+    const sent: MotivationSendResult[] = [];
+    for (const point of toSend) {
+      // A story detail needs its story's experience.
+      if (point.kind === "story_detail" && !interview.storyPositionId) continue;
+      try {
+        const { profileSuggestionId } = await suggestLine({
+          db: this.db,
+          cipher,
+          userId: input.userId,
+          careerProfileId: profile.id,
+          target:
+            point.kind === "story_detail"
+              ? {
+                  kind: "experience",
+                  positionId: interview.storyPositionId!,
+                  field: "results",
+                }
+              : { kind: "careerDirection" },
+          text: cipher.decrypt(point.encryptedText),
+          reason: {
+            "en-US": `You said this in the motivation interview for ${title}.`,
+            "pt-BR": `Você disse isto na entrevista de motivação para ${title}.`,
+          },
+        });
+        await repository.updatePoints([point.id], { status: "promoted" });
+        sent.push({ motivationPointId: point.id, profileSuggestionId });
+      } catch (error) {
+        // Refused, or already in the profile: it stays in this application.
+        if (!(error instanceof TRPCError)) throw error;
+      }
+    }
+    return { sent };
   }
 }

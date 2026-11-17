@@ -1,12 +1,16 @@
 import type { AiClient } from "@repo/api/domains/ai/ai-client";
 import { CareerRepository } from "@repo/api/domains/career/career-repository";
 import type { UserCipher } from "@repo/api/domains/encryption/user-cipher";
-import type { SensitiveFilter } from "@repo/api/domains/evidence/sensitive/sensitive-filter";
 import type { DbClient } from "@repo/api/tools/db-client";
 
 import { proposalDiff } from "../adaptation/three-way-merge";
 import { DocumentsRepository } from "../documents-repository";
+import { letterViolations } from "../coverage-review/check-letter";
 import { reviewLoopSettings } from "../generation/review-loop-settings";
+import {
+  defaultGenerationSettings,
+  generationSettingsSchema,
+} from "../schemas/generation-settings";
 import { outputLanguageNames } from "../generation/resume-prompts";
 import type { CoverLetterContent } from "../schemas/cover-letter-content";
 import { decryptDocument, decryptResume } from "../snapshot-content";
@@ -24,11 +28,10 @@ export async function runUpdateLetter(deps: {
   db: DbClient;
   ai: AiClient;
   cipher: UserCipher;
-  filter: SensitiveFilter;
   userId: string;
   generationId: string;
 }) {
-  const { db, ai, cipher, filter } = deps;
+  const { db, ai, cipher } = deps;
   const documents = new DocumentsRepository(db);
   const generation = await documents.findGeneration(deps.generationId);
   if (generation?.kind !== "letter_update") {
@@ -66,16 +69,23 @@ export async function runUpdateLetter(deps: {
     const changes = oldResume
       ? proposalDiff(decryptResume(cipher, oldResume), after)
       : null;
+    // The profile version and settings the letter was written under.
     const material = await loadLetterMaterial({
       db,
       cipher,
-      filter,
       userId: deps.userId,
       profileId: profile.id,
       openingId: application.openingId,
       language: generation.language,
       resume: after,
+      profileVersionId: generation.profileVersionId,
+      // The story the letter being updated was written around.
+      storyLineId: generation.storyLineId,
+      settings: generationSettingsSchema
+        .catch(defaultGenerationSettings)
+        .parse(generation.settings ?? defaultGenerationSettings),
     });
+    const { context, filter } = material;
     const { object } = await ai.generateObject({
       purpose: "cover_letter_update",
       role: "writing",
@@ -119,7 +129,11 @@ export async function runUpdateLetter(deps: {
       sources: material.sources,
       header: letter.header,
       language: generation.language,
-      isForbidden: (text) => filter.findForbiddenTerms(text).length > 0,
+      years: material.years,
+      isForbidden: (text, cited) =>
+        filter.findForbiddenTerms(text).length > 0 ||
+        letterViolations(text, context, cited.evidenceIds, cited.instructionIds)
+          .length > 0,
     }).content;
     const adjustedByText = new Map(
       adjusted.paragraphs.map((line) => [line.text, line])

@@ -38,7 +38,14 @@ import { useOpeningLabels } from "~/domains/openings/hooks/use-opening-labels";
 import { useTRPC } from "~/tools/trpc/client";
 
 import { useDocumentLabels } from "../hooks/use-document-labels";
+import { useDocumentSettings } from "../hooks/use-document-settings";
 import { useRefreshDocuments } from "../hooks/use-opening-documents";
+import { DocumentSettings, PublishProfileNotice } from "./document-settings";
+import {
+  chosenStory,
+  LetterStoryPicker,
+  useLetterStories,
+} from "./letter-story-picker";
 
 const languages: OutputLanguage[] = ["en-US", "pt-BR"];
 const tones: Tone[] = ["your_style", "formal", "direct", "warm", "technical"];
@@ -77,7 +84,7 @@ export function GenerateLetterDialog({
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>{trigger}</DialogTrigger>
-      <DialogContent>
+      <DialogContent className="max-h-[90vh] overflow-y-auto">
         {/* Mounted per opening: the choices start fresh each time. */}
         <LetterForm
           openingId={openingId}
@@ -117,6 +124,11 @@ function LetterForm({
   const [chosenResume, setChosenResume] = useState<string | null>(null);
   const [tone, setTone] = useState(defaultTone);
   const [writingLevel, setWritingLevel] = useState<WritingLevel>("standard");
+  // Mounted when the dialog opens: the settings start from the defaults.
+  const documentSettings = useDocumentSettings(true);
+  const stories = useLetterStories(openingId);
+  const [pickedStory, setPickedStory] = useState<string | null>(null);
+  const storyLineId = chosenStory(stories.data, pickedStory);
   // A choice that no longer exists (deleted meanwhile) falls back.
   const chosen =
     chosenResume === withoutResume ||
@@ -150,7 +162,27 @@ function LetterForm({
           })}
         </DialogDescription>
       </DialogHeader>
+      {documentSettings.unpublished && <PublishProfileNotice />}
       <div className="grid gap-4">
+        <div className="grid gap-1.5">
+          <Label>{t.formatMessage({ defaultMessage: "Story" })}</Label>
+          {stories.data && stories.data.length > 0 ? (
+            <LetterStoryPicker
+              stories={stories.data}
+              value={pickedStory}
+              onChange={setPickedStory}
+            />
+          ) : (
+            stories.data && (
+              <p className="text-muted-foreground text-xs">
+                {t.formatMessage({
+                  defaultMessage:
+                    "No story of your profile stands out for this opening yet. The letter is written from your profile as a whole.",
+                })}
+              </p>
+            )
+          )}
+        </div>
         {!versionId && (
           <div className="grid gap-1.5">
             <Label>
@@ -226,13 +258,22 @@ function LetterForm({
             </SelectContent>
           </Select>
         </div>
+        <DocumentSettings
+          value={documentSettings.value}
+          onChange={documentSettings.onChange}
+          letter
+        />
       </div>
       <DialogFooter className="items-center">
         <CreditCost
           credits={letterCredits(credits.data?.estimates, writingLevel)}
         />
         <Button
-          disabled={generate.isPending}
+          disabled={
+            generate.isPending ||
+            documentSettings.unpublished ||
+            documentSettings.invalid
+          }
           onClick={() =>
             generate.mutate({
               openingId,
@@ -241,6 +282,8 @@ function LetterForm({
               writingLevel,
               resumeVersionId: resumeId === withoutResume ? null : resumeId,
               versionId,
+              settings: documentSettings.settings,
+              storyLineId,
             })
           }
         >

@@ -5,8 +5,9 @@ import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { createAiClient } from "@repo/api/domains/ai/ai-client";
 import { CareerService } from "@repo/api/domains/career/career-service";
 import { getUserCipher } from "@repo/api/domains/encryption/user-cipher";
-import { careerGoalsTable } from "@repo/api/domains/evidence/db/evidence-tables";
+import { loadProfileSource } from "@repo/api/domains/documents/generation/load-profile-source";
 import { OpeningsRepository } from "@repo/api/domains/openings/openings-repository";
+import { ProfileService } from "@repo/api/domains/profile/profile-service";
 import { TasksService } from "@repo/api/domains/tasks/tasks-service";
 import { createTestUser } from "@repo/api/test/create-test-user";
 import { fakeProviderPackage } from "@repo/api/test/fake-provider-package";
@@ -15,9 +16,20 @@ import {
   closeTestDatabase,
   getTestDatabase,
 } from "@repo/api/test/pglite";
+import type * as SuggestLineModule from "@repo/api/domains/profile/suggestions/suggest-line";
+import { suggestLine } from "@repo/api/domains/profile/suggestions/suggest-line";
 
 import { MotivationService } from "./motivation-service";
 import { runMotivationTurn } from "./run-motivation-turn";
+
+// The real suggestion, which a test can make fail once.
+vi.mock(
+  "@repo/api/domains/profile/suggestions/suggest-line",
+  async (importOriginal) => {
+    const original = await importOriginal<typeof SuggestLineModule>();
+    return { ...original, suggestLine: vi.fn(original.suggestLine) };
+  }
+);
 
 vi.mock("@repo/common/env/web.env", () => ({
   env: { ENCRYPTION_MASTER_KEY: `v1:${randomBytes(32).toString("base64")}` },
@@ -25,6 +37,40 @@ vi.mock("@repo/common/env/web.env", () => ({
 
 const vector = (seed: number) =>
   Array.from({ length: 384 }, (_, index) => ((index * seed) % 11) / 11 + 0.01);
+
+const profileMarkdown = `# Profile
+
+## Professional identity
+
+- Professional name: Ada Lovelace
+- Career direction (what I look for): Platform work at scale.
+
+## Contact (only what may appear on a resume)
+
+- City and state: Belo Horizonte, MG
+
+## Experience (most recent first)
+
+### Globex — Tech Lead (2021-03 to present)
+
+- Tools: Kubernetes
+- Results:
+  - Cut deploy time by 40% with Kubernetes [measured: CI dashboard].
+
+## Education
+
+## Certifications
+
+## Competencies
+
+- I master: Kubernetes
+
+## Languages
+
+## Known gaps
+
+## Communication rules
+`;
 
 async function setup() {
   const db = await getTestDatabase();
@@ -47,7 +93,19 @@ async function setup() {
   const trigger = {
     trigger: vi.fn(async () => ({ runId: "run", accessToken: "t" })),
   };
-  const motivation = new MotivationService(db, new TasksService(db, trigger));
+  const tasks = new TasksService(db, trigger);
+  const motivation = new MotivationService(db, tasks);
+  const profiles = new ProfileService(db, tasks);
+  const current = await profiles.getDraft({
+    userId: user.id,
+    language: "en-US",
+  });
+  const { revision } = await profiles.saveDraft({
+    userId: user.id,
+    markdown: profileMarkdown,
+    baseRevision: current.revision,
+  });
+  await profiles.publish({ userId: user.id, baseRevision: revision });
   const misuse = {
     isCoolingDown: vi.fn(async () => false),
     recordBlocked: vi.fn(() => Promise.resolve()),
@@ -102,6 +160,8 @@ async function setup() {
     profile,
     opening,
     motivation,
+    profiles,
+    cipher,
     trigger,
     turn,
     misuse,
@@ -113,11 +173,86 @@ describe("motivation interview", () => {
     await clearTestDatabase();
   });
 
+  /** Runs an interview to its end with the points the model proposes. */
+  async function finishInterview(
+    ctx: Awaited<ReturnType<typeof setup>>,
+    points: Array<{ text: string; kind: string; worth_saving: boolean }>
+  ) {
+    const ids = { userId: ctx.user.id, openingId: ctx.opening.id };
+    await ctx.motivation.start(ids);
+    for (const question of ["Why Hooli?", "Your goals?", "Fit?", "More?"]) {
+      await ctx.turn({ question: { done: false, question } });
+      await ctx.motivation.answer({
+        ...ids,
+        text: "I look for small teams.",
+      });
+    }
+    await ctx.turn({ question: { done: true, question: null }, points });
+    return ids;
+  }
+
+  it("keeps the profile's never-include terms out of the career direction the interviewer sees", async () => {
+    const ctx = await setup();
+    const draft = await ctx.profiles.getDraft({
+      userId: ctx.user.id,
+      language: "en-US",
+    });
+    const { revision } = await ctx.profiles.saveDraft({
+      userId: ctx.user.id,
+      markdown: profileMarkdown
+        .replace("Platform work at scale.", "Platform work at Initrode.")
+        .replace(
+          "## Communication rules\n",
+          "## Communication rules\n\n- Never include: Initrode\n"
+        ),
+      baseRevision: draft.revision,
+    });
+    await ctx.profiles.publish({ userId: ctx.user.id, baseRevision: revision });
+    await ctx.motivation.start({
+      userId: ctx.user.id,
+      openingId: ctx.opening.id,
+    });
+    const fake = await ctx.turn({
+      question: { done: false, question: "Why Hooli?" },
+    });
+    const prompt = fake.generateObject.mock.calls.find(([request]) =>
+      request.system.startsWith("You interview")
+    )![0];
+    expect(JSON.stringify(prompt)).not.toContain("Initrode");
+    expect(JSON.stringify(prompt)).toContain("careerDirectionInProfile");
+  });
+
+  it("marks a point promoted only once its suggestion exists, so a failure can be retried", async () => {
+    const ctx = await setup();
+    const ids = await finishInterview(ctx, [
+      { text: "I look for small teams", kind: "goal", worth_saving: true },
+    ]);
+    const [goal] = (await ctx.motivation.get(ids)).points;
+    vi.mocked(suggestLine).mockRejectedValueOnce(new Error("boom"));
+    await expect(
+      ctx.motivation.confirm({
+        ...ids,
+        decisions: [{ motivationPointId: goal.id, save: true }],
+      })
+    ).rejects.toThrow("boom");
+    expect(
+      (await ctx.motivation.get(ids)).points.map((point) => point.status)
+    ).toEqual(["kept"]);
+    const { sent } = await ctx.motivation.confirm({
+      ...ids,
+      decisions: [{ motivationPointId: goal.id, save: true }],
+    });
+    expect(sent).toHaveLength(1);
+    expect(
+      (await ctx.motivation.get(ids)).points.map((point) => point.status)
+    ).toEqual(["promoted"]);
+  });
+
   afterAll(async () => {
     await closeTestDatabase();
   });
 
-  it("interviews in turns and saves only approved goals", async () => {
+  it("interviews in turns and suggests only approved goals to the career direction", async () => {
     const ctx = await setup();
     const ids = { userId: ctx.user.id, openingId: ctx.opening.id };
     await ctx.motivation.start(ids);
@@ -215,15 +350,90 @@ describe("motivation interview", () => {
     ]);
 
     const [, smallTeams] = finished.points;
-    await ctx.motivation.confirm({
+    const draftBefore = (
+      await ctx.profiles.getDraft({ userId: ctx.user.id, language: "en-US" })
+    ).markdown;
+    const { sent } = await ctx.motivation.confirm({
       ...ids,
       decisions: [{ motivationPointId: smallTeams.id, save: true }],
     });
-    const goals = await ctx.db.select().from(careerGoalsTable);
-    expect(goals).toHaveLength(1);
+    // A suggestion under the career direction line, not a change.
+    expect(sent).toHaveLength(1);
+    expect(await ctx.profiles.listSuggestions(ctx.user.id)).toEqual([
+      expect.objectContaining({
+        id: sent[0].profileSuggestionId,
+        origin: "application",
+        part: "identity",
+        find: "- Career direction (what I look for): Platform work at scale.",
+        replace:
+          "- Career direction (what I look for): Platform work at scale.\n  - I look for small teams",
+      }),
+    ]);
+    expect(
+      (await ctx.profiles.getDraft({ userId: ctx.user.id, language: "en-US" }))
+        .markdown
+    ).toBe(draftBefore);
     expect(
       (await ctx.motivation.get(ids)).points.map((point) => point.status)
     ).toEqual(["kept", "promoted", "kept"]);
+  });
+
+  it("suggests a saved detail of the chosen story for that story's experience", async () => {
+    const ctx = await setup();
+    const ids = { userId: ctx.user.id, openingId: ctx.opening.id };
+    const source = await loadProfileSource({
+      db: ctx.db,
+      cipher: ctx.cipher,
+      profileId: ctx.profile.id,
+    });
+    const story = source?.evidence.find((line) => line.kind === "achievement");
+    if (!story) throw new Error("The profile tells no story");
+    // Only a line of the profile can be the story.
+    await expect(
+      ctx.motivation.start({ ...ids, storyLineId: "nope" })
+    ).rejects.toMatchObject({ code: "BAD_REQUEST" });
+    await ctx.motivation.start({ ...ids, storyLineId: story.id });
+    await ctx.turn({
+      question: {
+        done: false,
+        question: "When did you decide to migrate?",
+        about_story: true,
+      },
+    });
+    await ctx.motivation.answer({
+      ...ids,
+      text: "I decided after a release took a whole night.",
+    });
+    await ctx.turn({ question: { done: false, question: "Why Hooli?" } });
+    await ctx.motivation.answer({ ...ids, text: "I like the platform." });
+    await ctx.turn({ question: { done: false, question: "And your goals?" } });
+    await ctx.motivation.answer({ ...ids, text: "Small teams." });
+    await ctx.turn({ question: { done: false, question: "Anything else?" } });
+    await ctx.motivation.answer({ ...ids, text: "Not really." });
+    await ctx.turn({
+      question: { done: true, question: null },
+      points: [
+        {
+          text: "I decided after a release took a whole night",
+          kind: "story_detail",
+          worth_saving: true,
+        },
+      ],
+    });
+    const [detail] = (await ctx.motivation.get(ids)).points;
+    expect(detail).toMatchObject({ kind: "story_detail", status: "draft" });
+    const { sent } = await ctx.motivation.confirm({
+      ...ids,
+      decisions: [{ motivationPointId: detail.id, save: true }],
+    });
+    expect(await ctx.profiles.listSuggestions(ctx.user.id)).toMatchObject([
+      {
+        id: sent[0].profileSuggestionId,
+        part: "experience:globex — tech lead",
+        replace:
+          "  - Cut deploy time by 40% with Kubernetes [measured: CI dashboard].\n  - I decided after a release took a whole night",
+      },
+    ]);
   });
 
   it("can be skipped", async () => {

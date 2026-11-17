@@ -662,7 +662,11 @@ async function screenOpening(
   );
   const answered = new Map(
     (previous ? await openings.listFitCheckItems(previous.id) : [])
-      .filter((item) => item.encryptedGapAnswer && !split.has(item.id))
+      .filter(
+        (item) =>
+          (!!item.encryptedGapAnswer && !split.has(item.id)) ||
+          item.lackConfirmedAt !== null
+      )
       .map((item) => [item.termId, item])
   );
 
@@ -697,6 +701,7 @@ async function screenOpening(
               ? cipher.encrypt(questions.get(item.term.id)!)
               : null),
           encryptedGapAnswer: kept?.encryptedGapAnswer ?? null,
+          lackConfirmedAt: kept?.lackConfirmedAt ?? null,
         };
       }),
     });

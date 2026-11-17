@@ -17,7 +17,8 @@ export type MotivationTurnRole = z.infer<typeof motivationTurnRoleSchema>;
 /**
  * Where a point of the answers goes (resume spec, "Motivation interview"):
  * about this company it stays in the application; about the user it may
- * become a career goal; about the chosen story it may enrich that story.
+ * become a suggestion for the profile's career direction; about the chosen
+ * story it may become one for that story's experience.
  */
 export const motivationPointKindSchema = z.enum([
   "company",
@@ -84,3 +85,10 @@ export const motivationDecisionSchema = z.object({
   motivationPointId: z.uuid(),
   save: z.boolean(),
 });
+
+/** A point sent to the profile: the suggestion waiting in its draft. */
+export const motivationSendResultSchema = z.object({
+  motivationPointId: z.uuid(),
+  profileSuggestionId: z.uuid(),
+});
+export type MotivationSendResult = z.infer<typeof motivationSendResultSchema>;

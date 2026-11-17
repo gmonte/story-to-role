@@ -2,29 +2,13 @@ import { and, eq } from "drizzle-orm";
 
 import type { DbClient } from "@repo/api/tools/db-client";
 
-import { careerGoalsTable, sensitiveItemsTable } from "./db/evidence-tables";
+import { sensitiveItemsTable } from "./db/evidence-tables";
 
 type Insert<T extends { $inferInsert: unknown }> = T["$inferInsert"];
 
-/**
- * Sensitive items and career goals: what is left of the old evidence base
- * that applications and generation still read.
- */
+/** Sensitive items: what is left of the old evidence base. */
 export class EvidenceRepository {
   constructor(private readonly tx: DbClient) {}
-
-  listCareerGoals(profileId: string) {
-    return this.tx
-      .select()
-      .from(careerGoalsTable)
-      .where(eq(careerGoalsTable.profileId, profileId))
-      .orderBy(careerGoalsTable.createdAt);
-  }
-
-  async insertCareerGoals(rows: Array<Insert<typeof careerGoalsTable>>) {
-    if (rows.length === 0) return;
-    await this.tx.insert(careerGoalsTable).values(rows);
-  }
 
   listSensitiveItems(profileId: string) {
     return this.tx

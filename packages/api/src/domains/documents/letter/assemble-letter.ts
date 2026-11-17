@@ -2,6 +2,10 @@ import { randomUUID } from "node:crypto";
 
 import { z } from "zod";
 
+import { findMarks } from "@repo/api/domains/profile/truth/marks";
+import { ungivenFigures } from "@repo/api/domains/profile/truth/suggestions";
+
+import { withheld } from "../generation/profile-source";
 import { LockedFactEditError } from "../editing/apply-user-edit";
 import type { Line, OutputLanguage } from "../schemas/document";
 import type { CoverLetterContent } from "../schemas/cover-letter-content";
@@ -11,7 +15,7 @@ const sourceIds = {
   evidence_ids: z.array(z.string()),
   company_fact_ids: z.array(z.string()),
   motivation_point_ids: z.array(z.string()),
-  career_goal_ids: z.array(z.string()),
+  instruction_ids: z.array(z.string()).catch([]),
 };
 
 /** What the writing model returns: the letter's words and their sources. */
@@ -22,14 +26,24 @@ export const letterDraftSchema = z.object({
 });
 export type LetterDraft = z.infer<typeof letterDraftSchema>;
 
-type Source = { id: string; text: string };
+type Source = {
+  id: string;
+  text: string;
+  // The text whose numbers a paragraph resting on this may carry (a profile
+  // line's measured figures only); the text itself when it has none.
+  figures?: string;
+};
 
-/** Everything a letter may rest on, each approved by the user. */
+/**
+ * Everything a letter may rest on: lines of the frozen profile, the
+ * application's instructions and the motivation points (the user's own
+ * words) and the company facts the user approved.
+ */
 export type LetterSources = {
   evidence: Source[];
   companyFacts: Source[];
   motivationPoints: Source[];
-  careerGoals: Source[];
+  instructions: Source[];
 };
 
 export type RefusedParagraph = {
@@ -37,11 +51,16 @@ export type RefusedParagraph = {
   reason: "no_source" | "unsupported_figure" | "forbidden_term";
 };
 
-/** Every figure in a paragraph must appear in what it cites. */
+/**
+ * Figures follow the resume's rules (resume spec, "Generation rules"): a
+ * paragraph carries only numbers its sources show as measured (or the user
+ * wrote), a position's years, and no mark or placeholder.
+ */
 function figuresBackedBy(text: string, sources: string[]) {
-  const all = sources.join(" ");
-  return (text.match(/\d+(?:[.,]\d+)?/g) ?? []).every((figure) =>
-    all.includes(figure)
+  return (
+    !text.includes(withheld) &&
+    findMarks(text).length === 0 &&
+    ungivenFigures(text, sources).length === 0
   );
 }
 
@@ -58,16 +77,24 @@ export function assembleLetter(input: {
   sources: LetterSources;
   header: ResumeHeader;
   language: OutputLanguage;
+  /** Years a letter may name: the positions' dates, locked facts. */
+  years?: string[];
   /** Names and figures the user doesn't allow (the sensitive filter). */
-  isForbidden?: (text: string) => boolean;
+  isForbidden?: (
+    text: string,
+    cited: { evidenceIds: string[]; instructionIds: string[] }
+  ) => boolean;
   newLineId?: () => string;
 }): { content: CoverLetterContent; refused: RefusedParagraph[] } {
   const { draft, sources } = input;
   const newLineId = input.newLineId ?? (() => randomUUID().slice(0, 8));
   const known = (list: Source[], ids: string[]) =>
     [...new Set(ids)].filter((id) => list.some((source) => source.id === id));
-  const textOf = (list: Source[], ids: string[]) =>
-    ids.map((id) => list.find((source) => source.id === id)!.text);
+  const textOf = (list: Source[], ids: string[], figures = false) =>
+    ids.map((id) => {
+      const source = list.find((candidate) => candidate.id === id)!;
+      return figures ? (source.figures ?? source.text) : source.text;
+    });
   const refused: RefusedParagraph[] = [];
 
   const paragraphs = draft.paragraphs.flatMap((paragraph): Line[] => {
@@ -81,23 +108,23 @@ export function assembleLetter(input: {
         sources.motivationPoints,
         paragraph.motivation_point_ids
       ),
-      careerGoalIds: known(sources.careerGoals, paragraph.career_goal_ids),
+      instructionIds: known(sources.instructions, paragraph.instruction_ids),
     };
     const cited = [
-      ...textOf(sources.evidence, origin.evidenceIds),
+      ...textOf(sources.evidence, origin.evidenceIds, true),
       ...textOf(sources.companyFacts, origin.companyFactIds),
       ...textOf(sources.motivationPoints, origin.motivationPointIds),
-      ...textOf(sources.careerGoals, origin.careerGoalIds),
+      ...textOf(sources.instructions, origin.instructionIds),
     ];
     if (cited.length === 0) {
       refused.push({ text, reason: "no_source" });
       return [];
     }
-    if (!figuresBackedBy(text, cited)) {
+    if (!figuresBackedBy(text, [...cited, ...(input.years ?? [])])) {
       refused.push({ text, reason: "unsupported_figure" });
       return [];
     }
-    if (input.isForbidden?.(text)) {
+    if (input.isForbidden?.(text, origin)) {
       refused.push({ text, reason: "forbidden_term" });
       return [];
     }
@@ -111,14 +138,18 @@ export function assembleLetter(input: {
       greeting: plain(
         draft.greeting,
         conventions[input.language].greeting,
-        input.isForbidden
+        input.isForbidden &&
+          ((text) =>
+            input.isForbidden!(text, { evidenceIds: [], instructionIds: [] }))
       ),
       paragraphs,
       closing: signed(
         plain(
           draft.closing,
           conventions[input.language].closing,
-          input.isForbidden
+          input.isForbidden &&
+            ((text) =>
+              input.isForbidden!(text, { evidenceIds: [], instructionIds: [] }))
         ),
         input.header.name
       ),

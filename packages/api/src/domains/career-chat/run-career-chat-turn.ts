@@ -250,6 +250,7 @@ async function orchestrate(
           userId,
           sessionId,
           message,
+          via: "career_chat",
         });
         if (!userTurn) return { reviewRequired: true };
         const reply = await runInterviewTurn({

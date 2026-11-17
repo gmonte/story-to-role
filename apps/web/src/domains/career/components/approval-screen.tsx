@@ -17,7 +17,6 @@ import { useTRPC } from "~/tools/trpc/client";
 
 import { useCareerLabels } from "../hooks/use-career-labels";
 import { useRefreshCareer, useTimeline } from "../hooks/use-career-queries";
-import { useCareerWorkspace } from "./career-workspace-context";
 import { LanguageBadges } from "./language-badges";
 
 type StoryFields = {
@@ -38,7 +37,6 @@ export function ApprovalScreen({ session }: { session: SessionView }) {
   const labels = useCareerLabels();
   const trpc = useTRPC();
   const refresh = useRefreshCareer();
-  const { openPosition, setOpenPosition } = useCareerWorkspace();
   const [decisions, setDecisions] = useState<Record<string, Decision>>({});
   const [editing, setEditing] = useState<string | null>(null);
   const timeline = useTimeline();
@@ -60,8 +58,6 @@ export function ApprovalScreen({ session }: { session: SessionView }) {
     trpc.interview.approveExtraction.mutationOptions({
       onSuccess: async () => {
         await refresh();
-        // Reviewed: the position's space shows what is now approved.
-        if (openPosition) setOpenPosition({ ...openPosition, tab: "overview" });
         toast.success(
           t.formatMessage({ defaultMessage: "Saved to your career." })
         );

@@ -13,15 +13,15 @@ import { TimelinePanel } from "./timeline-panel";
  * a source preview), resizable while it is open.
  */
 export function CareerBody() {
-  const { previewSourceDocumentId, openPosition } = useCareerWorkspace();
+  const { previewSourceDocumentId, openPositionId } = useCareerWorkspace();
   return (
     <WorkspaceBody
       layoutId="career"
       chat={<InterviewColumn />}
       panel={<TimelinePanel />}
       // One pane beside the chat: a position's space or a source.
-      preview={openPosition ? <PositionSpace /> : <SourcePreview />}
-      previewOpen={!!openPosition || !!previewSourceDocumentId}
+      preview={openPositionId ? <PositionSpace /> : <SourcePreview />}
+      previewOpen={!!openPositionId || !!previewSourceDocumentId}
     />
   );
 }

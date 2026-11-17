@@ -4,15 +4,10 @@ import { createContext, useContext, useState, type ReactNode } from "react";
 
 import type { SourceImport } from "../hooks/use-source-upload";
 
-/** The tabs of a position's space. */
-export type PositionTab = "overview" | "facts" | "review" | "chat";
-
 type CareerWorkspace = {
   // The position whose space is open in the pane beside the chat.
-  openPosition: { positionId: string; tab: PositionTab } | null;
-  setOpenPosition: (
-    openPosition: { positionId: string; tab: PositionTab } | null
-  ) => void;
+  openPositionId: string | null;
+  setOpenPositionId: (positionId: string | null) => void;
   // The career chat's unsent message, which a position card can prefill.
   draft: string;
   setDraft: (draft: string) => void;
@@ -31,8 +26,7 @@ const CareerWorkspaceContext = createContext<CareerWorkspace | null>(null);
 
 /** Shared by the chat column and the timeline panel of My career. */
 export function CareerWorkspaceProvider({ children }: { children: ReactNode }) {
-  const [openPosition, setOpenPosition] =
-    useState<CareerWorkspace["openPosition"]>(null);
+  const [openPositionId, setOpenPositionId] = useState<string | null>(null);
   const [draft, setDraft] = useState("");
   const [previewSourceDocumentId, setPreviewSourceDocumentId] = useState<
     string | null
@@ -42,11 +36,11 @@ export function CareerWorkspaceProvider({ children }: { children: ReactNode }) {
   return (
     <CareerWorkspaceContext
       value={{
-        openPosition,
+        openPositionId,
         // One pane at a time: a position replaces a source preview, and back.
-        setOpenPosition: (next) => {
-          setOpenPosition(next);
-          if (next) setPreviewSourceDocumentId(null);
+        setOpenPositionId: (positionId) => {
+          setOpenPositionId(positionId);
+          if (positionId) setPreviewSourceDocumentId(null);
         },
         draft,
         setDraft,
@@ -57,7 +51,7 @@ export function CareerWorkspaceProvider({ children }: { children: ReactNode }) {
         previewSourceDocumentId,
         setPreviewSourceDocumentId: (sourceDocumentId) => {
           setPreviewSourceDocumentId(sourceDocumentId);
-          if (sourceDocumentId) setOpenPosition(null);
+          if (sourceDocumentId) setOpenPositionId(null);
         },
         imports,
         startImport: (started) =>

@@ -18,6 +18,9 @@ export const turnViewSchema = z.object({
   role: turnRoleSchema,
   kind: turnKindSchema,
   content: z.string().nullable(),
+  // Through the career chat (relayed by its orchestrator), or null when
+  // said in the position's own chat.
+  via: z.enum(["career_chat"]).nullable(),
   createdAt: z.date(),
 });
 

@@ -184,6 +184,7 @@ export class InterviewService {
           content: turn.encryptedContent
             ? cipher.decrypt(turn.encryptedContent)
             : null,
+          via: turn.via,
           createdAt: turn.createdAt,
         })),
         drafts: drafts
@@ -305,6 +306,7 @@ export class InterviewService {
     userId: string;
     sessionId: string;
     message: string;
+    via?: "career_chat";
   }) {
     const { profile, session } = await this.requireOpenSession(
       input.userId,
@@ -330,6 +332,7 @@ export class InterviewService {
       return interview.insertTurn({
         sessionId: session.id,
         role: "user",
+        via: input.via ?? null,
         encryptedContent: cipher.encrypt(input.message),
         language: profile.interviewLanguage,
         tokenCount: estimateTokens(input.message),

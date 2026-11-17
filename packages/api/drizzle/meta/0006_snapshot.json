@@ -1,5 +1,5 @@
 {
-  "id": "b4c3fbd2-d93e-4456-ae4a-4a3a722dcc9f",
+  "id": "671d2d74-4856-4316-bd02-9cd472318e94",
   "prevId": "db0db7f0-77f2-42aa-bcd4-e3801c4f65ce",
   "version": "7",
   "dialect": "postgresql",
@@ -2541,18 +2541,17 @@
           "primaryKey": false,
           "notNull": false
         },
+        "preferencesVersionId": {
+          "name": "preferencesVersionId",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
         "encryptedPreferenceConflicts": {
           "name": "encryptedPreferenceConflicts",
           "type": "text",
           "primaryKey": false,
           "notNull": false
-        },
-        "warnings": {
-          "name": "warnings",
-          "type": "text[]",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'{}'::text[]"
         }
       },
       "indexes": {
@@ -2580,6 +2579,24 @@
           "columnsFrom": ["openingId"],
           "columnsTo": ["id"],
           "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "fit_checks_profileVersionId_profile_versions_id_fk": {
+          "name": "fit_checks_profileVersionId_profile_versions_id_fk",
+          "tableFrom": "fit_checks",
+          "tableTo": "profile_versions",
+          "columnsFrom": ["profileVersionId"],
+          "columnsTo": ["id"],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        },
+        "fit_checks_preferencesVersionId_profile_versions_id_fk": {
+          "name": "fit_checks_preferencesVersionId_profile_versions_id_fk",
+          "tableFrom": "fit_checks",
+          "tableTo": "profile_versions",
+          "columnsFrom": ["preferencesVersionId"],
+          "columnsTo": ["id"],
+          "onDelete": "set null",
           "onUpdate": "no action"
         }
       },
@@ -2775,6 +2792,13 @@
           "type": "vector(384)",
           "primaryKey": false,
           "notNull": false
+        },
+        "warnings": {
+          "name": "warnings",
+          "type": "text[]",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'{}'::text[]"
         },
         "closedAt": {
           "name": "closedAt",

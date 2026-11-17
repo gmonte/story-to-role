@@ -24,6 +24,10 @@ export function useProfileDraftQuery(kind: ProfileDocumentKind = "profile") {
     // The editor owns the text once loaded; a refetch would reset it.
     refetchOnWindowFocus: false,
     staleTime: Infinity,
+    // And it never writes back here: an editor opened again (after
+    // switching documents, or a change made elsewhere) reads the server,
+    // not what an earlier one first loaded.
+    gcTime: 0,
   });
 }
 
@@ -121,6 +125,16 @@ export function useDraftAutosave(
     latest.current = next.markdown;
     setStatus("saved");
   }, []);
+
+  // An editor that closes (the user switches documents) saves what is
+  // still waiting for its pause.
+  useEffect(
+    () => () => {
+      clearTimeout(timer.current);
+      if (latest.current !== saved.current) void flush();
+    },
+    [flush]
+  );
 
   // Don't lose the last keystrokes when the user leaves the page.
   useEffect(() => {

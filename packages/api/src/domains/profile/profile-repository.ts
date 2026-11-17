@@ -313,8 +313,9 @@ export class ProfileRepository {
       .limit(input.limit);
   }
 
-  async findPassages(passageIds: string[]) {
-    if (passageIds.length === 0) return [];
+  /** Passages by id, among the user's own published versions. */
+  async findPassages(input: { userId: string; passageIds: string[] }) {
+    if (input.passageIds.length === 0) return [];
     return this.tx
       .select({
         id: profilePassagesTable.id,
@@ -322,6 +323,19 @@ export class ProfileRepository {
         encryptedText: profilePassagesTable.encryptedText,
       })
       .from(profilePassagesTable)
-      .where(inArray(profilePassagesTable.id, passageIds));
+      .innerJoin(
+        profileVersionsTable,
+        eq(profileVersionsTable.id, profilePassagesTable.versionId)
+      )
+      .innerJoin(
+        profileDocumentsTable,
+        eq(profileDocumentsTable.id, profileVersionsTable.documentId)
+      )
+      .where(
+        and(
+          inArray(profilePassagesTable.id, input.passageIds),
+          eq(profileDocumentsTable.userId, input.userId)
+        )
+      );
   }
 }

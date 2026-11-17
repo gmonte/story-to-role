@@ -173,10 +173,10 @@ export class OpeningsService {
 
       let items: OpeningDetail["fitCheck"] = null;
       const profiles = new ProfileRepository(tx);
-      const profileDocument = await profiles.findDocument(
-        input.userId,
-        "profile"
-      );
+      const [profileDocument, preferencesDocument] = await Promise.all([
+        profiles.findDocument(input.userId, "profile"),
+        profiles.findDocument(input.userId, "preferences"),
+      ]);
       if (fitCheck) {
         const [checkItems, terms] = await Promise.all([
           openings.listFitCheckItems(fitCheck.id),
@@ -184,9 +184,10 @@ export class OpeningsService {
         ]);
         const passages = new Map(
           (
-            await profiles.findPassages(
-              checkItems.flatMap((item) => item.evidenceIds)
-            )
+            await profiles.findPassages({
+              userId: input.userId,
+              passageIds: checkItems.flatMap((item) => item.evidenceIds),
+            })
           ).map((passage) => [
             passage.id,
             cipher.decrypt(passage.encryptedText),
@@ -221,10 +222,11 @@ export class OpeningsService {
                 )
               )
             : [],
-          warnings: fitCheck.warnings,
           outdated:
             !!profileDocument?.publishedVersionId &&
-            fitCheck.profileVersionId !== profileDocument.publishedVersionId,
+            (fitCheck.profileVersionId !== profileDocument.publishedVersionId ||
+              fitCheck.preferencesVersionId !==
+                (preferencesDocument?.publishedVersionId ?? null)),
         };
       }
 
@@ -251,8 +253,10 @@ export class OpeningsService {
         language: row.language,
         suggestedTone: row.suggestedTone,
         fitCheck: items,
+        warnings: row.warnings,
         needsPublishedProfile:
           row.kind === "posted" && row.status === "analyzed" && !fitCheck,
+        profilePublished: !!profileDocument?.publishedVersionId,
       };
     });
   }
@@ -303,6 +307,17 @@ export class OpeningsService {
       openingId: input.openingId,
     });
     if (row?.status !== "analyzed" || row.kind !== "posted") throw notFound();
+    // Nothing to check against until a profile is published.
+    const published = await new ProfileRepository(this.db).findDocument(
+      input.userId,
+      "profile"
+    );
+    if (!published?.publishedVersionId) {
+      throw new TRPCError({
+        code: "PRECONDITION_FAILED",
+        message: "Publish your profile before running the fit check.",
+      });
+    }
     await this.tasks.assertAffordable({
       userId: input.userId,
       type: "analyze_opening",
@@ -331,6 +346,7 @@ export class OpeningsService {
   async excludeCompany(input: {
     userId: string;
     openingId: string;
+    date: string;
     language: ProfileLanguage;
   }) {
     const profile = await this.requireProfile(input.userId);
@@ -345,6 +361,7 @@ export class OpeningsService {
     await new ProfileService(this.db, this.tasks).excludeCompany({
       userId: input.userId,
       company,
+      date: input.date,
       language: input.language,
     });
     return { company };

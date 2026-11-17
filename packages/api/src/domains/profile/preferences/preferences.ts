@@ -1,5 +1,5 @@
 import type { ProfileBlock } from "../truth/blocks";
-import type { ProfileFinding } from "../truth/lint";
+import { mentions, type ProfileFinding } from "../truth/lint";
 import { normalizeLabel, type ProfileLanguage } from "../truth/sections";
 import { splitLabel } from "../truth/structure";
 
@@ -156,6 +156,9 @@ const workModelWords: Record<WorkModel, string[]> = {
   onsite: ["presencial", "on site", "onsite", "on-site", "in person"],
 };
 
+const refusal =
+  /(^|\s)(nao|not|don't|dont|never|nunca|except|exceto|menos)(\s|$)/;
+
 /** What screening reads from the published preferences. */
 export type PreferencesExtract = {
   // Empty when the document doesn't say: nothing is assumed.
@@ -178,10 +181,14 @@ function items(blocks: ProfileBlock[], section: PreferenceSection | undefined) {
 
 /** A company's name in its line: "Acme (2026-11-17): reason" is Acme. */
 function nameOf(line: string) {
-  return line
-    .replace(/\s*\(\d{4}-\d{2}(-\d{2})?\).*$/, "")
-    .replace(/\s*:.*$/, "")
-    .trim();
+  return (
+    line
+      .replace(/\s*\(\d{4}-\d{2}(-\d{2})?\).*$/, "")
+      // A reason follows a colon and a space; "Re:amaze" is a name.
+      .replace(/\s*:\s.*$/, "")
+      .replace(/:$/, "")
+      .trim()
+  );
 }
 
 export function extractPreferences(blocks: ProfileBlock[]): PreferencesExtract {
@@ -191,9 +198,12 @@ export function extractPreferences(blocks: ProfileBlock[]): PreferencesExtract {
       blocks,
       sections.find((section) => section.key === key)
     );
+  // What a clause refuses ("I do not accept on site") is not accepted.
   const accepted = normalizeLabel(
     of("workModel")
       .map((line) => splitLabel(line)?.value ?? line)
+      .flatMap((line) => line.split(/[.;]/))
+      .filter((clause) => !refusal.test(normalizeLabel(clause)))
       .join(", ")
   );
   return {
@@ -362,17 +372,19 @@ export function addPreference(
   ];
 }
 
-/** Whether a company is one the user excluded (by name, either way). */
+/**
+ * The excluded company an opening's company is, if any: the same name, or
+ * one naming the other as whole words ("Initech" for "Initech Tecnologia"),
+ * never a part of a word ("Meta" is not "Metabase").
+ */
 export function isExcludedCompany(
   preferences: PreferencesExtract,
   company: string | null
 ) {
-  const name = normalizeLabel(company ?? "");
-  if (!name) return null;
+  if (!normalizeLabel(company ?? "")) return null;
   return (
-    preferences.excludedCompanies.find((excluded) => {
-      const other = normalizeLabel(excluded);
-      return other === name || name.includes(other) || other.includes(name);
-    }) ?? null
+    preferences.excludedCompanies.find(
+      (excluded) => mentions(company!, excluded) || mentions(excluded, company!)
+    ) ?? null
   );
 }

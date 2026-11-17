@@ -6,7 +6,6 @@ import {
   createTRPCRouter,
   rateLimited,
   userProcedure,
-  type TRPCContext,
 } from "@repo/api/tools/trpc";
 import { realtimeSubscriptionSchema } from "@repo/api/domains/tasks/schemas/task";
 
@@ -20,12 +19,7 @@ import {
   profileSuggestionSchema,
   profileVersionSummarySchema,
 } from "./schemas/profile";
-import type { ProfileLanguage } from "./truth/sections";
-
-/** A new profile starts from the template in the interface language. */
-function templateLanguage(ctx: Pick<TRPCContext, "t">): ProfileLanguage {
-  return ctx.t.locale === "pt-BR" ? "pt-BR" : "en-US";
-}
+import { templateLanguage } from "./template-language";
 
 const revisionSchema = z.number().int().min(0);
 

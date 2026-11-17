@@ -71,6 +71,7 @@ export async function loadPublishedPreferences(input: {
   const markdown = input.cipher.decrypt(version.encryptedMarkdown);
   const blocks = parseBlocks(markdown);
   return {
+    versionId: version.id,
     markdown,
     extract: extractPreferences(blocks),
     rules: preferenceRules(blocks),

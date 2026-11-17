@@ -28,4 +28,19 @@ describe("what the profile declares the person lacks", () => {
       declaredLack("5+ years building data pipelines with Spark", lacks)
     ).toBeNull();
   });
+
+  it("is never read into a word a line only mentions", () => {
+    const profile = {
+      studied: ["React Native"],
+      gaps: ["Never led a team of more than 5 Python developers."],
+      notDone: ["I did not define the AWS architecture of the platform."],
+    };
+    // React is not React Native; an app in it is.
+    expect(declaredLack("React", profile)).toBeNull();
+    expect(declaredLack("React Native apps", profile)?.kind).toBe("studied");
+    expect(declaredLack("Python", profile)).toBeNull();
+    expect(declaredLack("AWS", profile)).toBeNull();
+    // Either of two: one being lacking is not a gap.
+    expect(declaredLack("React or React Native", profile)).toBeNull();
+  });
 });

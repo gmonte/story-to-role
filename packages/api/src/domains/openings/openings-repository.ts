@@ -9,7 +9,7 @@ import {
   openingTermsTable,
   openingsTable,
 } from "./db/openings-tables";
-import type { OpeningStatus, OpeningWarning } from "./schemas/opening";
+import type { OpeningStatus } from "./schemas/opening";
 
 type Insert<T extends { $inferInsert: unknown }> = T["$inferInsert"];
 
@@ -126,8 +126,8 @@ export class OpeningsRepository {
     openingId: string;
     band: Insert<typeof fitChecksTable>["band"];
     profileVersionId?: string | null;
+    preferencesVersionId?: string | null;
     encryptedPreferenceConflicts?: string | null;
-    warnings?: OpeningWarning[];
     items: Array<Omit<Insert<typeof fitCheckItemsTable>, "fitCheckId">>;
   }) {
     const { items: _items, ...fitCheckRow } = input;

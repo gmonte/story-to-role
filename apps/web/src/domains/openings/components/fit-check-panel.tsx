@@ -1,6 +1,6 @@
 "use client";
 
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Ban, RotateCw, TriangleAlert } from "lucide-react";
 import Link from "next/link";
 
@@ -55,6 +55,16 @@ export function FitCheckPanel({ openingId }: { openingId: string }) {
         <h3 className="text-sm font-medium">
           {t.formatMessage({ defaultMessage: "Analysis" })}
         </h3>
+        {opening.data.warnings.length > 0 && (
+          <div className="flex gap-2 rounded-lg border border-amber-500/40 bg-amber-500/5 p-3 text-xs">
+            <TriangleAlert className="mt-0.5 size-3.5 shrink-0 text-amber-600" />
+            <ul className="flex flex-col gap-1">
+              {opening.data.warnings.map((warning) => (
+                <li key={warning}>{labels.warning(warning)}</li>
+              ))}
+            </ul>
+          </div>
+        )}
         {fitCheck ? (
           <>
             <div
@@ -94,25 +104,15 @@ export function FitCheckPanel({ openingId }: { openingId: string }) {
                 </ul>
               </div>
             )}
-            {fitCheck.warnings.length > 0 && (
-              <div className="flex gap-2 rounded-lg border border-amber-500/40 bg-amber-500/5 p-3 text-xs">
-                <TriangleAlert className="mt-0.5 size-3.5 shrink-0 text-amber-600" />
-                <ul className="flex flex-col gap-1">
-                  {fitCheck.warnings.map((warning) => (
-                    <li key={warning}>{labels.warning(warning)}</li>
-                  ))}
-                </ul>
-              </div>
-            )}
             {fitCheck.outdated && (
               <div className="flex flex-wrap items-center gap-2 text-xs">
                 <span className="text-muted-foreground">
                   {t.formatMessage({
                     defaultMessage:
-                      "Your profile was published again since this check.",
+                      "Your profile or your job preferences were published again since this check.",
                   })}
                 </span>
-                <RunFitCheck openingId={openingId} again />
+                <RunFitCheck openingId={openingId} again enabled />
               </div>
             )}
             <ul className="flex flex-col gap-2">
@@ -124,12 +124,6 @@ export function FitCheckPanel({ openingId }: { openingId: string }) {
                   <FitCheckItem key={item.id} item={item} />
                 ))}
             </ul>
-            {opening.data.company && (
-              <ExcludeCompany
-                openingId={openingId}
-                company={opening.data.company}
-              />
-            )}
           </>
         ) : opening.data.needsPublishedProfile ? (
           <div className="flex flex-col gap-2 rounded-lg border border-dashed p-3 text-xs">
@@ -145,7 +139,10 @@ export function FitCheckPanel({ openingId }: { openingId: string }) {
                   {t.formatMessage({ defaultMessage: "Go to My career" })}
                 </Link>
               </Button>
-              <RunFitCheck openingId={openingId} />
+              <RunFitCheck
+                openingId={openingId}
+                enabled={opening.data.profilePublished}
+              />
             </div>
           </div>
         ) : (
@@ -159,6 +156,12 @@ export function FitCheckPanel({ openingId }: { openingId: string }) {
                   defaultMessage: "No analysis for this opening.",
                 })}
           </p>
+        )}
+        {opening.data.status === "analyzed" && opening.data.company && (
+          <ExcludeCompany
+            openingId={openingId}
+            company={opening.data.company}
+          />
         )}
       </section>
 
@@ -191,15 +194,17 @@ export function FitCheckPanel({ openingId }: { openingId: string }) {
 function RunFitCheck({
   openingId,
   again = false,
+  enabled,
 }: {
   openingId: string;
   again?: boolean;
+  // Nothing to check against until a profile is published.
+  enabled: boolean;
 }) {
   const t = useTranslation();
   const trpc = useTRPC();
   const refresh = useRefreshOpenings();
   const credits = useCredits();
-  const published = useQuery(trpc.profile.draft.queryOptions({}));
   const run = useMutation(
     trpc.openings.reanalyze.mutationOptions({
       onSuccess: refresh,
@@ -212,8 +217,7 @@ function RunFitCheck({
         size="sm"
         variant="outline"
         className="h-7"
-        // Nothing to check against until a profile is published.
-        disabled={run.isPending || !published.data?.publishedVersion}
+        disabled={run.isPending || !enabled}
         onClick={() => run.mutate({ openingId })}
       >
         <RotateCw className="size-3" />
@@ -236,9 +240,18 @@ function ExcludeCompany({
 }) {
   const t = useTranslation();
   const trpc = useTRPC();
+  const queryClient = useQueryClient();
   const exclude = useMutation(
     trpc.openings.excludeCompany.mutationOptions({
-      onSuccess: () =>
+      onSuccess: () => {
+        // The preferences changed, and the checks made on the older ones
+        // now say so.
+        void queryClient.invalidateQueries({
+          queryKey: trpc.profile.pathKey(),
+        });
+        void queryClient.invalidateQueries({
+          queryKey: trpc.openings.pathKey(),
+        });
         toast.success(
           t.formatMessage(
             {
@@ -247,7 +260,8 @@ function ExcludeCompany({
             },
             { company }
           )
-        ),
+        );
+      },
       onError: (error) => toast.error(error.message),
     })
   );
@@ -257,7 +271,13 @@ function ExcludeCompany({
       variant="ghost"
       className="text-muted-foreground h-7 self-start text-xs"
       disabled={exclude.isPending || exclude.isSuccess}
-      onClick={() => exclude.mutate({ openingId })}
+      // The day in the user's own calendar, written next to the company.
+      onClick={() =>
+        exclude.mutate({
+          openingId,
+          date: new Date().toLocaleDateString("sv-SE"),
+        })
+      }
     >
       <Ban className="size-3" />
       {t.formatMessage(

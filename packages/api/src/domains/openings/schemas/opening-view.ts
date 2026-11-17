@@ -68,14 +68,17 @@ export const openingDetailSchema = openingSummarySchema.extend({
       items: z.array(fitCheckItemViewSchema),
       // The job preferences the opening breaks: any makes the band low.
       preferenceConflicts: preferenceConflictsSchema,
-      // The method's warning signs found in the posting.
-      warnings: z.array(openingWarningSchema),
-      // Whether the profile was published again since this check.
+      // Whether the profile or the job preferences were published again
+      // since this check.
       outdated: z.boolean(),
     })
     .nullable(),
+  // The method's warning signs found in the opening's text.
+  warnings: z.array(openingWarningSchema),
   // A posted opening analyzed before any profile was published: its fit
   // check waits for the user to publish and run it.
   needsPublishedProfile: z.boolean(),
+  // Whether there is a published profile for a fit check to read.
+  profilePublished: z.boolean(),
 });
 export type OpeningDetail = z.infer<typeof openingDetailSchema>;

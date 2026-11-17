@@ -199,22 +199,21 @@ export class ProfileService {
           return {
             versionId: current.id,
             number: current.number,
-            isNew: false,
+            hasPassages: false,
           };
         }
       }
       // The job preferences are versioned without validation, and screening
       // reads their text as it is.
       if (kind === "preferences") {
-        const version = await repository.insertVersion({
-          documentId: document.id,
-          number: await repository.nextVersionNumber(document.id),
+        const version = await publishVersion(repository, document.id, {
           encryptedMarkdown: cipher.encrypt(markdown),
         });
-        await repository.updateDocument(document.id, {
-          publishedVersionId: version.id,
-        });
-        return { versionId: version.id, number: version.number, isNew: false };
+        return {
+          versionId: version.id,
+          number: version.number,
+          hasPassages: false,
+        };
       }
       // Validated when a review finished since the last publish: fixing
       // what it found afterwards keeps the version validated.
@@ -222,9 +221,7 @@ export class ProfileService {
       const validated =
         validation?.status === "completed" &&
         validation.baseVersionId === document.publishedVersionId;
-      const version = await repository.insertVersion({
-        documentId: document.id,
-        number: await repository.nextVersionNumber(document.id),
+      const version = await publishVersion(repository, document.id, {
         encryptedMarkdown: cipher.encrypt(markdown),
         validatedAt: validated ? validation.completedAt : null,
       });
@@ -261,13 +258,14 @@ export class ProfileService {
           embedding: previousVectors.get(passage.text) ?? null,
         }))
       );
-      await repository.updateDocument(document.id, {
-        publishedVersionId: version.id,
-      });
-      return { versionId: version.id, number: version.number, isNew: true };
+      return {
+        versionId: version.id,
+        number: version.number,
+        hasPassages: true,
+      };
     });
-    // Only the profile's new versions have passages to embed.
-    if (published.isNew) {
+    // Only a new version of the profile has passages to embed.
+    if (published.hasPassages) {
       // Vectors are computed locally and cost the user nothing; a failure
       // to start them leaves the passages for the next publish to retry.
       try {
@@ -502,10 +500,14 @@ export class ProfileService {
    * spec: "A company can be excluded from an opening or the tracker, which
    * adds it here"): in the draft, and in what screening reads, as a new
    * published version, since the user asked for it to count from now on.
+   * Only the company is published: what else the draft holds unpublished
+   * stays a draft, and preferences never published start from the template.
    */
   async excludeCompany(input: {
     userId: string;
     company: string;
+    // The day it was excluded, in the user's own calendar (YYYY-MM-DD).
+    date: string;
     language: ProfileLanguage;
   }) {
     const kind: ProfileDocumentKind = "preferences";
@@ -513,7 +515,7 @@ export class ProfileService {
     const entry = {
       section: "excludedCompanies" as const,
       company: input.company,
-      date: new Date().toISOString().slice(0, 10),
+      date: input.date,
     };
     await this.db.transaction(async (tx) => {
       const repository = new ProfileRepository(tx);
@@ -541,32 +543,42 @@ export class ProfileService {
             draftRevision: 1,
           });
       if (!document) throw new TRPCError({ code: "CONFLICT" });
-      // What is published gets the company too, whatever else the draft
-      // holds unpublished; a document never published is published as it is.
       const current = document.publishedVersionId
         ? await repository.findVersion(document.id, document.publishedVersionId)
         : undefined;
-      const published = current
-        ? addPreference(
-            parseBlocks(cipher.decrypt(current.encryptedMarkdown)),
-            entry
-          )
-        : draft;
-      const markdown = serializeBlocks(published);
-      if (
-        (current && cipher.decrypt(current.encryptedMarkdown) === markdown) ||
-        hasFormatErrors(lintPreferences(published))
-      ) {
-        return;
-      }
-      const version = await repository.insertVersion({
-        documentId: document.id,
-        number: await repository.nextVersionNumber(document.id),
+      const currentMarkdown = current
+        ? cipher.decrypt(current.encryptedMarkdown)
+        : null;
+      const markdown = serializeBlocks(
+        addPreference(
+          currentMarkdown === null
+            ? preferencesTemplate(input.language)
+            : parseBlocks(currentMarkdown),
+          entry
+        )
+      );
+      // Already excluded in what screening reads.
+      if (markdown === currentMarkdown) return;
+      await publishVersion(repository, document.id, {
         encryptedMarkdown: cipher.encrypt(markdown),
-      });
-      await repository.updateDocument(document.id, {
-        publishedVersionId: version.id,
       });
     });
   }
+}
+
+/** A new version of a document, made the one the product reads. */
+async function publishVersion(
+  repository: ProfileRepository,
+  documentId: string,
+  content: { encryptedMarkdown: string; validatedAt?: Date | null }
+) {
+  const version = await repository.insertVersion({
+    documentId,
+    number: await repository.nextVersionNumber(documentId),
+    ...content,
+  });
+  await repository.updateDocument(documentId, {
+    publishedVersionId: version.id,
+  });
+  return version;
 }

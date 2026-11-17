@@ -3,6 +3,7 @@ import { index } from "drizzle-orm/pg-core";
 
 import { careerProfilesTable } from "@repo/api/domains/career/db/career-tables";
 import type { InterviewLanguage } from "@repo/api/domains/career/schemas/career";
+import { profileVersionsTable } from "@repo/api/domains/profile/db/profile-tables";
 import { embeddingDimensions } from "@repo/api/tools/embeddings/embedding-model";
 import { createTable } from "@repo/api/utils/db/create-table";
 
@@ -51,6 +52,13 @@ export const openingsTable = createTable(
     language: d.text().$type<InterviewLanguage>(),
     suggestedTone: d.text().$type<Tone>(),
     embedding: d.vector({ dimensions: embeddingDimensions }),
+    // The method's warning signs found in the opening's text.
+    warnings: d
+      .text()
+      .array()
+      .$type<OpeningWarning[]>()
+      .notNull()
+      .default(sql`'{}'::text[]`),
     closedAt: d.timestamp({ withTimezone: true }),
   }),
   (t) => [index("openings_profile_id_idx").on(t.profileId)]
@@ -98,18 +106,18 @@ export const fitChecksTable = createTable(
       .notNull()
       .references(() => openingsTable.id, { onDelete: "cascade" }),
     band: d.text().$type<FitBand>().notNull(),
-    // The published profile version the check read (ADR 0008).
-    profileVersionId: d.uuid(),
+    // The published versions the check read (ADR 0008): the profile and,
+    // when there were any, the job preferences. A newer one of either makes
+    // the check outdated.
+    profileVersionId: d
+      .uuid()
+      .references(() => profileVersionsTable.id, { onDelete: "set null" }),
+    preferencesVersionId: d
+      .uuid()
+      .references(() => profileVersionsTable.id, { onDelete: "set null" }),
     // The job preferences the opening breaks, each with the rule as the
     // user wrote it (JSON); any of them makes the band low.
     encryptedPreferenceConflicts: d.text(),
-    // The method's warning signs found in the posting.
-    warnings: d
-      .text()
-      .array()
-      .$type<OpeningWarning[]>()
-      .notNull()
-      .default(sql`'{}'::text[]`),
   }),
   (t) => [index("fit_checks_opening_id_idx").on(t.openingId)]
 );

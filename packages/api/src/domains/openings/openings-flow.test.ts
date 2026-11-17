@@ -315,6 +315,48 @@ describe("openings and fit check", () => {
     expect(fitCheck!.band).toBe("low");
   });
 
+  it("makes a gap of a requirement the judge ties to a line of what is lacking", async () => {
+    const ctx = await setup();
+    const openingId = await ctx.add();
+    const sentence = "Production experience operating Kafka clusters at scale";
+    await ctx.analyze(
+      openingId,
+      fitScript(
+        (terms, system) => {
+          const line = Number(
+            /^(\d+)\. did not do: I did not touch Kafka\.$/m.exec(system)![1]
+          );
+          return {
+            items: allMet(terms).items.map((item) =>
+              terms.find((term) => term.termId === item.term_id)!.text ===
+              sentence
+                ? { ...item, lack: line }
+                : item
+            ),
+          };
+        },
+        {
+          ...extraction,
+          requirements: [
+            ...extraction.requirements,
+            { text: sentence, category: "other", importance: "mandatory" },
+          ],
+        }
+      )
+    );
+    const { fitCheck } = await ctx.detail(openingId);
+    expect(
+      fitCheck!.items.find((item) => item.term === sentence)
+    ).toMatchObject({
+      verdict: "gap",
+      passages: [],
+      explanation:
+        "The profile says this was not done: “I did not touch Kafka.”.",
+      gapQuestion: null,
+    });
+    expect(fitCheck!.band).toBe("low");
+  });
+
   it("is high when the mandatory requirements are met, a desirable gap aside", async () => {
     const ctx = await setup();
     const openingId = await ctx.add();
@@ -351,9 +393,35 @@ describe("openings and fit check", () => {
       passages: [],
       explanation: "No passage of the profile backs this.",
     });
-    // The work model needs no passage: the preferences answer it.
+    // With no job preferences published, nothing says which work model
+    // the person accepts: it is shown as unknown and left out of the band.
     expect(
-      fitCheck!.items.find((item) => item.category === "work_model")!.verdict
+      fitCheck!.items.find((item) => item.category === "work_model")
+    ).toMatchObject({
+      verdict: "partial",
+      explanation:
+        "Your job preferences don't say; write and publish them to have this checked.",
+      gapQuestion: null,
+    });
+
+    // With preferences published, they answer it: no passage is needed.
+    await ctx.publishDocument(preferences, "preferences");
+    const second = await ctx.add();
+    await ctx.analyze(
+      second,
+      fitScript((terms) => ({
+        items: terms.map((term) => ({
+          term_id: term.termId,
+          verdict: "met",
+          passage_ids: [],
+          explanation: "Accepted",
+        })),
+      }))
+    );
+    expect(
+      (await ctx.detail(second)).fitCheck!.items.find(
+        (item) => item.category === "work_model"
+      )!.verdict
     ).toBe("met");
   });
 
@@ -376,10 +444,10 @@ describe("openings and fit check", () => {
     expect(prompt).toContain("- certification (valid): CKA — CNCF");
     expect(prompt).toContain("- language: English — fluent");
     expect(prompt).toContain(
-      "- studied, without professional experience: Spark"
+      "1. studied, without professional experience: Spark"
     );
-    expect(prompt).toContain("- known gap: Go in production.");
-    expect(prompt).toContain("- did not do: I did not touch Kafka.");
+    expect(prompt).toContain("2. known gap: Go in production.");
+    expect(prompt).toContain("3. did not do: I did not touch Kafka.");
     expect(prompt).toContain("- accepted work models: remote");
     expect(prompt).toContain("- salary: Minimum: R$ 20.000 CLT");
     // Excluded companies are checked by code.
@@ -457,7 +525,7 @@ describe("openings and fit check", () => {
       {
         rule: "Betting",
         explanation:
-          "The posting names this sector, excluded in your job preferences.",
+          "The opening names this sector, excluded in your job preferences.",
       },
     ]);
   });
@@ -472,7 +540,7 @@ describe("openings and fit check", () => {
         warnings: ["messaging_only_contact", "asks_payment_or_data"],
       })
     );
-    expect((await ctx.detail(openingId)).fitCheck!.warnings).toEqual([
+    expect((await ctx.detail(openingId)).warnings).toEqual([
       "messaging_only_contact",
       "asks_payment_or_data",
     ]);
@@ -481,35 +549,134 @@ describe("openings and fit check", () => {
   it("waits for a published profile, then runs when asked again", async () => {
     const ctx = await setup({ publish: false });
     const openingId = await ctx.add();
-    const fake = await ctx.analyze(openingId, fitScript(allMet));
+    const fake = await ctx.analyze(
+      openingId,
+      fitScript(allMet, { ...extraction, warnings: ["pay_too_good"] })
+    );
     // Read and kept, but nothing was judged against an empty profile.
     expect(fake.generateObject).toHaveBeenCalledTimes(2);
     expect(await ctx.detail(openingId)).toMatchObject({
       status: "analyzed",
       fitCheck: null,
       needsPublishedProfile: true,
+      profilePublished: false,
+      warnings: ["pay_too_good"],
     });
+    // Nothing to run, and nothing to pay for, until a profile is published.
+    await expect(
+      ctx.openings.reanalyze({ userId: ctx.user.id, openingId })
+    ).rejects.toMatchObject({ code: "PRECONDITION_FAILED" });
 
     await ctx.publishDocument(profile);
     await ctx.openings.reanalyze({ userId: ctx.user.id, openingId });
     expect((await ctx.detail(openingId)).status).toBe("processing");
-    await ctx.analyze(openingId, fitScript(allMet));
+    // The opening was already read: only the fit check runs.
+    const rerun = await ctx.analyze(openingId, {
+      object: (request: { system: string }) => {
+        if (!request.system.startsWith("Screen"))
+          throw new Error(`Unexpected call: ${request.system.slice(0, 40)}`);
+        return allMet(parseJudgmentPrompt(request.system));
+      },
+    });
+    expect(rerun.generateObject).toHaveBeenCalledTimes(1);
     const after = await ctx.detail(openingId);
+    expect(after).toMatchObject({
+      title: "Senior Platform Engineer",
+      company: "Globex",
+      warnings: ["pay_too_good"],
+      needsPublishedProfile: false,
+    });
     expect(after.fitCheck?.band).toBe("high");
     expect(after.fitCheck?.outdated).toBe(false);
 
-    // Published again: the check says it read an older version.
-    await ctx.publishDocument(profile.replace("Go in production.", "Go."));
+    // Published again, the profile or the preferences: the check says it
+    // read an older version.
+    await ctx.publishDocument(preferences, "preferences");
     expect((await ctx.detail(openingId)).fitCheck?.outdated).toBe(true);
+  });
+
+  it("keeps the opening and the gap answers when the check runs again", async () => {
+    const ctx = await setup();
+    const openingId = await ctx.add();
+    const allGaps = fitScript((terms) => ({
+      items: terms.map((term) => ({
+        term_id: term.termId,
+        verdict: "gap",
+        passage_ids: [],
+        explanation: "No",
+      })),
+    }));
+    await ctx.analyze(openingId, {
+      object: (request: { system: string }) =>
+        request.system.startsWith("Write")
+          ? {
+              questions: [
+                ...request.system.matchAll(/- ([0-9a-f-]{36}): (.*)/g),
+              ].map((m) => ({ term_id: m[1], question: `About ${m[2]}?` })),
+            }
+          : allGaps.object(request),
+    });
+    const before = (await ctx.detail(openingId)).fitCheck!.items.find(
+      (item) => item.term === "Terraform"
+    )!;
+    await ctx.openings.answerGapQuestion({
+      userId: ctx.user.id,
+      fitCheckItemId: before.id,
+      answer: "I wrote our modules.",
+    });
+
+    await ctx.publishDocument(profile.replace("Go in production.", "Go."));
+    await ctx.openings.reanalyze({ userId: ctx.user.id, openingId });
+    // A check that fails leaves the opening as it was, to run again.
+    await expect(
+      ctx.analyze(openingId, {
+        object: () => {
+          throw new Error("provider down");
+        },
+      })
+    ).rejects.toThrow("provider down");
+    expect(await ctx.detail(openingId)).toMatchObject({
+      status: "analyzed",
+      fitCheck: { outdated: true },
+    });
+
+    await ctx.openings.reanalyze({ userId: ctx.user.id, openingId });
+    await ctx.analyze(openingId, fitScript(allMet));
+    const after = (await ctx.detail(openingId)).fitCheck!;
+    expect(after.outdated).toBe(false);
+    expect(after.items.find((item) => item.term === "Terraform")).toMatchObject(
+      {
+        verdict: "met",
+        gapQuestion: "About Terraform?",
+        gapAnswer: "I wrote our modules.",
+      }
+    );
   });
 
   it("excludes the opening's company in the job preferences", async () => {
     const ctx = await setup();
     const openingId = await ctx.add();
     await ctx.analyze(openingId, fitScript(allMet));
+    // Preferences the user is still writing, never published.
+    const started = await ctx.profiles.getDraft({
+      userId: ctx.user.id,
+      language: "en-US",
+      kind: "preferences",
+    });
+    await ctx.profiles.saveDraft({
+      userId: ctx.user.id,
+      markdown: started.markdown.replace(
+        "## Excluded sectors",
+        "## Excluded sectors\n\n- Tobacco"
+      ),
+      baseRevision: started.revision,
+      kind: "preferences",
+    });
+
     await ctx.openings.excludeCompany({
       userId: ctx.user.id,
       openingId,
+      date: "2026-11-17",
       language: "en-US",
     });
 
@@ -518,11 +685,22 @@ describe("openings and fit check", () => {
       language: "en-US",
       kind: "preferences",
     });
-    expect(draft.markdown).toMatch(
-      /## Excluded companies\n\n- Globex \(\d{4}-\d{2}-\d{2}\)/
+    expect(draft.markdown).toContain(
+      "## Excluded companies\n\n- Globex (2026-11-17)"
     );
-    // Published too, so the next fit check counts it.
+    expect(draft.markdown).toContain("- Tobacco");
+    // Published too, so the next fit check counts it: the company alone,
+    // not what the user hadn't published.
     expect(draft.publishedVersion?.number).toBe(1);
+    const published = await ctx.profiles.getVersion({
+      userId: ctx.user.id,
+      profileVersionId: draft.publishedVersion!.id,
+      kind: "preferences",
+    });
+    expect(published.markdown).toContain("- Globex (2026-11-17)");
+    expect(published.markdown).not.toContain("Tobacco");
+    // The check already made is now outdated, and the next one is low.
+    expect((await ctx.detail(openingId)).fitCheck?.outdated).toBe(true);
     const next = await ctx.add();
     await ctx.analyze(next, fitScript(allMet));
     expect((await ctx.detail(next)).fitCheck!.band).toBe("low");

@@ -1,5 +1,6 @@
 import { z } from "zod";
 
+import { templateLanguage } from "@repo/api/domains/profile/template-language";
 import { realtimeSubscriptionSchema } from "@repo/api/domains/tasks/schemas/task";
 import { db } from "@repo/api/tools/db";
 import { ok, okSchema, openApiMeta } from "@repo/api/tools/openapi";
@@ -165,12 +166,18 @@ export const openingsRouter = createTRPCRouter({
         "Adds the opening's company to the excluded companies of the job preferences"
       )
     )
-    .input(z.object({ openingId: z.uuid() }))
+    .input(
+      z.object({
+        openingId: z.uuid(),
+        // The user's own day, written next to the company.
+        date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+      })
+    )
     .output(z.object({ company: z.string() }))
     .mutation(({ ctx, input }) =>
       new OpeningsService(db).excludeCompany({
         userId: ctx.userId,
-        language: ctx.t.locale === "pt-BR" ? "pt-BR" : "en-US",
+        language: templateLanguage(ctx),
         ...input,
       })
     ),

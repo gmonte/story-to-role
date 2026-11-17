@@ -108,4 +108,35 @@ describe("the job preferences document", () => {
     expect(isExcludedCompany(extract, "Empresa Beta")).toBeNull();
     expect(isExcludedCompany(extract, null)).toBeNull();
   });
+
+  it("never takes a part of a word for an excluded company", () => {
+    const extract = extractPreferences(
+      parseBlocks(
+        preferences.replace(
+          "- Banco Alfa",
+          "- Oi\n- Meta (2026-01-10): layoffs\n- Re:amaze\n- Banco Alfa"
+        )
+      )
+    );
+    expect(extract.excludedCompanies).toEqual(
+      expect.arrayContaining(["Oi", "Meta", "Re:amaze"])
+    );
+    expect(isExcludedCompany(extract, "Deloitte")).toBeNull();
+    expect(isExcludedCompany(extract, "Metabase")).toBeNull();
+    expect(isExcludedCompany(extract, "Red Hat")).toBeNull();
+    expect(isExcludedCompany(extract, "Oi Fibra")).toBe("Oi");
+    expect(isExcludedCompany(extract, "Meta Platforms")).toBe("Meta");
+  });
+
+  it("doesn't accept a work model the line refuses", () => {
+    const extract = extractPreferences(
+      parseBlocks(
+        preferences.replace(
+          /- Aceito:.*/,
+          "- Aceito: remoto e híbrido. Não aceito presencial."
+        )
+      )
+    );
+    expect(extract.workModels).toEqual(["remote", "hybrid"]);
+  });
 });

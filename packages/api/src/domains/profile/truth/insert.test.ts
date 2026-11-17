@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { parseBlocks, serializeBlocks } from "./blocks";
-import { insertEntry } from "./insert";
+import { insertEntry, setCompetencyLevel } from "./insert";
 import { lintProfile } from "./lint";
 import { profileTemplate } from "./template";
 
@@ -100,6 +100,18 @@ describe("the insert menu", () => {
     });
     expect(markdown).toBe(
       "## Identidade profissional\n\n## Experiência (mais recente primeiro)\n\n### Beta — Dev (2022-03 a atual)\n\n- Contexto (setor, tamanho do time, produto):\n- Responsabilidades:\n- Tecnologias:\n- Resultados:\n- O que NÃO fiz neste cargo (para não exagerar):\n\n## Competências\n"
+    );
+  });
+
+  it("moves a competency to the level a validation proposed", () => {
+    const markdown =
+      "## Competências\n\n- Domino: Python\n- Uso com frequência: SQL, Docker\n";
+    expect(
+      serializeBlocks(
+        setCompetencyLevel(parseBlocks(markdown), "SQL", "master")
+      )
+    ).toBe(
+      "## Competências\n\n- Domino: Python, SQL\n- Uso com frequência: Docker\n"
     );
   });
 });

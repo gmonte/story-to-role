@@ -3,6 +3,15 @@ import { z } from "zod";
 export const profileDocumentKindSchema = z.enum(["profile", "preferences"]);
 export type ProfileDocumentKind = z.infer<typeof profileDocumentKindSchema>;
 
+export const profileValidationStatusSchema = z.enum([
+  "running",
+  "completed",
+  "failed",
+]);
+export type ProfileValidationStatus = z.infer<
+  typeof profileValidationStatusSchema
+>;
+
 export const profileFindingSchema = z.object({
   code: z.string(),
   kind: z.enum(["format", "content"]),

@@ -7,6 +7,7 @@ import { ProfileDocument } from "./profile-document";
 import { ProfileEditorProvider } from "./profile-editor-context";
 import { ProfileFindings } from "./profile-findings";
 import { ProfileIndex } from "./profile-index";
+import { ProfileReview } from "./profile-review";
 import { ProfileToolbar } from "./profile-toolbar";
 
 /**
@@ -29,6 +30,7 @@ export function ProfileWorkspace() {
         <aside className="hidden w-60 shrink-0 space-y-6 overflow-y-auto border-r p-4 md:block">
           <ProfileIndex />
           <ProfileFindings />
+          <ProfileReview />
         </aside>
         <div className="min-w-0 flex-1 overflow-y-auto">
           <ProfileToolbar />

@@ -7,8 +7,10 @@ import {
   userProcedure,
   type TRPCContext,
 } from "@repo/api/tools/trpc";
+import { realtimeSubscriptionSchema } from "@repo/api/domains/tasks/schemas/task";
 
 import { ProfileService } from "./profile-service";
+import { profileValidationSchema } from "./schemas/validation";
 import {
   maxProfileLength,
   profileDraftSchema,
@@ -128,4 +130,50 @@ export const profileRouter = createTRPCRouter({
     .mutation(({ ctx, input }) =>
       new ProfileService(db).restoreVersion({ userId: ctx.userId, ...input })
     ),
+
+  validationEstimate: userProcedure
+    .meta(
+      openApiMeta(
+        "profile",
+        "GET",
+        "/profile/validation/estimate",
+        "What Validate would review now, and its credit cap"
+      )
+    )
+    .input(z.object({}))
+    .output(z.object({ parts: z.array(z.string()), credits: z.number().int() }))
+    .query(({ ctx }) => new ProfileService(db).validationEstimate(ctx.userId)),
+
+  validate: userProcedure
+    .meta(
+      openApiMeta(
+        "profile",
+        "POST",
+        "/profile/validate",
+        "Starts an AI quality review of what changed in the draft"
+      )
+    )
+    .input(z.object({ baseRevision: revisionSchema }))
+    .output(
+      z.object({
+        profileValidationId: z.uuid(),
+        realtime: realtimeSubscriptionSchema,
+      })
+    )
+    .mutation(({ ctx, input }) =>
+      new ProfileService(db).validate({ userId: ctx.userId, ...input })
+    ),
+
+  latestValidation: userProcedure
+    .meta(
+      openApiMeta(
+        "profile",
+        "GET",
+        "/profile/validation",
+        "Returns the last validation, its progress and its report"
+      )
+    )
+    .input(z.object({}))
+    .output(profileValidationSchema.nullable())
+    .query(({ ctx }) => new ProfileService(db).latestValidation(ctx.userId)),
 });

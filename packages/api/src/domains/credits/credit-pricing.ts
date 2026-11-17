@@ -58,6 +58,8 @@ export type CapHints = {
   thorough?: boolean;
   maximum?: boolean;
   documentKind?: "resume" | "cover_letter";
+  // The profile parts a validation reviews.
+  sections?: number;
 };
 
 /**
@@ -84,8 +86,12 @@ export function creditCap(type: TaskType, hints: CapHints = {}): number {
       const base = Math.min(110, 30 + 5 * (hints.positions ?? 5));
       return base * level * (hints.thorough ? 2 : 1);
     }
+    case "validate_profile":
+      // About 5 for one changed part, up to 20 or so for a whole profile.
+      return Math.min(25, 3 + 2 * Math.max(1, hints.sections ?? 1));
     case "sample":
     case "render_pdf":
+    case "embed_profile":
       return 0;
   }
 }

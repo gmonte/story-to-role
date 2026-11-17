@@ -218,3 +218,41 @@ export function insertEntry(
     line: at,
   };
 }
+
+/**
+ * Moves a competency to a level (a validation's proposal the user
+ * accepted): it leaves the line it was on, if any, and joins its level's.
+ */
+export function setCompetencyLevel(
+  input: ProfileBlock[],
+  name: string,
+  level: CompetencyLevel
+): ProfileBlock[] {
+  const structure = readStructure(input);
+  const section = sectionOf(structure, "competencies");
+  const wanted = name.trim().toLowerCase();
+  const blocks = input.map((block, line) => {
+    if (!section || line < section.start || line >= section.end) return block;
+    if (block.type !== "item") return block;
+    const labelled = splitLabel(block.text);
+    const prefix = labelled
+      ? block.text.slice(0, block.text.indexOf(":") + 1)
+      : "";
+    const value = labelled ? labelled.value : block.text;
+    const names = value
+      .split(/\s*,\s*/)
+      .map((part) => part.trim())
+      .filter(Boolean);
+    const kept = names.filter(
+      (part) => part.replace(/\.$/, "").toLowerCase() !== wanted
+    );
+    if (kept.length === names.length) return block;
+    const rest = kept.join(", ");
+    return {
+      ...block,
+      text: prefix ? `${prefix}${rest ? ` ${rest}` : ""}` : rest,
+    };
+  });
+  return insertEntry(blocks, { kind: "competency", name: name.trim(), level })
+    .blocks;
+}

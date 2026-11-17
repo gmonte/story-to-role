@@ -55,6 +55,11 @@ export class AccountRepository {
       this.rowsWhere(table, table.profileId, profileIds);
 
     const profileDocuments = await byUser(t.profileDocumentsTable);
+    const profileVersions = await this.rowsWhere(
+      t.profileVersionsTable,
+      t.profileVersionsTable.documentId,
+      idsOf(profileDocuments)
+    );
     const positions = await byProfile(t.positionsTable);
     const openings = await byProfile(t.openingsTable);
     const fitChecks = await this.rowsWhere(
@@ -88,10 +93,21 @@ export class AccountRepository {
       subscriptions: await byUser(t.subscriptionsTable),
       career_profiles: profiles,
       profile_documents: profileDocuments,
-      profile_versions: await this.rowsWhere(
-        t.profileVersionsTable,
-        t.profileVersionsTable.documentId,
+      profile_versions: profileVersions,
+      profile_validations: await this.rowsWhere(
+        t.profileValidationsTable,
+        t.profileValidationsTable.documentId,
         idsOf(profileDocuments)
+      ),
+      profile_extracts: await this.rowsWhere(
+        t.profileExtractsTable,
+        t.profileExtractsTable.versionId,
+        idsOf(profileVersions)
+      ),
+      profile_passages: await this.rowsWhere(
+        t.profilePassagesTable,
+        t.profilePassagesTable.versionId,
+        idsOf(profileVersions)
       ),
       source_documents: await byProfile(t.sourceDocumentsTable),
       positions,

@@ -2,14 +2,13 @@
 
 import { useState } from "react";
 
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { Download, History, Loader2, Send } from "lucide-react";
 
 import { useTranslation } from "@repo/intl/use-translation";
 import { serializeBlocks } from "@repo/api/domains/profile/truth/blocks";
 import { hasFormatErrors } from "@repo/api/domains/profile/truth/lint";
 import { Button } from "@repo/web/components/ui/button";
-import { toast } from "@repo/web/components/ui/sonner";
 import {
   Tooltip,
   TooltipContent,
@@ -19,6 +18,8 @@ import {
 import { useTRPC } from "~/tools/trpc/client";
 
 import { useProfileEditor } from "./profile-editor-context";
+import { useLatestValidation } from "../hooks/use-profile-validation";
+import { PublishDialog } from "./publish-dialog";
 import { VersionsDialog } from "./versions-dialog";
 
 const dot = "·";
@@ -31,9 +32,7 @@ const dot = "·";
 export function ProfileToolbar() {
   const t = useTranslation();
   const trpc = useTRPC();
-  const queryClient = useQueryClient();
-  const { blocks, findings, saveStatus, saveNow, markdown, draft } =
-    useProfileEditor();
+  const { blocks, findings, saveStatus, markdown, draft } = useProfileEditor();
   const [versionsOpen, setVersionsOpen] = useState(false);
   const versions = useQuery(trpc.profile.versions.queryOptions({}));
   const latest = versions.data?.[0] ?? draft.publishedVersion;
@@ -43,38 +42,11 @@ export function ProfileToolbar() {
     }),
     enabled: !!latest,
   });
-  const publish = useMutation(trpc.profile.publish.mutationOptions());
+  const [publishOpen, setPublishOpen] = useState(false);
+  const validation = useLatestValidation();
 
   const blocked = hasFormatErrors(findings);
   const changed = published.data?.markdown !== serializeBlocks(blocks);
-
-  async function publishDraft() {
-    const revision = await saveNow();
-    if (revision === null || revision === 0) {
-      toast.error(
-        t.formatMessage({
-          defaultMessage: "Save the profile before publishing.",
-        })
-      );
-      return;
-    }
-    try {
-      const result = await publish.mutateAsync({ baseRevision: revision });
-      toast.success(
-        t.formatMessage(
-          { defaultMessage: "Version {number, number} published." },
-          { number: result.number }
-        )
-      );
-      await queryClient.invalidateQueries({ queryKey: trpc.profile.pathKey() });
-    } catch {
-      toast.error(
-        t.formatMessage({
-          defaultMessage: "The profile couldn't be published.",
-        })
-      );
-    }
-  }
 
   function download() {
     const file = new Blob([markdown()], {
@@ -149,15 +121,10 @@ export function ProfileToolbar() {
             <span>
               <Button
                 size="sm"
-                disabled={
-                  blocked ||
-                  !changed ||
-                  publish.isPending ||
-                  saveStatus === "conflict"
-                }
-                onClick={() => void publishDraft()}
+                disabled={blocked || !changed || saveStatus === "conflict"}
+                onClick={() => setPublishOpen(true)}
               >
-                {publish.isPending ? (
+                {validation.data?.status === "running" ? (
                   <Loader2 className="size-4 animate-spin" />
                 ) : (
                   <Send className="size-4" />
@@ -184,6 +151,7 @@ export function ProfileToolbar() {
         </Tooltip>
       </div>
       <VersionsDialog open={versionsOpen} onOpenChange={setVersionsOpen} />
+      <PublishDialog open={publishOpen} onOpenChange={setPublishOpen} />
     </div>
   );
 }

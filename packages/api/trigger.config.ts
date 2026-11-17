@@ -119,6 +119,7 @@ export default defineConfig({
   dirs: [
     "./src/domains/tasks/tasks",
     "./src/domains/openings/tasks",
+    "./src/domains/profile/tasks",
     "./src/domains/documents/tasks",
     "./src/domains/applications/tasks",
     "./src/domains/applications/tracker/tasks",

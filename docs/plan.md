@@ -69,6 +69,8 @@ Acceptance:
 
 - One button, two steps: Validate (an AI review of what changed since the last published version, the user's credits, estimate first; findings on their passages with "Talk about this"; competency levels proposed) and Publish (a numbered version; with or without validating; format errors block, quality findings don't).
 - The extracted structure of each published version (experiences with locked facts, credentials, competencies by level, languages, gaps, communication rules, marked figures) and its passages' embeddings.
+- Note: a finding's "Talk about this" arrives with the agent (P3); until then each finding opens its passage. An accepted competency level edits the draft directly, as one undo step; P3's tracked suggestions take over.
+- Note: `loadPublishedProfile` is the one reader of a published version (extract, passages, Markdown) for P5–P8.
 
 Acceptance:
 - [ ] Validating reviews only the changed sections and is charged; publishing creates a version even with open findings; a format error blocks it.

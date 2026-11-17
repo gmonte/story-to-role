@@ -82,3 +82,7 @@
   font-style: italic;
   user-select: none;
 }
+.profile-editor .profile-finding-review {
+  background: color-mix(in oklab, var(--primary) 10%, transparent);
+  border-radius: 2px;
+}

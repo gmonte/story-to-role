@@ -8,6 +8,7 @@ import {
   closeTestDatabase,
   getTestDatabase,
 } from "@repo/api/test/pglite";
+import { TasksService } from "@repo/api/domains/tasks/tasks-service";
 
 import { profileDocumentsTable } from "./db/profile-tables";
 import { ProfileService } from "./profile-service";
@@ -19,9 +20,12 @@ vi.mock("@repo/common/env/web.env", () => ({
 async function setup() {
   const db = await getTestDatabase();
   const user = await createTestUser();
-  const profile = new ProfileService(db);
+  const trigger = {
+    trigger: vi.fn(async () => ({ runId: "run", accessToken: "token" })),
+  };
+  const profile = new ProfileService(db, new TasksService(db, trigger));
   const draft = () => profile.getDraft({ userId: user.id, language: "pt-BR" });
-  return { db, user, profile, draft };
+  return { db, user, profile, draft, trigger };
 }
 
 const wellFormed = (identity: string) => `# Perfil

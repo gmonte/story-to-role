@@ -8,6 +8,7 @@ import {
   type ProfileLanguage,
   type ProfileSectionKey,
 } from "./sections";
+import { splitNames } from "./lint";
 import { readStructure, sectionOf, splitLabel } from "./structure";
 import { experienceTemplate, sectionTemplate } from "./template";
 
@@ -217,4 +218,41 @@ export function insertEntry(
     ]),
     line: at,
   };
+}
+
+/**
+ * Moves a competency to a level (a validation's proposal the user
+ * accepted): it leaves the line it was on, if any, and joins its level's.
+ */
+export function setCompetencyLevel(
+  input: ProfileBlock[],
+  name: string,
+  level: CompetencyLevel
+): ProfileBlock[] {
+  const structure = readStructure(input);
+  const section = sectionOf(structure, "competencies");
+  const wanted = name.trim().toLowerCase();
+  const blocks = input.map((block, line) => {
+    if (!section || line < section.start || line >= section.end) return block;
+    if (block.type !== "item") return block;
+    const labelled = splitLabel(block.text);
+    const prefix = labelled
+      ? block.text.slice(0, block.text.indexOf(":") + 1)
+      : "";
+    const value = labelled ? labelled.value : block.text;
+    // The same names the extract reads, so the proposal leaves the list.
+    const names = splitNames(value, 0, { anyLength: true });
+    const found = names.find((n) => n.name.toLowerCase() === wanted);
+    if (!found) return block;
+    const rest = names
+      .filter((n) => n !== found)
+      .map((n) => n.name)
+      .join(", ");
+    return {
+      ...block,
+      text: prefix ? `${prefix}${rest ? ` ${rest}` : ""}` : rest,
+    };
+  });
+  return insertEntry(blocks, { kind: "competency", name: name.trim(), level })
+    .blocks;
 }

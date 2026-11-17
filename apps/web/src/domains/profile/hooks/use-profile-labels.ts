@@ -3,8 +3,10 @@
 import { useTranslation } from "@repo/intl/use-translation";
 import type { ProfileEntryKind } from "@repo/api/domains/profile/truth/insert";
 import type { ProfileFinding } from "@repo/api/domains/profile/truth/lint";
+import type { ValidationFindingKind } from "@repo/api/domains/profile/schemas/validation";
 import {
   sectionHeadings,
+  type CompetencyLevel,
   type ProfileLanguage,
   type ProfileSectionKey,
 } from "@repo/api/domains/profile/truth/sections";
@@ -156,5 +158,28 @@ export function useProfileLabels() {
     addendum: t.formatMessage({ defaultMessage: "Addendum" }),
   };
 
-  return { findingMessage, sectionHints, entryLabels };
+  const reviewKinds: Record<ValidationFindingKind, string> = {
+    noImpact: t.formatMessage({ defaultMessage: "Impact unclear" }),
+    mixedOwnership: t.formatMessage({ defaultMessage: "Yours or the team's?" }),
+    inconsistentFigure: t.formatMessage({ defaultMessage: "Figures disagree" }),
+    figureWithoutOrigin: t.formatMessage({ defaultMessage: "Figure's origin" }),
+    emptyNotDone: t.formatMessage({ defaultMessage: "What you didn't do" }),
+    unknown: t.formatMessage({ defaultMessage: "Still unknown" }),
+  };
+
+  const levelLabels: Record<CompetencyLevel, string> = {
+    master: t.formatMessage({ defaultMessage: "I master it" }),
+    often: t.formatMessage({ defaultMessage: "I use it often" }),
+    studied: t.formatMessage({
+      defaultMessage: "Studied, without professional experience",
+    }),
+  };
+
+  return {
+    findingMessage,
+    sectionHints,
+    entryLabels,
+    reviewKinds,
+    levelLabels,
+  };
 }

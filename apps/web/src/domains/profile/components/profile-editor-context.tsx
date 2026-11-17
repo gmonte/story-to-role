@@ -21,12 +21,14 @@ import {
 import { fixFormat, fixFinding } from "@repo/api/domains/profile/truth/fix";
 import {
   insertEntry,
+  setCompetencyLevel,
   type ProfileEntry,
 } from "@repo/api/domains/profile/truth/insert";
 import {
   lintProfile,
   type ProfileFinding,
 } from "@repo/api/domains/profile/truth/lint";
+import type { CompetencyLevel } from "@repo/api/domains/profile/truth/sections";
 import {
   readStructure,
   type ProfileStructure,
@@ -35,6 +37,11 @@ import type { ProfileDraft } from "@repo/api/domains/profile/schemas/profile";
 
 import { useDraftAutosave, type SaveStatus } from "../hooks/use-profile-draft";
 import { useProfileLabels } from "../hooks/use-profile-labels";
+import {
+  locateReviewFindings,
+  useLatestValidation,
+  type LocatedReviewFinding,
+} from "../hooks/use-profile-validation";
 import { blockPositions, blocksToDoc, docToBlocks } from "../utils/editor-doc";
 import {
   focusNodeEnd,
@@ -55,11 +62,16 @@ type ProfileEditorState = {
   draft: ProfileDraft;
   markdown: () => string;
   saveNow: () => Promise<number | null>;
+  // The last saved draft revision.
+  revision: () => number;
   resetTo: (next: { markdown: string; revision: number }) => void;
   insert: (entry: ProfileEntry) => void;
   fix: (finding: ProfileFinding) => void;
   fixWholeFormat: () => void;
   goToLine: (line: number, range?: { from: number; to: number }) => void;
+  // The last validation's findings, where their passages are now.
+  reviewFindings: LocatedReviewFinding[];
+  applyCompetencyLevel: (name: string, level: CompetencyLevel) => void;
 };
 
 const ProfileEditorContext = createContext<ProfileEditorState | null>(null);
@@ -167,6 +179,11 @@ export function ProfileEditorProvider({
 
   const structure = useMemo(() => readStructure(blocks), [blocks]);
   const findings = useMemo(() => lintProfile(blocks), [blocks]);
+  const validation = useLatestValidation();
+  const reviewFindings = useMemo(
+    () => locateReviewFindings(validation.data?.report, blocks),
+    [validation.data, blocks]
+  );
 
   // The findings and hints drawn over the text follow every lint.
   useEffect(() => {
@@ -187,6 +204,17 @@ export function ProfileEditorProvider({
         className: `profile-finding profile-finding-${finding.kind}`,
         title: findingMessage(finding, structure.language),
         key: `finding-${index}`,
+      });
+    });
+    reviewFindings.forEach((finding, index) => {
+      const start = positions[finding.line] + 1;
+      specs.push({
+        kind: "inline",
+        from: start + finding.from,
+        to: start + finding.to,
+        className: "profile-finding profile-finding-review",
+        title: finding.message,
+        key: `review-${index}`,
       });
     });
     blocks.forEach((block, line) => {
@@ -223,7 +251,7 @@ export function ProfileEditorProvider({
     setDecorations(editor, specs);
     // findingMessage and sectionHints change with the interface language only.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [editor, blocks, findings, structure]);
+  }, [editor, blocks, findings, structure, reviewFindings]);
 
   const currentBlocks = useCallback(
     () => (editor ? docToBlocks(editor.state.doc) : blocks),
@@ -270,6 +298,7 @@ export function ProfileEditorProvider({
       }
       return autosave.saveNow();
     },
+    revision: () => autosave.revision.current,
     resetTo: (next) => {
       autosave.reset(next);
       const nextBlocks = parseBlocks(next.markdown);
@@ -302,6 +331,11 @@ export function ProfileEditorProvider({
           candidate.from === finding.from
       );
       if (match) applyBlocks(editor, fixFinding(fresh, match));
+    },
+    reviewFindings,
+    applyCompetencyLevel: (name, level) => {
+      if (!editor) return;
+      applyBlocks(editor, setCompetencyLevel(currentBlocks(), name, level));
     },
     fixWholeFormat: () => {
       if (!editor) return;

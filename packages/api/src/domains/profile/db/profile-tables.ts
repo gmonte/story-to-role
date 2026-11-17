@@ -3,8 +3,12 @@ import { index, unique } from "drizzle-orm/pg-core";
 
 import { usersTable } from "@repo/api/domains/users/db/users-tables";
 import { createTable } from "@repo/api/utils/db/create-table";
+import { embeddingDimensions } from "@repo/api/tools/embeddings/embedding-model";
 
-import type { ProfileDocumentKind } from "../schemas/profile";
+import type {
+  ProfileDocumentKind,
+  ProfileValidationStatus,
+} from "../schemas/profile";
 
 // Every `encrypted*` column holds ciphertext from the user's data key
 // (privacy spec): a database copy reveals no career content.
@@ -59,4 +63,59 @@ export const profileVersionsTable = createTable(
     ),
     index("profile_versions_document_id_idx").on(t.documentId),
   ]
+);
+
+/**
+ * An AI quality review of what changed in the draft (profile spec,
+ * "Validate and publish"): its report waits for the user, the last one per
+ * document is what the editor shows.
+ */
+export const profileValidationsTable = createTable(
+  "profile_validations",
+  (d) => ({
+    id: d.uuid().defaultRandom().primaryKey(),
+    createdAt: d
+      .timestamp({ withTimezone: true })
+      .default(sql`CURRENT_TIMESTAMP`)
+      .notNull(),
+    documentId: d
+      .uuid()
+      .notNull()
+      .references(() => profileDocumentsTable.id, { onDelete: "cascade" }),
+    // The draft revision reviewed, and the version it was compared with.
+    draftRevision: d.integer().notNull(),
+    baseVersionId: d.uuid(),
+    status: d.text().$type<ProfileValidationStatus>().notNull(),
+    // The report (findings and competency levels), as JSON.
+    encryptedReport: d.text(),
+    completedAt: d.timestamp({ withTimezone: true }),
+  }),
+  (t) => [index("profile_validations_document_id_idx").on(t.documentId)]
+);
+
+/** The structure of a published version, as JSON (ProfileExtract). */
+export const profileExtractsTable = createTable("profile_extracts", (d) => ({
+  versionId: d
+    .uuid()
+    .primaryKey()
+    .references(() => profileVersionsTable.id, { onDelete: "cascade" }),
+  encryptedContent: d.text().notNull(),
+}));
+
+/** A passage of a published version and its local vector (ADR 0004). */
+export const profilePassagesTable = createTable(
+  "profile_passages",
+  (d) => ({
+    id: d.uuid().defaultRandom().primaryKey(),
+    versionId: d
+      .uuid()
+      .notNull()
+      .references(() => profileVersionsTable.id, { onDelete: "cascade" }),
+    ordinal: d.integer().notNull(),
+    section: d.text(),
+    experience: d.integer(),
+    encryptedText: d.text().notNull(),
+    embedding: d.vector({ dimensions: embeddingDimensions }),
+  }),
+  (t) => [index("profile_passages_version_id_idx").on(t.versionId)]
 );

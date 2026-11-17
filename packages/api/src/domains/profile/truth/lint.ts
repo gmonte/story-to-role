@@ -31,8 +31,8 @@ export const findingCodes = {
   certificationFormat: "format",
   certificationStatus: "format",
   competencyLevel: "format",
-  markFormat: "format",
   unmarkedFigure: "content",
+  markFormat: "content",
   missingNotDone: "content",
   experienceOrder: "content",
   experienceOverlap: "content",
@@ -132,7 +132,11 @@ const proseStarts = new Set([
  * separators inside parentheses don't split, a parenthesis and a category
  * prefix aren't part of the name, and long phrases are left out.
  */
-export function splitNames(text: string, offset = 0) {
+export function splitNames(
+  text: string,
+  offset = 0,
+  { anyLength = false }: { anyLength?: boolean } = {}
+) {
   const parts: Array<{ text: string; start: number }> = [];
   let depth = 0;
   let start = 0;
@@ -160,8 +164,9 @@ export function splitNames(text: string, offset = 0) {
         .replace(/[.)\]]+$/, "")
         .trim();
       const words = name.split(/\s+/);
-      if (!name || words.length > maxNameWords) continue;
-      if (proseStarts.has(words[0].toLowerCase())) continue;
+      if (!name) continue;
+      if (!anyLength && words.length > maxNameWords) continue;
+      if (!anyLength && proseStarts.has(words[0].toLowerCase())) continue;
       const from = offset + at + piece.indexOf(name);
       names.push({ name, from, to: from + name.length });
     }
@@ -409,6 +414,13 @@ function readCompetencies(structure: ProfileStructure, blocks: ProfileBlock[]) {
   return { findings, competencies };
 }
 
+function foldCase(text: string) {
+  return text
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
+}
+
 function normalizeName(name: string) {
   return normalizeLabel(name).replace(/\s+/g, " ");
 }
@@ -502,23 +514,24 @@ function lintNeverInclude(structure: ProfileStructure, blocks: ProfileBlock[]) {
       labelled &&
       neverIncludeLabels.includes(normalizeLabel(labelled.label))
     ) {
-      terms.push(...splitNames(labelled.value).map((n) => n.name));
+      terms.push(
+        ...splitNames(labelled.value, 0, { anyLength: true }).map((n) => n.name)
+      );
     }
   }
   blocks.forEach((block, line) => {
     if (line >= rules.heading && line < rules.end) return;
-    const text = normalizeName(block.text);
+    // Same length as the text (accents dropped one for one), so offsets hold.
+    const text = foldCase(block.text);
     for (const term of terms) {
-      const index = text.indexOf(normalizeName(term));
+      const index = text.indexOf(foldCase(term));
       if (index >= 0 && mentions(block.text, term)) {
         findings.push(
           finding(
             "neverInclude",
             line,
             { from: index, to: index + term.length },
-            {
-              params: { term },
-            }
+            { params: { term } }
           )
         );
       }

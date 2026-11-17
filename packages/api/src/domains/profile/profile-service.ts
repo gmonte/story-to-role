@@ -4,13 +4,26 @@ import { getUserCipher } from "@repo/api/domains/encryption/user-cipher";
 import type { DbClient } from "@repo/api/tools/db-client";
 
 import { ProfileRepository } from "./profile-repository";
-import type { ProfileDocumentKind, ProfileDraft } from "./schemas/profile";
+import type {
+  ProfileDocumentKind,
+  ProfileDraft,
+  ProfileVersionSummary,
+} from "./schemas/profile";
 import { parseBlocks, serializeBlocks } from "./truth/blocks";
 import { hasFormatErrors, lintProfile } from "./truth/lint";
 import type { ProfileLanguage } from "./truth/sections";
 import { profileTemplate } from "./truth/template";
 
 const kind: ProfileDocumentKind = "profile";
+
+function versionSummary(version: ProfileVersionSummary): ProfileVersionSummary {
+  return {
+    id: version.id,
+    number: version.number,
+    publishedAt: version.publishedAt,
+    validatedAt: version.validatedAt,
+  };
+}
 
 /** A stale tab saving over a newer draft (another tab, a restore). */
 const staleDraft = () =>
@@ -51,14 +64,7 @@ export class ProfileService {
       markdown,
       revision: document.draftRevision,
       updatedAt: document.draftUpdatedAt,
-      publishedVersion: published
-        ? {
-            id: published.id,
-            number: published.number,
-            publishedAt: published.publishedAt,
-            validatedAt: published.validatedAt,
-          }
-        : null,
+      publishedVersion: published ? versionSummary(published) : null,
       changedSincePublished:
         !published || cipher.decrypt(published.encryptedMarkdown) !== markdown,
     };
@@ -113,7 +119,7 @@ export class ProfileService {
   }
 
   /**
-   * Makes the draft the official, numbered version (profile spec, "Validate
+   * Publishes the draft as a new, numbered version (profile spec, "Validate
    * and publish"). Format findings block it; content findings never do. A
    * draft equal to the published version publishes nothing new.
    */
@@ -170,10 +176,7 @@ export class ProfileService {
     if (!version) throw new TRPCError({ code: "NOT_FOUND" });
     const cipher = await getUserCipher(this.db, input.userId);
     return {
-      id: version.id,
-      number: version.number,
-      publishedAt: version.publishedAt,
-      validatedAt: version.validatedAt,
+      ...versionSummary(version),
       markdown: cipher.decrypt(version.encryptedMarkdown),
     };
   }

@@ -24,6 +24,12 @@ function templateLanguage(ctx: Pick<TRPCContext, "t">): ProfileLanguage {
 
 const revisionSchema = z.number().int().min(0);
 
+const savedDraftSchema = z.object({
+  revision: z.number().int(),
+  updatedAt: z.date(),
+  findings: z.array(profileFindingSchema),
+});
+
 export const profileRouter = createTRPCRouter({
   draft: userProcedure
     .meta(
@@ -58,13 +64,7 @@ export const profileRouter = createTRPCRouter({
         baseRevision: revisionSchema,
       })
     )
-    .output(
-      z.object({
-        revision: z.number().int(),
-        updatedAt: z.date(),
-        findings: z.array(profileFindingSchema),
-      })
-    )
+    .output(savedDraftSchema)
     .mutation(({ ctx, input }) =>
       new ProfileService(db).saveDraft({ userId: ctx.userId, ...input })
     ),
@@ -75,7 +75,7 @@ export const profileRouter = createTRPCRouter({
         "profile",
         "POST",
         "/profile/publish",
-        "Publishes the draft as the official version"
+        "Publishes the draft as a new published version"
       )
     )
     .input(z.object({ baseRevision: revisionSchema }))
@@ -124,13 +124,7 @@ export const profileRouter = createTRPCRouter({
     .input(
       z.object({ profileVersionId: z.uuid(), baseRevision: revisionSchema })
     )
-    .output(
-      z.object({
-        revision: z.number().int(),
-        updatedAt: z.date(),
-        findings: z.array(profileFindingSchema),
-      })
-    )
+    .output(savedDraftSchema)
     .mutation(({ ctx, input }) =>
       new ProfileService(db).restoreVersion({ userId: ctx.userId, ...input })
     ),

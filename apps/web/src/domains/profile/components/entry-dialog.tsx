@@ -41,7 +41,15 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
   );
 }
 
-const today = () => new Date().toISOString().slice(0, 10);
+/** Today in the user's time zone, as YYYY-MM-DD. */
+function today() {
+  const now = new Date();
+  return [
+    now.getFullYear(),
+    String(now.getMonth() + 1).padStart(2, "0"),
+    String(now.getDate()).padStart(2, "0"),
+  ].join("-");
+}
 
 /**
  * Asks what the insert menu needs for one entry (profile spec, "Insert

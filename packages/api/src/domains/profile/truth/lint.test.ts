@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { parseBlocks, serializeBlocks } from "./blocks";
-import { fixAll, fixFinding } from "./fix";
+import { fixFormat, fixFinding } from "./fix";
 import { lintProfile, type ProfileFinding } from "./lint";
 import { profileTemplate } from "./template";
 
@@ -122,7 +122,7 @@ describe("the profile linter", () => {
       false
     );
     expect(
-      lintProfile(fixAll(parseBlocks(markdown))).map((f) => f.code)
+      lintProfile(fixFormat(parseBlocks(markdown))).map((f) => f.code)
     ).toContain("experienceTitle");
   });
 
@@ -148,7 +148,7 @@ describe("the profile linter", () => {
     );
     const findings = lint(markdown);
     expect(codes(findings)).toEqual(["markFormat"]);
-    expect(serializeBlocks(fixAll(parseBlocks(markdown)))).toBe(valid);
+    expect(serializeBlocks(fixFormat(parseBlocks(markdown)))).toBe(valid);
   });
 
   it("marks an experience without what the user did not do", () => {
@@ -170,7 +170,7 @@ describe("the profile linter", () => {
       .replace(" — 2024-05 — válida", " — 2024-05");
     const findings = lint(markdown);
     expect(codes(findings)).toEqual(["dateFormat", "certificationStatus"]);
-    const fixed = lintProfile(fixAll(parseBlocks(markdown)));
+    const fixed = lintProfile(fixFormat(parseBlocks(markdown)));
     expect(codes(fixed)).toEqual(["certificationStatus"]);
   });
 
@@ -217,11 +217,37 @@ describe("the profile linter", () => {
     expect(findings[0].params).toEqual({ term: "Projeto Fênix" });
   });
 
+  it("never blocks publishing over a mark written another way", () => {
+    const markdown = valid.replace(
+      "[sem número].\n- O que",
+      "[Sem número].\n- O que"
+    );
+    expect(lint(markdown).map((f) => f.kind)).toEqual(["content"]);
+  });
+
+  it("checks long “never include” terms and marks them where they are", () => {
+    const markdown = valid
+      .replace(
+        "- Nunca incluir: Projeto Fênix",
+        "- Nunca incluir: dados pessoais fora da seção Contato"
+      )
+      .replace(
+        "- Contexto: time de 8 pessoas.",
+        "- Contexto: dados pessoais fora da seção Contato."
+      );
+    const [found] = lint(markdown);
+    expect(found.code).toBe("neverInclude");
+    const line = parseBlocks(markdown)[found.line!].text;
+    expect(line.slice(found.from, found.to)).toBe(
+      "dados pessoais fora da seção Contato"
+    );
+  });
+
   it("inserts missing sections and reorders them with Fix format", () => {
     const markdown = valid
       .replace("## Idiomas\n\n- Inglês — intermediário\n\n", "")
       .replace("## Lacunas conhecidas\n\n- Spark em produção.\n\n", "");
-    const fixed = fixAll(parseBlocks(markdown));
+    const fixed = fixFormat(parseBlocks(markdown));
     expect(
       codes(lintProfile(fixed)).filter((c) => c.includes("Section"))
     ).toEqual([]);

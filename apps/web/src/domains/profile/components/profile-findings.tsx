@@ -23,7 +23,7 @@ const shownContent = 8;
 export function ProfileFindings() {
   const t = useTranslation();
   const { findingMessage } = useProfileLabels();
-  const { findings, structure, goToLine, fix, fixEverything } =
+  const { findings, structure, goToLine, fix, fixWholeFormat } =
     useProfileEditor();
   const [showAll, setShowAll] = useState(false);
   const [open, setOpen] = useState(true);
@@ -100,7 +100,7 @@ export function ProfileFindings() {
             size="sm"
             variant="outline"
             className="h-7 text-xs"
-            onClick={fixEverything}
+            onClick={fixWholeFormat}
           >
             <Wand2 className="size-3" />
             {t.formatMessage({ defaultMessage: "Fix format" })}

@@ -5,6 +5,7 @@ import {
   getUserCipher,
   type UserCipher,
 } from "@repo/api/domains/encryption/user-cipher";
+import { ProfileRepository } from "@repo/api/domains/profile/profile-repository";
 
 import { CareerRepository } from "./career-repository";
 import type { InterviewLanguage, StartPath } from "./schemas/career";
@@ -73,11 +74,16 @@ export class CareerService {
     const repository = new CareerRepository(this.db);
     const profile = await repository.findProfileByUserId(userId);
     if (!profile) return { path: null, hasStarted: false, hasOpening: false };
-    const [hasStarted, hasOpening] = await Promise.all([
-      repository.hasStarted(profile.id, userId),
+    const [hasStarted, hasProfileDocument, hasOpening] = await Promise.all([
+      repository.hasStarted(profile.id),
+      new ProfileRepository(this.db).hasDocument(userId),
       repository.hasOpening(profile.id),
     ]);
-    return { path: profile.startPath, hasStarted, hasOpening };
+    return {
+      path: profile.startPath,
+      hasStarted: hasStarted || hasProfileDocument,
+      hasOpening,
+    };
   }
 
   async chooseStart(input: {

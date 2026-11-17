@@ -9,6 +9,8 @@ import { useTRPC } from "~/tools/trpc/client";
 
 // How long the user pauses before the draft is saved.
 const saveDelayMs = 800;
+// How long a failed save waits before trying again.
+const retryDelayMs = 5000;
 
 export type SaveStatus = "saved" | "pending" | "saving" | "error" | "conflict";
 
@@ -42,6 +44,8 @@ export function useDraftAutosave(initial: {
   const latest = useRef(initial.markdown);
   const timer = useRef<ReturnType<typeof setTimeout>>(undefined);
   const inFlight = useRef(false);
+  // Bumped by a restore: a save that was in flight then is stale.
+  const generation = useRef(0);
 
   // Saves until what's saved is the latest text: the user may keep typing
   // while a save is in flight.
@@ -49,13 +53,16 @@ export function useDraftAutosave(initial: {
     if (inFlight.current) return;
     inFlight.current = true;
     try {
-      while (latest.current !== saved.current) {
+      // A profile never saved (the template) is saved once to exist.
+      while (latest.current !== saved.current || revision.current === 0) {
         const markdown = latest.current;
+        const started = generation.current;
         setStatus("saving");
         const result = await saveDraft({
           markdown,
           baseRevision: revision.current,
         });
+        if (started !== generation.current) return;
         revision.current = result.revision;
         saved.current = markdown;
       }
@@ -84,6 +91,13 @@ export function useDraftAutosave(initial: {
     [flush]
   );
 
+  // A dropped connection shouldn't wait for the next keystroke.
+  useEffect(() => {
+    if (status !== "error") return;
+    const retry = setTimeout(() => void flush(), retryDelayMs);
+    return () => clearTimeout(retry);
+  }, [status, flush]);
+
   /** Saves now (before publishing), resolving to the saved revision. */
   const saveNow = useCallback(async () => {
     clearTimeout(timer.current);
@@ -97,6 +111,7 @@ export function useDraftAutosave(initial: {
   /** After a restore saved on the server, the editor starts from it. */
   const reset = useCallback((next: { markdown: string; revision: number }) => {
     clearTimeout(timer.current);
+    generation.current++;
     revision.current = next.revision;
     saved.current = next.markdown;
     latest.current = next.markdown;

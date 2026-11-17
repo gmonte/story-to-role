@@ -124,7 +124,7 @@ export function fixFinding(
  * Fix format for the whole document: applies every fixable finding, one at a
  * time (a fix can move lines), until nothing fixable is left.
  */
-export function fixAll(blocks: ProfileBlock[]): ProfileBlock[] {
+export function fixFormat(blocks: ProfileBlock[]): ProfileBlock[] {
   let current = blocks;
   // Each pass fixes one finding; a document has far fewer than this.
   for (let pass = 0; pass < 500; pass++) {

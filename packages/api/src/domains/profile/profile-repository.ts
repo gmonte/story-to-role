@@ -13,8 +13,8 @@ type Insert<T extends { $inferInsert: unknown }> = T["$inferInsert"];
 export class ProfileRepository {
   constructor(private readonly tx: DbClient) {}
 
-  async findDocument(userId: string, kind: ProfileDocumentKind) {
-    const [row] = await this.tx
+  private documentQuery(userId: string, kind: ProfileDocumentKind) {
+    return this.tx
       .select()
       .from(profileDocumentsTable)
       .where(
@@ -23,22 +23,27 @@ export class ProfileRepository {
           eq(profileDocumentsTable.kind, kind)
         )
       );
+  }
+
+  async findDocument(userId: string, kind: ProfileDocumentKind) {
+    const [row] = await this.documentQuery(userId, kind);
     return row;
   }
 
   /** Locks the document's row for the rest of the transaction. */
   async findDocumentForUpdate(userId: string, kind: ProfileDocumentKind) {
-    const [row] = await this.tx
-      .select()
-      .from(profileDocumentsTable)
-      .where(
-        and(
-          eq(profileDocumentsTable.userId, userId),
-          eq(profileDocumentsTable.kind, kind)
-        )
-      )
-      .for("update");
+    const [row] = await this.documentQuery(userId, kind).for("update");
     return row;
+  }
+
+  /** Whether the user has saved any profile document yet. */
+  async hasDocument(userId: string) {
+    const rows = await this.tx
+      .select({ id: profileDocumentsTable.id })
+      .from(profileDocumentsTable)
+      .where(eq(profileDocumentsTable.userId, userId))
+      .limit(1);
+    return rows.length > 0;
   }
 
   async insertDocument(document: Insert<typeof profileDocumentsTable>) {

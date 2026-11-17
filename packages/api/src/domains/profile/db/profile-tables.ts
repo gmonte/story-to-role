@@ -11,7 +11,7 @@ import type { ProfileDocumentKind } from "../schemas/profile";
 
 /**
  * One per user and kind (the profile, and from P5 the job preferences): the
- * draft being edited and the version that is official.
+ * draft being edited and the published version the product reads.
  */
 export const profileDocumentsTable = createTable(
   "profile_documents",

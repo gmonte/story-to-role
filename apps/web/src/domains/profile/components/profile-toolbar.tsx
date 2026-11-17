@@ -25,7 +25,7 @@ const dot = "·";
 
 /**
  * Above the document: whether the draft is saved, which version is
- * official, and Publish (format findings block it; profile spec, "Validate
+ * published, and Publish (format findings block it; profile spec, "Validate
  * and publish"), the versions and the download of profile_truth.md.
  */
 export function ProfileToolbar() {
@@ -175,7 +175,7 @@ export function ProfileToolbar() {
               : changed
                 ? t.formatMessage({
                     defaultMessage:
-                      "Makes this draft the official version that resumes and fit checks read.",
+                      "Publishes this draft as the version resumes and fit checks read.",
                   })
                 : t.formatMessage({
                     defaultMessage: "Nothing changed since the last version.",

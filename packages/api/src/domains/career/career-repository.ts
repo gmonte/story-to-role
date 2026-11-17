@@ -1,6 +1,5 @@
 import { arrayContains, desc, eq, sql } from "drizzle-orm";
 
-import { profileDocumentsTable } from "@repo/api/domains/profile/db/profile-tables";
 import { openingsTable } from "@repo/api/domains/openings/db/openings-tables";
 import type { DbClient } from "@repo/api/tools/db-client";
 
@@ -34,11 +33,8 @@ export class CareerRepository {
     return rows.length > 0;
   }
 
-  /**
-   * Whether the user has anything yet: a saved profile draft, a source, a
-   * position or an opening.
-   */
-  async hasStarted(profileId: string, userId: string) {
+  /** Whether the profile holds anything yet: a source, a position or an opening. */
+  async hasStarted(profileId: string) {
     const first = (
       table:
         | typeof sourceDocumentsTable
@@ -51,11 +47,6 @@ export class CareerRepository {
         .where(eq(table.profileId, profileId))
         .limit(1);
     const found = await Promise.all([
-      this.tx
-        .select({ id: profileDocumentsTable.id })
-        .from(profileDocumentsTable)
-        .where(eq(profileDocumentsTable.userId, userId))
-        .limit(1),
       first(sourceDocumentsTable),
       first(positionsTable),
       first(openingsTable),

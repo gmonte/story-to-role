@@ -18,7 +18,7 @@ import {
   serializeBlocks,
   type ProfileBlock,
 } from "@repo/api/domains/profile/truth/blocks";
-import { fixAll, fixFinding } from "@repo/api/domains/profile/truth/fix";
+import { fixFormat, fixFinding } from "@repo/api/domains/profile/truth/fix";
 import {
   insertEntry,
   type ProfileEntry,
@@ -58,7 +58,7 @@ type ProfileEditorState = {
   resetTo: (next: { markdown: string; revision: number }) => void;
   insert: (entry: ProfileEntry) => void;
   fix: (finding: ProfileFinding) => void;
-  fixEverything: () => void;
+  fixWholeFormat: () => void;
   goToLine: (line: number, range?: { from: number; to: number }) => void;
 };
 
@@ -72,6 +72,10 @@ export function useProfileEditor() {
 
 function sameBlock(a: ProfileBlock, b: ProfileBlock) {
   return JSON.stringify(a) === JSON.stringify(b);
+}
+
+function sameBlocks(a: ProfileBlock[], b: ProfileBlock[]) {
+  return a.length === b.length && a.every((block, i) => sameBlock(block, b[i]));
 }
 
 /**
@@ -102,6 +106,16 @@ function applyBlocks(editor: Editor, next: ProfileBlock[]) {
     endNext--;
   }
   if (start === endCurrent && start === endNext) return;
+  // An empty document holds one blank paragraph that isn't a block.
+  if (!current.length) {
+    const nodes = (blocksToDoc(next).content ?? []).map((json) =>
+      editor.schema.nodeFromJSON(json)
+    );
+    editor.view.dispatch(
+      editor.state.tr.replaceWith(0, doc.content.size, nodes).scrollIntoView()
+    );
+    return;
+  }
 
   const from = start < positions.length ? positions[start] : doc.content.size;
   const last = positions[endCurrent - 1];
@@ -158,16 +172,18 @@ export function ProfileEditorProvider({
   useEffect(() => {
     if (!editor || editor.isDestroyed) return;
     const { doc } = editor.state;
+    // Mid-typing the doc is ahead of the last lint; the next lint draws.
+    if (!sameBlocks(docToBlocks(doc), blocks)) return;
     const positions = blockPositions(doc);
-    if (positions.length !== blocks.length) return;
     const specs: EditorDecorationSpec[] = [];
     findings.forEach((finding, index) => {
       if (finding.line === null) return;
       const start = positions[finding.line] + 1;
+      const end = start + blocks[finding.line].text.length;
       specs.push({
         kind: "inline",
-        from: start + finding.from,
-        to: start + Math.max(finding.to, finding.from + 1),
+        from: Math.min(start + finding.from, end),
+        to: Math.min(start + Math.max(finding.to, finding.from + 1), end),
         className: `profile-finding profile-finding-${finding.kind}`,
         title: findingMessage(finding, structure.language),
         key: `finding-${index}`,
@@ -277,11 +293,19 @@ export function ProfileEditorProvider({
     },
     fix: (finding) => {
       if (!editor) return;
-      applyBlocks(editor, fixFinding(currentBlocks(), finding));
+      // The finding came from the last lint; fix its match in the text now.
+      const fresh = currentBlocks();
+      const match = lintProfile(fresh).find(
+        (candidate) =>
+          candidate.code === finding.code &&
+          candidate.line === finding.line &&
+          candidate.from === finding.from
+      );
+      if (match) applyBlocks(editor, fixFinding(fresh, match));
     },
-    fixEverything: () => {
+    fixWholeFormat: () => {
       if (!editor) return;
-      applyBlocks(editor, fixAll(currentBlocks()));
+      applyBlocks(editor, fixFormat(currentBlocks()));
     },
     goToLine,
   };

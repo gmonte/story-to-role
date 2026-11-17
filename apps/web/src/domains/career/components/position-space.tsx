@@ -31,6 +31,7 @@ import { useTRPC } from "~/tools/trpc/client";
 
 import { useCareerLabels } from "../hooks/use-career-labels";
 import { useRefreshCareer, useTimeline } from "../hooks/use-career-queries";
+import { AccountSection } from "./account-section";
 import { ApprovalScreen } from "./approval-screen";
 import { useCareerWorkspace } from "./career-workspace-context";
 
@@ -91,6 +92,7 @@ export function PositionSpace() {
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto">
         <div className="flex flex-col gap-6 p-4">
+          <AccountSection positionId={position.id} />
           <Summary position={position} />
           {sessionId && position.draftsToReview > 0 && (
             <Review sessionId={sessionId} />

@@ -5,6 +5,7 @@ import { usersTable } from "@repo/api/domains/users/db/users-tables";
 import { createTable } from "@repo/api/utils/db/create-table";
 
 import type {
+  AccountSource,
   CareerEventKind,
   InterviewLanguage,
   InterviewLanguageSource,
@@ -275,4 +276,36 @@ export const careerEventsTable = createTable(
     seenAt: d.timestamp({ withTimezone: true }),
   }),
   (t) => [index("career_events_profile_id_idx").on(t.profileId)]
+);
+
+/**
+ * A position's account (ADR 0008): the user's own text about it, kept as
+ * versions. The latest approved version is the account; a newer unapproved
+ * one is its draft. Text and "do not include" list are encrypted.
+ */
+export const positionAccountVersionsTable = createTable(
+  "position_account_versions",
+  (d) => ({
+    id: d.uuid().defaultRandom().primaryKey(),
+    ...timestamps(d),
+    profileId: d
+      .uuid()
+      .notNull()
+      .references(() => careerProfilesTable.id, { onDelete: "cascade" }),
+    positionId: d
+      .uuid()
+      .notNull()
+      .references(() => positionsTable.id, { onDelete: "cascade" }),
+    // Numbered when approved: 1 is the first approved account.
+    version: d.integer(),
+    encryptedText: d.text().notNull(),
+    // JSON array of names and figures never to appear in what is generated.
+    encryptedDoNotInclude: d.text().notNull(),
+    // Who wrote it: the user, the interviewer, an import, the migration.
+    source: d.text().$type<AccountSource>().notNull(),
+    // The approved version a restore copied, when it is one.
+    restoredFromId: d.uuid(),
+    approvedAt: d.timestamp({ withTimezone: true }),
+  }),
+  (t) => [index("position_account_versions_position_id_idx").on(t.positionId)]
 );

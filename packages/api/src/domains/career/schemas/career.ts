@@ -117,5 +117,15 @@ export const careerEventKinds = [
   "fact_edited",
   "fact_removed",
   "position_chat",
+  "account_approved",
 ] as const;
 export type CareerEventKind = (typeof careerEventKinds)[number];
+
+/** Who wrote a version of a position's account. */
+export const accountSources = [
+  "user",
+  "interviewer",
+  "import",
+  "migration",
+] as const;
+export type AccountSource = (typeof accountSources)[number];

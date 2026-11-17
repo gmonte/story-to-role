@@ -158,10 +158,25 @@ async function setup({ withDraft = true }: { withDraft?: boolean } = {}) {
     });
   }
 
+  const remove = (sourceDocumentId: string) =>
+    new DocumentsService(db, storage).remove({
+      userId: user.id,
+      sourceDocumentId,
+    });
   const timeline = () =>
     career.getTimeline({ userId: user.id, defaultLanguage: "pt-BR" });
   const suggestions = () => profiles.listSuggestions(user.id);
-  return { db, user, tasks, trigger, upload, run, timeline, suggestions };
+  return {
+    db,
+    user,
+    tasks,
+    trigger,
+    upload,
+    run,
+    remove,
+    timeline,
+    suggestions,
+  };
 }
 
 describe("importing a file into the profile", () => {
@@ -271,10 +286,13 @@ describe("importing a file into the profile", () => {
   it("refuses a file that isn't about a career", async () => {
     const ctx = await setup();
     const source = await ctx.upload("Bolo de cenoura: ".padEnd(300, "x"));
-    await ctx.run(source, [], {
-      is_career_document: false,
-      has_confidentiality_rules: false,
-    });
+    // Refused before any work for the user: its task charges nothing.
+    await expect(
+      ctx.run(source, [], {
+        is_career_document: false,
+        has_confidentiality_rules: false,
+      })
+    ).resolves.toEqual({ rejected: true });
     const { documents } = await ctx.timeline();
     expect(documents[0]).toMatchObject({
       importStatus: "rejected",
@@ -283,9 +301,16 @@ describe("importing a file into the profile", () => {
     expect(await ctx.suggestions()).toEqual([]);
   });
 
-  it("proposes an empty profile's first draft as suggestions too", async () => {
+  it("suggests an empty profile's first draft too, on the template in the interface language", async () => {
     const ctx = await setup({ withDraft: false });
     const source = await ctx.upload();
+    // Starting the import gives a user who never opened the editor their
+    // profile, from the template.
+    await new ImportService(ctx.db, ctx.tasks).start({
+      userId: ctx.user.id,
+      sourceDocumentId: source,
+      language: "en-US",
+    });
     await ctx.run(source, [
       {
         part: "experience",
@@ -295,14 +320,101 @@ describe("importing a file into the profile", () => {
         evidence: "Built sales reports in SQL",
       },
     ]);
-    // The template came in the file's language; the draft is still it.
     const draft = await new ProfileService(ctx.db, ctx.tasks).getDraft({
       userId: ctx.user.id,
       language: "pt-BR",
     });
     expect(draft.markdown).toContain("## Professional identity");
+    // Nothing is written until the user accepts.
     expect(draft.markdown).not.toContain("Gama");
     expect((await ctx.suggestions())[0].replace).toContain("### Gama");
+  });
+
+  it("completes a waiting suggestion instead of repeating it", async () => {
+    const ctx = await setup();
+    // A first file left a new position waiting.
+    const first = await ctx.upload();
+    await ctx.run(first, [
+      {
+        part: "experience",
+        find: "",
+        replace:
+          "### Gama — Júnior (2019-02 a 2022-02)\n- Tecnologias: SQL\n- Resultados:\n- O que NÃO fiz neste cargo (para não exagerar):",
+        evidence: "Built sales reports in SQL",
+      },
+    ]);
+    const [waiting] = await ctx.suggestions();
+
+    // A second file about the same position adds to it.
+    const second = await ctx.upload(
+      `${resume}\nAt Gama I also maintained Django APIs and cut costs by 15%.`,
+      "linkedin.txt"
+    );
+    await ctx.run(second, [
+      {
+        part: `pending:${waiting.id}`,
+        find: "- Tecnologias: SQL",
+        replace: "- Tecnologias: SQL, Django",
+        evidence: "maintained Django APIs",
+      },
+      {
+        part: `pending:${waiting.id}`,
+        find: "- Resultados:",
+        replace: "- Resultados:\n  - Cortei custos em 15%.",
+        evidence: "cut costs by 15%",
+      },
+      // The same position again, as if it were new: the model's mistake.
+      {
+        part: "pending:unknown",
+        find: "",
+        replace: "- Tecnologias: Java",
+        evidence: "maintained Django APIs",
+      },
+    ]);
+    const after = await ctx.suggestions();
+    expect(after).toHaveLength(1);
+    expect(after[0]).toMatchObject({ part: "experience", find: "" });
+    expect(after[0].replace).toBe(
+      "### Gama — Júnior (2019-02 a 2022-02)\n- Tecnologias: SQL, Django\n- Resultados:\n  - Cortei custos em 15% [a confirmar].\n- O que NÃO fiz neste cargo (para não exagerar):"
+    );
+  });
+
+  it("takes a truth file's rules to the communication rules", async () => {
+    const ctx = await setup();
+    const source = await ctx.upload(
+      `${resume}\n❌ DO NOT INCLUDE: the client Alfa Bank, internal codename Phoenix.`
+    );
+    await ctx.run(
+      source,
+      [
+        {
+          part: "rules",
+          find: "- Nunca incluir:",
+          replace: "- Nunca incluir: o cliente Alfa Bank, o codinome Phoenix",
+          evidence: "DO NOT INCLUDE: the client Alfa Bank",
+        },
+      ],
+      { is_career_document: true, has_confidentiality_rules: true }
+    );
+    expect((await ctx.suggestions())[0]).toMatchObject({
+      part: "rules",
+      replace: "- Nunca incluir: o cliente Alfa Bank, o codinome Phoenix",
+    });
+    expect((await ctx.timeline()).documents[0].kind).toBe("truth_file");
+  });
+
+  it("needs a real passage of the file, not a word", async () => {
+    const ctx = await setup();
+    const source = await ctx.upload();
+    await ctx.run(source, [
+      {
+        part: "experience:beta — backend",
+        find: "- Tecnologias: Python",
+        replace: "- Tecnologias: Python, Kubernetes",
+        evidence: "Python",
+      },
+    ]);
+    expect(await ctx.suggestions()).toEqual([]);
   });
 
   it("leaves a summary for the agent to say once", async () => {
@@ -323,7 +435,7 @@ describe("importing a file into the profile", () => {
     const { chatId } = await new AgentChatService(ctx.db).current(ctx.user.id);
     const pending = await pendingImportSummaries(ctx.db, chatId);
     expect(pending?.text).toBe(
-      "Li “cv-2024.txt” e propus 1 mudança no perfil; ela espera você no texto, para aceitar ou recusar. Falta dizer o que você não fez na Gama."
+      "Li “cv-2024.txt” e deixei 1 sugestão no perfil, para você aceitar ou recusar no texto: Beta — Backend. Os números que vieram do arquivo estão como [a confirmar]. Falta dizer o que você não fez na Gama."
     );
     await markImportSummariesSaid(ctx.db, pending!.sourceDocumentIds);
     expect(await pendingImportSummaries(ctx.db, chatId)).toBeNull();
@@ -334,16 +446,28 @@ describe("importing a file into the profile", () => {
     const ctx = await setup();
     const source = await ctx.upload();
     const imports = new ImportService(ctx.db, ctx.tasks);
-    await imports.start({ userId: ctx.user.id, sourceDocumentId: source });
+    await imports.start({
+      userId: ctx.user.id,
+      sourceDocumentId: source,
+      language: "pt-BR",
+    });
     expect(ctx.trigger.trigger).toHaveBeenCalledWith(
       "import_document",
       expect.anything(),
       { concurrencyKey: ctx.user.id }
     );
     expect((await ctx.timeline()).documents[0].importStatus).toBe("importing");
+    // A file being read can't be removed.
+    await expect(ctx.remove(source)).rejects.toMatchObject({
+      code: "CONFLICT",
+    });
     // Already importing: not started twice.
     await expect(
-      imports.start({ userId: ctx.user.id, sourceDocumentId: source })
+      imports.start({
+        userId: ctx.user.id,
+        sourceDocumentId: source,
+        language: "pt-BR",
+      })
     ).rejects.toMatchObject({ code: "CONFLICT" });
 
     const other = await createTestUser("grace@example.com");
@@ -352,7 +476,11 @@ describe("importing a file into the profile", () => {
       defaultLanguage: "en-US",
     });
     await expect(
-      imports.start({ userId: other.id, sourceDocumentId: source })
+      imports.start({
+        userId: other.id,
+        sourceDocumentId: source,
+        language: "en-US",
+      })
     ).rejects.toMatchObject({ code: "NOT_FOUND" });
   });
 });

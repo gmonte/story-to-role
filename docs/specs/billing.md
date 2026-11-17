@@ -77,7 +77,7 @@ Credits live in an append-only ledger in Postgres: grants, debits, reservations,
 
 - The meter leads with what the user can still spend this month, translated into actions from the user's own usual choices: "You can still spend 470 credits this month (about 9 resumes or 33 cover letters)". One tap shows the breakdown by source and expiry: "320 from the plan, expire on Nov 30; 150 from a pack, valid until Mar 2027". With key funding, it shows the estimated spend on the user's key this month, with credits shown as a reserve.
 - The user always sees the cost of the next action before taking it.
-- A **credit reserve** keeps enough credits for the step the user came for: in the Free plan, the resume generation. When the balance approaches the reserve, the user sees an alert before each agent message and validation, so working on the profile never consumes the credits the resume needs.
+- A **credit reserve** keeps enough credits for the step the user came for: in the Free plan, the resume generation. When the balance approaches the reserve, the user sees an alert before each agent message and validation, so working on the profile (agent messages, validation and imports) never consumes the credits the resume needs.
 
 ## Payments
 

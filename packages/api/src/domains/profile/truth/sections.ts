@@ -21,6 +21,12 @@ export type ProfileSectionKey = (typeof profileSectionKeys)[number];
 
 export type ProfileLanguage = "pt-BR" | "en-US";
 
+/** Each language's name, for telling a model which one to write in. */
+export const languageNames: Record<ProfileLanguage, string> = {
+  "pt-BR": "Brazilian Portuguese",
+  "en-US": "English",
+};
+
 const aliases: Record<ProfileSectionKey, string[]> = {
   identity: ["identidade profissional", "professional identity", "identity"],
   contact: ["contato", "contact"],

@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { ArrowRight } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -39,6 +39,7 @@ export function GuidedOpeningStart() {
       onError: (error) => toast.error(error.message),
     })
   );
+  const published = useQuery(trpc.profile.draft.queryOptions({}));
   if (!timeline.data) return null;
   const { profile, documents } = timeline.data;
 
@@ -109,34 +110,37 @@ export function GuidedOpeningStart() {
               </p>
             </div>
             <Sources documents={documents} />
-            {documents.some(
-              (document) => document.importStatus === "imported"
-            ) && (
-              <Button asChild variant="outline" className="self-start">
-                <Link href="/app/career">
-                  {t.formatMessage({
-                    defaultMessage: "Review and publish my profile",
-                  })}
-                </Link>
-              </Button>
-            )}
+            {/* ADR 0006: the profile is reviewed and published before the
+                opening, since the fit check reads the published version. */}
             <div className="flex flex-wrap gap-2">
-              {/* Either way on to the opening: only the wording differs. */}
-              <Button
-                variant={documents.length > 0 ? "default" : "ghost"}
-                onClick={() => setStep("opening")}
-              >
-                {documents.length > 0 ? (
-                  <>
+              {published.data?.publishedVersion ? (
+                <Button onClick={() => setStep("opening")}>
+                  {t.formatMessage({
+                    defaultMessage: "Continue to the opening",
+                  })}
+                  <ArrowRight />
+                </Button>
+              ) : documents.length > 0 ? (
+                <>
+                  <Button asChild>
+                    <Link href="/app/career">
+                      {t.formatMessage({
+                        defaultMessage: "Review and publish my profile",
+                      })}
+                      <ArrowRight />
+                    </Link>
+                  </Button>
+                  <Button variant="ghost" onClick={() => setStep("opening")}>
                     {t.formatMessage({
-                      defaultMessage: "Continue to the opening",
+                      defaultMessage: "Go to the opening without publishing",
                     })}
-                    <ArrowRight />
-                  </>
-                ) : (
-                  t.formatMessage({ defaultMessage: "I don’t have a resume" })
-                )}
-              </Button>
+                  </Button>
+                </>
+              ) : (
+                <Button variant="ghost" onClick={() => setStep("opening")}>
+                  {t.formatMessage({ defaultMessage: "I don’t have a resume" })}
+                </Button>
+              )}
             </div>
           </section>
         ))}

@@ -95,7 +95,8 @@ Acceptance:
 - A resume, LinkedIn PDF or truth file writes the first draft of an empty profile, or proposes only what an existing one lacks; figures from a resume arrive as `[a confirmar]`; disagreements arrive side by side; a truth file's rules arrive as communication-rule suggestions; the agent sums up what was proposed and what is missing.
 
 - Note: an import is one comparison of the file's text with the draft (`import_document`, one at a time per user, cap 30 credits) whose changes become `profile_suggestions` with origin `import`; an empty profile's first draft arrives the same way. Code drops a change with no passage of the file behind it, one that restates a line, or one that rewrites a line whose figure the user marked. A source keeps its import state (`importStatus`, the summary the agent says once).
-- Note: the guided start ("I have an opening in mind") sends the user to My career to review and publish the first draft; P5 makes the fit check read the published profile.
+- Note: the guided start ("I have an opening in mind") sends the user to My career to review and publish the first draft before the opening (ADR 0006); P5 makes the fit check read the published profile.
+- Note: an import sees the suggestions still waiting and completes one instead of repeating it; imports hold the Free plan's credit reserve like the agent and validation; the acceptance's second half (imported figures staying out of generated documents) is met when P6 reads only `[medido]`.
 
 Acceptance:
 - [ ] A file that only restates the profile proposes nothing; one with a new fact proposes only that.

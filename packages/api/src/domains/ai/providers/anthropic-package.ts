@@ -264,13 +264,17 @@ export function createAnthropicPackage({
 
     async generateObject(request) {
       const params = toParams(request);
-      const response = await client.messages.parse({
-        ...params,
-        output_config: {
-          ...params.output_config,
-          format: zodOutputFormat(request.schema),
-        },
-      });
+      // Streamed and gathered: a long output (a profile's first draft)
+      // would exceed the time a plain request may take.
+      const response = await client.messages
+        .stream({
+          ...params,
+          output_config: {
+            ...params.output_config,
+            format: zodOutputFormat(request.schema),
+          },
+        })
+        .finalMessage();
 
       return {
         object: response.parsed_output ?? null,

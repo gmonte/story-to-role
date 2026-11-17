@@ -1,9 +1,16 @@
 import { TRPCError } from "@trpc/server";
 
 import { CareerRepository } from "@repo/api/domains/career/career-repository";
+import { getUserCipher } from "@repo/api/domains/encryption/user-cipher";
 import { TasksRepository } from "@repo/api/domains/tasks/tasks-repository";
 import { TasksService } from "@repo/api/domains/tasks/tasks-service";
 import type { DbClient } from "@repo/api/tools/db-client";
+
+import { ProfileRepository } from "../profile-repository";
+import { serializeBlocks } from "../truth/blocks";
+import type { ProfileLanguage } from "../truth/sections";
+import { profileTemplate } from "../truth/template";
+import { importSettings } from "./import-settings";
 
 /**
  * Starts reading a source into profile suggestions (profile spec,
@@ -16,41 +23,65 @@ export class ImportService {
     private readonly tasks = new TasksService(db)
   ) {}
 
-  async start(input: { userId: string; sourceDocumentId: string }) {
-    const career = new CareerRepository(this.db);
-    const [profile, source] = await Promise.all([
-      career.findProfileByUserId(input.userId),
-      career.findDocument(input.sourceDocumentId),
-    ]);
-    // A source of the user's own: anyone else's is not found.
-    if (source?.profileId !== profile?.id) {
-      throw new TRPCError({ code: "NOT_FOUND" });
-    }
-    if (
-      source.importStatus === "importing" &&
-      (await new TasksRepository(this.db).activeTask(
-        source.id,
-        "import_document"
-      ))
-    ) {
-      throw new TRPCError({ code: "CONFLICT" });
-    }
+  /**
+   * `language` is the interface's: a user who never opened the editor gets
+   * their profile from the template in it, for the import to compare with.
+   */
+  async start(input: {
+    userId: string;
+    sourceDocumentId: string;
+    language: ProfileLanguage;
+  }) {
     await this.tasks.assertAffordable({
       userId: input.userId,
       type: "import_document",
     });
-    await career.updateDocument(source.id, {
-      importStatus: "importing",
-      importRejection: null,
+    const cipher = await getUserCipher(this.db, input.userId);
+    // Checked and marked under a lock on the source: two requests at once
+    // start one import.
+    const source = await this.db.transaction(async (tx) => {
+      const career = new CareerRepository(tx);
+      const profile = await career.findProfileByUserId(input.userId);
+      const row = await career.findDocumentForUpdate(input.sourceDocumentId);
+      // A source of the user's own: anyone else's is not found.
+      if (row?.profileId !== profile?.id) {
+        throw new TRPCError({ code: "NOT_FOUND" });
+      }
+      if (
+        row.importStatus === "importing" &&
+        (await new TasksRepository(tx).activeTask(
+          row.id,
+          "import_document",
+          importSettings.staleAfterMs
+        ))
+      ) {
+        throw new TRPCError({ code: "CONFLICT" });
+      }
+      await new ProfileRepository(tx).insertDocument({
+        userId: input.userId,
+        kind: "profile",
+        encryptedDraft: cipher.encrypt(
+          serializeBlocks(profileTemplate(input.language))
+        ),
+        draftUpdatedAt: new Date(),
+        draftRevision: 1,
+      });
+      await career.updateDocument(row.id, {
+        importStatus: "importing",
+        importRejection: null,
+      });
+      return row;
     });
-    const { realtime } = await this.tasks.startOrUndo(
+    await this.tasks.startOrUndo(
       {
         userId: input.userId,
         type: "import_document",
         subjectId: source.id,
       },
-      () => career.updateDocument(source.id, { importStatus: "failed" })
+      () =>
+        new CareerRepository(this.db).updateDocument(source.id, {
+          importStatus: "failed",
+        })
     );
-    return { realtime };
   }
 }

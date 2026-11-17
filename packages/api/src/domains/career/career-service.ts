@@ -1,5 +1,6 @@
 import { TRPCError } from "@trpc/server";
 
+import { importSettings } from "@repo/api/domains/profile/import/import-settings";
 import { TasksRepository } from "@repo/api/domains/tasks/tasks-repository";
 import type { DbClient } from "@repo/api/tools/db-client";
 import {
@@ -115,6 +116,7 @@ export class CareerService {
     const documents = await new CareerRepository(this.db).listDocuments(
       profile.id
     );
+    const tasks = new TasksRepository(this.db);
     return {
       profile: {
         interviewLanguage: profile.interviewLanguage,
@@ -122,13 +124,17 @@ export class CareerService {
       },
       documents: await Promise.all(
         documents.map(async (row) => {
-          const tasks = new TasksRepository(this.db);
           // An import whose run died leaves its row importing: past its
           // task's life it counts as failed, so nothing waits on it forever.
           const importing =
             row.importStatus === "importing" &&
-            (Date.now() - (row.updatedAt ?? row.createdAt).getTime() < 30_000 ||
-              !!(await tasks.activeTask(row.id, "import_document")));
+            (Date.now() - (row.updatedAt ?? row.createdAt).getTime() <
+              importSettings.startingGraceMs ||
+              !!(await tasks.activeTask(
+                row.id,
+                "import_document",
+                importSettings.staleAfterMs
+              )));
           return {
             id: row.id,
             kind: row.kind,

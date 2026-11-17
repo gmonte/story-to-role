@@ -4,10 +4,22 @@ import {
   canonicalMarkText,
   findMarks,
   hasFigure,
+  type FigureMark,
 } from "./marks";
 import { experienceFieldOf, type ProfileLanguage } from "./sections";
 import { readStructure, splitLabel } from "./structure";
 import { locateChange, parseFragment, type ProfileChange } from "./suggestions";
+
+/** The numbers a line states, outside its marks. */
+function figuresOf(text: string) {
+  const plain = findMarks(text).reduceRight(
+    (rest, match) => rest.slice(0, match.from) + rest.slice(match.to),
+    text
+  );
+  return (plain.match(/\d+(?:[.,]\d+)*/g) ?? []).map((figure) =>
+    figure.replace(/,/g, ".")
+  );
+}
 
 /** Whether the line a change starts at sits under an experience's results. */
 function startsInResults(blocks: ProfileBlock[], line: number) {
@@ -45,7 +57,17 @@ export function markImportedFigures(
   const range = locateChange(draft, change);
   if (!range || !change.part.startsWith("experience")) return change;
   const open = canonicalMarks[language].toConfirm;
-  const fileMarks = new Set(findMarks(fileText).map((match) => match.mark));
+  const fileLines = fileText.split("\n");
+  // Whether the file itself writes this mark next to one of the line's
+  // figures: a mark elsewhere in the file says nothing about this one.
+  const fileMarks = (text: string, mark: FigureMark) => {
+    const wanted = figuresOf(text);
+    return fileLines.some(
+      (line) =>
+        findMarks(line).some((match) => match.mark === mark) &&
+        figuresOf(line).some((figure) => wanted.includes(figure))
+    );
+  };
   // Replaced or continued lines keep where they are; a labelled line says
   // where the ones under it belong.
   const anchor = range.end > range.start ? range.start : range.start - 1;
@@ -77,19 +99,17 @@ export function markImportedFigures(
       if (!isResult || existing.has(block.text.trim())) return [block];
 
       let text = block.text;
-      // A mark the file doesn't carry is the model's, not the person's.
       for (const match of findMarks(text).reverse()) {
-        if (
-          (match.mark === "measured" || match.mark === "estimated") &&
-          !fileMarks.has(match.mark)
-        ) {
-          text = `${text.slice(0, match.from)}[${open}]${text.slice(match.to)}`;
-        } else {
-          text =
-            text.slice(0, match.from) +
-            canonicalMarkText(match, language) +
-            text.slice(match.to);
-        }
+        const withoutOrigin =
+          // The model's "measured" or "estimated", not the person's.
+          ((match.mark === "measured" || match.mark === "estimated") &&
+            !fileMarks(text, match.mark)) ||
+          // A figure can't be a result "with no number".
+          (match.mark === "noNumber" && hasFigure(text));
+        text =
+          text.slice(0, match.from) +
+          (withoutOrigin ? `[${open}]` : canonicalMarkText(match, language)) +
+          text.slice(match.to);
       }
       if (hasFigure(text) && !findMarks(text).length)
         text = withMark(text, open);

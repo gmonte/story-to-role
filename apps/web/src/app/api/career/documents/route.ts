@@ -9,6 +9,8 @@ import { UsersRepository } from "@repo/api/domains/users/users-repository";
 import { db } from "@repo/api/tools/db";
 import { upstashRateLimiter } from "@repo/api/tools/rate-limit";
 
+import { getLocaleFromNextCookies } from "~/tools/intl/utils/get-locale-from-next-cookies";
+
 const formSchema = z.object({
   file: z.instanceof(File),
 });
@@ -53,7 +55,14 @@ export async function POST(request: NextRequest) {
     });
     // The file is kept whatever happens to its import.
     const importError = await new ImportService(db)
-      .start({ userId: user.id, sourceDocumentId: result.sourceDocumentId })
+      .start({
+        userId: user.id,
+        sourceDocumentId: result.sourceDocumentId,
+        // A user who never opened the editor gets their profile from the
+        // template in the interface language.
+        language:
+          (await getLocaleFromNextCookies()) === "pt-BR" ? "pt-BR" : "en-US",
+      })
       .then(() => null)
       .catch((error: unknown) => (error as { code?: string }).code ?? "FAILED");
     return Response.json({ ...result, importError });

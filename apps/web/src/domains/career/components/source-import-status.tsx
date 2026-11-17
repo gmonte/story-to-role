@@ -6,6 +6,7 @@ import { RotateCw } from "lucide-react";
 import type { Timeline } from "@repo/api/domains/career/schemas/timeline";
 import type { SourceImportRejection } from "@repo/api/domains/career/schemas/career";
 import { documentLimits } from "@repo/api/domains/career/documents/document-limits";
+import { importSteps } from "@repo/api/domains/profile/import/import-settings";
 import { useTranslation } from "@repo/intl/use-translation";
 import { Button } from "@repo/web/components/ui/button";
 import { toast } from "@repo/web/components/ui/sonner";
@@ -36,6 +37,19 @@ export function SourceImportStatus({ document }: { document: SourceDocument }) {
     })
   );
 
+  const stepLabels: Record<(typeof importSteps)[number], string> = {
+    reading: t.formatMessage({ defaultMessage: "Turning the file into text" }),
+    checking: t.formatMessage({
+      defaultMessage: "Checking that it is about your career",
+    }),
+    comparing: t.formatMessage({
+      defaultMessage: "Comparing it with your profile, line by line",
+    }),
+    suggesting: t.formatMessage({
+      defaultMessage: "Writing suggestions for what the profile lacks",
+    }),
+  };
+
   if (document.importStatus === "importing") {
     return (
       <AiAtWork
@@ -45,38 +59,13 @@ export function SourceImportStatus({ document }: { document: SourceDocument }) {
           { fileName: document.fileName }
         )}
         current={document.importProgress?.label ?? "reading"}
-        steps={[
-          {
-            key: "reading",
-            label: t.formatMessage({
-              defaultMessage: "Turning the file into text",
-            }),
-          },
-          {
-            key: "checking",
-            label: t.formatMessage({
-              defaultMessage: "Checking that it is about your career",
-            }),
-          },
-          {
-            key: "comparing",
-            label: t.formatMessage({
-              defaultMessage: "Comparing it with your profile, line by line",
-            }),
-          },
-          {
-            key: "suggesting",
-            label: t.formatMessage({
-              defaultMessage: "Writing suggestions for what the profile lacks",
-            }),
-          },
-        ]}
+        steps={importSteps.map((key) => ({ key, label: stepLabels[key] }))}
         detail={
           document.importProgress?.counts?.found !== undefined &&
           t.formatMessage(
             {
               defaultMessage:
-                "{count, plural, =0 {Nothing new found} one {# possible change found} other {# possible changes found}}.",
+                "{count, plural, =0 {Nothing new found} one {# thing the profile may lack} other {# things the profile may lack}}.",
             },
             { count: document.importProgress.counts.found }
           )

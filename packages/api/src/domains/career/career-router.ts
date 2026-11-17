@@ -9,7 +9,6 @@ import {
   type TRPCContext,
 } from "@repo/api/tools/trpc";
 import { ImportService } from "@repo/api/domains/profile/import/import-service";
-import { realtimeSubscriptionSchema } from "@repo/api/domains/tasks/schemas/task";
 
 import { CareerService } from "./career-service";
 import { DocumentsService } from "./documents/documents-service";
@@ -145,10 +144,15 @@ export const careerRouter = createTRPCRouter({
       )
     )
     .input(z.object({ sourceDocumentId: z.uuid() }))
-    .output(z.object({ realtime: realtimeSubscriptionSchema }))
-    .mutation(({ ctx, input }) =>
-      new ImportService(db).start({ userId: ctx.userId, ...input })
-    ),
+    .output(okSchema)
+    .mutation(async ({ ctx, input }) => {
+      await new ImportService(db).start({
+        userId: ctx.userId,
+        language: defaultLanguage(ctx),
+        ...input,
+      });
+      return ok;
+    }),
 
   documentPreview: userProcedure
     .meta(

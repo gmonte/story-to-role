@@ -161,6 +161,16 @@ export class CareerRepository {
       .where(eq(sourceDocumentsTable.id, sourceDocumentId));
   }
 
+  /** Locks the source's row for the rest of the transaction. */
+  async findDocumentForUpdate(sourceDocumentId: string) {
+    const [row] = await this.tx
+      .select()
+      .from(sourceDocumentsTable)
+      .where(eq(sourceDocumentsTable.id, sourceDocumentId))
+      .for("update");
+    return row;
+  }
+
   async findDocument(sourceDocumentId: string) {
     const [row] = await this.tx
       .select()

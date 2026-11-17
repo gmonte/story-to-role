@@ -26,7 +26,9 @@ export type TaskContext = {
  */
 export async function runTask(
   { db, taskId, type }: { db: DbClient; taskId: string; type: TaskType },
-  handler: (context: TaskContext) => Promise<void>
+  // A handler may end without a charge (a file refused before any work
+  // was done for the user): its reservation is released like a failure's.
+  handler: (context: TaskContext) => Promise<void | { charge: false }>
 ) {
   const repository = new TasksRepository(db);
   const owner = await repository.findOwner(taskId);
@@ -37,8 +39,9 @@ export async function runTask(
 
   await repository.markProcessing(taskId);
 
+  let outcome: void | { charge: false };
   try {
-    await handler({
+    outcome = await handler({
       taskId,
       userId: owner.userId,
       subjectId: owner.subjectId,
@@ -63,6 +66,7 @@ export async function runTask(
     taskId,
     userId: owner.userId,
     funding: owner.funding,
+    charge: outcome?.charge,
   });
 }
 
@@ -77,6 +81,8 @@ export async function finishTask(input: {
   userId: string;
   funding: AiFunding;
   error?: unknown;
+  // False: the task ends completed, with nothing charged.
+  charge?: boolean;
 }) {
   const { db, taskId, userId } = input;
   const repository = new TasksRepository(db);
@@ -84,7 +90,11 @@ export async function finishTask(input: {
     await repository.markCompleted(taskId);
     // A settlement error never turns a finished task into a failed, free
     // one; reconciliation settles what is left open.
-    await settleTask(db, { userId, taskId, succeeded: true });
+    await settleTask(db, {
+      userId,
+      taskId,
+      succeeded: input.charge !== false,
+    });
     return;
   }
   const keyFailure =

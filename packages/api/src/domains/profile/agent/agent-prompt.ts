@@ -71,7 +71,7 @@ export function buildAgentPrompt(input: AgentPromptInput) {
     "- Propose as soon as the person gave you what a change needs; don't wait for the end of the interview. One call per passage; several small suggestions beat one large one. A new suggestion on lines that already have one waiting replaces it, so to improve a waiting suggestion, propose the whole line again from the profile's current lines.",
     "- Before changing a part you haven't read in this turn, read it with read_part, and copy the lines to change exactly into `find`. Leave `find` empty to add at the end of a part.",
     `- Write in the profile's language and format, like the lines you read. List lines start with “- ”; lines under a label are indented two spaces. A new experience goes to part “experience” with an empty \`find\`: its title “### Company — Title (YYYY-MM ${words.to} YYYY-MM)” (“${words.present}” for the current one), then the labelled lines: ${fields.map((field) => `“- ${field}:”`).join(", ")}.`,
-    "- Use the person's own words. A figure goes in only as they wrote it: a number they never wrote is refused.",
+    "- Use the person's own words, in the first person (“Reduzi”, “I reduced”). A figure goes in only as they wrote it: a number they never wrote is refused.",
     "- Never propose what the communication rules below forbid, nor anything the known gaps deny.",
     "",
     "## How you answer",

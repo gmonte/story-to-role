@@ -77,6 +77,23 @@ describe("figures from an uploaded file", () => {
     );
   });
 
+  it("takes a mark only from the file's line about that figure", () => {
+    const change = markImportedFigures(
+      draft,
+      {
+        part: "experience:beta — backend",
+        find: "- Resultados:",
+        replace:
+          "- Resultados:\n  - Reduzi 60% [medido: painel de APM].\n  - Cortei custos em 30% [medido].\n  - Atendi 12 clientes [sem número].",
+      },
+      "Reduzi 60% [medido: painel de APM].\nCortei custos em 30%.\nAtendi 12 clientes.",
+      "pt-BR"
+    );
+    expect(change.replace).toBe(
+      "- Resultados:\n  - Reduzi 60% [medido: painel de APM].\n  - Cortei custos em 30% [a confirmar].\n  - Atendi 12 clientes [a confirmar]."
+    );
+  });
+
   it("keeps the marks a truth file gives its own figures", () => {
     const change = markImportedFigures(
       draft,

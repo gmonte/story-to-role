@@ -163,11 +163,20 @@ function Conversation({
 
   // The agent sums up an import that ended (here or while the page was
   // away): the page asks for it once the chat is free.
-  const summaryPending = documents.some((document) => document.summaryPending);
+  // Which summaries are waiting: asked for once (twice if the first try
+  // fails), never in a loop when one can't be said.
+  const unsaid = documents
+    .filter((document) => document.summaryPending)
+    .map((document) => document.id)
+    .sort()
+    .join(",");
   const asking = useRef(false);
-  useEffect(() => {
-    if (!summaryPending || busy || asking.current) return;
+  const asked = useRef(new Map<string, number>());
+  const catchUp = useRef<() => void>(undefined);
+  catchUp.current = () => {
+    if (asking.current || (asked.current.get(unsaid) ?? 0) >= 2) return;
     asking.current = true;
+    asked.current.set(unsaid, (asked.current.get(unsaid) ?? 0) + 1);
     // The answer to a request without a message continues the last
     // assistant message: an empty one takes it, so earlier ones stay.
     setMessages((current) => [
@@ -179,10 +188,14 @@ function Conversation({
       // what the stream showed stays, as the store may not have it yet.
       const stored = (await loadProfileChat()).messages;
       setMessages((current) => withStored(current, stored));
+      // The sources say it was said before another request may go.
+      await refreshCareer();
       asking.current = false;
-      void refreshCareer();
     });
-  }, [summaryPending, busy, sendAction, setMessages, refreshCareer]);
+  };
+  useEffect(() => {
+    if (unsaid && !busy) catchUp.current?.();
+  }, [unsaid, busy]);
 
   // A passage or a finding sent here from the document: its words go to the
   // composer, ready to send.
@@ -230,6 +243,14 @@ function Conversation({
     void send(text);
   }
 
+  // The import's cost shows where the file is attached, too.
+  const attachLabel = t.formatMessage(
+    {
+      defaultMessage:
+        "Attach a resume or a text file (read into suggestions: up to {credits, plural, =0 {no credits} one {# credit} other {# credits}} each)",
+    },
+    { credits: credits.data?.estimates.sourceImport ?? 0 }
+  );
   const interviewRequest = t.formatMessage({
     defaultMessage:
       "Interview me to fill in my profile, one position at a time.",
@@ -451,12 +472,8 @@ function Conversation({
               size="icon"
               variant="ghost"
               className="size-8"
-              aria-label={t.formatMessage({
-                defaultMessage: "Attach a resume or a text file",
-              })}
-              title={t.formatMessage({
-                defaultMessage: "Attach a resume or a text file",
-              })}
+              aria-label={attachLabel}
+              title={attachLabel}
               onClick={() => fileInput.current?.click()}
             >
               <Paperclip />

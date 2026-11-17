@@ -61,6 +61,9 @@ export async function proposeSuggestion(input: {
   // The suggestions already waiting: two can't rewrite the same lines, so
   // the new one takes the place of those it overlaps.
   pending?: Array<ProfileChange & { id: string }>;
+  // Waiting suggestions this one is a newer version of, whatever their
+  // lines (an addition has none to overlap).
+  supersedes?: string[];
 }): Promise<
   | { ok: true; suggestion: ProfileSuggestion; supersededIds: string[] }
   | { ok: false; refusal: SuggestionRefusal }
@@ -87,7 +90,8 @@ export async function proposeSuggestion(input: {
         taken.start < range.end
       );
     })
-    .map((other) => other.id);
+    .map((other) => other.id)
+    .concat(input.supersedes ?? []);
   const figures = ungivenFigures(change.replace, [
     serializeBlocks(input.draft),
     ...input.sources,

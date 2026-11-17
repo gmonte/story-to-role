@@ -21,7 +21,7 @@ export const importSourceTask = task({
         if (!subjectId) throw new Error(`Task ${taskId} has no source`);
         try {
           const { ai, cipher } = await createTaskAi({ db, userId, taskId });
-          await runImportSource({
+          const outcome = await runImportSource({
             db,
             ai,
             cipher,
@@ -30,6 +30,8 @@ export const importSourceTask = task({
             sourceDocumentId: subjectId,
             reportProgress,
           });
+          // A file refused before the comparison did nothing for the user.
+          if (outcome.rejected) return { charge: false as const };
         } catch (error) {
           await new CareerRepository(db).updateDocument(subjectId, {
             importStatus: "failed",

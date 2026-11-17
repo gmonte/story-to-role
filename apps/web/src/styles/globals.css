@@ -70,7 +70,8 @@
   text-decoration: underline wavy var(--destructive);
 }
 .profile-editor .profile-finding-content {
-  text-decoration: underline dotted 2px color-mix(in oklab, #f59e0b 70%, transparent);
+  text-decoration: underline dotted 2px
+    color-mix(in oklab, #f59e0b 70%, transparent);
 }
 .profile-editor .profile-label-hint {
   color: var(--muted-foreground);
@@ -92,7 +93,11 @@
 .profile-editor .profile-suggestion-old {
   background: color-mix(in oklab, var(--destructive) 10%, transparent);
   text-decoration: line-through;
-  text-decoration-color: color-mix(in oklab, var(--destructive) 60%, transparent);
+  text-decoration-color: color-mix(
+    in oklab,
+    var(--destructive) 60%,
+    transparent
+  );
 }
 .profile-editor .profile-suggestion {
   margin: 0.25rem 0 0.5rem;

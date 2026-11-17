@@ -1,5 +1,5 @@
 {
-  "id": "edda96dd-73de-46ce-9b5f-f146005fae9e",
+  "id": "de32083c-d482-4fec-90a3-1bca745cb874",
   "prevId": "671d2d74-4856-4316-bd02-9cd472318e94",
   "version": "7",
   "dialect": "postgresql",
@@ -115,7 +115,9 @@
         "users_clerk_user_id_unique": {
           "name": "users_clerk_user_id_unique",
           "nullsNotDistinct": false,
-          "columns": ["clerkUserId"]
+          "columns": [
+            "clerkUserId"
+          ]
         }
       },
       "policies": {},
@@ -165,8 +167,12 @@
           "name": "user_data_keys_userId_users_id_fk",
           "tableFrom": "user_data_keys",
           "tableTo": "users",
-          "columnsFrom": ["userId"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "userId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -176,7 +182,9 @@
         "user_data_keys_user_id_unique": {
           "name": "user_data_keys_user_id_unique",
           "nullsNotDistinct": false,
-          "columns": ["userId"]
+          "columns": [
+            "userId"
+          ]
         }
       },
       "policies": {},
@@ -307,8 +315,12 @@
           "name": "tasks_userId_users_id_fk",
           "tableFrom": "tasks",
           "tableTo": "users",
-          "columnsFrom": ["userId"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "userId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -381,8 +393,12 @@
           "name": "ai_keys_userId_users_id_fk",
           "tableFrom": "ai_keys",
           "tableTo": "users",
-          "columnsFrom": ["userId"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "userId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -392,7 +408,10 @@
         "ai_keys_user_id_provider_unique": {
           "name": "ai_keys_user_id_provider_unique",
           "nullsNotDistinct": false,
-          "columns": ["userId", "provider"]
+          "columns": [
+            "userId",
+            "provider"
+          ]
         }
       },
       "policies": {},
@@ -523,8 +542,12 @@
           "name": "ai_usage_userId_users_id_fk",
           "tableFrom": "ai_usage",
           "tableTo": "users",
-          "columnsFrom": ["userId"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "userId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -532,8 +555,12 @@
           "name": "ai_usage_taskId_tasks_id_fk",
           "tableFrom": "ai_usage",
           "tableTo": "tasks",
-          "columnsFrom": ["taskId"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "taskId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "set null",
           "onUpdate": "no action"
         }
@@ -615,8 +642,12 @@
           "name": "courtesy_grants_userId_users_id_fk",
           "tableFrom": "courtesy_grants",
           "tableTo": "users",
-          "columnsFrom": ["userId"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "userId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -624,8 +655,12 @@
           "name": "courtesy_grants_grantedBy_users_id_fk",
           "tableFrom": "courtesy_grants",
           "tableTo": "users",
-          "columnsFrom": ["grantedBy"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "grantedBy"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "set null",
           "onUpdate": "no action"
         }
@@ -737,8 +772,12 @@
           "name": "credit_entries_userId_users_id_fk",
           "tableFrom": "credit_entries",
           "tableTo": "users",
-          "columnsFrom": ["userId"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "userId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -746,8 +785,12 @@
           "name": "credit_entries_lotId_credit_lots_id_fk",
           "tableFrom": "credit_entries",
           "tableTo": "credit_lots",
-          "columnsFrom": ["lotId"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "lotId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -755,8 +798,12 @@
           "name": "credit_entries_taskId_tasks_id_fk",
           "tableFrom": "credit_entries",
           "tableTo": "tasks",
-          "columnsFrom": ["taskId"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "taskId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "set null",
           "onUpdate": "no action"
         }
@@ -845,8 +892,12 @@
           "name": "credit_lots_userId_users_id_fk",
           "tableFrom": "credit_lots",
           "tableTo": "users",
-          "columnsFrom": ["userId"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "userId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -856,7 +907,9 @@
         "credit_lots_origin_unique": {
           "name": "credit_lots_origin_unique",
           "nullsNotDistinct": false,
-          "columns": ["origin"]
+          "columns": [
+            "origin"
+          ]
         }
       },
       "policies": {},
@@ -900,8 +953,12 @@
           "name": "stored_credit_confirmations_userId_users_id_fk",
           "tableFrom": "stored_credit_confirmations",
           "tableTo": "users",
-          "columnsFrom": ["userId"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "userId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -911,7 +968,9 @@
         "stored_credit_confirmations_user_id_unique": {
           "name": "stored_credit_confirmations_user_id_unique",
           "nullsNotDistinct": false,
-          "columns": ["userId"]
+          "columns": [
+            "userId"
+          ]
         }
       },
       "policies": {},
@@ -955,8 +1014,12 @@
           "name": "billing_customers_userId_users_id_fk",
           "tableFrom": "billing_customers",
           "tableTo": "users",
-          "columnsFrom": ["userId"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "userId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -966,12 +1029,16 @@
         "billing_customers_user_id_unique": {
           "name": "billing_customers_user_id_unique",
           "nullsNotDistinct": false,
-          "columns": ["userId"]
+          "columns": [
+            "userId"
+          ]
         },
         "billing_customers_stripe_customer_id_unique": {
           "name": "billing_customers_stripe_customer_id_unique",
           "nullsNotDistinct": false,
-          "columns": ["stripeCustomerId"]
+          "columns": [
+            "stripeCustomerId"
+          ]
         }
       },
       "policies": {},
@@ -1086,8 +1153,12 @@
           "name": "subscriptions_userId_users_id_fk",
           "tableFrom": "subscriptions",
           "tableTo": "users",
-          "columnsFrom": ["userId"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "userId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -1097,7 +1168,9 @@
         "subscriptions_stripe_subscription_id_unique": {
           "name": "subscriptions_stripe_subscription_id_unique",
           "nullsNotDistinct": false,
-          "columns": ["stripeSubscriptionId"]
+          "columns": [
+            "stripeSubscriptionId"
+          ]
         }
       },
       "policies": {},
@@ -1159,8 +1232,12 @@
           "name": "career_profiles_userId_users_id_fk",
           "tableFrom": "career_profiles",
           "tableTo": "users",
-          "columnsFrom": ["userId"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "userId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -1170,7 +1247,9 @@
         "career_profiles_user_id_unique": {
           "name": "career_profiles_user_id_unique",
           "nullsNotDistinct": false,
-          "columns": ["userId"]
+          "columns": [
+            "userId"
+          ]
         }
       },
       "policies": {},
@@ -1286,8 +1365,12 @@
           "name": "credentials_profileId_career_profiles_id_fk",
           "tableFrom": "credentials",
           "tableTo": "career_profiles",
-          "columnsFrom": ["profileId"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "profileId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -1413,8 +1496,12 @@
           "name": "positions_profileId_career_profiles_id_fk",
           "tableFrom": "positions",
           "tableTo": "career_profiles",
-          "columnsFrom": ["profileId"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "profileId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -1532,8 +1619,12 @@
           "name": "source_documents_profileId_career_profiles_id_fk",
           "tableFrom": "source_documents",
           "tableTo": "career_profiles",
-          "columnsFrom": ["profileId"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "profileId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -1622,8 +1713,12 @@
           "name": "profile_chat_messages_chatId_profile_chats_id_fk",
           "tableFrom": "profile_chat_messages",
           "tableTo": "profile_chats",
-          "columnsFrom": ["chatId"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "chatId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -1633,7 +1728,10 @@
         "profile_chat_messages_chat_message_unique": {
           "name": "profile_chat_messages_chat_message_unique",
           "nullsNotDistinct": false,
-          "columns": ["chatId", "messageId"]
+          "columns": [
+            "chatId",
+            "messageId"
+          ]
         }
       },
       "policies": {},
@@ -1711,8 +1809,12 @@
           "name": "profile_chats_userId_users_id_fk",
           "tableFrom": "profile_chats",
           "tableTo": "users",
-          "columnsFrom": ["userId"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "userId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -1785,8 +1887,12 @@
           "name": "profile_documents_userId_users_id_fk",
           "tableFrom": "profile_documents",
           "tableTo": "users",
-          "columnsFrom": ["userId"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "userId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -1796,7 +1902,10 @@
         "profile_documents_user_kind_unique": {
           "name": "profile_documents_user_kind_unique",
           "nullsNotDistinct": false,
-          "columns": ["userId", "kind"]
+          "columns": [
+            "userId",
+            "kind"
+          ]
         }
       },
       "policies": {},
@@ -1826,8 +1935,12 @@
           "name": "profile_extracts_versionId_profile_versions_id_fk",
           "tableFrom": "profile_extracts",
           "tableTo": "profile_versions",
-          "columnsFrom": ["versionId"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "versionId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -1915,8 +2028,12 @@
           "name": "profile_passages_versionId_profile_versions_id_fk",
           "tableFrom": "profile_passages",
           "tableTo": "profile_versions",
-          "columnsFrom": ["versionId"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "versionId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -2005,8 +2122,12 @@
           "name": "profile_suggestions_documentId_profile_documents_id_fk",
           "tableFrom": "profile_suggestions",
           "tableTo": "profile_documents",
-          "columnsFrom": ["documentId"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "documentId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -2094,8 +2215,12 @@
           "name": "profile_validations_documentId_profile_documents_id_fk",
           "tableFrom": "profile_validations",
           "tableTo": "profile_documents",
-          "columnsFrom": ["documentId"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "documentId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -2171,8 +2296,12 @@
           "name": "profile_versions_documentId_profile_documents_id_fk",
           "tableFrom": "profile_versions",
           "tableTo": "profile_documents",
-          "columnsFrom": ["documentId"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "documentId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -2182,7 +2311,10 @@
         "profile_versions_document_number_unique": {
           "name": "profile_versions_document_number_unique",
           "nullsNotDistinct": false,
-          "columns": ["documentId", "number"]
+          "columns": [
+            "documentId",
+            "number"
+          ]
         }
       },
       "policies": {},
@@ -2266,8 +2398,12 @@
           "name": "career_goals_profileId_career_profiles_id_fk",
           "tableFrom": "career_goals",
           "tableTo": "career_profiles",
-          "columnsFrom": ["profileId"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "profileId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -2373,8 +2509,12 @@
           "name": "sensitive_items_profileId_career_profiles_id_fk",
           "tableFrom": "sensitive_items",
           "tableTo": "career_profiles",
-          "columnsFrom": ["profileId"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "profileId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -2382,8 +2522,12 @@
           "name": "sensitive_items_positionId_positions_id_fk",
           "tableFrom": "sensitive_items",
           "tableTo": "positions",
-          "columnsFrom": ["positionId"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "positionId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "set null",
           "onUpdate": "no action"
         }
@@ -2484,8 +2628,12 @@
           "name": "fit_check_items_fitCheckId_fit_checks_id_fk",
           "tableFrom": "fit_check_items",
           "tableTo": "fit_checks",
-          "columnsFrom": ["fitCheckId"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "fitCheckId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -2493,8 +2641,12 @@
           "name": "fit_check_items_termId_opening_terms_id_fk",
           "tableFrom": "fit_check_items",
           "tableTo": "opening_terms",
-          "columnsFrom": ["termId"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "termId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -2576,8 +2728,12 @@
           "name": "fit_checks_openingId_openings_id_fk",
           "tableFrom": "fit_checks",
           "tableTo": "openings",
-          "columnsFrom": ["openingId"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "openingId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -2585,8 +2741,12 @@
           "name": "fit_checks_profileVersionId_profile_versions_id_fk",
           "tableFrom": "fit_checks",
           "tableTo": "profile_versions",
-          "columnsFrom": ["profileVersionId"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "profileVersionId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "set null",
           "onUpdate": "no action"
         },
@@ -2594,8 +2754,12 @@
           "name": "fit_checks_preferencesVersionId_profile_versions_id_fk",
           "tableFrom": "fit_checks",
           "tableTo": "profile_versions",
-          "columnsFrom": ["preferencesVersionId"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "preferencesVersionId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "set null",
           "onUpdate": "no action"
         }
@@ -2684,8 +2848,12 @@
           "name": "opening_terms_openingId_openings_id_fk",
           "tableFrom": "opening_terms",
           "tableTo": "openings",
-          "columnsFrom": ["openingId"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "openingId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -2829,8 +2997,12 @@
           "name": "openings_profileId_career_profiles_id_fk",
           "tableFrom": "openings",
           "tableTo": "career_profiles",
-          "columnsFrom": ["profileId"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "profileId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -2955,8 +3127,12 @@
           "name": "applications_profileId_career_profiles_id_fk",
           "tableFrom": "applications",
           "tableTo": "career_profiles",
-          "columnsFrom": ["profileId"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "profileId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -2964,8 +3140,12 @@
           "name": "applications_openingId_openings_id_fk",
           "tableFrom": "applications",
           "tableTo": "openings",
-          "columnsFrom": ["openingId"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "openingId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -2975,7 +3155,9 @@
         "applications_opening_id_unique": {
           "name": "applications_opening_id_unique",
           "nullsNotDistinct": false,
-          "columns": ["openingId"]
+          "columns": [
+            "openingId"
+          ]
         }
       },
       "policies": {},
@@ -3059,8 +3241,12 @@
           "name": "application_events_applicationId_applications_id_fk",
           "tableFrom": "application_events",
           "tableTo": "applications",
-          "columnsFrom": ["applicationId"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "applicationId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -3130,8 +3316,12 @@
           "name": "application_submissions_applicationId_applications_id_fk",
           "tableFrom": "application_submissions",
           "tableTo": "applications",
-          "columnsFrom": ["applicationId"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "applicationId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -3139,8 +3329,12 @@
           "name": "application_submissions_versionId_document_versions_id_fk",
           "tableFrom": "application_submissions",
           "tableTo": "document_versions",
-          "columnsFrom": ["versionId"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "versionId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -3148,8 +3342,12 @@
           "name": "application_submissions_snapshotId_document_snapshots_id_fk",
           "tableFrom": "application_submissions",
           "tableTo": "document_snapshots",
-          "columnsFrom": ["snapshotId"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "snapshotId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -3197,8 +3395,12 @@
           "name": "dismissed_reminders_profileId_career_profiles_id_fk",
           "tableFrom": "dismissed_reminders",
           "tableTo": "career_profiles",
-          "columnsFrom": ["profileId"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "profileId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -3208,7 +3410,10 @@
         "dismissed_reminders_profile_id_key_unique": {
           "name": "dismissed_reminders_profile_id_key_unique",
           "nullsNotDistinct": false,
-          "columns": ["profileId", "reminderKey"]
+          "columns": [
+            "profileId",
+            "reminderKey"
+          ]
         }
       },
       "policies": {},
@@ -3267,8 +3472,12 @@
           "name": "tracker_settings_profileId_career_profiles_id_fk",
           "tableFrom": "tracker_settings",
           "tableTo": "career_profiles",
-          "columnsFrom": ["profileId"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "profileId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -3278,7 +3487,9 @@
         "tracker_settings_profile_id_unique": {
           "name": "tracker_settings_profile_id_unique",
           "nullsNotDistinct": false,
-          "columns": ["profileId"]
+          "columns": [
+            "profileId"
+          ]
         }
       },
       "policies": {},
@@ -3351,8 +3562,12 @@
           "name": "application_instructions_profileId_career_profiles_id_fk",
           "tableFrom": "application_instructions",
           "tableTo": "career_profiles",
-          "columnsFrom": ["profileId"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "profileId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -3360,8 +3575,12 @@
           "name": "application_instructions_openingId_openings_id_fk",
           "tableFrom": "application_instructions",
           "tableTo": "openings",
-          "columnsFrom": ["openingId"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "openingId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -3443,8 +3662,12 @@
           "name": "application_overrides_profileId_career_profiles_id_fk",
           "tableFrom": "application_overrides",
           "tableTo": "career_profiles",
-          "columnsFrom": ["profileId"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "profileId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -3452,8 +3675,12 @@
           "name": "application_overrides_openingId_openings_id_fk",
           "tableFrom": "application_overrides",
           "tableTo": "openings",
-          "columnsFrom": ["openingId"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "openingId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -3461,8 +3688,12 @@
           "name": "application_overrides_sensitiveItemId_sensitive_items_id_fk",
           "tableFrom": "application_overrides",
           "tableTo": "sensitive_items",
-          "columnsFrom": ["sensitiveItemId"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "sensitiveItemId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -3472,7 +3703,10 @@
         "application_overrides_opening_item_unique": {
           "name": "application_overrides_opening_item_unique",
           "nullsNotDistinct": false,
-          "columns": ["openingId", "sensitiveItemId"]
+          "columns": [
+            "openingId",
+            "sensitiveItemId"
+          ]
         }
       },
       "policies": {},
@@ -3606,8 +3840,12 @@
           "name": "instruction_points_profileId_career_profiles_id_fk",
           "tableFrom": "instruction_points",
           "tableTo": "career_profiles",
-          "columnsFrom": ["profileId"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "profileId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -3615,8 +3853,12 @@
           "name": "instruction_points_openingId_openings_id_fk",
           "tableFrom": "instruction_points",
           "tableTo": "openings",
-          "columnsFrom": ["openingId"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "openingId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -3624,8 +3866,12 @@
           "name": "instruction_points_applicationInstructionsId_application_instructions_id_fk",
           "tableFrom": "instruction_points",
           "tableTo": "application_instructions",
-          "columnsFrom": ["applicationInstructionsId"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "applicationInstructionsId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "set null",
           "onUpdate": "no action"
         },
@@ -3633,8 +3879,12 @@
           "name": "instruction_points_fitCheckItemId_fit_check_items_id_fk",
           "tableFrom": "instruction_points",
           "tableTo": "fit_check_items",
-          "columnsFrom": ["fitCheckItemId"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "fitCheckItemId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "set null",
           "onUpdate": "no action"
         }
@@ -3712,8 +3962,12 @@
           "name": "locked_fact_overrides_profileId_career_profiles_id_fk",
           "tableFrom": "locked_fact_overrides",
           "tableTo": "career_profiles",
-          "columnsFrom": ["profileId"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "profileId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -3721,8 +3975,12 @@
           "name": "locked_fact_overrides_openingId_openings_id_fk",
           "tableFrom": "locked_fact_overrides",
           "tableTo": "openings",
-          "columnsFrom": ["openingId"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "openingId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -3730,8 +3988,12 @@
           "name": "locked_fact_overrides_instructionPointId_instruction_points_id_fk",
           "tableFrom": "locked_fact_overrides",
           "tableTo": "instruction_points",
-          "columnsFrom": ["instructionPointId"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "instructionPointId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "set null",
           "onUpdate": "no action"
         }
@@ -3741,7 +4003,11 @@
         "locked_fact_overrides_field_unique": {
           "name": "locked_fact_overrides_field_unique",
           "nullsNotDistinct": false,
-          "columns": ["openingId", "positionId", "field"]
+          "columns": [
+            "openingId",
+            "positionId",
+            "field"
+          ]
         }
       },
       "policies": {},
@@ -3831,8 +4097,12 @@
           "name": "company_facts_profileId_career_profiles_id_fk",
           "tableFrom": "company_facts",
           "tableTo": "career_profiles",
-          "columnsFrom": ["profileId"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "profileId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -3840,8 +4110,12 @@
           "name": "company_facts_openingId_openings_id_fk",
           "tableFrom": "company_facts",
           "tableTo": "openings",
-          "columnsFrom": ["openingId"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "openingId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -3849,8 +4123,12 @@
           "name": "company_facts_researchId_company_research_id_fk",
           "tableFrom": "company_facts",
           "tableTo": "company_research",
-          "columnsFrom": ["researchId"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "researchId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "set null",
           "onUpdate": "no action"
         }
@@ -3921,8 +4199,12 @@
           "name": "company_research_profileId_career_profiles_id_fk",
           "tableFrom": "company_research",
           "tableTo": "career_profiles",
-          "columnsFrom": ["profileId"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "profileId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -3930,8 +4212,12 @@
           "name": "company_research_openingId_openings_id_fk",
           "tableFrom": "company_research",
           "tableTo": "openings",
-          "columnsFrom": ["openingId"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "openingId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -3986,8 +4272,12 @@
           "name": "motivation_interviews_profileId_career_profiles_id_fk",
           "tableFrom": "motivation_interviews",
           "tableTo": "career_profiles",
-          "columnsFrom": ["profileId"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "profileId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -3995,8 +4285,12 @@
           "name": "motivation_interviews_openingId_openings_id_fk",
           "tableFrom": "motivation_interviews",
           "tableTo": "openings",
-          "columnsFrom": ["openingId"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "openingId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -4006,7 +4300,9 @@
         "motivation_interviews_opening_unique": {
           "name": "motivation_interviews_opening_unique",
           "nullsNotDistinct": false,
-          "columns": ["openingId"]
+          "columns": [
+            "openingId"
+          ]
         }
       },
       "policies": {},
@@ -4098,8 +4394,12 @@
           "name": "motivation_points_profileId_career_profiles_id_fk",
           "tableFrom": "motivation_points",
           "tableTo": "career_profiles",
-          "columnsFrom": ["profileId"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "profileId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -4107,8 +4407,12 @@
           "name": "motivation_points_interviewId_motivation_interviews_id_fk",
           "tableFrom": "motivation_points",
           "tableTo": "motivation_interviews",
-          "columnsFrom": ["interviewId"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "interviewId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -4175,8 +4479,12 @@
           "name": "motivation_turns_interviewId_motivation_interviews_id_fk",
           "tableFrom": "motivation_turns",
           "tableTo": "motivation_interviews",
-          "columnsFrom": ["interviewId"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "interviewId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -4186,7 +4494,10 @@
         "motivation_turns_sequence_unique": {
           "name": "motivation_turns_sequence_unique",
           "nullsNotDistinct": false,
-          "columns": ["interviewId", "sequence"]
+          "columns": [
+            "interviewId",
+            "sequence"
+          ]
         }
       },
       "policies": {},
@@ -4253,6 +4564,12 @@
           "primaryKey": false,
           "notNull": false
         },
+        "profileVersionId": {
+          "name": "profileVersionId",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
         "resumeVersionId": {
           "name": "resumeVersionId",
           "type": "uuid",
@@ -4278,9 +4595,26 @@
           "name": "document_snapshots_versionId_document_versions_id_fk",
           "tableFrom": "document_snapshots",
           "tableTo": "document_versions",
-          "columnsFrom": ["versionId"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "versionId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "document_snapshots_profileVersionId_profile_versions_id_fk": {
+          "name": "document_snapshots_profileVersionId_profile_versions_id_fk",
+          "tableFrom": "document_snapshots",
+          "tableTo": "profile_versions",
+          "columnsFrom": [
+            "profileVersionId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
           "onUpdate": "no action"
         }
       },
@@ -4289,7 +4623,10 @@
         "document_snapshots_version_sequence_unique": {
           "name": "document_snapshots_version_sequence_unique",
           "nullsNotDistinct": false,
-          "columns": ["versionId", "sequence"]
+          "columns": [
+            "versionId",
+            "sequence"
+          ]
         }
       },
       "policies": {},
@@ -4379,8 +4716,12 @@
           "name": "document_versions_documentId_documents_id_fk",
           "tableFrom": "document_versions",
           "tableTo": "documents",
-          "columnsFrom": ["documentId"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "documentId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -4456,8 +4797,12 @@
           "name": "documents_profileId_career_profiles_id_fk",
           "tableFrom": "documents",
           "tableTo": "career_profiles",
-          "columnsFrom": ["profileId"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "profileId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -4465,8 +4810,12 @@
           "name": "documents_applicationId_applications_id_fk",
           "tableFrom": "documents",
           "tableTo": "applications",
-          "columnsFrom": ["applicationId"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "applicationId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -4476,7 +4825,10 @@
         "documents_application_kind_unique": {
           "name": "documents_application_kind_unique",
           "nullsNotDistinct": false,
-          "columns": ["applicationId", "kind"]
+          "columns": [
+            "applicationId",
+            "kind"
+          ]
         }
       },
       "policies": {},
@@ -4670,8 +5022,12 @@
           "name": "generations_profileId_career_profiles_id_fk",
           "tableFrom": "generations",
           "tableTo": "career_profiles",
-          "columnsFrom": ["profileId"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "profileId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -4679,8 +5035,12 @@
           "name": "generations_documentId_documents_id_fk",
           "tableFrom": "generations",
           "tableTo": "documents",
-          "columnsFrom": ["documentId"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "documentId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -4688,8 +5048,12 @@
           "name": "generations_versionId_document_versions_id_fk",
           "tableFrom": "generations",
           "tableTo": "document_versions",
-          "columnsFrom": ["versionId"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "versionId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "set null",
           "onUpdate": "no action"
         },
@@ -4697,8 +5061,12 @@
           "name": "generations_sourceVersionId_document_versions_id_fk",
           "tableFrom": "generations",
           "tableTo": "document_versions",
-          "columnsFrom": ["sourceVersionId"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "sourceVersionId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "set null",
           "onUpdate": "no action"
         },
@@ -4706,8 +5074,12 @@
           "name": "generations_resumeVersionId_document_versions_id_fk",
           "tableFrom": "generations",
           "tableTo": "document_versions",
-          "columnsFrom": ["resumeVersionId"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "resumeVersionId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "set null",
           "onUpdate": "no action"
         },
@@ -4715,8 +5087,12 @@
           "name": "generations_profileVersionId_profile_versions_id_fk",
           "tableFrom": "generations",
           "tableTo": "profile_versions",
-          "columnsFrom": ["profileVersionId"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "profileVersionId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "set null",
           "onUpdate": "no action"
         }
@@ -4798,8 +5174,12 @@
           "name": "position_title_equivalents_profileId_career_profiles_id_fk",
           "tableFrom": "position_title_equivalents",
           "tableTo": "career_profiles",
-          "columnsFrom": ["profileId"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "profileId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -4809,7 +5189,10 @@
         "position_title_equivalents_language_unique": {
           "name": "position_title_equivalents_language_unique",
           "nullsNotDistinct": false,
-          "columns": ["positionId", "language"]
+          "columns": [
+            "positionId",
+            "language"
+          ]
         }
       },
       "policies": {},
@@ -4871,8 +5254,12 @@
           "name": "rendered_files_profileId_career_profiles_id_fk",
           "tableFrom": "rendered_files",
           "tableTo": "career_profiles",
-          "columnsFrom": ["profileId"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "profileId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -4880,8 +5267,12 @@
           "name": "rendered_files_snapshotId_document_snapshots_id_fk",
           "tableFrom": "rendered_files",
           "tableTo": "document_snapshots",
-          "columnsFrom": ["snapshotId"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "snapshotId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -4891,7 +5282,10 @@
         "rendered_files_snapshot_template_unique": {
           "name": "rendered_files_snapshot_template_unique",
           "nullsNotDistinct": false,
-          "columns": ["snapshotId", "template"]
+          "columns": [
+            "snapshotId",
+            "template"
+          ]
         }
       },
       "policies": {},
@@ -4982,8 +5376,12 @@
           "name": "review_rounds_generationId_generations_id_fk",
           "tableFrom": "review_rounds",
           "tableTo": "generations",
-          "columnsFrom": ["generationId"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "generationId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -5049,8 +5447,12 @@
           "name": "resume_templates_profileId_career_profiles_id_fk",
           "tableFrom": "resume_templates",
           "tableTo": "career_profiles",
-          "columnsFrom": ["profileId"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "profileId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -5060,7 +5462,9 @@
         "resume_templates_profile_id_unique": {
           "name": "resume_templates_profile_id_unique",
           "nullsNotDistinct": false,
-          "columns": ["profileId"]
+          "columns": [
+            "profileId"
+          ]
         }
       },
       "policies": {},
@@ -5122,8 +5526,12 @@
           "name": "style_profiles_profileId_career_profiles_id_fk",
           "tableFrom": "style_profiles",
           "tableTo": "career_profiles",
-          "columnsFrom": ["profileId"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "profileId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -5133,7 +5541,9 @@
         "style_profiles_profile_id_unique": {
           "name": "style_profiles_profile_id_unique",
           "nullsNotDistinct": false,
-          "columns": ["profileId"]
+          "columns": [
+            "profileId"
+          ]
         }
       },
       "policies": {},

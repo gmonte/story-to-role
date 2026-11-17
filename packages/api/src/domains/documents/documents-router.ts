@@ -10,7 +10,7 @@ import {
   userProcedure,
 } from "@repo/api/tools/trpc";
 
-import { generationSettingsSchema } from "./schemas/generation-settings";
+import { generationSettingsFields } from "./schemas/generation-settings";
 import { DocumentsService } from "./documents-service";
 import { PdfService } from "./rendering/pdf-service";
 import {
@@ -64,7 +64,7 @@ export const documentsRouter = createTRPCRouter({
         sectionsForcedIn: z.array(resumeSectionKindSchema).optional(),
         sectionsForcedOut: z.array(resumeSectionKindSchema).optional(),
         referenceVersionId: z.uuid().optional(),
-        settings: generationSettingsSchema.partial().optional(),
+        settings: generationSettingsFields.partial().optional(),
       })
     )
     .output(

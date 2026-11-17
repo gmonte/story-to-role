@@ -277,7 +277,9 @@ function shortenOnce(
     (section) => section.kind === "summary"
   );
   if (summary?.kind === "summary") {
-    const sentences = summary.line.text.match(/[^.!?]+[.!?]+(\s+|$)/g) ?? [];
+    // A sentence ends where a new one starts with a capital letter: never
+    // inside "Node.js" or "1.8 s".
+    const sentences = summary.line.text.split(/(?<=[.!?])\s+(?=\p{Lu})/u);
     if (sentences.length > maxSummarySentences) {
       return mapSection("summary", (section) =>
         section.kind === "summary"
@@ -285,7 +287,7 @@ function shortenOnce(
               ...section,
               line: {
                 ...section.line,
-                text: sentences.slice(0, maxSummarySentences).join("").trim(),
+                text: sentences.slice(0, maxSummarySentences).join(" "),
               },
             }
           : section

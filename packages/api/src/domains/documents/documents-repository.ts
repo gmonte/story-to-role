@@ -312,10 +312,19 @@ export class DocumentsRepository {
     return row ?? null;
   }
 
+  /**
+   * A snapshot carries the profile version its content was written from:
+   * the one given, or its parent's (an edit of a text is of that text's
+   * profile).
+   */
   async insertSnapshot(snapshot: Insert<typeof documentSnapshotsTable>) {
+    const profileVersionId =
+      snapshot.profileVersionId === undefined && snapshot.parentSnapshotId
+        ? (await this.findSnapshot(snapshot.parentSnapshotId))?.profileVersionId
+        : snapshot.profileVersionId;
     const [row] = await this.tx
       .insert(documentSnapshotsTable)
-      .values(snapshot)
+      .values({ ...snapshot, profileVersionId: profileVersionId ?? null })
       .returning();
     // A document now exists for its application: an external one isn't
     // external anymore (tracker spec).
@@ -356,16 +365,12 @@ export class DocumentsRepository {
   }
 
   /**
-   * The profile version a document froze and the generation settings it
-   * was written with: those of the latest generation from the profile that
-   * wrote it.
+   * The generation settings a document was written with: those of the
+   * latest generation from the profile that wrote it.
    */
-  async frozenGeneration(documentId: string) {
+  async writtenSettings(documentId: string) {
     const [row] = await this.tx
-      .select({
-        profileVersionId: generationsTable.profileVersionId,
-        settings: generationsTable.settings,
-      })
+      .select({ settings: generationsTable.settings })
       .from(generationsTable)
       .where(
         and(
@@ -376,7 +381,7 @@ export class DocumentsRepository {
       )
       .orderBy(desc(generationsTable.createdAt))
       .limit(1);
-    return row ?? null;
+    return row?.settings ?? null;
   }
 
   /** The latest generation from the profile that wrote this version. */

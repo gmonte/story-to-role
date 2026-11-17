@@ -47,13 +47,15 @@ export async function freezeGeneration(input: {
       message: "Publish your profile before generating a document.",
     });
   }
+  const settings = generationSettingsSchema.safeParse({
+    ...(await loadGenerationSettings(input.db, input.profileId)),
+    ...input.settings,
+  });
+  if (!settings.success) throw new TRPCError({ code: "BAD_REQUEST" });
   return {
     profileVersionId: published.versionId,
     // What a resume may cost depends on how long the career is.
     positions: published.extract.experiences.length,
-    settings: generationSettingsSchema.parse({
-      ...(await loadGenerationSettings(input.db, input.profileId)),
-      ...input.settings,
-    }),
+    settings: settings.data,
   };
 }

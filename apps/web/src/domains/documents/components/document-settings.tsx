@@ -29,7 +29,9 @@ export function DocumentSettings({
   const t = useTranslation();
   if (!value) return null;
   return (
-    <Collapsible>
+    // Shown each time a document is generated (resume spec): open, so what
+    // the document will be written with is in sight.
+    <Collapsible defaultOpen>
       <CollapsibleTrigger className="text-muted-foreground flex items-center gap-1 text-xs hover:underline">
         <ChevronDown className="size-3.5" />
         {t.formatMessage({ defaultMessage: "Settings for this document" })}

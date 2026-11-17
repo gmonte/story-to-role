@@ -1,12 +1,7 @@
 import { z } from "zod";
 
 import type { ResumeContent } from "../schemas/resume-content";
-import type { AssemblyDraft } from "./assemble-resume";
-
-const draftLine = z.object({
-  text: z.string(),
-  evidence_ids: z.array(z.string()),
-});
+import { type AssemblyDraft, draftLine } from "./assemble-resume";
 
 /**
  * What the model returns for an adjustment (the method's prompt 04b): a
@@ -136,7 +131,8 @@ export function adjustmentDraft(
         relevance: asked?.relevance ?? entry.relevance ?? null,
         bullets: [
           ...ordered(named, named).map((keep) => ({ keep })),
-          ...(asked?.added ?? []),
+          // At most one new bullet per position: an adjustment adds little.
+          ...(asked?.added ?? []).slice(0, 1),
           ...ids.filter((id) => !named.includes(id)).map((keep) => ({ keep })),
         ],
       };

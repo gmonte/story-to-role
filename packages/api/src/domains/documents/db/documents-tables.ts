@@ -101,6 +101,13 @@ export const documentSnapshotsTable = createTable(
     author: d.text().$type<SnapshotAuthor>().notNull(),
     encryptedContent: d.text().notNull(),
     generationId: d.uuid(),
+    // The published profile version this content was written from, frozen
+    // (ADR 0008): a generation's, then carried by every snapshot that
+    // comes from it (an edit, a copy, an adaptation, a restore). What
+    // adapting it and its coverage review read.
+    profileVersionId: d
+      .uuid()
+      .references(() => profileVersionsTable.id, { onDelete: "set null" }),
     // A cover letter's resume (resume spec, "Cover letter and its resume"):
     // the version and exact snapshot it was written from, carried by every
     // snapshot of the letter (edits inherit it; copies keep it), and

@@ -9,8 +9,8 @@ import { renderResumePdf } from "./resume-pdf";
  * "Generation settings"): the estimate shortens first, then each render
  * that still runs over shortens one step more, in the settings' order and
  * rewriting nothing. Returns the content with the PDF it renders to, ready
- * to cache; `fits` is false when only recent experiences were left to cut,
- * and the user is warned instead.
+ * to cache. When only recent experiences are left to cut it stops, and the
+ * user sees the length warning instead.
  */
 export async function fitToPages(input: {
   content: ResumeContent;
@@ -26,7 +26,7 @@ export async function fitToPages(input: {
       content,
       language: input.language,
     });
-    if (rendered.pages <= maxPages) return { content, fits: true, ...rendered };
+    if (rendered.pages <= maxPages) return { content, ...rendered };
     // Aim the estimate lower until it shortens something more.
     let trimmed = content;
     while (trimmed === content && target > 0) {
@@ -34,7 +34,7 @@ export async function fitToPages(input: {
       trimmed = trimToPages(content, target, ages);
     }
     // Nothing left to cut: the user sees the length warning.
-    if (trimmed === content) return { content, fits: false, ...rendered };
+    if (trimmed === content) return { content, ...rendered };
     content = trimmed;
   }
 }

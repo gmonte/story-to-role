@@ -5,7 +5,7 @@ import { z } from "zod";
  * global defaults, shown as a form each time a document is generated and
  * changed there for that document only. Code enforces them.
  */
-export const generationSettingsSchema = z.object({
+export const generationSettingsFields = z.object({
   // Bullets of an experience that is current or ended at most
   // `recentYears` ago.
   bulletsRecent: z.number().int().min(1).max(8),
@@ -20,6 +20,11 @@ export const generationSettingsSchema = z.object({
   letterMaxParagraphs: z.number().int().min(2).max(8),
   letterMaxPages: z.number().int().min(1).max(2),
 });
+export const generationSettingsSchema = generationSettingsFields.refine(
+  // An older experience is one between recent and very old.
+  (settings) => settings.veryOldYears > settings.recentYears,
+  { path: ["veryOldYears"] }
+);
 export type GenerationSettings = z.infer<typeof generationSettingsSchema>;
 
 export const defaultGenerationSettings: GenerationSettings = {

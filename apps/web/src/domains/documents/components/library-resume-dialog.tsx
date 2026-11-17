@@ -233,7 +233,8 @@ function LibraryResumeForm({
           disabled={
             generate.isPending ||
             (!versionId && !focus.trim()) ||
-            documentSettings.unpublished
+            documentSettings.unpublished ||
+            documentSettings.invalid
           }
           onClick={() =>
             generate.mutate({

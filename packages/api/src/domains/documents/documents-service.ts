@@ -284,7 +284,7 @@ export class DocumentsService {
     const outdated = await outdatedVersions(repository, cipher, versions);
     // The settings the document was written with, for a version no
     // generation wrote itself (an adaptation, a copy).
-    const frozen = await repository.frozenGeneration(document.id);
+    const documentSettings = await repository.writtenSettings(document.id);
     const sent = await repository.submissionsForVersions(
       versions.map((version) => version.id)
     );
@@ -315,7 +315,7 @@ export class DocumentsService {
           (isResume ? estimatePages(content) : estimateLetterPages(content)),
         // The page limit this version was written under.
         maxPages: isResume
-          ? ((written ?? frozen)?.settings?.resumeMaxPages ??
+          ? ((written?.settings ?? documentSettings)?.resumeMaxPages ??
             defaultGenerationSettings.resumeMaxPages)
           : defaultGenerationSettings.letterMaxPages,
         pdf: {
@@ -683,7 +683,9 @@ export class DocumentsService {
         origin: "restored",
         author: "user",
         encryptedContent: old.encryptedContent,
-        // The restored text's own resume, not the newer one's.
+        // The restored text's own profile version and resume, not the
+        // newer one's.
+        profileVersionId: old.profileVersionId,
         ...resumeLinkOf(old),
       });
       return { snapshotId: snapshot.id };

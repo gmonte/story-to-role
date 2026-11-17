@@ -407,7 +407,8 @@ export function GenerateResumeDialog({
               generate.isPending ||
               instructionsPending ||
               unreviewed ||
-              documentSettings.unpublished
+              documentSettings.unpublished ||
+              documentSettings.invalid
             }
             onClick={() =>
               generate.mutate({

@@ -3,7 +3,7 @@
 import { useId, useState } from "react";
 
 import {
-  generationSettingsSchema,
+  generationSettingsFields,
   type GenerationSettings,
 } from "@repo/api/domains/documents/schemas/generation-settings";
 import { useTranslation } from "@repo/intl/use-translation";
@@ -19,7 +19,7 @@ import {
 
 type NumberKey = Exclude<keyof GenerationSettings, "veryOld">;
 
-const limits = generationSettingsSchema.shape;
+const limits = generationSettingsFields.shape;
 
 /**
  * The generation settings as a form (resume spec, "Generation settings"):

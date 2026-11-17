@@ -90,13 +90,15 @@ export async function runAdaptDocument(deps: {
   if (profile?.userId !== deps.userId) {
     throw new Error(`Generation ${generation.id} belongs to another user`);
   }
-  const open = async (snapshotId: string | null) => {
+  const find = async (snapshotId: string | null) => {
     const snapshot = snapshotId && (await documents.findSnapshot(snapshotId));
     if (!snapshot) throw new Error(`Snapshot ${snapshotId} is gone`);
-    return resumeContentSchema.parse(
-      JSON.parse(cipher.decrypt(snapshot.encryptedContent))
-    );
+    return snapshot;
   };
+  const open = async (snapshotId: string | null) =>
+    resumeContentSchema.parse(
+      JSON.parse(cipher.decrypt((await find(snapshotId)).encryptedContent))
+    );
 
   await documents.updateGeneration(generation.id, { status: "running" });
   try {
@@ -125,15 +127,19 @@ export async function runAdaptDocument(deps: {
 
     // An adaptation runs longer in some languages: it fits the real PDF
     // too, under the settings its document was written with.
+    // The adaptation is of that text, so of the profile version it was
+    // written from.
+    const { profileVersionId } = await find(generation.sourceSnapshotId);
     const adapted = await adaptVersion({
       ...deps,
       profileId: profile.id,
+      profileVersionId,
       generation,
       source,
     });
     const settings = generationSettingsSchema
       .catch(defaultGenerationSettings)
-      .parse(adapted.frozen?.settings ?? defaultGenerationSettings);
+      .parse(adapted.settings ?? defaultGenerationSettings);
     const today = new Date().toISOString().slice(0, 7);
     const fitted = await fitToPages({
       content: adapted.content,
@@ -173,6 +179,7 @@ export async function runAdaptDocument(deps: {
         author: "ai",
         encryptedContent: cipher.encrypt(JSON.stringify(content)),
         generationId: generation.id,
+        profileVersionId,
       });
       // One link per pair, within one document (a version reused from
       // another document stays independent): recreating a version from
@@ -225,6 +232,9 @@ async function adaptVersion(input: {
   cipher: UserCipher;
   filter: SensitiveFilter;
   profileId: string;
+  // The profile version the text being adapted was written from: its
+  // positions are the ones the content holds.
+  profileVersionId: string | null;
   generation: {
     id: string;
     language: OutputLanguage;
@@ -242,17 +252,15 @@ async function adaptVersion(input: {
   const sourceVersion = await documents.findVersion(
     generation.sourceVersionId!
   );
-  // The profile version the document being adapted froze: its positions
-  // are the ones the content holds.
-  const frozen = sourceVersion
-    ? await documents.frozenGeneration(sourceVersion.documentId)
+  const settings = sourceVersion
+    ? await documents.writtenSettings(sourceVersion.documentId)
     : null;
   const context = await loadCareerContext({
     db,
     cipher,
     profileId: input.profileId,
     filter,
-    profileVersionId: frozen?.profileVersionId,
+    profileVersionId: input.profileVersionId,
     openingId: application?.openingId,
   });
   // Reused from another document: its locked facts become this one's.
@@ -405,7 +413,7 @@ async function adaptVersion(input: {
   ) {
     throw new Error(`Adaptation ${generation.id} altered a locked fact`);
   }
-  return { content, frozen, positions: context.positions };
+  return { content, settings, positions: context.positions };
 }
 
 /** One call adapts the selected changes; code merges them into the target. */

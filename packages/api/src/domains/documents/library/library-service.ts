@@ -288,16 +288,20 @@ export class LibraryService {
         return { versionId: null, generationId: generation.id };
       }
       const cipher = await getUserCipher(tx, input.userId);
+      // The copy is of that text, so of the profile version it was
+      // written from: its locked facts are read from there.
       const filter = await loadSensitiveFilter({
         db: tx,
         cipher,
         profileId: profile.id,
+        profileVersionId: latest.profileVersionId,
       });
       const context = await loadCareerContext({
         db: tx,
         cipher,
         profileId: profile.id,
         filter,
+        profileVersionId: latest.profileVersionId,
         openingId: opening.id,
         language: source.language,
       });
@@ -316,6 +320,7 @@ export class LibraryService {
             relockFacts(decryptResume(cipher, latest), context.positions)
           )
         ),
+        profileVersionId: latest.profileVersionId,
       });
       return { versionId: version.id, generationId: null };
     });

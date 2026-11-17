@@ -266,6 +266,7 @@ export async function runGenerateResume(deps: {
         settings,
         today,
         purposes,
+        targetTitle: brief.title ?? "",
         fallbackName: setup.header.name,
       });
       return {
@@ -313,8 +314,10 @@ export async function runGenerateResume(deps: {
 
     await progress(1, "drafting");
     const candidates: Candidate[] = [];
+    // An adjustment runs no review round, so nothing is judged or stored.
+    let adjusted: ReturnType<typeof evaluate> | null = null;
     if (reference) {
-      const adjusted = await ai.generateObject({
+      const { object } = await ai.generateObject({
         purpose: "resume_adjuster",
         role,
         maxTokens: reviewLoopSettings.draftMaxTokens,
@@ -322,12 +325,8 @@ export async function runGenerateResume(deps: {
         system: adjusterPrompt({ material, settings, reference }),
         messages: [{ role: "user", content: "Adjust the resume." }],
       });
-      if (!adjusted.object) throw new Error("The adjuster returned no draft");
-      candidates.push(
-        await review(evaluate(adjustmentDraft(adjusted.object, reference)), 0, [
-          adjusted.usage,
-        ])
-      );
+      if (!object) throw new Error("The adjuster returned no draft");
+      adjusted = evaluate(adjustmentDraft(object, reference));
     } else {
       const first = await ai.generateObject({
         purpose: "resume_strategist",
@@ -383,11 +382,15 @@ export async function runGenerateResume(deps: {
     // A draft within its pages beats a longer one; then the rating decides.
     const fits = (candidate: Candidate) =>
       candidate.pages <= settings.resumeMaxPages;
-    const best = candidates.reduce((top, candidate) => {
-      if (fits(candidate) !== fits(top))
-        return fits(candidate) ? candidate : top;
-      return candidate.rating > top.rating ? candidate : top;
-    });
+    const bestRound =
+      candidates.length > 0
+        ? candidates.reduce((top, candidate) => {
+            if (fits(candidate) !== fits(top))
+              return fits(candidate) ? candidate : top;
+            return candidate.rating > top.rating ? candidate : top;
+          })
+        : null;
+    const best = bestRound ?? adjusted!;
     // Code has the last word: lines with a forbidden term go, and a resume
     // whose real PDF runs over its pages is shortened in the settings'
     // order, never touching the bullets of recent experiences.
@@ -429,6 +432,7 @@ export async function runGenerateResume(deps: {
         author: "ai",
         encryptedContent: cipher.encrypt(JSON.stringify(content)),
         generationId: generation.id,
+        profileVersionId: context.profileVersionId,
       });
       await repository.insertReviewRounds(
         candidates.map((candidate) => ({
@@ -437,7 +441,7 @@ export async function runGenerateResume(deps: {
           rating: candidate.rating,
           inputTokens: candidate.inputTokens,
           outputTokens: candidate.outputTokens,
-          kept: candidate === best,
+          kept: candidate === bestRound,
           encryptedReview: cipher.encrypt(JSON.stringify(candidate.review)),
         }))
       );
@@ -445,7 +449,7 @@ export async function runGenerateResume(deps: {
         status: "completed",
         versionId: version.id,
         snapshotId: snapshot.id,
-        bestRound: best.round,
+        bestRound: bestRound?.round ?? null,
         encryptedEmphasis: emphasis.length
           ? cipher.encrypt(JSON.stringify(emphasis))
           : null,

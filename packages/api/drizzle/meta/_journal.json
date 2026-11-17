@@ -54,7 +54,7 @@
     {
       "idx": 7,
       "version": "7",
-      "when": 1794933300147,
+      "when": 1794935026519,
       "tag": "0007_add_generation_settings_and_frozen_profile",
       "breakpoints": true
     }

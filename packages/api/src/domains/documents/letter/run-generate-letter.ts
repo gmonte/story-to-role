@@ -62,6 +62,8 @@ type LetterMaterial = {
   data: Record<string, unknown>;
   header: CoverLetterContent["header"];
   motivationSkipped: boolean;
+  // The profile version its facts were read from.
+  profileVersionId: string | null;
 };
 
 /** Everything a letter may use, each approved by the user, as data. */
@@ -74,6 +76,9 @@ export async function loadLetterMaterial(input: {
   openingId: string;
   language: OutputLanguage;
   resume: ResumeContent | null;
+  // The profile version the letter's resume was written from: the lines
+  // that resume cites are that version's.
+  profileVersionId?: string | null;
 }): Promise<LetterMaterial> {
   const { db, cipher, filter } = input;
   const context = await loadCareerContext({
@@ -81,6 +86,7 @@ export async function loadLetterMaterial(input: {
     cipher,
     profileId: input.profileId,
     filter,
+    profileVersionId: input.profileVersionId,
     openingId: input.openingId,
     language: input.language,
   });
@@ -158,6 +164,7 @@ export async function loadLetterMaterial(input: {
     sources: { evidence, companyFacts, motivationPoints, careerGoals },
     header,
     motivationSkipped: interview?.status !== "finished",
+    profileVersionId: context.profileVersionId,
     data: {
       opening: {
         title: decryptOptional(opening?.encryptedTitle),
@@ -228,6 +235,7 @@ export async function runGenerateLetter(deps: {
       openingId: application.openingId,
       language: generation.language,
       resume: resumeSnapshot && decryptResume(cipher, resumeSnapshot),
+      profileVersionId: resumeSnapshot?.profileVersionId,
     });
     const role = generation.writingLevel === "maximum" ? "maximum" : "writing";
     const system = [
@@ -306,6 +314,8 @@ export async function runGenerateLetter(deps: {
         author: "ai",
         encryptedContent: cipher.encrypt(JSON.stringify(content)),
         generationId: generation.id,
+        // Its resume's profile version, or the one published now.
+        profileVersionId: material.profileVersionId,
         resumeVersionId: generation.resumeVersionId,
         resumeSnapshotId: generation.resumeSnapshotId,
         motivationSkipped: material.motivationSkipped,

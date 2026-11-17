@@ -57,6 +57,10 @@ export type CareerContext = {
   // Each fit check passage's evidence lines.
   evidenceOfPassage: Map<string, string[]>;
   rules: { neverInclude: string[]; neverClaim: string[] };
+  // What the profile says the person lacks: competencies only studied and
+  // the known gaps. Never claimed in a document.
+  studied: string[];
+  gaps: string[];
 };
 
 /**
@@ -223,5 +227,7 @@ export async function loadCareerContext(input: {
     instructions,
     evidenceOfPassage: source?.evidenceOfPassage ?? new Map<string, string[]>(),
     rules: source?.rules ?? { neverInclude: [], neverClaim: [] },
+    studied: source?.studied ?? [],
+    gaps: source?.gaps ?? [],
   };
 }

@@ -2,6 +2,9 @@ import { randomUUID } from "node:crypto";
 
 import { z } from "zod";
 
+import { mentions } from "@repo/api/domains/profile/truth/lint";
+import { findMarks } from "@repo/api/domains/profile/truth/marks";
+import { ungivenFigures } from "@repo/api/domains/profile/truth/suggestions";
 import { foldAccents } from "@repo/api/utils/text/fold-accents";
 
 import type { Line } from "../schemas/document";
@@ -17,8 +20,9 @@ import {
   type GenerationSettings,
 } from "../schemas/generation-settings";
 import type { CareerContext } from "./load-career-context";
+import { withheld } from "./profile-source";
 
-const draftLine = z.object({
+export const draftLine = z.object({
   text: z.string(),
   evidence_ids: z.array(z.string()),
 });
@@ -90,29 +94,42 @@ export type DroppedLine = {
     | "unsupported_figure"
     | "unknown_skill"
     // A very old experience with no requirement that justifies it.
-    | "not_relevant";
+    | "not_relevant"
+    // It names a competency the profile says was only studied, or
+    // something its communication rules say never to claim.
+    | "studied_only"
+    | "never_claim";
 };
 
 const normalize = (text: string) => foldAccents(text).toLowerCase();
 
-/** Every figure in a line ("40%", "2021", "3") must appear in its evidence. */
-function figuresBackedBy(text: string, evidenceTexts: string[]) {
-  // Whole numbers, never a part of one: a measured "15" doesn't back a "5".
-  const figures = (value: string) =>
-    (value.match(/\d+(?:[.,]\d+)*/g) ?? []).map((figure) =>
-      figure.replace(/,/g, ".")
-    );
-  const known = new Set(figures(evidenceTexts.join(" ")));
-  return figures(text).every((figure) => known.has(figure));
+/**
+ * Every figure in a line ("40%", "1,8", "3") must be one its sources show:
+ * a whole number, never a part of one, and a percentage only as one.
+ */
+function figuresBackedBy(text: string, sources: string[]) {
+  return ungivenFigures(text, sources).length === 0;
+}
+
+// A group of competencies is named in a few words ("Languages").
+const maxLabelLength = 40;
+
+/** A competency group's name: no number, nothing long enough to claim. */
+function shortLabel(label: string) {
+  return label
+    .replace(/\d+/g, "")
+    .replace(/\s{2,}/g, " ")
+    .trim()
+    .slice(0, maxLabelLength);
 }
 
 // A position's context is a note of a few words, never a place for facts.
 const maxContextLength = 40;
 
 /**
- * The note next to a position's title ("parallel project"): the only
- * written text that cites nothing, so it holds no number and nothing long
- * enough to be a claim.
+ * The note next to a position's title ("parallel project"): written text
+ * that cites nothing, so it holds no number and nothing long enough to be
+ * a claim.
  */
 function shortNote(context: string | null | undefined) {
   const note = context?.trim();
@@ -122,18 +139,35 @@ function shortNote(context: string | null | undefined) {
 }
 
 /**
- * The requirement (or focus) a very old experience says it is there for,
- * as the document's purpose writes it; null when it names none of them.
+ * What a document is for: a requirement of the opening with the profile
+ * lines the fit check found behind it, or a library document's focus
+ * (which has no fit check: `evidenceIds` is null).
  */
-export function matchPurpose(relevance: string | null, purposes: string[]) {
+export type Purpose = { text: string; evidenceIds: string[] | null };
+
+// How much of the longer wording the shorter one must be to name it.
+const minPurposeOverlap = 0.6;
+// Words of a focus too common to prove anything.
+const minFocusWordLength = 3;
+
+/**
+ * The purpose a very old experience says it is there for, when it names
+ * one as the document writes it (or nearly: most of the wording); null for
+ * a loose word that would match anything.
+ */
+export function matchPurpose(relevance: string | null, purposes: Purpose[]) {
   const wanted = normalize(relevance ?? "").trim();
   if (!wanted) return null;
   return (
     purposes.find((purpose) => {
-      const known = normalize(purpose).trim();
+      const known = normalize(purpose.text).trim();
+      if (!known) return false;
+      if (known === wanted) return true;
+      const [shorter, longer] =
+        known.length < wanted.length ? [known, wanted] : [wanted, known];
       return (
-        !!known &&
-        (known === wanted || known.includes(wanted) || wanted.includes(known))
+        longer.includes(shorter) &&
+        shorter.length >= minPurposeOverlap * longer.length
       );
     }) ?? null
   );
@@ -160,7 +194,10 @@ export function assembleResume(input: {
   // This month (YYYY-MM): what "recent" is measured from.
   today: string;
   // What the document is for: the opening's requirements, or the focus.
-  purposes: string[];
+  purposes: Purpose[];
+  // The document's target title: the opening's, or the focus. Printed by
+  // code, so the title line holds no claim.
+  targetTitle: string;
   // The account's name, printed only when the profile gives none.
   fallbackName?: string;
   newLineId?: () => string;
@@ -197,6 +234,68 @@ export function assembleResume(input: {
   );
 
   /**
+   * Why a text can't be printed whatever it cites: a placeholder or a
+   * figure mark left in it, a competency the profile says was only
+   * studied, or something its rules say never to claim.
+   */
+  function refusal(text: string): DroppedLine["reason"] | null {
+    if (text.includes(withheld) || findMarks(text).length > 0) {
+      return "unsupported_figure";
+    }
+    if (context.studied.some((name) => mentions(text, name))) {
+      return "studied_only";
+    }
+    if (context.rules.neverClaim.some((term) => mentions(text, term))) {
+      return "never_claim";
+    }
+    return null;
+  }
+  const evidenceText = [...context.evidence, ...context.instructions]
+    .map((row) => row.text)
+    .join("\n");
+  /** A competency the person uses, or one the profile spells out. */
+  const knownSkill = (item: string) =>
+    !refusal(item) &&
+    (context.skills.some(
+      (skill) => normalize(skill.name) === normalize(item)
+    ) ||
+      mentions(evidenceText, item));
+  /** A line kept from a reference still holds under the frozen profile. */
+  function stillHolds(text: string, positionId: string | null) {
+    const reason =
+      refusal(text) ??
+      (figuresBackedBy(text, [
+        ...context.evidence
+          .filter((row) => !positionId || row.positionId === positionId)
+          .map((row) => row.figures),
+        ...context.instructions.map((row) => row.text),
+      ])
+        ? null
+        : ("unsupported_figure" as const));
+    if (reason) dropped.push({ text, reason });
+    return !reason;
+  }
+
+  /**
+   * Whether a written line proves a purpose: it cites a profile line the
+   * fit check found behind that requirement or, for a focus, a line that
+   * names one of the focus's words.
+   */
+  function proves(line: Line, purpose: Purpose) {
+    const cited = "evidenceIds" in line.origin ? line.origin.evidenceIds : [];
+    if (purpose.evidenceIds) {
+      return cited.some((id) => purpose.evidenceIds!.includes(id));
+    }
+    const words = purpose.text
+      .split(/[^\p{L}\p{N}+#.]+/u)
+      .filter((word) => word.length >= minFocusWordLength);
+    return cited.some((id) => {
+      const text = evidenceById.get(id)?.text ?? "";
+      return words.some((word) => mentions(text, word));
+    });
+  }
+
+  /**
    * An instruction backs a line when it is about the same position, or
    * about none in particular; `allowed` judges evidence.
    */
@@ -227,8 +326,11 @@ export function assembleResume(input: {
       ...evidenceIds.map((id) => evidenceById.get(id)!.figures),
       ...instructionIds.map((id) => instructionById.get(id)!.text),
     ];
-    if (!figuresBackedBy(text, texts)) {
-      dropped.push({ text, reason: "unsupported_figure" });
+    const reason =
+      refusal(text) ??
+      (figuresBackedBy(text, texts) ? null : ("unsupported_figure" as const));
+    if (reason) {
+      dropped.push({ text, reason });
       return null;
     }
     return {
@@ -249,8 +351,10 @@ export function assembleResume(input: {
         draft.summary && !isKept(draft.summary)
           ? toLine(draft.summary, () => true)
           : null;
-      // An adjustment whose new summary was refused keeps the one it had.
-      const summary = line ?? kept;
+      // An adjustment whose new summary was refused keeps the one it had,
+      // as long as it still holds under the profile frozen now.
+      const summary =
+        line ?? (kept && stillHolds(kept.text, null) ? kept : null);
       return summary ? { kind: "summary", line: summary } : null;
     },
     skills: () => {
@@ -260,7 +364,13 @@ export function assembleResume(input: {
           // nothing new enters.
           const existing = referenceGroups.get(group.keep);
           if (!existing) return [];
-          const items = existing.text.split(", ");
+          const items = existing.text.split(", ").filter((item) => {
+            // Still a competency in use under the profile frozen now.
+            if (knownSkill(item)) return true;
+            dropped.push({ text: item, reason: "unknown_skill" });
+            return false;
+          });
+          if (items.length === 0) return [];
           const asked = group.items.flatMap(
             (item) =>
               items.find((known) => normalize(known) === normalize(item)) ?? []
@@ -278,9 +388,9 @@ export function assembleResume(input: {
           ];
         }
         const cited = group.evidence_ids.filter((id) => evidenceById.has(id));
-        const citedText = normalize(
-          cited.map((id) => evidenceById.get(id)!.text).join(" ")
-        );
+        const citedText = cited
+          .map((id) => evidenceById.get(id)!.text)
+          .join("\n");
         const citedInstructions = group.evidence_ids.filter((id) =>
           instructionById.has(id)
         );
@@ -295,9 +405,9 @@ export function assembleResume(input: {
             skill.evidenceIds.forEach((id) => evidenceIds.add(id));
             return true;
           }
-          if (citedText.includes(normalize(item))) return true;
+          if (!refusal(item) && mentions(citedText, item)) return true;
           const instruction = citedInstructions.find((id) =>
-            normalize(instructionById.get(id)!.text).includes(normalize(item))
+            mentions(instructionById.get(id)!.text, item)
           );
           if (instruction) {
             instructionIds.add(instruction);
@@ -310,7 +420,7 @@ export function assembleResume(input: {
           ? [
               {
                 id: newLineId(),
-                label: group.label.trim(),
+                label: shortLabel(group.label),
                 text: items.join(", "),
                 origin:
                   instructionIds.size > 0
@@ -356,7 +466,9 @@ export function assembleResume(input: {
               return [];
             }
             keptIds.add(bullet.keep);
-            return [existing.line];
+            return stillHolds(existing.line.text, position.id)
+              ? [existing.line]
+              : [];
           }
           return (
             toLine(
@@ -379,11 +491,14 @@ export function assembleResume(input: {
           if (input.settings.veryOld === "leave_out") return [];
           // It enters only for a requirement of this document, with one
           // bullet tied to it.
-          const relevance = matchPurpose(
+          const purpose = matchPurpose(
             drafted?.relevance ?? null,
             input.purposes
           );
-          if (!relevance || lines.length === 0) {
+          // With the profile line that proves it: one the fit check found
+          // behind that requirement, or, for a focus, one that names it.
+          const proof = purpose && lines.find((line) => proves(line, purpose));
+          if (!purpose || !proof) {
             if (drafted?.bullets.length) {
               dropped.push({
                 text: `${position.title}, ${position.employer}`,
@@ -392,7 +507,7 @@ export function assembleResume(input: {
             }
             return [];
           }
-          return [{ ...entry, relevance, lines: lines.slice(0, 1) }];
+          return [{ ...entry, relevance: purpose.text, lines: [proof] }];
         }
         return [
           {
@@ -453,29 +568,25 @@ export function assembleResume(input: {
     ) as Record<CredentialSectionKind, () => ResumeSection | null>),
   };
 
-  // "Target title | technologies": the target title names the opening; each
-  // technology must be an approved skill or spelled out in the evidence.
+  // "Target title | technologies": code prints the document's target title
+  // (the opening's, or the focus), so the line holds no claim; each
+  // technology must be a competency in use or spelled out in the profile.
   function checkedTitleLine() {
-    const [title, ...rest] = draft.title_line.split("|");
-    const evidenceText = normalize(
-      [...context.evidence, ...context.instructions]
-        .map((row) => row.text)
-        .join(" ")
-    );
-    const technologies = rest
-      .join("|")
+    const drafted = draft.title_line.includes("|")
+      ? draft.title_line.split("|").slice(1).join("|")
+      : draft.title_line;
+    const technologies = drafted
       .split(",")
       .map((item) => item.trim())
       .filter(Boolean)
       .filter((item) => {
-        const known =
-          context.skills.some(
-            (skill) => normalize(skill.name) === normalize(item)
-          ) || evidenceText.includes(normalize(item));
+        const known = knownSkill(item);
         if (!known) dropped.push({ text: item, reason: "unknown_skill" });
         return known;
       });
-    return [title.trim(), technologies.join(", ")].filter(Boolean).join(" | ");
+    return [input.targetTitle.trim(), technologies.join(", ")]
+      .filter(Boolean)
+      .join(" | ");
   }
 
   // Contact data comes from the profile, like every other fact.

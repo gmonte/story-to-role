@@ -1,5 +1,7 @@
 "use client";
 
+import type { ComponentProps } from "react";
+
 import { useMutation, useQuery } from "@tanstack/react-query";
 
 import type { OutputLanguage } from "@repo/api/domains/documents/schemas/document";
@@ -66,6 +68,7 @@ export function SimilarDocuments({
             defaultLanguage={defaultLanguage}
             defaultTone={defaultTone}
             pendingGaps={pendingGaps}
+            application={documents.data?.application ?? null}
           />
         ))}
       </ul>
@@ -97,12 +100,15 @@ function SimilarRow({
   defaultLanguage,
   defaultTone,
   pendingGaps,
+  application,
 }: {
   openingId: string;
   document: SimilarDocument;
   defaultLanguage: OutputLanguage;
   defaultTone: Tone;
   pendingGaps: number;
+  /** Its section choices, which an adjustment starts from. */
+  application: ComponentProps<typeof GenerateResumeDialog>["application"];
 }) {
   const t = useTranslation();
   const labels = useDocumentLabels();
@@ -181,6 +187,7 @@ function SimilarRow({
           defaultLanguage={defaultLanguage}
           defaultTone={defaultTone}
           pendingGaps={pendingGaps}
+          application={application}
           reference={document}
           trigger={
             <Button size="sm" variant="ghost">

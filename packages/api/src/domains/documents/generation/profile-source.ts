@@ -4,7 +4,8 @@ import type { CredentialKind } from "@repo/api/domains/career/schemas/career";
 import type { EvidenceKind } from "@repo/api/domains/evidence/schemas/evidence";
 import type { PublishedProfile } from "@repo/api/domains/profile/load-published-profile";
 import { parseBlocks } from "@repo/api/domains/profile/truth/blocks";
-import { findMarks, hasFigure } from "@repo/api/domains/profile/truth/marks";
+import { mentions } from "@repo/api/domains/profile/truth/lint";
+import { findMarks } from "@repo/api/domains/profile/truth/marks";
 import {
   experienceFieldOf,
   normalizeLabel,
@@ -82,16 +83,26 @@ export type ProfileSource = {
   // Each fit check passage's lines here, since a passage may hold several.
   evidenceOfPassage: Map<string, string[]>;
   rules: { neverInclude: string[]; neverClaim: string[] };
+  // What the profile says the person lacks: never claimed in a document.
+  studied: string[];
+  gaps: string[];
 };
 
-const withheld = "[figure withheld]";
+/** What a writer reads where the profile has a figure it may not use. */
+export const withheld = "[figure withheld]";
+
+// A number standing on its own ("30%", "1,8", "3x"), not the digits of a
+// name (EC2, B2B, S3) nor a year, which dates a fact and measures nothing.
+const standaloneNumber =
+  /(?<![\p{L}\p{N}])(?!(?:19|20)\d{2}(?![\d.,%]))\d+(?:[.,]\d+)*%?/gu;
 
 /**
  * A profile line as generation may use it. A figure enters a document only
  * when the profile marks it measured; one marked estimated or to confirm is
  * withheld, so the line can still be told without it; an unmarked number in
- * a result is withheld too, since nothing says where it comes from. Marks
- * themselves never reach a document.
+ * a result is withheld too, since nothing says where it comes from. What is
+ * marked as having no number is told as written. Marks themselves never
+ * reach a document.
  */
 export function readFigures(line: string, isResult: boolean) {
   const marks = findMarks(line);
@@ -99,23 +110,27 @@ export function readFigures(line: string, isResult: boolean) {
   let figures = "";
   let cursor = 0;
   const add = (segment: string, usable: boolean) => {
-    text += usable ? segment : segment.replace(/\d+(?:[.,]\d+)*%?/g, withheld);
-    if (usable && /\d/.test(segment)) figures += ` ${segment.trim()}`;
+    text += usable ? segment : segment.replace(standaloneNumber, withheld);
+    // What is left of a withheld segment still backs the names in it.
+    figures += ` ${usable ? segment : segment.replace(standaloneNumber, " ")}`;
   };
   for (const mark of marks) {
-    add(line.slice(cursor, mark.from), mark.mark === "measured");
+    add(
+      line.slice(cursor, mark.from),
+      mark.mark === "measured" || mark.mark === "noNumber"
+    );
     cursor = mark.to;
   }
   const rest = line.slice(cursor);
   // What follows the last mark (or a line with none): a fact as written,
   // unless it is a result's figure nobody marked.
-  add(rest, !(isResult && hasFigure(rest)));
+  add(rest, !(isResult && rest.search(standaloneNumber) >= 0));
   return {
     text: text
       .replace(/\s+([.,;])/g, "$1")
       .replace(/\s{2,}/g, " ")
       .trim(),
-    figures: figures.trim(),
+    figures: figures.replace(/\s{2,}/g, " ").trim(),
   };
 }
 
@@ -308,7 +323,7 @@ export function readProfileSource(input: {
     .map((competency) => {
       const name = normalizeLabel(competency.name);
       const passageId = [...competencyPassage.entries()].find(([line]) =>
-        line.includes(name)
+        mentions(line, competency.name)
       )?.[1];
       return {
         id: stableId(input.careerProfileId, "skill", name),
@@ -332,5 +347,9 @@ export function readProfileSource(input: {
     skills,
     evidenceOfPassage,
     rules: profile.extract.rules,
+    studied: profile.extract.competencies
+      .filter((competency) => competency.level === "studied")
+      .map((competency) => competency.name),
+    gaps: profile.extract.gaps,
   };
 }

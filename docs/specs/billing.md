@@ -25,7 +25,7 @@ A user's **plan** (what they can use) is separate from their **AI funding** (who
 2. The user's own key, when there is one.
 3. Stored credits (packs and welcome credits), only once both of the above are exhausted, and only after the user confirms ("Finish with credits"); never silently.
 
-Calls the user didn't ask for cost them nothing: the "What I understood" summary of a review and the career chat's own reactions (to an import ending or a change on the side panel; an import's reaction is part of the import). They run on the user's key on a paid plan when there is one, otherwise StoryToRole pays; no credit is reserved or taken.
+What the user asks for is charged: each message to the profile agent, validating the profile, importing a resume or truth file, a fit check, a gap question, and each generation (resume, cover letter, adjustment, adaptation), its coverage review included. What runs without the user asking costs them nothing: the profile's linter and "Fix format" are plain code, and embedding a published profile runs locally. Any AI call the product makes on its own initiative runs on the user's key on a paid plan when there is one, otherwise StoryToRole pays; no credit is reserved or taken.
 
 A subscriber who adds a key mid-month keeps spending that month's credits first; the key takes over when they run out. The subscription switches to the key price at the next renewal, when no new monthly credits are granted; removing the key switches back at the next renewal as well.
 
@@ -48,13 +48,13 @@ Stripe's presentment-currency list for Brazil-based accounts (docs.stripe.com/cu
 
 ## Free plan
 
-The Free plan lets the user record their recent history and build one resume in each output language and one cover letter. The full career interview is part of the paid plans.
+The Free plan lets the user build their profile and get one resume in each output language and one cover letter.
 
-1. The user uploads their current resume and an opening. The resume pre-fills the career timeline and the opening gets a fit check.
-2. The interview is limited only by credits: the user decides where to spend them, going deep on a few positions or telling a little about each, with the short script suggested by default. The two most recent positions are proposed first. When the user has no position yet (a first job or a career change), the interview asks what they want to work with and which notable experiences they have in that area: projects, studies, volunteering, freelance work.
+1. The user uploads their current resume, which writes the profile's first draft; they publish it (validated or not), then add an opening and get its fit check.
+2. Working on the profile is limited only by credits: the user decides where to spend them, asking the agent about a few positions in depth or about each one briefly, and validating when they choose. The editor itself, its linter and "Fix format" are free. When the user has no position yet (a first job or a career change), the agent asks what they want to work with and which notable experiences they have in that area: projects, studies, volunteering, freelance work.
 3. StoryToRole generates a new resume tailored to the opening.
 
-Free is limited by credits only: 200 welcome credits, granted once, spent however the user wants (interview, truth file import, fit checks, documents, gap questions), plus 10 credits a month for fit checks so users keep coming back. The pricing page says what 200 credits are enough for ("tell your recent story and get your resume in Portuguese and English plus a cover letter"), and the product makes clear at every limit that subscribing unlocks more: the credit meter, the reserve alert and the end of the welcome credits all point to the subscription. Maximum AI cost per signup is about US$2.
+Free is limited by credits only: 200 welcome credits, granted once, spent however the user wants (agent messages, validation, resume and truth file import, fit checks, documents, gap questions), plus 10 credits a month for fit checks so users keep coming back. The pricing page says what 200 credits are enough for ("write your profile and get your resume in Portuguese and English plus a cover letter"), and the product makes clear at every limit that subscribing unlocks more: the credit meter, the reserve alert and the end of the welcome credits all point to the subscription. Maximum AI cost per signup is about US$2.
 
 Every generation option is available in Free, limited only by credits: Quick or Thorough review rounds, standard or maximum writing level. Each option shows its credit estimate before the user confirms. Free preselects Quick with the standard level and says why: it leaves enough credits for the second language and the cover letter.
 
@@ -62,7 +62,7 @@ Every generation option is available in Free, limited only by credits: Quick or 
 
 Credit packs are sold without a subscription, for users who want to pay only when they use. They are priced so that a credit bought in a pack clearly costs more than a credit in the subscription, which makes the subscription the obvious choice for anyone applying regularly, while still covering AI cost plus margin. Pricing is never per opening or per document.
 
-Packs also serve bring-your-own-key users: when their key runs out of credit, they can finish a task with StoryToRole credits after confirming (see the guided interview spec). Claude Max and Team subscribers receive monthly API credits on a linked Console organization; a key from that organization works as a bring-your-own key, which makes the BYOK plan attractive to them.
+Packs also serve bring-your-own-key users: when their key runs out of credit, they can finish a task with StoryToRole credits after confirming (see [ai-platform.md](./ai-platform.md)). Claude Max and Team subscribers receive monthly API credits on a linked Console organization; a key from that organization works as a bring-your-own key, which makes the BYOK plan attractive to them.
 
 ## Credit ledger
 
@@ -77,7 +77,7 @@ Credits live in an append-only ledger in Postgres: grants, debits, reservations,
 
 - The meter leads with what the user can still spend this month, translated into actions from the user's own usual choices: "You can still spend 470 credits this month (about 9 resumes or 33 cover letters)". One tap shows the breakdown by source and expiry: "320 from the plan, expire on Nov 30; 150 from a pack, valid until Mar 2027". With key funding, it shows the estimated spend on the user's key this month, with credits shown as a reserve.
 - The user always sees the cost of the next action before taking it.
-- A **credit reserve** keeps enough credits for the step the user came for: in the Free plan, the resume generation. When the balance approaches the reserve, the interviewer is told to wrap up the current position with what was said, and the user sees an alert, so the interview never consumes the credits the resume needs.
+- A **credit reserve** keeps enough credits for the step the user came for: in the Free plan, the resume generation. When the balance approaches the reserve, the user sees an alert before each agent message and validation, so working on the profile never consumes the credits the resume needs.
 
 ## Payments
 
@@ -118,7 +118,7 @@ Examples: a R$49 subscription on a Brazilian card keeps R$46.31 (5.5% in fees); 
 ## Credit value and pricing of actions
 
 - **One credit is about US$0.01 of expected AI cost** on the default provider package, including a 1.5x safety margin for retries, variance and longer thinking. Sale prices per plan cover AI cost, Stripe fees (about 5% to 9%, worst case with a foreign card) and the margin. If the default package changes, credits per action are recalculated; the money value of a credit stays the same.
-- With the Anthropic package, actions cost about: fit check 1, gap question 1, interview turn 2, adjustment 7, cover letter 14, truth file import about 20 (for about 12,000 words), resume 37 to 55 (Quick, standard level) or 72 to 108 (Quick, maximum level), depending mostly on career length.
+- With the Anthropic package, actions cost about: fit check 1, gap question 1, agent message 2, profile validation about 5 (one changed section) to 20 (a whole new profile), adjustment 7, cover letter 14, truth file import about 20 (for about 12,000 words), resume 37 to 55 (Quick, standard level) or 72 to 108 (Quick, maximum level), depending mostly on career length.
 - **Estimate with a cap.** Before an action, the user sees "up to N credits", computed from their career size, the chosen review depth and writing level. The ledger reserves the cap, settles to the actual cost when the task ends and never charges above the cap. When Thorough stops early, the user pays only the rounds that ran. The per-action table is recalibrated from measured usage.
 
 ## Cost model (estimate)
@@ -129,17 +129,17 @@ Token assumptions per action, to be replaced by measured usage from the first pr
 
 | Action | Calls and tokens assumed | Model | Estimated AI cost (USD) |
 | --- | --- | --- | --- |
-| Fit check | Keyword extraction (2k in, 1.3k out) + judgment over retrieved evidence (4k in, 1.5k out) | Haiku | 0.002 |
+| Fit check | Keyword extraction (2k in, 1.3k out) + judgment over retrieved profile passages (4k in, 1.5k out) | Haiku | 0.002 |
 | Fit check | Same, judged by Sonnet | Haiku + Sonnet | 0.024 |
 | Adjustment | One call (6k in, 3k out) | Sonnet | 0.042 |
 | Cover letter | Draft, review, edit; 8k prefix cached | Sonnet | 0.093 |
 | Resume | 7 calls (strategist, review, editor, about two revision rounds, report); 9.5k prefix cached; 2.5k out each | Sonnet | 0.24 |
 | Resume | Same | Opus | 0.46 |
-| Resume, ten positions | Same 7 calls; relevant evidence only (about 600 tokens per position, 10k prefix cached); 3.5k out each | Sonnet | 0.32 |
-| Resume, ten positions | Same, sending the whole evidence base instead of retrieved evidence (54k prefix) | Sonnet | 0.52 |
-| Interview turn | Topic gate (Haiku) + turn with 15k cached history, 0.7k out | Haiku + Sonnet | 0.011 |
-| Interview, one position | About 30 turns + 1.5 extractions (20k in, 3k out) | Sonnet | 0.44 |
-| Interview, eight positions | | Sonnet | 3.51 |
+| Resume, ten positions | Same 7 calls; relevant profile passages only (about 600 tokens per position, 10k prefix cached); 3.5k out each | Sonnet | 0.32 |
+| Resume, ten positions | Same, sending the whole profile instead of retrieved passages (54k prefix) | Sonnet | 0.52 |
+| Agent message | Topic gate (Haiku) + turn with the passage, its section, the index and 10k cached history, 0.7k out | Haiku + Sonnet | 0.011 |
+| Profile validation, one section | The changed section plus the index (4k in, 1.5k out) | Sonnet | 0.023 |
+| Coverage review | Code checks + one call over the document and its passages (8k in, 2k out) | Sonnet | 0.036 |
 
 Thinking tokens are billed as output and are the largest uncertainty; the estimates assume moderate effort. Output dominates generation cost: each call of the revision loop rewrites the whole resume, so the number of revisions is the largest lever, and a longer career costs more mainly because the resume is longer, not because more context is sent.
 

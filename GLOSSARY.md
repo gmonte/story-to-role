@@ -1,20 +1,68 @@
 # StoryToRole
 
-StoryToRole helps job seekers produce tailored resumes and cover letters from a career evidence base the user has approved. Nothing is invented.
+StoryToRole helps job seekers produce tailored resumes and cover letters from one profile of their career, written and published by them, following the meu-emprego-novo method. Nothing is invented.
 
-## Career
+## Profile
+
+**Profile**:
+The user's whole career in one Markdown document, `profile_truth.md`, in the meu-emprego-novo method's template; the only source every document is generated from. In Portuguese, "perfil" (the file keeps its name).
+_Avoid_: Evidence base, account, relato, career data
+
+**Draft**:
+The profile as the user is editing it, autosaved; never read by screening or generation.
+_Avoid_: Working copy, unsaved changes
+
+**Published version**:
+A numbered, immutable version of the profile the user published; the latest one feeds screening and generation, and each generated document freezes the one it used.
+_Avoid_: Official copy, release, snapshot (a snapshot belongs to a generated document)
+
+**Validation**:
+The AI quality review of what changed in the draft since the last published version, which the user asks for and pays for; its findings never block publishing.
+_Avoid_: Approval, check, audit
+
+**Linter**:
+The deterministic check, plain code, that marks in the profile's text whatever breaks the template or its content rules.
+_Avoid_: Validator, AI check
+
+**Fix format**:
+The linter's on-demand correction of what code can fix with certainty (titles, dates, marks, missing or misplaced sections).
+_Avoid_: Auto-fix by AI, cleanup
+
+**Figure mark**:
+The bracketed origin after a figure in the profile: `[medido]`, `[estimado]`, `[sem número]` or `[a confirmar]`; only `[medido]` figures reach generated documents.
+_Avoid_: Tag, label, confidence
+
+**Suggestion**:
+A change to the profile proposed by the agent, an import, a validation or an application, shown in place until the user accepts or rejects it.
+_Avoid_: Draft fact, proposal, edit
+
+**Profile agent**:
+The AI the user talks to about a passage of their profile; it interviews per the method and changes the profile only through suggestions.
+_Avoid_: Interviewer, career chat, orchestrator
+
+**Experience**:
+One position in the profile's Experience section, titled `### Company — Title (YYYY-MM to YYYY-MM)`, with context, responsibilities, tools, results and what the user did not do.
+_Avoid_: Job, role, account
 
 **Credential**:
-An education, certification, language, course, publication, award or volunteering entry; a short locked fact that can also own evidence and stories.
+An education, certification or language line of the profile, in the template's format.
 _Avoid_: Qualification, certificate, diploma
 
 **Locked fact**:
-An employer, title or date of a position that code prevents the AI from altering in any generated text.
+An employer, title or date of an experience that code prevents the AI from altering in any generated text.
 _Avoid_: Fixed field, protected field
 
-**Position**:
-A role the user holds or has held at one employer, with a title and a period; the unit the guided interview works through one at a time.
-_Avoid_: Job, experience, role
+**Known gap**:
+Something the user does not have or has not done, stated in the profile (in an experience's "what I did not do" or in Known gaps); it counts as a gap, never as coverage.
+_Avoid_: Weakness, missing skill
+
+**Communication rule**:
+A line of the profile's Communication rules: something that must never appear ("never include") or never be claimed ("never claim") in what is generated; applied in code.
+_Avoid_: Sensitive item, privacy setting, secret
+
+**Job preferences**:
+The user's separate document with work model, locations, salary range, excluded companies and sectors, and discard rules; read only by screening.
+_Avoid_: Excluded jobs list, filters, settings
 
 ## Writing style
 
@@ -45,11 +93,19 @@ A dated entry on an application's timeline ("HR interview on Nov 20"), recorded 
 _Avoid_: Step, stage, activity
 
 **Fit check**:
-A quick analysis, run automatically when an opening is added and shown as a hint, of whether the opening makes sense for the user's skills.
+The method's screening, run automatically when an opening is added and shown as a hint: a high, medium or low band, each requirement backed by a profile passage or listed as a gap.
 _Avoid_: Fit score, match, assessment
 
+**Coverage review**:
+The report that comes with every generated document, checked against the profile version it froze: code checks that block, then strong and partial coverage, gaps not invented and inconsistencies.
+_Avoid_: Quality report, score, audit
+
+**Generation settings**:
+The user's defaults for bullets per experience, what counts as recent or very old, and document length, shown as a prefilled form at each generation and enforced in code.
+_Avoid_: Template, preferences
+
 **Review round**:
-One review and edit pass over a generated document during generation; the user picks how many rounds to allow.
+One coverage review and edit pass over a generated document during generation; the user picks how many rounds to allow.
 _Avoid_: Iteration, revision, pass
 
 **ATS check**:
@@ -57,7 +113,7 @@ A literal comparison of a generated resume against an opening's keywords, as an 
 _Avoid_: ATS score, keyword score, match rate
 
 **Application instructions**:
-Free-text statements the user adds for one application's generation only; each point may be promoted to the global evidence base.
+Free-text statements the user adds for one application's generation only; each point may become a suggestion in the profile.
 _Avoid_: Extra prompt, custom prompt, notes
 
 **Outdated**:
@@ -89,42 +145,30 @@ Carrying the changes of one version into another version of the same document, p
 _Avoid_: Translation update, merge
 
 **Locked-fact override**:
-A different employer, title or dates for one position that the user declares for a single application, which code then enforces there.
+A different employer, title or dates for one experience that the user declares for a single application, which code then enforces there.
 _Avoid_: Exception, custom title
 
 **Adaptation**:
-A snapshot that rewrites a generated document in another output language from the latest snapshot of another version, keeping its evidence and adding no new fact.
+A snapshot that rewrites a generated document in another output language from the latest snapshot of another version, keeping its profile passages and adding no new fact.
 _Avoid_: Translation, localization
 
 **Company fact**:
 A fact about a company found by web research for one application, kept with its source and used only once the user approves it.
 _Avoid_: Company data, insight
 
-**Career goal**:
-What the user wants from their next role, stated in a motivation interview and approved into the evidence base.
-_Avoid_: Preference, objective, wish
+**Career direction**:
+What the user wants from their next role, kept in the profile under Professional identity; a motivation interview can suggest additions.
+_Avoid_: Career goal, preference, objective, wish
 
 **Motivation interview**:
 The short conversation, within an application, about why the user wants that opening.
 _Avoid_: Cover letter interview, questionnaire
 
-## Guided interview
-
-**Account** (see ADR 0008):
-A position's own text in the user's voice, telling what they did there; versioned and approved as a whole, the source every document is generated from. In Portuguese, "relato".
-_Avoid_: Profile, summary (a summary is the AI's reading of it), story (a problem-action-result record)
-
-**Pending note**:
-A passage the user told about a position while talking about another, kept verbatim on it until a new version of its account brings it in.
-_Avoid_: Cross note (the older, internal name)
+## Sources and languages
 
 **Truth file**:
-A document the user already keeps with their own career facts, imported as a source document and validated like any extraction.
+A document the user already keeps with their own career facts, imported like a resume: its content and its "do not include" rules become suggestions in the profile.
 _Avoid_: Profile file, about me, bio
-
-**Interview**:
-The guided conversation in which StoryToRole discovers the user's career story, position by position, and turns it into approved evidence.
-_Avoid_: Onboarding chat, questionnaire; never use it for an employer's interview (see Hiring interview)
 
 **Hiring interview**:
 An interview an employer holds with the user during an application; StoryToRole does not prepare users for it in the MVP.
@@ -134,38 +178,8 @@ _Avoid_: Interview (unqualified), interview prep
 The language the app's screens are shown in, set independently of every other language.
 _Avoid_: Locale, app language
 
-**Interview language**:
-The language the user and the interviewer converse in; each evidence item keeps the interview language it was told in.
-_Avoid_: Chat language, AI language
-
-**Depth**:
-How complete a position's story is in the evidence base, shown beside its workflow status.
-_Avoid_: Status, progress, score
-
-**Short script**:
-A reduced interview script that covers only a position's highlights, used for old or off-target positions and in the Free plan.
-_Avoid_: Quick interview, light mode
-
-**Session**:
-One slice of the guided interview about a single position (or one project of it), whose turns are never loaded again once it closes.
-_Avoid_: Conversation, chat, thread
-
-**Session checkpoint**:
-The moment a session that has grown too long is closed: what was said so far is extracted, the user approves it, and the interview continues in a fresh session.
-_Avoid_: Compaction, summary, context reset
-
-## Sensitive data
-
-**Sensitive item**:
-A client name, project codename, explicit figure or person mentioned in the evidence base that the user may not want in generated text.
-_Avoid_: Secret, PII, confidential data
-
-**Sensitivity choice**:
-The user's general rule for one sensitive item (use, generalize or exclude), applied to every application unless overridden.
-_Avoid_: Privacy setting, visibility
-
 **Application override**:
-An exception to a sensitivity choice that applies to a single application only.
+An exception to a communication rule that applies to a single application only.
 _Avoid_: Per-job override, exception rule
 
 ## AI providers

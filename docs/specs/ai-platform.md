@@ -1,0 +1,69 @@
+# StoryToRole spec: AI platform
+
+Nov 17, 2026 · @Guilherme
+
+What every AI feature shares: the stack, the providers and keys, voice input and the usage guardrails. Moved out of the former guided-interview spec when the career engine became the profile document ([profile-truth.md](./profile-truth.md), ADR 0008).
+
+## Stack, languages and AI providers
+
+StoryToRole starts from a clone of the private `gmonte/company-balance` repo, which already provides the app shell, auth, database and i18n.
+
+| Layer | Comes from the base repo | Added for StoryToRole |
+| --- | --- | --- |
+| Monorepo | pnpm workspace with lerna and nx; `apps/web`, `packages/api`, `packages/common`, `packages/intl`, `packages/web` | A `packages/ai` package for prompts, agents and provider adapters |
+| Web app | Next.js App Router, shadcn/ui components | The profile's block editor with its linter and agent, openings, documents and tracker |
+| API | tRPC routers plus a REST bridge and Swagger docs | A router per domain (profile, openings, documents, applications, credits) |
+| Database | Postgres with Drizzle schemas per domain and generated migrations | Tables from the data model section. Two Neon databases in AWS us-east-1, one for previews and staging and one for production, created directly in Neon; `DATABASE_URL` holds the pooled connection string per Vercel environment (Development points to the local Postgres), and `predeploy` applies migrations during each Vercel build |
+| Auth | Clerk, synced to local `users` through webhooks (`user.created`, `user.updated`, `user.deleted`); the base repo's Clerk Organizations sync (`organizations`, `organization_memberships`, their webhooks and domain code) is removed, since StoryToRole has no team accounts in the MVP | Ownership checks on every record; the admin role (for courtesy grants) is a user attribute in Clerk metadata, not an organization; webhook logs record only the event type and user id |
+| i18n | `@repo/intl`, locale from a cookie, `useTranslation` and `getTranslation` | English and Brazilian Portuguese messages |
+| Tests | Vitest, PGlite for database tests | Tests for the profile linter, the communication rules and generation's checks |
+| AI processing | None | Every AI call (the profile agent, validation, imports, fit checks, generation, coverage reviews, embeddings) runs as a Trigger.dev task; progress and tokens are streamed to the client through Trigger.dev Realtime, and results are saved to Postgres |
+| Rate limiting | None | Upstash Redis (free tier: 256 MB, 500K commands a month; then pay as you go) for rate limits and the misuse cooldown, through `@upstash/ratelimit`. Credit balances and every result stay in Postgres. Locally, `compose.yaml` runs serverless-redis-http (an Upstash-compatible REST API) on top of a host Redis, so the same client code runs in development and production. Two Upstash databases: one for previews and staging, one for production. Every key carries the environment prefix from `REDIS_KEY_PREFIX` (passed to each limiter's `prefix` option and to the helper that builds other keys), so staging and every preview keep their own counters in the shared database: CI passes it on deploy like `APP_URL` (`stg` for staging, `pr-<number>` for previews), production sets `prod` on Vercel, and local development uses `dev`. The databases are created directly in the Upstash console (not through the Vercel integration), and the app reads the standard `UPSTASH_REDIS_REST_URL` and `UPSTASH_REDIS_REST_TOKEN`, set by hand per Vercel environment (Preview and Production; never Development, so `vercel env pull` keeps the local values) |
+
+**Languages.** The interface language uses the existing `@repo/intl` setup (English or Brazilian Portuguese). The profile is written in whatever language the user writes it in; the agent answers in the language of the user's messages, and documents are generated in the output language the user picks for each one.
+
+**AI providers.** Two modes share one adapter interface:
+
+- **Bring your own key:** the user enters an API key from a provider with a certified package (see Provider packages); StoryToRole picks the model for each role, and the user chooses at most the writing level. Keys live on the server only, since calls must pass the guardrails and generation runs in the background. Each key is encrypted with AES-256-GCM before it reaches the database, under a master key held in its own environment variable (separate from the database URL, marked sensitive in the deploy). Every encrypted key records the master-key version, and a script re-encrypts all keys when the master key rotates. A saved key is never shown again (only its last characters), is decrypted in memory only for the call, is masked by the logger, is validated with a minimal provider call when saved, and is deleted on revoke. A managed key vault (KMS) is deferred until paying users or compliance require it.
+- **When a user's key runs out of credit or is refused:** the running task stops at a safe point (a generation keeps its best version so far) and the user sees why, including when the provider's credits renew (for example, the monthly API credits of a Claude Max or Team plan, granted to a linked Console organization). Nothing is charged. If the user has StoryToRole credits or buys a pack, a "Finish with credits" action shows the estimate for the remaining work; it never switches automatically.
+
+**Provider packages.** A **provider package** maps every AI role in the pipeline to one provider's models: company research (web search), classification (content checks, opening keywords, fit check judgment, gap questions, instruction splitting), writing (resume import, the profile agent, profile validation, generation, adjustments, coverage reviews) and, optionally, a maximum writing level. A provider is offered only through a **certified** package:
+
+- every role has a tested model and the shared test suite passes on each of them;
+- structured outputs and tool use are available;
+- the price table is known, so cost estimates can be shown.
+
+Packages are versioned; changing a model re-runs the tests first, and a provider whose model is being replaced is marked "under review" until it passes. The interface shows certified packages with a "tested integration" badge. PDF and DOCX files are converted to text by code, so no provider needs document input; the topic gate uses the package's classification model, and embeddings are not a package role (they run locally). Which package the AI-included plans use is a system setting, not a constant; bring-your-own-key users use the package of their key's provider.
+
+At launch only the Anthropic package is certified: Haiku 5.5 for classification, Sonnet 5.5 for writing and fact extraction, Opus 5.5 for the maximum level. OpenAI comes next, with "Sign in with ChatGPT" (paying with the user's ChatGPT plan allowance) as its main way in, once its package is certified and OpenAI's documentation confirms any developer can enable plan usage; its weekly cap can stop a task, which then behaves as a key out of credit. Mixing providers across roles is a possible later step.
+
+**StoryToRole's own key per environment.** Local development and previews may use a key from the owner's Console organization linked to a Claude Max plan, paid by its monthly API credits. Production never does: it uses a key from a separate Anthropic Console organization owned by StoryToRole, not linked to any personal subscription and billed to the company, with a production workspace that has a monthly spend limit and alerts. The production key lives only in production environment variables (Vercel production and the production Trigger.dev project).
+- **AI included:** StoryToRole's own key, with monthly limits per plan.
+
+The adapter reports token usage per call so the app can show cost estimates before a run and actual usage after.
+
+**Voice input.** Speech to text only, like the Claude app's dictation: the user speaks, the transcript appears in the input box, and nothing is sent until they confirm. The transcription language follows the interface language. Audio is not stored; only the confirmed text becomes a message.
+
+Recognition is the browser's own. The microphone button uses the Web Speech API without requiring on-device processing: Chrome and Edge transcribe with Google's service, Safari with Apple's, and words appear in the input box while the user speaks. On-device recognition (`processLocally`) was tried first and dropped: in testing, Chrome reported the Brazilian Portuguese pack as available, heard speech and never returned a word, and no other browser offered it. StoryToRole never receives the audio; it goes from the browser to its vendor under the browser's terms, which the privacy notice states. Where the browser can't transcribe (Firefox has no recognition, Brave blocks it with a `network` error, or recognition hears speech and returns no text for 6 seconds), the button is replaced by a hint on using the operating system's own dictation (Fn Fn on macOS, Win+H on Windows, the keyboard microphone on iOS and Android), which types into the input box like any keyboard. Voice input costs StoryToRole nothing and is part of every plan. A paid transcription API is reconsidered only if browser recognition disappoints in Brazilian Portuguese or the browsers without it matter.
+
+The privacy notice says audio never leaves the user's device.
+
+## Usage guardrails
+
+StoryToRole is not a general chatbot: every AI call must serve the profile, an opening or a document, and code, not the prompt alone, stops anything else before it reaches an expensive model.
+
+Each user message passes these layers in order; the first one that fails answers from code, with no call to the main model.
+
+1. **No general-purpose chat.** Every chat belongs to a context: the profile agent, an opening or a document. There is no chat without an owner and no "ask anything" box. The topic gate judges each message against its context.
+2. **Input limits in code.** Maximum characters per message, maximum voice-recording length, maximum file size and pages per upload, maximum opening-description length.
+3. **Topic gate.** A small, cheap model classifies each message as on topic (the user's career and profile, the passage under discussion, how the agent works), off topic, or an attempt to override instructions. Off-topic messages get a fixed reply in the user's language that steers back to the profile.
+4. **Content checks on inputs that trigger generation.** An upload must look like a resume and a pasted opening description must look like a job posting; anything else is refused before generation, so the generation flow cannot be used as a free writing tool.
+5. **Scoped prompts and tools.** The main model's instructions limit it to the profile (or the document at hand), and it has no tools beyond those in this spec: no code execution, and no web access except in the separate company research task, whose results the user approves before use. Links the user attaches are read by code, not by the model (see the workspace spec).
+6. **Output limits.** A maximum number of output tokens per call, set per call type.
+7. **Budgets and rate limits.** Messages per day and the user's credit balance, enforced before each call. The user sees the credit meter (see the billing spec); when credits run out the app stops calling the AI and offers the subscription or a credit pack.
+8. **Repeated misuse.** Off-topic and override attempts are counted; after a set number in a short window the chat pauses for a cooldown.
+9. **Monitoring.** Cost per user per day is tracked, with an alert for outliers.
+
+**Bring-your-own-key users** pay for their own tokens, so credits do not limit them; their usage and estimated cost are shown as information only. Every other guardrail applies: the terms of use cover the product's purpose, and the topic gate follows the AI funding: with key funding it runs on the user's key, with the classification model of their provider package (Haiku for Anthropic); with credit funding, including "Finish with credits" after a key runs out, it runs on StoryToRole's key. The server decides to call the gate whatever key is used, so running it on the user's key does not make it skippable. The gate fails closed: when it cannot run (for example, the user's key is invalid or out of credit), the message is blocked and nothing reaches the main model unfiltered. This keeps StoryToRole's AI cost for key-funded users at zero. A local classifier may replace it after the MVP.
+
+Thresholds (message length, turns, budgets, cooldown) are settings to tune with real usage, not fixed in this spec.

@@ -100,6 +100,7 @@ const context: CareerContext = {
   rules: { neverInclude: ["Hooli"], neverClaim: ["fluent English"] },
   studied: ["Rust"],
   gaps: [],
+  careerDirection: [],
 };
 
 const entry = (

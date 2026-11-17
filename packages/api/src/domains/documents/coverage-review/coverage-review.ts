@@ -9,8 +9,9 @@ import { foldAccents } from "@repo/api/utils/text/fold-accents";
 
 import { matchPurpose, type Purpose } from "../generation/assemble-resume";
 import type { CareerContext } from "../generation/load-career-context";
-import { writtenLines } from "../generation/resume-checks";
+import { type WrittenLine, writtenLines } from "../generation/resume-checks";
 import type { OpeningBrief } from "../generation/resume-prompts";
+import type { CoverLetterContent } from "../schemas/cover-letter-content";
 import type { OutputLanguage } from "../schemas/document";
 import type { ResumeContent } from "../schemas/resume-content";
 
@@ -139,9 +140,35 @@ function provable(terms: OpeningBrief["terms"]) {
   );
 }
 
+/**
+ * What a line resting on the user's own words says, and the position it is
+ * about: a resume bullet from an instruction or written by hand, or a
+ * letter paragraph resting on instructions (the instruction's statement is
+ * the fact, never the paragraph). Null when the line isn't one, or its
+ * position is unknown.
+ */
+export function ownWordsFact(
+  line: WrittenLine,
+  instructions: CareerContext["instructions"]
+): { positionId: string; text: string } | null {
+  const origin = line.origin;
+  if (origin?.kind === "instruction" || origin?.kind === "manual") {
+    return line.positionId
+      ? { positionId: line.positionId, text: line.text }
+      : null;
+  }
+  if (origin?.kind === "letter") {
+    const point = instructions.find(
+      (row) => origin.instructionIds.includes(row.id) && row.positionId
+    );
+    return point ? { positionId: point.positionId!, text: point.text } : null;
+  }
+  return null;
+}
+
 export function keepReview(input: {
   draft: CoverageReviewDraft;
-  content: ResumeContent;
+  content: ResumeContent | CoverLetterContent;
   context: CareerContext;
   brief: OpeningBrief;
   purposes: Purpose[];
@@ -237,9 +264,7 @@ export function keepReview(input: {
           : [{ kind: item.kind, lineId, text }];
       }
       const line = lineId ? lines.get(lineId) : null;
-      const ownWords =
-        line?.origin?.kind === "instruction" || line?.origin?.kind === "manual";
-      return line?.positionId && ownWords
+      return line && ownWordsFact(line, context.instructions)
         ? [{ kind: item.kind, lineId, text }]
         : [];
     }
@@ -253,7 +278,10 @@ export function keepReview(input: {
         : { kind: "opening", title: brief.title, company: brief.company },
       instructions: context.instructions.length,
     },
-    preserved: input.content.sections.flatMap((section) =>
+    preserved: (input.content.kind === "resume"
+      ? input.content.sections
+      : []
+    ).flatMap((section) =>
       section.kind === "experience"
         ? section.entries.map((entry) => ({
             positionId: entry.positionId,
@@ -320,14 +348,21 @@ export function reviewedResumeText(content: ResumeContent) {
   return parts.join("\n");
 }
 
+/** The letter as the reviewer reads it: each paragraph with its id. */
+export function reviewedLetterText(content: CoverLetterContent) {
+  return content.paragraphs
+    .map((line) => `[${line.id}] ${line.text}`)
+    .join("\n");
+}
+
 /**
- * The reviewer's prompt (the method's prompt 05): the resume with its line
+ * The reviewer's prompt (the method's prompt 05): the document with its line
  * ids, the requirements (or the focus) with the fit check, the profile
  * lines the document cites plus those the fit check found, never the whole
  * profile, and the application's instructions.
  */
 export function coverageReviewPrompt(input: {
-  content: ResumeContent;
+  content: ResumeContent | CoverLetterContent;
   context: CareerContext;
   brief: OpeningBrief;
   language: OutputLanguage;
@@ -346,17 +381,26 @@ export function coverageReviewPrompt(input: {
   const languageName = { "en-US": "English", "pt-BR": "Brazilian Portuguese" }[
     input.language
   ];
+  const letter = input.content.kind === "cover_letter";
+  const document = letter ? "cover letter" : "resume";
   return [
-    "You audit a resume against the opening (or the focus) it was written for and the profile lines it rests on, which are the only facts. Answer in JSON.",
-    "- strong: each requirement the resume proves, with the resume line (line_id) and the profile line (evidence_id) that proves it. One per requirement, named as written.",
+    `You audit a ${document} against the opening (or the focus) it was written for and the profile lines it rests on, which are the only facts. Answer in JSON.`,
+    ...(letter
+      ? [
+          "The letter tells one story and speaks for the user in their own words: judge a requirement proven when a paragraph shows it, with the profile line that backs it.",
+        ]
+      : []),
+    `- strong: each requirement the ${document} proves, with the ${document} line (line_id) and the profile line (evidence_id) that proves it. One per requirement, named as written.`,
     "- partial: requirements touched only indirectly, each with a short explanation.",
-    "- gaps: requirements the resume does NOT prove, listed by name. Never invent one.",
-    "- inconsistencies: any fact, date or figure in a resume line that doesn't match the profile lines (line_id and what differs). None is the usual answer.",
-    "- suggestions: never suggest covering a gap or adding anything. Only: reorder (kind “reorder”: bring a line that answers a requirement forward), or, when a resume line states a true fact the profile omits (a line resting on the user's instructions or written by them), updating the profile with it (kind “profile”, with that line_id).",
+    `- gaps: requirements the ${document} does NOT prove, listed by name. Never invent one.`,
+    `- inconsistencies: any fact, date or figure in a ${document} line that doesn't match the profile lines (line_id and what differs). None is the usual answer.`,
+    `- suggestions: never suggest covering a gap or adding anything. Only: reorder (kind “reorder”: bring a line that answers a requirement forward), or, when a ${document} line states a true fact the profile omits (a line resting on the user's instructions or written by them), updating the profile with it (kind “profile”, with that line_id).`,
     `- Write explanations and suggestions in ${languageName}. Where the profile has no passage, say so; code adds the final statement.`,
     "",
-    "The resume (line ids in brackets):",
-    reviewedResumeText(input.content),
+    `The ${document} (line ids in brackets):`,
+    input.content.kind === "cover_letter"
+      ? reviewedLetterText(input.content)
+      : reviewedResumeText(input.content),
     "",
     ...(brief.focus
       ? [`The focus (a library resume, no opening): ${brief.focus}`]

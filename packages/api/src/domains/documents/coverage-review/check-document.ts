@@ -40,6 +40,8 @@ export const coverageFindingCodes = [
   "studied",
   // A very old experience kept without the requirement that justifies it.
   "veryOld",
+  // A cover letter has more paragraphs than the settings allow.
+  "paragraphs",
 ] as const;
 export type CoverageFindingCode = (typeof coverageFindingCodes)[number];
 
@@ -66,6 +68,39 @@ function toolNames(evidence: CareerContext["evidence"]) {
         .map((name) => name.trim().replace(/\.$/, ""))
         .filter((name) => name && !name.includes(withheld))
     );
+}
+
+/**
+ * What each position says the person did not do, as the names the profile
+ * knows (competencies in use or studied, and tools), so "what I did not
+ * do" is checked by name and never on free text. A name the position's own
+ * lines use otherwise ("Tools: Terraform" with "did not run Terraform in
+ * production") was used there: not denied.
+ */
+export function deniedNamesOf(context: CareerContext) {
+  const knownNames = [
+    ...new Set([
+      ...context.skills.map((skill) => skill.name),
+      ...context.studied,
+      ...toolNames(context.evidence),
+    ]),
+  ];
+  const usedAt = (positionId: string, name: string) =>
+    context.evidence.some(
+      (row) => row.positionId === positionId && mentions(row.text, name)
+    );
+  const deniedByPosition = new Map(
+    context.positions.map((position) => [
+      position.id,
+      position.notDone.flatMap((text) =>
+        knownNames
+          .filter((name) => mentions(text, name) && !usedAt(position.id, name))
+          .map((name) => ({ name, notDone: text }))
+      ),
+    ])
+  );
+  return (positionId: string | null) =>
+    deniedByPosition.get(positionId ?? "") ?? [];
 }
 
 /**
@@ -172,33 +207,7 @@ export function checkDocument(input: {
     });
   }
 
-  // Names the profile knows, so "what I did not do" is checked by name and
-  // never on free text: competencies (in use or studied) and tools.
-  const knownNames = [
-    ...new Set([
-      ...context.skills.map((skill) => skill.name),
-      ...context.studied,
-      ...toolNames(context.evidence),
-    ]),
-  ];
-  // A name the position's own lines use otherwise ("Tools: Terraform" with
-  // "did not run Terraform in production") was used there: not denied.
-  const usedAt = (positionId: string, name: string) =>
-    context.evidence.some(
-      (row) => row.positionId === positionId && mentions(row.text, name)
-    );
-  const deniedByPosition = new Map(
-    context.positions.map((position) => [
-      position.id,
-      position.notDone.flatMap((text) =>
-        knownNames
-          .filter((name) => mentions(text, name) && !usedAt(position.id, name))
-          .map((name) => ({ name, notDone: text }))
-      ),
-    ])
-  );
-  const deniedNames = (positionId: string | null) =>
-    deniedByPosition.get(positionId ?? "") ?? [];
+  const deniedNames = deniedNamesOf(context);
   // Only what the profile marks measured backs a figure: the lines of the
   // line's position (any position, for the summary or a competency group)
   // and the instructions that may back it.

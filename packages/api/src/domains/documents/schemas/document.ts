@@ -71,14 +71,15 @@ export const lineOriginSchema = z.discriminatedUnion("kind", [
     evidenceIds: z.array(z.uuid()),
   }),
   z.object({ kind: z.literal("manual") }),
-  // A cover letter paragraph: evidence, approved company facts, the
-  // motivation interview's points and career goals.
+  // A cover letter paragraph: profile lines (the career direction among
+  // them), approved company facts, the motivation interview's points and
+  // the application's instructions.
   z.object({
     kind: z.literal("letter"),
     evidenceIds: z.array(z.uuid()),
     companyFactIds: z.array(z.uuid()),
     motivationPointIds: z.array(z.uuid()),
-    careerGoalIds: z.array(z.uuid()),
+    instructionIds: z.array(z.uuid()).default([]),
   }),
   z.object({ kind: z.literal("credential"), credentialId: z.uuid() }),
   z.object({ kind: z.literal("skill"), evidenceIds: z.array(z.uuid()) }),

@@ -69,6 +69,7 @@ const context: CareerContext = {
   rules: { neverInclude: [], neverClaim: [] },
   studied: [],
   gaps: [],
+  careerDirection: [],
 };
 
 const content: ResumeContent = {

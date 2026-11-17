@@ -11,6 +11,8 @@ import {
 } from "@repo/api/tools/trpc";
 
 import { outputLanguageSchema, writingLevelSchema } from "../schemas/document";
+import { generationSettingsFields } from "../schemas/generation-settings";
+import { letterStorySchema } from "../schemas/letter-story";
 import { LetterService } from "./letter-service";
 
 const started = z.object({
@@ -19,6 +21,21 @@ const started = z.object({
 });
 
 export const letterRouter = createTRPCRouter({
+  stories: userProcedure
+    .meta(
+      openApiMeta(
+        "letters",
+        "GET",
+        "/openings/by-id/{openingId}/cover-letter-stories",
+        "Returns the top three stories of the profile for the opening's letter"
+      )
+    )
+    .input(z.object({ openingId: z.uuid() }))
+    .output(z.array(letterStorySchema))
+    .query(({ ctx, input }) =>
+      new LetterService(db).stories({ userId: ctx.userId, ...input })
+    ),
+
   generate: userProcedure
     .use(rateLimited("taskStart"))
     .meta(
@@ -37,6 +54,10 @@ export const letterRouter = createTRPCRouter({
         writingLevel: writingLevelSchema,
         resumeVersionId: z.uuid().nullable(),
         versionId: z.uuid().optional(),
+        // The settings form's changes, for this letter only.
+        settings: generationSettingsFields.partial().optional(),
+        // The story picked from `stories`.
+        storyLineId: z.string().nullable().optional(),
       })
     )
     .output(started)

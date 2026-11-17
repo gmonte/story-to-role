@@ -141,6 +141,7 @@ const context: CareerContext = {
   rules: { neverInclude: [], neverClaim: [] },
   studied: [],
   gaps: [],
+  careerDirection: [],
 };
 
 const draft: ResumeDraft = {

@@ -1,0 +1,1 @@
+ALTER TABLE "generations" ADD COLUMN IF NOT EXISTS "storyLineId" uuid;

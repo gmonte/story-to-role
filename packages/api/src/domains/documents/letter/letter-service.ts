@@ -1,6 +1,7 @@
 import { TRPCError } from "@trpc/server";
 
 import { CareerRepository } from "@repo/api/domains/career/career-repository";
+import { getUserCipher } from "@repo/api/domains/encryption/user-cipher";
 import { OpeningsRepository } from "@repo/api/domains/openings/openings-repository";
 import type { Tone } from "@repo/api/domains/openings/schemas/opening";
 import type { RealtimeSubscription } from "@repo/api/domains/tasks/schemas/task";
@@ -8,10 +9,16 @@ import { TasksService } from "@repo/api/domains/tasks/tasks-service";
 import type { DbClient } from "@repo/api/tools/db-client";
 
 import { DocumentsRepository } from "../documents-repository";
+import { writtenSettings } from "../coverage-review/snapshot-coverage";
 import { failGeneration } from "../documents-service";
+import { freezeGeneration } from "../generation/generation-request";
+import { loadProfileSource } from "../generation/load-profile-source";
 import { letterResumeState } from "./letter-resume";
 import { requireUserVersion } from "../require-version";
 import type { OutputLanguage, WritingLevel } from "../schemas/document";
+import type { GenerationSettings } from "../schemas/generation-settings";
+import type { LetterStoryView } from "../schemas/letter-story";
+import { rankStories } from "./rank-stories";
 
 const notFound = () => new TRPCError({ code: "NOT_FOUND" });
 
@@ -40,7 +47,44 @@ export class LetterService {
     return { generationId, realtime };
   }
 
-  /** Generates a letter: a new version, or into an existing one again. */
+  private async requireProfile(userId: string) {
+    const profile = await new CareerRepository(this.db).findProfileByUserId(
+      userId
+    );
+    if (!profile) throw notFound();
+    return profile;
+  }
+
+  /**
+   * The stories the profile tells, ranked by similarity to the opening: the
+   * top three, for the user to pick one (resume spec, "Story choice").
+   */
+  async stories(input: {
+    userId: string;
+    openingId: string;
+  }): Promise<LetterStoryView[]> {
+    const profile = await this.requireProfile(input.userId);
+    const opening = await new OpeningsRepository(this.db).findOpening({
+      profileId: profile.id,
+      openingId: input.openingId,
+    });
+    if (!opening) throw notFound();
+    return rankStories({
+      db: this.db,
+      cipher: await getUserCipher(this.db, input.userId),
+      profileId: profile.id,
+      openingId: opening.id,
+    });
+  }
+
+  /**
+   * Generates a letter: a new version, or into an existing one again. Like
+   * a resume, it freezes what it is asked with (ADR 0008): the profile
+   * version (the one its resume was written from, when it has one, so the
+   * lines they cite are the same; else the one published now) and the
+   * settings of the form. Nothing is generated before a profile is
+   * published.
+   */
   async generate(input: {
     userId: string;
     openingId: string;
@@ -49,7 +93,20 @@ export class LetterService {
     writingLevel: WritingLevel;
     resumeVersionId: string | null;
     versionId?: string;
+    /** What the user changed in the settings form, for this document. */
+    settings?: Partial<GenerationSettings>;
+    /** The story picked from `stories`: a results line of the profile. */
+    storyLineId?: string | null;
   }): Promise<{ generationId: string; realtime: RealtimeSubscription }> {
+    const profile = await this.requireProfile(input.userId);
+    const cipher = await getUserCipher(this.db, input.userId);
+    const frozen = await freezeGeneration({
+      db: this.db,
+      cipher,
+      userId: input.userId,
+      profileId: profile.id,
+      settings: input.settings,
+    });
     await this.tasks.assertAffordable({
       userId: input.userId,
       type: "generate_document",
@@ -60,16 +117,11 @@ export class LetterService {
     });
     const generation = await this.db.transaction(async (tx) => {
       const repository = new DocumentsRepository(tx);
-      const profile = await new CareerRepository(tx).findProfileByUserId(
-        input.userId
-      );
-      const opening =
-        profile &&
-        (await new OpeningsRepository(tx).findOpening({
-          profileId: profile.id,
-          openingId: input.openingId,
-        }));
-      if (!profile || !opening) throw notFound();
+      const opening = await new OpeningsRepository(tx).findOpening({
+        profileId: profile.id,
+        openingId: input.openingId,
+      });
+      if (!opening) throw notFound();
       const application = await repository.findOrInsertApplication({
         profileId: profile.id,
         openingId: opening.id,
@@ -85,8 +137,6 @@ export class LetterService {
       if (input.versionId && existing?.documentId !== document.id) {
         throw notFound();
       }
-      // A letter tells one story (resume spec). Profile_truth replaces this
-      // in P8 (docs/plan.md): until the profile supplies it, none is required.
       // The resume it accompanies: a version of this application's resume.
       const resume = input.resumeVersionId
         ? await requireUserVersion(tx, input.userId, input.resumeVersionId)
@@ -100,12 +150,42 @@ export class LetterService {
       }
       const resumeSnapshot =
         resume && (await repository.latestSnapshot(resume.version.id));
+      const profileVersionId =
+        resumeSnapshot?.profileVersionId ?? frozen.profileVersionId;
+      // The story, a results line of the version published now; the
+      // letter's version may be the resume's older one, where it is found
+      // again by its words.
+      let storyLineId: string | null = null;
+      if (input.storyLineId) {
+        const source = (version: string) =>
+          loadProfileSource({
+            db: tx,
+            cipher,
+            profileId: profile.id,
+            profileVersionId: version,
+          });
+        const chosen = (await source(frozen.profileVersionId))?.evidence.find(
+          (line) => line.id === input.storyLineId && line.kind === "achievement"
+        );
+        if (!chosen) throw new TRPCError({ code: "BAD_REQUEST" });
+        storyLineId =
+          profileVersionId === frozen.profileVersionId
+            ? chosen.id
+            : ((await source(profileVersionId))?.evidence.find(
+                (line) =>
+                  line.positionId === chosen.positionId &&
+                  line.text === chosen.text
+              )?.id ?? null);
+      }
       return repository.insertGeneration({
         profileId: profile.id,
         documentId: document.id,
         versionId: existing?.id ?? null,
         // Into a version, its language: a letter never changes language.
         language: existing?.language ?? input.language,
+        profileVersionId,
+        settings: frozen.settings,
+        storyLineId,
         reviewDepth: "quick",
         writingLevel: input.writingLevel,
         tone: input.tone,
@@ -164,6 +244,14 @@ export class LetterService {
       type: "generate_document",
       hints: { documentKind: "cover_letter" },
     });
+    // A letter from before snapshots carried their version reads the one
+    // published now.
+    const published = await freezeGeneration({
+      db: this.db,
+      cipher: await getUserCipher(this.db, input.userId),
+      userId: input.userId,
+      profileId: (await this.requireProfile(input.userId)).id,
+    });
     const generation = await this.db.transaction(async (tx) => {
       const repository = new DocumentsRepository(tx);
       const { version, document, profile, latest, state, resumeLatest } =
@@ -188,6 +276,9 @@ export class LetterService {
         sourceSnapshotId: state.usedSnapshotId,
         resumeVersionId: state.resumeVersionId,
         resumeSnapshotId: resumeLatest.id,
+        // What the letter was written under, whatever was published since.
+        profileVersionId: latest.profileVersionId ?? published.profileVersionId,
+        settings: await writtenSettings(repository, version),
         reviewDepth: "quick",
         writingLevel: "standard",
         tone: application?.tone ?? "your_style",

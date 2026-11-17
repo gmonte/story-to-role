@@ -9,7 +9,12 @@ import type { RealtimeSubscription } from "@repo/api/domains/tasks/schemas/task"
 import { TasksService } from "@repo/api/domains/tasks/tasks-service";
 import type { DbClient } from "@repo/api/tools/db-client";
 import { TasksRepository } from "@repo/api/domains/tasks/tasks-repository";
+import { loadProfileSource } from "@repo/api/domains/documents/generation/load-profile-source";
 import { ProfileRepository } from "@repo/api/domains/profile/profile-repository";
+import {
+  suggestLine,
+  type SuggestionTarget,
+} from "@repo/api/domains/profile/suggestions/suggest-line";
 import { ProfileService } from "@repo/api/domains/profile/profile-service";
 import type { ProfileLanguage } from "@repo/api/domains/profile/truth/sections";
 
@@ -213,6 +218,7 @@ export class OpeningsService {
               ),
               gapQuestion: open(cipher, item.encryptedGapQuestion),
               gapAnswer: open(cipher, item.encryptedGapAnswer),
+              gapLack: !!item.lackConfirmedAt,
             };
           }),
           preferenceConflicts: fitCheck.encryptedPreferenceConflicts
@@ -222,6 +228,18 @@ export class OpeningsService {
                 )
               )
             : [],
+          // The positions a confirmed gap can be tied to: those of the
+          // profile published now (“what I did not do” is per position).
+          positions: (
+            (await loadProfileSource({ db: tx, cipher, profileId: profile.id }))
+              ?.positions ?? []
+          ).map((position) => ({
+            positionId: position.id,
+            employer: position.employer,
+            title: position.title,
+            startDate: position.startDate,
+            endDate: position.endDate,
+          })),
           outdated:
             !!profileDocument?.publishedVersionId &&
             (fitCheck.profileVersionId !== profileDocument.publishedVersionId ||
@@ -421,16 +439,25 @@ export class OpeningsService {
   }
 
   /**
-   * The answer to a gap question: kept with the opening, it becomes an
-   * application instruction when the application starts (slice 4).
+   * The answer to a gap question (resume spec, "Gap questions"): either a
+   * story, kept with the opening and turned into an application
+   * instruction when it is split; or the user confirming they really lack
+   * it, which becomes a suggestion in the profile's draft: under "what I
+   * did not do" of the position the requirement is tied to (the one the
+   * user names, or the one the fit check's passages are in), else under
+   * Known gaps. Nothing changes until the user accepts it there.
    */
   async answerGapQuestion(input: {
     userId: string;
     fitCheckItemId: string;
-    answer: string;
-  }) {
+    answer?: string;
+    lacks?: boolean;
+    positionId?: string;
+  }): Promise<{ profileSuggestionId: string | null }> {
     const profile = await this.requireProfile(input.userId);
-    await this.db.transaction(async (tx) => {
+    const answer = input.answer?.trim();
+    if (!input.lacks && !answer) throw new TRPCError({ code: "BAD_REQUEST" });
+    const { item, openingId } = await this.db.transaction(async (tx) => {
       const openings = new OpeningsRepository(tx);
       const found = await openings.findFitCheckItem(input.fitCheckItemId);
       const opening =
@@ -440,12 +467,59 @@ export class OpeningsService {
           openingId: found.openingId,
         }));
       if (!found?.item.encryptedGapQuestion || !opening) throw notFound();
-      const cipher = await getUserCipher(tx, input.userId);
-      await openings.answerFitCheckItem({
-        fitCheckItemId: found.item.id,
-        encryptedGapAnswer: cipher.encrypt(input.answer.trim()),
-      });
+      if (!input.lacks) {
+        const cipher = await getUserCipher(tx, input.userId);
+        await openings.answerFitCheckItem({
+          fitCheckItemId: found.item.id,
+          encryptedGapAnswer: cipher.encrypt(answer!),
+          lackConfirmedAt: null,
+        });
+      }
+      return { item: found.item, openingId: opening.id };
     });
+    if (!input.lacks) return { profileSuggestionId: null };
+
+    const cipher = await getUserCipher(this.db, input.userId);
+    const openings = new OpeningsRepository(this.db);
+    const term = (await openings.listTerms(openingId)).find(
+      (row) => row.id === item.termId
+    );
+    if (!term) throw notFound();
+    const text = cipher.decrypt(term.encryptedText);
+    const known: SuggestionTarget = { kind: "section", section: "gaps" };
+    let profileSuggestionId: string | null = null;
+    try {
+      ({ profileSuggestionId } = await suggestLine({
+        db: this.db,
+        cipher,
+        userId: input.userId,
+        careerProfileId: profile.id,
+        target: input.positionId
+          ? {
+              kind: "experience",
+              positionId: input.positionId,
+              field: "notDone",
+            }
+          : known,
+        text,
+        reason: {
+          "en-US":
+            "You confirmed you really lack this when answering an opening's gap question.",
+          "pt-BR":
+            "Você confirmou que realmente não tem isto ao responder a pergunta de lacuna de uma vaga.",
+        },
+      }));
+    } catch (error) {
+      // The profile already says it: nothing to suggest.
+      if (!(error instanceof TRPCError && error.code === "CONFLICT")) {
+        throw error;
+      }
+    }
+    await openings.answerFitCheckItem({
+      fitCheckItemId: item.id,
+      lackConfirmedAt: new Date(),
+    });
+    return { profileSuggestionId };
   }
 }
 

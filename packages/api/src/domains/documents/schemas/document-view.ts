@@ -167,7 +167,7 @@ export const versionViewSchema = z.object({
   instructionTrace: z.array(
     z.object({ instructionId: z.uuid(), text: z.string() })
   ),
-  // A resume's coverage review; a cover letter's comes with P8.
+  // A resume's or a cover letter's coverage review.
   coverage: coverageViewSchema.nullable(),
   // Linked versions with changes this one has not received (language sync).
   outdated: z.array(
@@ -179,14 +179,14 @@ export const versionViewSchema = z.object({
       baseMissing: z.boolean(),
     })
   ),
-  // A cover letter's sources besides evidence, for its trace.
+  // A cover letter's sources besides profile lines and instructions, for
+  // its trace.
   letterTrace: z
     .object({
       companyFacts: z.array(
         z.object({ id: z.uuid(), text: z.string(), sourceUrl: z.string() })
       ),
       motivationPoints: z.array(z.object({ id: z.uuid(), text: z.string() })),
-      careerGoals: z.array(z.object({ id: z.uuid(), text: z.string() })),
     })
     .nullable(),
   // A cover letter and its resume (resume spec, "Cover letter and its

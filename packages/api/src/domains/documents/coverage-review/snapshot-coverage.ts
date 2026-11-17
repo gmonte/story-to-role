@@ -19,8 +19,10 @@ import {
   generationSettingsSchema,
 } from "../schemas/generation-settings";
 import type { OutputLanguage } from "../schemas/document";
-import { decryptResume } from "../snapshot-content";
+import { loadLetterOwnSources } from "../letter/letter-own-sources";
+import { decryptDocument } from "../snapshot-content";
 import { checkDocument } from "./check-document";
+import { checkLetter } from "./check-letter";
 
 type Snapshot = NonNullable<
   Awaited<ReturnType<DocumentsRepository["findSnapshot"]>>
@@ -137,8 +139,9 @@ export async function writtenSettings(
 }
 
 /**
- * The code checks of the coverage review on one resume snapshot (resume
- * spec, "Coverage review"), against what it froze: the profile version its
+ * The code checks of the coverage review on one resume or cover letter
+ * snapshot (resume spec, "Coverage review"), against what it froze: the
+ * profile version its
  * content was written from, the settings of the generation that wrote the
  * version and the opening's requirements (or the focus). The rendered
  * PDF's measured pages count when a file exists.
@@ -159,7 +162,7 @@ export async function snapshotCoverage(input: {
 }) {
   const { cipher } = input;
   const repository = new DocumentsRepository(input.db);
-  const content = decryptResume(cipher, input.snapshot);
+  const content = decryptDocument(cipher, input.snapshot);
   const openingId = await input.contexts.openingOf(
     input.document.applicationId
   );
@@ -179,15 +182,34 @@ export async function snapshotCoverage(input: {
     input.rendered === undefined
       ? await repository.findRenderedFile(input.snapshot.id, pdfTemplate)
       : input.rendered;
-  const findings = checkDocument({
-    content,
-    context,
-    settings: await writtenSettings(repository, input.version, input.written),
-    today: input.today ?? new Date().toISOString().slice(0, 7),
-    purposes,
-    targetTitle: brief.focus ? null : brief.title,
-    pages: rendered?.pages ?? null,
-  });
+  const settings = await writtenSettings(
+    repository,
+    input.version,
+    input.written
+  );
+  const findings =
+    content.kind === "cover_letter"
+      ? checkLetter({
+          content,
+          context,
+          settings,
+          ownSources: await loadLetterOwnSources({
+            db: input.db,
+            cipher,
+            openingId,
+            content,
+          }),
+          pages: rendered?.pages ?? null,
+        })
+      : checkDocument({
+          content,
+          context,
+          settings,
+          today: input.today ?? new Date().toISOString().slice(0, 7),
+          purposes,
+          targetTitle: brief.focus ? null : brief.title,
+          pages: rendered?.pages ?? null,
+        });
   return { context, findings };
 }
 
@@ -206,8 +228,6 @@ export async function assertSendable(input: {
   // Shared by the caller when it checks several documents at once.
   contexts?: FrozenContexts;
 }) {
-  // The cover letter's review comes with its own slice (docs/plan.md, P8).
-  if (input.document.kind !== "resume") return;
   const { findings } = await snapshotCoverage({
     ...input,
     contexts:

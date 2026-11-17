@@ -44,6 +44,8 @@ export const fitCheckItemViewSchema = z.object({
   passages: z.array(z.object({ id: z.uuid(), text: z.string() })),
   gapQuestion: z.string().nullable(),
   gapAnswer: z.string().nullable(),
+  // The user confirmed they really lack it: suggested to their profile.
+  gapLack: z.boolean(),
 });
 export type FitCheckItemView = z.infer<typeof fitCheckItemViewSchema>;
 
@@ -68,6 +70,18 @@ export const openingDetailSchema = openingSummarySchema.extend({
       items: z.array(fitCheckItemViewSchema),
       // The job preferences the opening breaks: any makes the band low.
       preferenceConflicts: preferenceConflictsSchema,
+      // The positions of the profile published now: a gap the user
+      // confirms is lacking can be tied to one (`positionId` of
+      // `answerGapQuestion`), for its “what I did not do”.
+      positions: z.array(
+        z.object({
+          positionId: z.uuid(),
+          employer: z.string(),
+          title: z.string(),
+          startDate: z.string().nullable(),
+          endDate: z.string().nullable(),
+        })
+      ),
       // Whether the profile or the job preferences were published again
       // since this check.
       outdated: z.boolean(),

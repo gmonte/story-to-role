@@ -98,6 +98,8 @@ export const instructionPointViewSchema = z.object({
   positionId: z.uuid().nullable(),
   credentialId: z.uuid().nullable(),
   evidenceKind: evidenceKindSchema.nullable(),
+  // Sent to the profile as a suggestion (it stays in this application too).
+  sentToProfile: z.boolean(),
   sensitiveItems: z.array(flaggedSensitiveItemSchema),
 });
 export type InstructionPointView = z.infer<typeof instructionPointViewSchema>;
@@ -129,3 +131,10 @@ export const applicationInstructionsSchema = z.object({
 export type ApplicationInstructions = z.infer<
   typeof applicationInstructionsSchema
 >;
+
+/** A point sent to the profile: the suggestion waiting in its draft. */
+export const instructionSendResultSchema = z.object({
+  instructionPointId: z.uuid(),
+  profileSuggestionId: z.uuid(),
+});
+export type InstructionSendResult = z.infer<typeof instructionSendResultSchema>;

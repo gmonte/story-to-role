@@ -653,6 +653,97 @@ describe("openings and fit check", () => {
     );
   });
 
+  it("suggests a gap the user confirms lacking for what-I-did-not-do or Known gaps, never as a change", async () => {
+    const ctx = await setup();
+    const openingId = await ctx.add();
+    const allGaps = fitScript((terms) => ({
+      items: terms.map((term) => ({
+        term_id: term.termId,
+        verdict: "gap",
+        passage_ids: [],
+        explanation: "No",
+      })),
+    }));
+    await ctx.analyze(openingId, {
+      object: (request: { system: string }) =>
+        request.system.startsWith("Write")
+          ? {
+              questions: [
+                ...request.system.matchAll(/- ([0-9a-f-]{36}): (.*)/g),
+              ].map((m) => ({ term_id: m[1], question: `About ${m[2]}?` })),
+            }
+          : allGaps.object(request),
+    });
+    const { fitCheck } = await ctx.detail(openingId);
+    const item = (term: string) =>
+      fitCheck!.items.find((row) => row.term === term)!;
+    const draftBefore = (
+      await ctx.profiles.getDraft({ userId: ctx.user.id, language: "en-US" })
+    ).markdown;
+    const suggestions = () => ctx.profiles.listSuggestions(ctx.user.id);
+
+    // Tied to a position: under its “what I did not do”, after its line.
+    const [position] = fitCheck!.positions;
+    expect(position).toMatchObject({ employer: "Acme" });
+    const tied = await ctx.openings.answerGapQuestion({
+      userId: ctx.user.id,
+      fitCheckItemId: item("Terraform").id,
+      lacks: true,
+      positionId: position.positionId,
+    });
+    // Tied to none: under Known gaps.
+    const known = await ctx.openings.answerGapQuestion({
+      userId: ctx.user.id,
+      fitCheckItemId: item("Kubernetes").id,
+      lacks: true,
+    });
+    const kafka =
+      "- What I did NOT do in this position (so as not to overstate): I did not touch Kafka.";
+    expect(await suggestions()).toMatchObject([
+      {
+        id: tied.profileSuggestionId,
+        origin: "application",
+        part: "experience:acme — platform engineer",
+        find: kafka,
+        replace: `${kafka}\n  - Terraform`,
+      },
+      {
+        id: known.profileSuggestionId,
+        origin: "application",
+        part: "gaps",
+        find: "",
+        replace: "- Kubernetes",
+      },
+    ]);
+    // A suggestion, not a change: the draft is as it was.
+    expect(
+      (await ctx.profiles.getDraft({ userId: ctx.user.id, language: "en-US" }))
+        .markdown
+    ).toBe(draftBefore);
+    expect((await ctx.detail(openingId)).fitCheck!.items).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ term: "Terraform", gapLack: true }),
+        expect.objectContaining({ term: "Kubernetes", gapLack: true }),
+      ])
+    );
+    // A story, by contrast, stays an application instruction point.
+    expect(
+      await ctx.openings.answerGapQuestion({
+        userId: ctx.user.id,
+        fitCheckItemId: item("8+ years of experience as a senior engineer").id,
+        answer: "I ran a Spark job once.",
+      })
+    ).toEqual({ profileSuggestionId: null });
+    expect(await suggestions()).toHaveLength(2);
+    // Neither a story nor a confirmation: refused.
+    await expect(
+      ctx.openings.answerGapQuestion({
+        userId: ctx.user.id,
+        fitCheckItemId: item("8+ years of experience as a senior engineer").id,
+      })
+    ).rejects.toMatchObject({ code: "BAD_REQUEST" });
+  });
+
   it("excludes the opening's company in the job preferences", async () => {
     const ctx = await setup();
     const openingId = await ctx.add();

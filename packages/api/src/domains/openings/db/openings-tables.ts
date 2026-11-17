@@ -154,6 +154,9 @@ export const fitCheckItemsTable = createTable(
     // The user's answer: it becomes an application instruction (slice 4).
     encryptedGapAnswer: d.text(),
     answeredAt: d.timestamp({ withTimezone: true }),
+    // The user confirmed they really lack it: it was suggested for "what I
+    // did not do" or the known gaps (resume spec, "Gap questions").
+    lackConfirmedAt: d.timestamp({ withTimezone: true }),
   }),
   (t) => [index("fit_check_items_fit_check_id_idx").on(t.fitCheckId)]
 );

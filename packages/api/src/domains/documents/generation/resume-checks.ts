@@ -1,5 +1,6 @@
 import type { SensitiveFilter } from "@repo/api/domains/evidence/sensitive/sensitive-filter";
 
+import type { CoverLetterContent } from "../schemas/cover-letter-content";
 import type { Line, LineOrigin } from "../schemas/document";
 import type { ExperienceAge } from "../schemas/generation-settings";
 import type { ResumeContent, ResumeSection } from "../schemas/resume-content";
@@ -67,7 +68,16 @@ export type WrittenLine = {
   origin: LineOrigin | null;
 };
 
-export function writtenLines(content: ResumeContent): WrittenLine[] {
+export function writtenLines(
+  content: ResumeContent | CoverLetterContent
+): WrittenLine[] {
+  // A letter's written text is its paragraphs: the greeting and the close
+  // hold no fact, and code prints them.
+  if (content.kind === "cover_letter") {
+    return content.paragraphs
+      .map((line) => ({ ...line, positionId: null }))
+      .filter((line) => line.text.trim());
+  }
   const written: WrittenLine[] = [
     {
       id: "title_line",

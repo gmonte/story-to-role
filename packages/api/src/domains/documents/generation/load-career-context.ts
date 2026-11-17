@@ -66,6 +66,8 @@ export type CareerContext = {
   // the known gaps. Never claimed in a document.
   studied: string[];
   gaps: string[];
+  // What the user says they look for next (Professional identity).
+  careerDirection: Array<{ id: string; text: string }>;
 };
 
 /**
@@ -256,5 +258,9 @@ export async function loadCareerContext(input: {
     rules: source?.rules ?? { neverInclude: [], neverClaim: [] },
     studied: source?.studied ?? [],
     gaps: source?.gaps ?? [],
+    careerDirection: (source?.careerDirection ?? []).map((line) => ({
+      ...line,
+      text: filter.apply(line.text),
+    })),
   };
 }

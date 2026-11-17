@@ -11,6 +11,7 @@ import {
 
 import {
   motivationDecisionSchema,
+  motivationSendResultSchema,
   motivationViewSchema,
 } from "../schemas/motivation";
 import { MotivationService } from "./motivation-service";
@@ -43,7 +44,14 @@ export const motivationRouter = createTRPCRouter({
         "Starts the motivation interview"
       )
     )
-    .input(z.object({ openingId: z.uuid() }))
+    .input(
+      z.object({
+        openingId: z.uuid(),
+        // The story the letter will tell (a line from letter.stories): the
+        // interview then asks about its turning point.
+        storyLineId: z.string().optional(),
+      })
+    )
     .output(started)
     .mutation(({ ctx, input }) =>
       new MotivationService(db).start({ userId: ctx.userId, ...input })
@@ -93,7 +101,7 @@ export const motivationRouter = createTRPCRouter({
         "motivation",
         "POST",
         "/openings/by-id/{openingId}/motivation/confirm",
-        "Saves the chosen points as career goals or story details"
+        "Suggests the chosen points to the profile's career direction or the story's experience"
       )
     )
     .input(
@@ -102,12 +110,8 @@ export const motivationRouter = createTRPCRouter({
         decisions: z.array(motivationDecisionSchema).max(50),
       })
     )
-    .output(okSchema)
-    .mutation(async ({ ctx, input }) => {
-      await new MotivationService(db).confirm({
-        userId: ctx.userId,
-        ...input,
-      });
-      return ok;
-    }),
+    .output(z.object({ sent: z.array(motivationSendResultSchema) }))
+    .mutation(({ ctx, input }) =>
+      new MotivationService(db).confirm({ userId: ctx.userId, ...input })
+    ),
 });

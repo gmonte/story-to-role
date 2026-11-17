@@ -105,6 +105,10 @@ export type ProfileSource = {
   // What the profile says the person lacks: never claimed in a document.
   studied: string[];
   gaps: string[];
+  // The lines of "Career direction (what I look for)" under Professional
+  // identity, as a writer may read them, each with the id of its profile
+  // line (so a letter can cite it).
+  careerDirection: Array<{ id: string; text: string }>;
 };
 
 /** What a writer reads where the profile has a figure it may not use. */
@@ -180,6 +184,8 @@ const headerLabels: Record<string, keyof ResumeHeaderFields> = {
   github: "github",
 };
 
+const careerDirectionLabels = ["career direction", "direcao de carreira"];
+
 const evidenceKindOf: Record<ExperienceField, EvidenceKind> = {
   context: "responsibility",
   responsibilities: "responsibility",
@@ -240,6 +246,7 @@ export function readProfileSource(input: {
   const evidence: SourceEvidence[] = [];
   const credentials: SourceCredential[] = [];
   const evidenceOfPassage = new Map<string, string[]>();
+  const careerDirection: Array<{ id: string; text: string }> = [];
   const competencyPassage = new Map<string, string>();
 
   for (const passage of profile.passages) {
@@ -264,6 +271,19 @@ export function readProfileSource(input: {
       }
       // Contact data is printed by code, never handed to a writer.
       if (passage.section === "contact") continue;
+      if (
+        labelled &&
+        careerDirectionLabels.includes(normalizeLabel(labelled.label))
+      ) {
+        [labelled.value, ...children].forEach((line, index) => {
+          const text = readFigures(line, false).text;
+          if (!text) return;
+          careerDirection.push({
+            id: index === 0 ? passage.id : stableId(passage.id, `${index}`),
+            text,
+          });
+        });
+      }
     }
     if (passage.section === "education") {
       const [title, institution, status] = head.split(/\s+—\s+/);
@@ -368,5 +388,6 @@ export function readProfileSource(input: {
       .filter((competency) => competency.level === "studied")
       .map((competency) => competency.name),
     gaps: profile.extract.gaps,
+    careerDirection,
   };
 }

@@ -8,6 +8,8 @@ import {
   type UserCipher,
 } from "@repo/api/domains/encryption/user-cipher";
 import { OpeningsRepository } from "@repo/api/domains/openings/openings-repository";
+import { suggestLine } from "@repo/api/domains/profile/suggestions/suggest-line";
+import type { ExperienceField } from "@repo/api/domains/profile/truth/sections";
 import type { RealtimeSubscription } from "@repo/api/domains/tasks/schemas/task";
 import { TasksService } from "@repo/api/domains/tasks/tasks-service";
 import type { DbClient } from "@repo/api/tools/db-client";
@@ -17,10 +19,20 @@ import { loadPendingGapAnswers } from "./load-gap-answers";
 import {
   type ApplicationInstructions,
   flaggedSensitiveItemSchema,
+  type InstructionSendResult,
   positionFieldOf,
 } from "./schemas/instructions";
 
 const notFound = () => new TRPCError({ code: "NOT_FOUND" });
+
+/** Where in a position a point of each kind belongs. */
+const fieldOfKind = {
+  achievement: "results",
+  metric: "results",
+  award: "results",
+  tool: "tools",
+  responsibility: "responsibilities",
+} as const satisfies Record<string, ExperienceField>;
 
 const sensitiveItemsOf = (cipher: UserCipher, encrypted: string | null) =>
   encrypted
@@ -98,6 +110,7 @@ export class InstructionsService {
             positionId: point.positionId,
             credentialId: point.credentialId,
             evidenceKind: point.evidenceKind,
+            sentToProfile: !!point.sentToProfileAt,
             sensitiveItems: sensitiveItemsOf(
               cipher,
               point.encryptedSensitiveItems
@@ -194,30 +207,35 @@ export class InstructionsService {
   }
 
   /**
-   * The user's review of the drafts: every point stays in this application
-   * (promoting one to the career is gone with the evidence base). Overrides
-   * not confirmed are dropped.
+   * The user's review of the drafts: every point is kept in this
+   * application, and the ones the user sends to their profile also become
+   * suggestions in its draft (resume spec, "Application instructions"):
+   * under the point's position when it has one, else under Addenda; never
+   * a change, the user accepts them there. Overrides not confirmed are
+   * dropped. A point the draft refuses (it has the line already, or no
+   * longer has the position) stays in this application only.
    */
   async confirm(input: {
     userId: string;
     openingId: string;
     confirmedLockedFactOverrideIds: string[];
-  }) {
-    const { opening } = await this.requireOpening(
+    sentToProfileInstructionPointIds?: string[];
+  }): Promise<{ sent: InstructionSendResult[] }> {
+    const { profile, opening } = await this.requireOpening(
       input.userId,
       input.openingId
     );
-    await this.db.transaction(async (tx) => {
+    const wanted = new Set(input.sentToProfileInstructionPointIds ?? []);
+    const toSend = await this.db.transaction(async (tx) => {
       const repository = new InstructionsRepository(tx);
       const confirmedAt = new Date();
       const pending = (await repository.listOverrides(opening.id)).filter(
         (row) => !row.confirmedAt
       );
 
-      // Profile_truth replaces this in P8 (docs/plan.md): "send to my
-      // profile" will turn a point into a profile suggestion.
       // Locked: a second submit finds no drafts left.
-      for (const point of await repository.lockDraftPoints(opening.id)) {
+      const drafts = await repository.lockDraftPoints(opening.id);
+      for (const point of drafts) {
         await repository.updatePoint(point.id, { status: "kept", confirmedAt });
       }
 
@@ -229,7 +247,48 @@ export class InstructionsService {
       await repository.deleteOverrides(
         pending.filter((row) => !confirmed.has(row.id)).map((row) => row.id)
       );
+      return drafts.filter((point) => wanted.has(point.id));
     });
+    if (toSend.length === 0) return { sent: [] };
+
+    const cipher = await getUserCipher(this.db, input.userId);
+    const title = [opening.encryptedCompany, opening.encryptedTitle]
+      .map((value) => (value ? cipher.decrypt(value) : ""))
+      .filter(Boolean)
+      .join(" — ");
+    const sent: InstructionSendResult[] = [];
+    for (const point of toSend) {
+      try {
+        const { profileSuggestionId } = await suggestLine({
+          db: this.db,
+          cipher,
+          userId: input.userId,
+          careerProfileId: profile.id,
+          target: point.positionId
+            ? {
+                kind: "experience",
+                positionId: point.positionId,
+                field: fieldOfKind[point.evidenceKind ?? "responsibility"],
+              }
+            : { kind: "section", section: "addenda" },
+          // A renamed position: the fact still has a place, the addenda.
+          fallback: { kind: "section", section: "addenda" },
+          text: cipher.decrypt(point.encryptedText),
+          reason: {
+            "en-US": `You stated this for an application (${title}); confirm it is a fact of your career.`,
+            "pt-BR": `Você afirmou isto em uma candidatura (${title}); confirme que é um fato da sua carreira.`,
+          },
+        });
+        await new InstructionsRepository(this.db).updatePoint(point.id, {
+          sentToProfileAt: new Date(),
+        });
+        sent.push({ instructionPointId: point.id, profileSuggestionId });
+      } catch (error) {
+        // Refused, or already in the profile: it stays in this application.
+        if (!(error instanceof TRPCError)) throw error;
+      }
+    }
+    return { sent };
   }
 
   /**

@@ -20,6 +20,7 @@ import { tasksTable } from "@repo/api/domains/tasks/db/tasks-tables";
 import type { DbClient } from "@repo/api/tools/db-client";
 
 import {
+  coverageReviewsTable,
   documentSnapshotsTable,
   documentsTable,
   documentVersionsTable,
@@ -451,6 +452,58 @@ export class DocumentsRepository {
       .from(reviewRoundsTable)
       .where(eq(reviewRoundsTable.generationId, generationId))
       .orderBy(asc(reviewRoundsTable.round));
+  }
+
+  async insertCoverageReview(row: Insert<typeof coverageReviewsTable>) {
+    const [inserted] = await this.tx
+      .insert(coverageReviewsTable)
+      .values(row)
+      .returning();
+    return inserted;
+  }
+
+  /** The latest coverage review of a version, with the snapshot it reviewed. */
+  async latestCoverageReview(versionId: string) {
+    const [row] = await this.tx
+      .select({
+        review: coverageReviewsTable,
+        snapshot: documentSnapshotsTable,
+      })
+      .from(coverageReviewsTable)
+      .innerJoin(
+        documentSnapshotsTable,
+        eq(documentSnapshotsTable.id, coverageReviewsTable.snapshotId)
+      )
+      .where(eq(documentSnapshotsTable.versionId, versionId))
+      .orderBy(desc(coverageReviewsTable.createdAt))
+      .limit(1);
+    return row ?? null;
+  }
+
+  /** A coverage review with the snapshot, version and document it belongs to. */
+  async findCoverageReview(coverageReviewId: string) {
+    const [row] = await this.tx
+      .select({
+        review: coverageReviewsTable,
+        snapshot: documentSnapshotsTable,
+        version: documentVersionsTable,
+        document: documentsTable,
+      })
+      .from(coverageReviewsTable)
+      .innerJoin(
+        documentSnapshotsTable,
+        eq(documentSnapshotsTable.id, coverageReviewsTable.snapshotId)
+      )
+      .innerJoin(
+        documentVersionsTable,
+        eq(documentVersionsTable.id, documentSnapshotsTable.versionId)
+      )
+      .innerJoin(
+        documentsTable,
+        eq(documentsTable.id, documentVersionsTable.documentId)
+      )
+      .where(eq(coverageReviewsTable.id, coverageReviewId));
+    return row ?? null;
   }
 
   listTitleEquivalents(profileId: string) {

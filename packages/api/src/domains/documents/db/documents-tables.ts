@@ -210,6 +210,34 @@ export const reviewRoundsTable = createTable(
 );
 
 /**
+ * The coverage review of a generated resume (resume spec, "Coverage
+ * review"; the method's prompt 05): the AI part, kept once per generation
+ * against the profile version the snapshot froze. The code checks are not
+ * stored: they run live on the official snapshot.
+ */
+export const coverageReviewsTable = createTable(
+  "coverage_reviews",
+  (d) => ({
+    id: d.uuid().defaultRandom().primaryKey(),
+    createdAt: createdAt(d),
+    generationId: d
+      .uuid()
+      .notNull()
+      .references(() => generationsTable.id, { onDelete: "cascade" }),
+    snapshotId: d
+      .uuid()
+      .notNull()
+      .references(() => documentSnapshotsTable.id, { onDelete: "cascade" }),
+    profileVersionId: d
+      .uuid()
+      .references(() => profileVersionsTable.id, { onDelete: "set null" }),
+    // A CoverageReviewContent, as JSON.
+    encryptedContent: d.text().notNull(),
+  }),
+  (t) => [index("coverage_reviews_snapshot_id_idx").on(t.snapshotId)]
+);
+
+/**
  * A position's title in another output language, proposed by the first
  * adaptation into it; once approved it is a locked fact in that language.
  */

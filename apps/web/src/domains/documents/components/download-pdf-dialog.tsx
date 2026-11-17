@@ -24,6 +24,7 @@ import { toast } from "@repo/web/components/ui/sonner";
 import { useTRPC } from "~/tools/trpc/client";
 
 import { useRefreshDocuments } from "../hooks/use-opening-documents";
+import { hasFindings } from "./coverage-review";
 
 /**
  * Downloading the official snapshot as PDF (resume spec, "Download"): it
@@ -42,6 +43,9 @@ export function DownloadPdfDialog({ version }: { version: VersionView }) {
     })
   );
   const { ready, rendering } = version.pdf;
+  // A document with coverage findings doesn't leave (resume spec,
+  // "Coverage review"); the server refuses it too.
+  const blocked = hasFindings(version);
 
   return (
     <Dialog
@@ -53,7 +57,19 @@ export function DownloadPdfDialog({ version }: { version: VersionView }) {
       }}
     >
       <DialogTrigger asChild>
-        <Button size="sm" variant="ghost">
+        <Button
+          size="sm"
+          variant="ghost"
+          disabled={blocked}
+          title={
+            blocked
+              ? t.formatMessage({
+                  defaultMessage:
+                    "Fix the coverage findings before downloading.",
+                })
+              : undefined
+          }
+        >
           <Download />
           {t.formatMessage({ defaultMessage: "Download PDF" })}
         </Button>

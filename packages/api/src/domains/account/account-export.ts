@@ -50,6 +50,7 @@ export const exportPaths: Record<string, string> = {
   document_snapshots: "documents/snapshots",
   generations: "documents/generations",
   review_rounds: "documents/review-rounds",
+  coverage_reviews: "documents/coverage-reviews",
   position_title_equivalents: "documents/title-equivalents",
   rendered_files: "documents/rendered-files",
   resume_templates: "documents/resume-template",

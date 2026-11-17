@@ -14,27 +14,106 @@ import {
   snapshotOriginSchema,
   writingLevelSchema,
 } from "./document";
+import { coverageFindingCodes } from "../coverage-review/check-document";
 import { documentContentSchema } from "./document-content";
 import { resumeSectionKindSchema } from "./resume-content";
 
-/** Where an evidence line came from, for the editor's trace. */
+/**
+ * A profile line a document line cites (resume spec, "Trace in the
+ * editor"), read from the profile version the snapshot froze: its text
+ * and the position it is in (null for a line of another section).
+ */
 export const evidenceTraceSchema = z.object({
   evidenceId: z.uuid(),
   text: z.string(),
-  quote: z.string(),
   source: z
-    .discriminatedUnion("kind", [
-      z.object({
-        kind: z.literal("position"),
-        title: z.string(),
-        employer: z.string(),
-      }),
-      z.object({ kind: z.literal("credential"), title: z.string() }),
-    ])
+    .object({
+      kind: z.literal("position"),
+      title: z.string(),
+      employer: z.string(),
+    })
     .nullable(),
-  approvedAt: z.date(),
 });
 export type EvidenceTrace = z.infer<typeof evidenceTraceSchema>;
+
+/** A code check's finding (coverage review): it blocks the document. */
+export const coverageFindingSchema = z.object({
+  code: z.enum(coverageFindingCodes),
+  lineId: z.string().nullable(),
+  positionId: z.uuid().nullable(),
+  text: z.string(),
+  params: z.record(z.string(), z.union([z.string(), z.number()])),
+});
+
+const reviewLine = z.object({ lineId: z.string(), lineText: z.string() });
+
+/**
+ * The AI part of the coverage review as the interface shows it: ids
+ * resolved into the texts of the reviewed snapshot and the frozen profile.
+ */
+export const coverageReviewViewSchema = z.object({
+  id: z.uuid(),
+  createdAt: z.date(),
+  sources: z.object({
+    profileVersionNumber: z.number().int().nullable(),
+    purpose: z.discriminatedUnion("kind", [
+      z.object({
+        kind: z.literal("opening"),
+        title: z.string().nullable(),
+        company: z.string().nullable(),
+      }),
+      z.object({ kind: z.literal("focus"), focus: z.string() }),
+    ]),
+    instructions: z.number().int(),
+  }),
+  preserved: z.array(
+    z.object({
+      positionId: z.uuid(),
+      employer: z.string(),
+      title: z.string(),
+      startDate: z.string().nullable(),
+      endDate: z.string().nullable(),
+      bullets: z.number().int(),
+    })
+  ),
+  // Requirement → resume line → profile line that proves it.
+  strong: z.array(
+    reviewLine.extend({
+      requirement: z.string(),
+      evidence: evidenceTraceSchema,
+    })
+  ),
+  partial: z.array(
+    z.object({ requirement: z.string(), explanation: z.string() })
+  ),
+  gaps: z.array(z.string()),
+  inconsistencies: z.array(reviewLine.extend({ explanation: z.string() })),
+  // A `profile` suggestion can be sent to the profile's draft
+  // (documents.sendToProfile) with the review's id and its lineId.
+  suggestions: z.array(
+    z.object({
+      kind: z.enum(["reorder", "profile"]),
+      lineId: z.string().nullable(),
+      lineText: z.string().nullable(),
+      text: z.string(),
+    })
+  ),
+  statement: z.string(),
+});
+export type CoverageReviewView = z.infer<typeof coverageReviewViewSchema>;
+
+/**
+ * A resume version's coverage review (resume spec, "Coverage review"): the
+ * code checks run live on the official snapshot, and the latest AI review
+ * of the version, which is `current` when it reviewed that snapshot.
+ */
+export const coverageViewSchema = z.object({
+  findings: z.array(coverageFindingSchema),
+  review: coverageReviewViewSchema.nullable(),
+  reviewedSnapshotId: z.uuid().nullable(),
+  current: z.boolean(),
+});
+export type CoverageView = z.infer<typeof coverageViewSchema>;
 
 export const atsCheckSchema = z.object({
   matched: z.array(z.string()),
@@ -86,9 +165,8 @@ export const versionViewSchema = z.object({
   instructionTrace: z.array(
     z.object({ instructionId: z.uuid(), text: z.string() })
   ),
-  credentialApprovals: z.array(
-    z.object({ credentialId: z.uuid(), approvedAt: z.date() })
-  ),
+  // A resume's coverage review; a cover letter's comes with P8.
+  coverage: coverageViewSchema.nullable(),
   // Linked versions with changes this one has not received (language sync).
   outdated: z.array(
     z.object({

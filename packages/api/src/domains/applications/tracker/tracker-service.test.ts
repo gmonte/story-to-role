@@ -4,6 +4,7 @@ import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { CareerRepository } from "@repo/api/domains/career/career-repository";
 import { DocumentsRepository } from "@repo/api/domains/documents/documents-repository";
+import { getUserCipher } from "@repo/api/domains/encryption/user-cipher";
 import { OpeningsService } from "@repo/api/domains/openings/openings-service";
 import { createTestUser } from "@repo/api/test/create-test-user";
 import {
@@ -160,12 +161,21 @@ describe("tracker", () => {
       documentId: document.id,
       language: "en-US",
     });
+    // Sending reads the resume: an empty one has nothing to find.
+    const cipher = await getUserCipher(ctx.db, ctx.user.id);
+    const encryptedContent = cipher.encrypt(
+      JSON.stringify({
+        kind: "resume",
+        header: { name: "", titleLine: "", contacts: [], city: null },
+        sections: [],
+      })
+    );
     const snapshot = await documents.insertSnapshot({
       versionId: version.id,
       sequence: 1,
       origin: "generated",
       author: "ai",
-      encryptedContent: "x",
+      encryptedContent,
     });
 
     await expect(
@@ -196,7 +206,7 @@ describe("tracker", () => {
       sequence: 2,
       origin: "edited",
       author: "user",
-      encryptedContent: "y",
+      encryptedContent,
     });
 
     const detail = await ctx.tracker.get({

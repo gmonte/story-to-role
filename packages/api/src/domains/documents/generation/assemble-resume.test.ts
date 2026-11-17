@@ -83,7 +83,9 @@ const line = (
 
 const context: CareerContext = {
   profileVersionId: "00000000-0000-4000-8000-0000000000f1",
+  profileVersionNumber: 1,
   header,
+  acceptedTitles: new Map(),
   positions: [
     {
       id: P1,
@@ -470,6 +472,7 @@ describe("figures by the profile's marks", () => {
   });
   const marked: CareerContext = {
     ...source,
+    acceptedTitles: new Map(),
     evidence: source.evidence.map((row) => ({
       ...row,
       credentialId: null,

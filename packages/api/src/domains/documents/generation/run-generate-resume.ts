@@ -15,6 +15,8 @@ import { foldAccents } from "@repo/api/utils/text/fold-accents";
 import type { Storage } from "@repo/api/tools/storage/storage";
 
 import { decryptResume } from "../snapshot-content";
+import type { CoverageReviewContent } from "../coverage-review/coverage-review";
+import { reviewCoverage } from "../coverage-review/run-coverage-review";
 import { DocumentsRepository } from "../documents-repository";
 import { fitToPages } from "../rendering/fit-to-pages";
 import { storeRenderedPdf } from "../rendering/store-rendered-pdf";
@@ -135,7 +137,8 @@ export function coverageRating(review: Review, gaps: string[]) {
  * where the profile marks them measured, competencies the person uses,
  * locked facts, the communication rules, and the generation settings
  * (bullets per experience, very old experiences, length). Every round is
- * stored, with what the document emphasizes.
+ * stored, with what the document emphasizes. The final content gets the
+ * method's coverage review (prompt 05), stored with its snapshot.
  */
 export async function runGenerateResume(deps: {
   db: DbClient;
@@ -254,8 +257,9 @@ export async function runGenerateResume(deps: {
     const totalRounds = reference
       ? 0
       : reviewLoopSettings.reviewRounds[generation.reviewDepth];
+    // Drafting, the review rounds, the coverage review, saving.
     const progress = (step: number, label: string) =>
-      deps.reportProgress?.({ step, totalSteps: totalRounds + 2, label });
+      deps.reportProgress?.({ step, totalSteps: totalRounds + 3, label });
 
     const evaluate = (draft: AssemblyDraft) => {
       const { content, dropped } = assembleResume({
@@ -410,7 +414,27 @@ export async function runGenerateResume(deps: {
       .filter((line) => line && filter.findForbiddenTerms(line).length === 0)
       .slice(0, maxEmphasisLines);
 
-    await progress(totalRounds + 2, "saving");
+    // The coverage review, once, on the final content; a key that ran out
+    // leaves the document without one.
+    let coverage: CoverageReviewContent | null = null;
+    if (!stoppedBy) {
+      await progress(totalRounds + 2, "coverage_review");
+      try {
+        coverage = await reviewCoverage({
+          ai,
+          content,
+          context,
+          brief,
+          purposes,
+          language: generation.language,
+        });
+      } catch (error) {
+        if (!(error instanceof KeyUnusableError)) throw error;
+        stoppedBy = error;
+      }
+    }
+
+    await progress(totalRounds + 3, "saving");
     const snapshotId = await db.transaction(async (tx) => {
       const repository = new DocumentsRepository(tx);
       const existing = generation.versionId
@@ -435,6 +459,14 @@ export async function runGenerateResume(deps: {
         generationId: generation.id,
         profileVersionId: context.profileVersionId,
       });
+      if (coverage) {
+        await repository.insertCoverageReview({
+          generationId: generation.id,
+          snapshotId: snapshot.id,
+          profileVersionId: context.profileVersionId,
+          encryptedContent: cipher.encrypt(JSON.stringify(coverage)),
+        });
+      }
       await repository.insertReviewRounds(
         candidates.map((candidate) => ({
           generationId: generation.id,

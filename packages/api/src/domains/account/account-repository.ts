@@ -177,6 +177,11 @@ export class AccountRepository {
         t.reviewRoundsTable.generationId,
         generations
       ),
+      coverage_reviews: await below(
+        t.coverageReviewsTable,
+        t.coverageReviewsTable.generationId,
+        generations
+      ),
       position_title_equivalents: await byProfile(
         t.positionTitleEquivalentsTable
       ),

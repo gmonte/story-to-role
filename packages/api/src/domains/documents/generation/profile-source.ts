@@ -75,6 +75,8 @@ export type SourceCredential = {
  */
 export type ProfileSource = {
   profileVersionId: string;
+  // The version's number, as the editor shows it.
+  profileVersionNumber: number;
   header: ResumeHeaderFields;
   positions: SourcePosition[];
   evidence: SourceEvidence[];
@@ -337,6 +339,7 @@ export function readProfileSource(input: {
 
   return {
     profileVersionId: profile.versionId,
+    profileVersionNumber: profile.number,
     header,
     positions: experiences
       .flatMap((experience) => experience.position ?? [])

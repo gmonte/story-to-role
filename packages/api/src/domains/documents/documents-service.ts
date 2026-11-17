@@ -20,11 +20,26 @@ import { ResearchRepository } from "@repo/api/domains/applications/research/rese
 
 import { DocumentsRepository } from "./documents-repository";
 import { outdatedVersions } from "./adaptation/sync-status";
+import {
+  type CoverageReviewContent,
+  coverageReviewContentSchema,
+} from "./coverage-review/coverage-review";
+import { sendLineToProfile } from "./coverage-review/send-to-profile";
+import {
+  FrozenContexts,
+  snapshotCoverage,
+} from "./coverage-review/snapshot-coverage";
+import type { CareerContext } from "./generation/load-career-context";
+import {
+  writtenLines,
+  estimatePages,
+  resumeText,
+} from "./generation/resume-checks";
+import { decryptResume, decryptDocument } from "./snapshot-content";
 import { proposalDiff } from "./adaptation/three-way-merge";
 import { fileNamer } from "./rendering/file-namer";
 import { pdfTemplate } from "./rendering/pdf-template";
 import { requireUserVersion } from "./require-version";
-import { decryptDocument } from "./snapshot-content";
 import { applyLetterEdit, estimateLetterPages } from "./letter/assemble-letter";
 import type { CoverLetterContent } from "./schemas/cover-letter-content";
 import type { DocumentContent } from "./schemas/document-content";
@@ -38,7 +53,6 @@ import { applyUserEdit, LockedFactEditError } from "./editing/apply-user-edit";
 import { atsCheck } from "./generation/ats-check";
 import { freezeGeneration } from "./generation/generation-request";
 import { loadProfileSource } from "./generation/load-profile-source";
-import { estimatePages, resumeText } from "./generation/resume-checks";
 import {
   defaultGenerationSettings,
   type GenerationSettings,
@@ -49,6 +63,8 @@ import type {
   WritingLevel,
 } from "./schemas/document";
 import type {
+  CoverageReviewView,
+  CoverageView,
   DocumentView,
   EvidenceTrace,
   OpeningDocuments,
@@ -273,7 +289,10 @@ export class DocumentsService {
   private async documentView(
     tx: DbClient,
     cipher: UserCipher,
-    document: Parameters<typeof fileNamer>[2] & { id: string },
+    document: Parameters<typeof fileNamer>[2] & {
+      id: string;
+      profileId: string;
+    },
     keywords: Array<{ term: string; backedByEvidence: boolean }> | null,
     trace: TraceSource
   ): Promise<DocumentView> {
@@ -288,6 +307,11 @@ export class DocumentsService {
     const sent = await repository.submissionsForVersions(
       versions.map((version) => version.id)
     );
+    // Each snapshot's text is read against the profile version it froze.
+    const contexts = new FrozenContexts(tx, cipher, document.profileId);
+    const application = document.applicationId
+      ? await repository.findApplication(document.applicationId)
+      : null;
     const views: VersionView[] = [];
     for (const version of versions) {
       const latest = await repository.latestSnapshot(version.id);
@@ -299,6 +323,23 @@ export class DocumentsService {
       );
       const isResume = content.kind === "resume";
       const written = await repository.latestWrittenGeneration(version.id);
+      const coverage = isResume
+        ? await snapshotCoverage({
+            db: tx,
+            cipher,
+            contexts,
+            document,
+            version,
+            snapshot: latest,
+          })
+        : null;
+      const frozen =
+        coverage?.context ??
+        (await contexts.load({
+          profileVersionId: latest.profileVersionId,
+          openingId: application?.openingId ?? null,
+          language: version.language,
+        }));
       views.push({
         id: version.id,
         language: version.language,
@@ -340,9 +381,14 @@ export class DocumentsService {
               adjusted: !!written.referenceSnapshotId,
             }
           : null,
-        trace: trace.evidenceFor(content),
+        trace: evidenceTrace(content, frozen),
         instructionTrace: trace.instructionsFor(content),
-        credentialApprovals: trace.credentialApprovals,
+        coverage: coverage
+          ? await this.coverageView(repository, cipher, version, latest, {
+              findings: coverage.findings,
+              context: frozen,
+            })
+          : null,
         outdated: outdated.get(version.id) ?? [],
         titleProposals: isResume
           ? trace.titleProposalsFor(content, version.language)
@@ -445,11 +491,6 @@ export class DocumentsService {
       ).map((point) => [point.id, cipher.decrypt(point.encryptedText)])
     );
     return {
-      // Profile_truth replaces this in P7 (docs/plan.md): no evidence
-      // exists, so no line traces to a fact.
-      evidenceFor(_content: DocumentContent): EvidenceTrace[] {
-        return [];
-      },
       instructionsFor(content: DocumentContent) {
         const ids = new Set(
           documentLines(content).flatMap((line) =>
@@ -518,10 +559,115 @@ export class DocumentsService {
             : []
         );
       },
-      // Credentials are lines of the published profile now: there is no
-      // approval of their own to show.
-      credentialApprovals: [],
     };
+  }
+
+  /**
+   * A resume version's coverage (resume spec, "Coverage review"): the code
+   * checks on the official snapshot and the latest AI review, its ids
+   * resolved into the texts of the snapshot it reviewed and of the frozen
+   * profile.
+   */
+  private async coverageView(
+    repository: DocumentsRepository,
+    cipher: UserCipher,
+    version: { id: string },
+    latest: { id: string },
+    input: { findings: CoverageView["findings"]; context: CareerContext }
+  ): Promise<CoverageView> {
+    const stored = await repository.latestCoverageReview(version.id);
+    if (!stored) {
+      return {
+        findings: input.findings,
+        review: null,
+        reviewedSnapshotId: null,
+        current: false,
+      };
+    }
+    const review = coverageReviewContentSchema.parse(
+      JSON.parse(cipher.decrypt(stored.review.encryptedContent))
+    );
+    const lines = new Map(
+      writtenLines(decryptResume(cipher, stored.snapshot)).map((line) => [
+        line.id,
+        line.text,
+      ])
+    );
+    const evidence = new Map(
+      evidenceTrace(decryptResume(cipher, stored.snapshot), input.context, {
+        all: true,
+      }).map((row) => [row.evidenceId, row])
+    );
+    const resolved: CoverageReviewView = {
+      id: stored.review.id,
+      createdAt: stored.review.createdAt,
+      sources: review.sources,
+      preserved: review.preserved,
+      strong: review.strong.flatMap((item) => {
+        const lineText = lines.get(item.lineId);
+        const proof = evidence.get(item.evidenceId);
+        return lineText !== undefined && proof
+          ? [{ ...item, lineText, evidence: proof }]
+          : [];
+      }),
+      partial: review.partial,
+      gaps: review.gaps,
+      inconsistencies: review.inconsistencies.flatMap((item) => {
+        const lineText = lines.get(item.lineId);
+        return lineText !== undefined ? [{ ...item, lineText }] : [];
+      }),
+      suggestions: review.suggestions.map((item) => ({
+        ...item,
+        lineText: item.lineId ? (lines.get(item.lineId) ?? null) : null,
+      })),
+      statement: review.statement,
+    };
+    return {
+      findings: input.findings,
+      review: resolved,
+      reviewedSnapshotId: stored.snapshot.id,
+      current: stored.snapshot.id === latest.id,
+    };
+  }
+
+  /**
+   * "Send to my profile" (resume spec, "Coverage review"): a `profile`
+   * suggestion of a review, about a line resting on the user's own words,
+   * becomes a suggestion in the profile's draft, under that line's
+   * experience; nothing changes until the user accepts it there.
+   */
+  async sendToProfile(input: {
+    userId: string;
+    coverageReviewId: string;
+    lineId: string;
+  }) {
+    const profile = await this.requireProfile(input.userId);
+    const found = await new DocumentsRepository(this.db).findCoverageReview(
+      input.coverageReviewId
+    );
+    if (found?.document.profileId !== profile.id) throw notFound();
+    const cipher = await getUserCipher(this.db, input.userId);
+    const review: CoverageReviewContent = coverageReviewContentSchema.parse(
+      JSON.parse(cipher.decrypt(found.review.encryptedContent))
+    );
+    const suggestion = review.suggestions.find(
+      (item) => item.kind === "profile" && item.lineId === input.lineId
+    );
+    const line = writtenLines(decryptResume(cipher, found.snapshot)).find(
+      (candidate) => candidate.id === input.lineId
+    );
+    if (!suggestion || !line?.positionId) {
+      throw new TRPCError({ code: "BAD_REQUEST" });
+    }
+    return sendLineToProfile({
+      db: this.db,
+      cipher,
+      userId: input.userId,
+      careerProfileId: profile.id,
+      positionId: line.positionId,
+      text: line.text,
+      reason: suggestion.text,
+    });
   }
 
   /** A letter's resume state and whether it was written without motivation. */
@@ -782,6 +928,41 @@ function summary(
     author: snapshot.author,
     createdAt: snapshot.createdAt,
   };
+}
+
+/**
+ * The profile lines a document's lines cite, read from the version the
+ * snapshot froze (resume spec, "Trace in the editor"); with `all`, every
+ * line of that version, for a review's proofs.
+ */
+function evidenceTrace(
+  content: DocumentContent,
+  context: CareerContext,
+  { all = false } = {}
+): EvidenceTrace[] {
+  const cited = new Set(
+    documentLines(content).flatMap((line) =>
+      "evidenceIds" in line.origin ? line.origin.evidenceIds : []
+    )
+  );
+  return context.evidence
+    .filter((row) => all || cited.has(row.id))
+    .map((row) => {
+      const position = context.positions.find(
+        (candidate) => candidate.id === row.positionId
+      );
+      return {
+        evidenceId: row.id,
+        text: row.text,
+        source: position
+          ? {
+              kind: "position",
+              title: position.title,
+              employer: position.employer,
+            }
+          : null,
+      };
+    });
 }
 
 /** A generation whose task never started: it failed, nothing waits on it. */

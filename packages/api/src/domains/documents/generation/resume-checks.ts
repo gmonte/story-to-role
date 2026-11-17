@@ -1,6 +1,6 @@
 import type { SensitiveFilter } from "@repo/api/domains/evidence/sensitive/sensitive-filter";
 
-import type { Line } from "../schemas/document";
+import type { Line, LineOrigin } from "../schemas/document";
 import type { ExperienceAge } from "../schemas/generation-settings";
 import type { ResumeContent, ResumeSection } from "../schemas/resume-content";
 import type { ContextPosition } from "./load-career-context";
@@ -54,6 +54,81 @@ export function resumeText(content: ResumeContent) {
 }
 
 /**
+ * Every piece of written text in a resume, with the position it belongs
+ * to: the lines (with their origins) and the text code prints with no line
+ * of its own, which has no origin: the title line (`title_line`), a
+ * competency group's label (`label:<group id>`) and a position's context
+ * note (`context:<position id>`). Empty text is left out.
+ */
+export type WrittenLine = {
+  id: string;
+  text: string;
+  positionId: string | null;
+  origin: LineOrigin | null;
+};
+
+export function writtenLines(content: ResumeContent): WrittenLine[] {
+  const written: WrittenLine[] = [
+    {
+      id: "title_line",
+      text: content.header.titleLine,
+      positionId: null,
+      origin: null,
+    },
+  ];
+  for (const section of content.sections) {
+    switch (section.kind) {
+      case "summary":
+        written.push({ ...section.line, positionId: null });
+        break;
+      case "skills":
+        for (const group of section.groups) {
+          written.push(
+            {
+              id: group.id,
+              text: group.text,
+              positionId: null,
+              origin: group.origin,
+            },
+            {
+              id: `label:${group.id}`,
+              text: group.label,
+              positionId: null,
+              origin: null,
+            }
+          );
+        }
+        break;
+      case "experience":
+        for (const entry of section.entries) {
+          if (entry.context) {
+            written.push({
+              id: `context:${entry.positionId}`,
+              text: entry.context,
+              positionId: entry.positionId,
+              origin: null,
+            });
+          }
+          for (const line of entry.lines) {
+            written.push({ ...line, positionId: entry.positionId });
+          }
+        }
+        break;
+      case "projects":
+        for (const entry of section.entries) {
+          for (const line of entry.lines) {
+            written.push({ ...line, positionId: null });
+          }
+        }
+        break;
+      default:
+        break;
+    }
+  }
+  return written.filter((line) => line.text.trim());
+}
+
+/**
  * Lines still carrying a generalized or excluded original (guided-interview
  * spec, "Sensitive-data control"): the output is rejected and regenerated.
  */
@@ -61,28 +136,7 @@ export function findForbiddenLines(
   content: ResumeContent,
   filter: SensitiveFilter
 ) {
-  const written = [
-    { id: "title_line", text: content.header.titleLine },
-    ...resumeLines(content),
-    ...content.sections.flatMap((section) =>
-      section.kind === "skills"
-        ? section.groups.map((group) => ({
-            id: `label:${group.id}`,
-            text: group.label,
-          }))
-        : []
-    ),
-    ...content.sections.flatMap((section) =>
-      section.kind === "experience"
-        ? section.entries.flatMap((entry) =>
-            entry.context
-              ? [{ id: `context:${entry.positionId}`, text: entry.context }]
-              : []
-          )
-        : []
-    ),
-  ];
-  return written
+  return writtenLines(content)
     .filter((line) => filter.findForbiddenTerms(line.text).length > 0)
     .map((line) => line.id);
 }

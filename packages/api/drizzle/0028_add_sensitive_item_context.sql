@@ -1,1 +1,0 @@
-ALTER TABLE "sensitive_items" ADD COLUMN IF NOT EXISTS "encryptedContext" text;

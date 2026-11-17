@@ -41,6 +41,8 @@ export const findingCodes = {
   competencyUnbacked: "content",
   studiedUsed: "content",
   neverInclude: "content",
+  // The job preferences document's own.
+  workModelUnknown: "content",
 } as const satisfies Record<string, FindingKind>;
 
 export type FindingCode = keyof typeof findingCodes;
@@ -425,7 +427,8 @@ function normalizeName(name: string) {
   return normalizeLabel(name).replace(/\s+/g, " ");
 }
 
-function mentions(text: string, name: string) {
+/** Whether `text` names `name` as a whole word, whatever case or accents. */
+export function mentions(text: string, name: string) {
   const escaped = normalizeName(name).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   return new RegExp(
     `(^|[^\\p{L}\\p{N}])${escaped}($|[^\\p{L}\\p{N}])`,

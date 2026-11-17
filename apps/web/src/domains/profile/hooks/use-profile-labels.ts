@@ -17,12 +17,14 @@ export function useProfileLabels() {
 
   function findingMessage(finding: ProfileFinding, language: ProfileLanguage) {
     const params = finding.params ?? {};
-    const section = params.section
-      ? sectionHeadings[language][params.section as ProfileSectionKey].replace(
-          /\s*\(.*\)$/,
-          ""
-        )
-      : "";
+    // The job preferences name their own sections in the finding.
+    const section =
+      params.title ??
+      (params.section
+        ? sectionHeadings[language][
+            params.section as ProfileSectionKey
+          ].replace(/\s*\(.*\)$/, "")
+        : "");
     switch (finding.code) {
       case "missingSection":
         return t.formatMessage(
@@ -111,6 +113,11 @@ export function useProfileLabels() {
           },
           { name: params.name }
         );
+      case "workModelUnknown":
+        return t.formatMessage({
+          defaultMessage:
+            "Say which work models you accept: remote, hybrid, on site.",
+        });
       case "neverInclude":
         return t.formatMessage(
           {

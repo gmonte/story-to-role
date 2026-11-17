@@ -109,7 +109,7 @@ Every table belongs to the user and is encrypted with their key where it holds c
 | `profile_documents` | user id, kind (profile, preferences), draft Markdown, draft updated at, published version id | One row per user and kind |
 | `profile_versions` | document id, number, Markdown, published at, validated at | Immutable once published |
 | `profile_extracts` | version id, experiences (employer, title, start, end), credentials, competencies by level, languages, gaps, communication rules, figures with their mark and passage | What the linter extracts from a published version; what the rest of the product reads |
-| `profile_passages` | version id, section, position, text, embedding | Passages of a published version, embedded locally (ADR 0004) |
+| `profile_passages` | version id, section, position, kind (evidence, studied, gap, not done, rule), text, embedding | Passages of a published version, embedded locally (ADR 0004); screening retrieves only evidence |
 | `profile_suggestions` | document id, anchor (passage), proposed text, reason, origin (agent, import, validation, application), status | Pending until accepted or rejected |
 | `profile_validations` | document id, base version, findings | The last validation's report |
 | agent chats and messages | as in ADR 0007 | Transcript encrypted, purged after 7 days |

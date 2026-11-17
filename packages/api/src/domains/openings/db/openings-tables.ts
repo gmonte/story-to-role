@@ -3,6 +3,7 @@ import { index } from "drizzle-orm/pg-core";
 
 import { careerProfilesTable } from "@repo/api/domains/career/db/career-tables";
 import type { InterviewLanguage } from "@repo/api/domains/career/schemas/career";
+import { profileVersionsTable } from "@repo/api/domains/profile/db/profile-tables";
 import { embeddingDimensions } from "@repo/api/tools/embeddings/embedding-model";
 import { createTable } from "@repo/api/utils/db/create-table";
 
@@ -13,7 +14,9 @@ import type {
   OpeningRejectionReason,
   OpeningStatus,
   OpeningTermCategory,
+  OpeningTermImportance,
   OpeningTermKind,
+  OpeningWarning,
   Tone,
 } from "../schemas/opening";
 
@@ -49,6 +52,13 @@ export const openingsTable = createTable(
     language: d.text().$type<InterviewLanguage>(),
     suggestedTone: d.text().$type<Tone>(),
     embedding: d.vector({ dimensions: embeddingDimensions }),
+    // The method's warning signs found in the opening's text.
+    warnings: d
+      .text()
+      .array()
+      .$type<OpeningWarning[]>()
+      .notNull()
+      .default(sql`'{}'::text[]`),
     closedAt: d.timestamp({ withTimezone: true }),
   }),
   (t) => [index("openings_profile_id_idx").on(t.profileId)]
@@ -69,6 +79,13 @@ export const openingTermsTable = createTable(
       .references(() => openingsTable.id, { onDelete: "cascade" }),
     kind: d.text().$type<OpeningTermKind>().notNull(),
     category: d.text().$type<OpeningTermCategory>().notNull(),
+    // Whether the opening requires it or only wishes for it: a mandatory
+    // gap makes the band low (the method's screening).
+    importance: d
+      .text()
+      .$type<OpeningTermImportance>()
+      .notNull()
+      .default("mandatory"),
     encryptedText: d.text().notNull(),
     embedding: d.vector({ dimensions: embeddingDimensions }),
   }),
@@ -89,13 +106,26 @@ export const fitChecksTable = createTable(
       .notNull()
       .references(() => openingsTable.id, { onDelete: "cascade" }),
     band: d.text().$type<FitBand>().notNull(),
+    // The published versions the check read (ADR 0008): the profile and,
+    // when there were any, the job preferences. A newer one of either makes
+    // the check outdated.
+    profileVersionId: d
+      .uuid()
+      .references(() => profileVersionsTable.id, { onDelete: "set null" }),
+    preferencesVersionId: d
+      .uuid()
+      .references(() => profileVersionsTable.id, { onDelete: "set null" }),
+    // The job preferences the opening breaks, each with the rule as the
+    // user wrote it (JSON); any of them makes the band low.
+    encryptedPreferenceConflicts: d.text(),
   }),
   (t) => [index("fit_checks_opening_id_idx").on(t.openingId)]
 );
 
 /**
- * The verdict on one term, the evidence it rests on, and (for a gap) the
- * question that asks whether the user really lacks it.
+ * The verdict on one term, the profile passages it rests on (`evidenceIds`
+ * holds their ids), and (for a gap) the question that asks whether the user
+ * really lacks it.
  */
 export const fitCheckItemsTable = createTable(
   "fit_check_items",

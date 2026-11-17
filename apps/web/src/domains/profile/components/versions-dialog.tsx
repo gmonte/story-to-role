@@ -5,6 +5,7 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { useTranslation } from "@repo/intl/use-translation";
+import type { ProfileDocumentKind } from "@repo/api/domains/profile/schemas/profile";
 import { diffLines } from "@repo/api/domains/profile/truth/diff";
 import { Button } from "@repo/web/components/ui/button";
 import {
@@ -26,8 +27,6 @@ import { cn } from "@repo/web/lib/utils";
 
 import { useTRPC } from "~/tools/trpc/client";
 
-import { useProfileEditor } from "./profile-editor-context";
-
 // The diff's gutter, like a terminal's; not words to translate.
 const changePrefix = { added: "+ ", removed: "− ", same: "  " };
 const blankLine = " ";
@@ -43,27 +42,42 @@ const noneKey = "none";
 export function VersionsDialog({
   open,
   onOpenChange,
+  kind = "profile",
+  markdown,
+  saveNow,
+  resetTo,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  // Which document's versions, and its editor: the draft's text, saving it
+  // and replacing it.
+  kind?: ProfileDocumentKind;
+  markdown: () => string;
+  saveNow: () => Promise<number | null>;
+  resetTo: (next: { markdown: string; revision: number }) => void;
 }) {
   const t = useTranslation();
   const trpc = useTRPC();
   const queryClient = useQueryClient();
-  const { markdown, saveNow, resetTo } = useProfileEditor();
   const versions = useQuery({
-    ...trpc.profile.versions.queryOptions({}),
+    ...trpc.profile.versions.queryOptions({ kind }),
     enabled: open,
   });
   const [selected, setSelected] = useState<string | null>(null);
   const [compareWith, setCompareWith] = useState<string>(draftKey);
   const versionId = selected ?? versions.data?.[0]?.id ?? null;
   const version = useQuery({
-    ...trpc.profile.version.queryOptions({ profileVersionId: versionId ?? "" }),
+    ...trpc.profile.version.queryOptions({
+      profileVersionId: versionId ?? "",
+      kind,
+    }),
     enabled: open && !!versionId,
   });
   const other = useQuery({
-    ...trpc.profile.version.queryOptions({ profileVersionId: compareWith }),
+    ...trpc.profile.version.queryOptions({
+      profileVersionId: compareWith,
+      kind,
+    }),
     enabled: open && compareWith !== draftKey && compareWith !== noneKey,
   });
   const restore = useMutation(trpc.profile.restoreVersion.mutationOptions());
@@ -90,6 +104,7 @@ export function VersionsDialog({
       const result = await restore.mutateAsync({
         profileVersionId: version.data.id,
         baseRevision: revision,
+        kind,
       });
       resetTo({ markdown: version.data.markdown, revision: result.revision });
       await queryClient.invalidateQueries({ queryKey: trpc.profile.pathKey() });

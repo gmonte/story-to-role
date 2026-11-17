@@ -125,11 +125,15 @@ export class OpeningsRepository {
   async insertFitCheck(input: {
     openingId: string;
     band: Insert<typeof fitChecksTable>["band"];
+    profileVersionId?: string | null;
+    preferencesVersionId?: string | null;
+    encryptedPreferenceConflicts?: string | null;
     items: Array<Omit<Insert<typeof fitCheckItemsTable>, "fitCheckId">>;
   }) {
+    const { items: _items, ...fitCheckRow } = input;
     const [fitCheck] = await this.tx
       .insert(fitChecksTable)
-      .values({ openingId: input.openingId, band: input.band })
+      .values(fitCheckRow)
       .returning();
     if (input.items.length > 0) {
       await this.tx

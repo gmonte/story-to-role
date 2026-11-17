@@ -51,13 +51,25 @@ export const openingTermCategorySchema = z.enum([
 ]);
 export type OpeningTermCategory = z.infer<typeof openingTermCategorySchema>;
 
-/** Requirements a history can't stretch to meet (they cap the band). */
-export const hardRequirementCategories: OpeningTermCategory[] = [
-  "seniority",
-  "years_of_experience",
+/** What the opening requires, and what it only wishes for. */
+export const openingTermImportanceSchema = z.enum(["mandatory", "desirable"]);
+export type OpeningTermImportance = z.infer<typeof openingTermImportanceSchema>;
+
+/** Requirements answered by the job preferences, not by a profile passage. */
+export const preferenceCategories: OpeningTermCategory[] = [
   "location",
-  "language",
+  "work_model",
 ];
+
+/** The method's warning signs for discarding an opening (step 03). */
+export const openingWarningSchema = z.enum([
+  "vague_company",
+  "messaging_only_contact",
+  "pay_too_good",
+  "asks_payment_or_data",
+  "code_download_test",
+]);
+export type OpeningWarning = z.infer<typeof openingWarningSchema>;
 
 export const fitVerdictSchema = z.enum(["met", "partial", "gap"]);
 export type FitVerdict = z.infer<typeof fitVerdictSchema>;

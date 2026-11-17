@@ -6,7 +6,6 @@ import {
   createTRPCRouter,
   rateLimited,
   userProcedure,
-  type TRPCContext,
 } from "@repo/api/tools/trpc";
 import { realtimeSubscriptionSchema } from "@repo/api/domains/tasks/schemas/task";
 
@@ -14,19 +13,18 @@ import { ProfileService } from "./profile-service";
 import { profileValidationSchema } from "./schemas/validation";
 import {
   maxProfileLength,
+  profileDocumentKindSchema,
   profileDraftSchema,
   profileFindingSchema,
   profileSuggestionSchema,
   profileVersionSummarySchema,
 } from "./schemas/profile";
-import type { ProfileLanguage } from "./truth/sections";
-
-/** A new profile starts from the template in the interface language. */
-function templateLanguage(ctx: Pick<TRPCContext, "t">): ProfileLanguage {
-  return ctx.t.locale === "pt-BR" ? "pt-BR" : "en-US";
-}
+import { templateLanguage } from "./template-language";
 
 const revisionSchema = z.number().int().min(0);
+
+// Which of the user's two documents: the profile unless said otherwise.
+const kindSchema = profileDocumentKindSchema.default("profile");
 
 const savedDraftSchema = z.object({
   revision: z.number().int(),
@@ -44,12 +42,13 @@ export const profileRouter = createTRPCRouter({
         "Returns the profile's draft"
       )
     )
-    .input(z.object({}))
+    .input(z.object({ kind: kindSchema }))
     .output(profileDraftSchema)
-    .query(({ ctx }) =>
+    .query(({ ctx, input }) =>
       new ProfileService(db).getDraft({
         userId: ctx.userId,
         language: templateLanguage(ctx),
+        kind: input.kind,
       })
     ),
 
@@ -66,6 +65,7 @@ export const profileRouter = createTRPCRouter({
       z.object({
         markdown: z.string().max(maxProfileLength),
         baseRevision: revisionSchema,
+        kind: kindSchema,
       })
     )
     .output(savedDraftSchema)
@@ -82,7 +82,7 @@ export const profileRouter = createTRPCRouter({
         "Publishes the draft as a new published version"
       )
     )
-    .input(z.object({ baseRevision: revisionSchema }))
+    .input(z.object({ baseRevision: revisionSchema, kind: kindSchema }))
     .output(z.object({ versionId: z.uuid(), number: z.number().int() }))
     .mutation(({ ctx, input }) =>
       new ProfileService(db).publish({ userId: ctx.userId, ...input })
@@ -97,9 +97,11 @@ export const profileRouter = createTRPCRouter({
         "Lists the published versions"
       )
     )
-    .input(z.object({}))
+    .input(z.object({ kind: kindSchema }))
     .output(z.array(profileVersionSummarySchema))
-    .query(({ ctx }) => new ProfileService(db).listVersions(ctx.userId)),
+    .query(({ ctx, input }) =>
+      new ProfileService(db).listVersions(ctx.userId, input.kind)
+    ),
 
   version: userProcedure
     .meta(
@@ -110,7 +112,7 @@ export const profileRouter = createTRPCRouter({
         "Returns a published version"
       )
     )
-    .input(z.object({ profileVersionId: z.uuid() }))
+    .input(z.object({ profileVersionId: z.uuid(), kind: kindSchema }))
     .output(profileVersionSummarySchema.extend({ markdown: z.string() }))
     .query(({ ctx, input }) =>
       new ProfileService(db).getVersion({ userId: ctx.userId, ...input })
@@ -126,7 +128,11 @@ export const profileRouter = createTRPCRouter({
       )
     )
     .input(
-      z.object({ profileVersionId: z.uuid(), baseRevision: revisionSchema })
+      z.object({
+        profileVersionId: z.uuid(),
+        baseRevision: revisionSchema,
+        kind: kindSchema,
+      })
     )
     .output(savedDraftSchema)
     .mutation(({ ctx, input }) =>

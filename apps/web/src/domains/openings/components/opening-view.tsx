@@ -93,7 +93,8 @@ export function OpeningView({ openingId }: { openingId: string }) {
             {
               key: "matching",
               label: t.formatMessage({
-                defaultMessage: "Looking for your evidence on each point",
+                defaultMessage:
+                  "Looking for the passages of your profile behind each point",
               }),
             },
             {
@@ -285,7 +286,7 @@ export function OpeningView({ openingId }: { openingId: string }) {
                   <p className="text-muted-foreground text-sm">
                     {t.formatMessage({
                       defaultMessage:
-                        "The opening asks for things your evidence doesn't show yet. Tell us if you really lack them, or share a story.",
+                        "The opening asks for things your profile doesn't show yet. Tell us if you really lack them, or share a story.",
                     })}
                   </p>
                 </div>

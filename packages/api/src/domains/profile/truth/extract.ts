@@ -43,7 +43,16 @@ export type ProfileExtract = {
 };
 
 /** A passage of a published version, embedded for retrieval (ADR 0004). */
+/**
+ * What a passage is to screening and generation: evidence of what the
+ * person did or has, or something the profile says they lack (what they
+ * did not do, a known gap, a competency only studied), or a rule. Only
+ * evidence ever counts as coverage.
+ */
+export type PassageKind = "evidence" | "notDone" | "gap" | "studied" | "rule";
+
 export type ProfilePassage = {
+  kind: PassageKind;
   section: ProfileSectionKey | null;
   // The document lines it holds.
   lines: number[];
@@ -200,6 +209,7 @@ export function profilePassages(blocks: ProfileBlock[]): ProfilePassage[] {
         continue;
       }
       current = {
+        kind: passageKind(structure, blocks, section.key, line),
         section: section.key,
         lines: [line],
         experience: experience >= 0 ? experience : null,
@@ -215,4 +225,25 @@ export function profilePassages(blocks: ProfileBlock[]): ProfilePassage[] {
 function passageOfLine(passages: ProfilePassage[], line: number) {
   const index = passages.findIndex((passage) => passage.lines.includes(line));
   return index >= 0 ? index : null;
+}
+
+/** What the line a passage starts at is to screening (see PassageKind). */
+function passageKind(
+  structure: ReturnType<typeof readStructure>,
+  blocks: ProfileBlock[],
+  section: ProfileSectionKey | null,
+  line: number
+): PassageKind {
+  if (section === "gaps") return "gap";
+  if (section === "rules") return "rule";
+  if (section === "competencies") {
+    const labelled = splitLabel(blocks[line].text);
+    return labelled && competencyLevelOf(labelled.label) === "studied"
+      ? "studied"
+      : "evidence";
+  }
+  const notDone = structure.experiences.some(
+    (experience) => experience.fields.notDone?.line === line
+  );
+  return notDone ? "notDone" : "evidence";
 }

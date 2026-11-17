@@ -3,7 +3,6 @@ import { z } from "zod";
 import { taskProgressSchema } from "@repo/api/domains/tasks/schemas/task";
 import { interviewLanguageSchema } from "@repo/api/domains/career/schemas/career";
 import { applicationStatusSchema } from "@repo/api/domains/applications/schemas/application";
-import { evidenceKindSchema } from "@repo/api/domains/evidence/schemas/evidence";
 
 import {
   fitBandSchema,
@@ -12,7 +11,9 @@ import {
   openingRejectionReasonSchema,
   openingStatusSchema,
   openingTermCategorySchema,
+  openingTermImportanceSchema,
   openingTermKindSchema,
+  openingWarningSchema,
   toneSchema,
 } from "./opening";
 
@@ -35,15 +36,21 @@ export const fitCheckItemViewSchema = z.object({
   term: z.string(),
   termKind: openingTermKindSchema,
   category: openingTermCategorySchema,
+  importance: openingTermImportanceSchema,
   verdict: fitVerdictSchema,
   explanation: z.string(),
-  evidence: z.array(
-    z.object({ id: z.uuid(), kind: evidenceKindSchema, text: z.string() })
-  ),
+  // The profile passages that back the verdict ("without a passage, a
+  // verdict is an opinion").
+  passages: z.array(z.object({ id: z.uuid(), text: z.string() })),
   gapQuestion: z.string().nullable(),
   gapAnswer: z.string().nullable(),
 });
 export type FitCheckItemView = z.infer<typeof fitCheckItemViewSchema>;
+
+/** What a fit check stores for the preferences an opening breaks. */
+export const preferenceConflictsSchema = z.array(
+  z.object({ rule: z.string(), explanation: z.string() })
+);
 
 export const openingDetailSchema = openingSummarySchema.extend({
   // The analysis' live step while it runs (keys and counts, no content).
@@ -59,7 +66,19 @@ export const openingDetailSchema = openingSummarySchema.extend({
       band: fitBandSchema,
       createdAt: z.date(),
       items: z.array(fitCheckItemViewSchema),
+      // The job preferences the opening breaks: any makes the band low.
+      preferenceConflicts: preferenceConflictsSchema,
+      // Whether the profile or the job preferences were published again
+      // since this check.
+      outdated: z.boolean(),
     })
     .nullable(),
+  // The method's warning signs found in the opening's text.
+  warnings: z.array(openingWarningSchema),
+  // A posted opening analyzed before any profile was published: its fit
+  // check waits for the user to publish and run it.
+  needsPublishedProfile: z.boolean(),
+  // Whether there is a published profile for a fit check to read.
+  profilePublished: z.boolean(),
 });
 export type OpeningDetail = z.infer<typeof openingDetailSchema>;

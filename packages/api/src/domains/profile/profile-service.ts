@@ -7,6 +7,11 @@ import { TasksRepository } from "@repo/api/domains/tasks/tasks-repository";
 import { TasksService } from "@repo/api/domains/tasks/tasks-service";
 import { logger } from "@repo/common/tools/logger";
 
+import {
+  addPreference,
+  lintPreferences,
+  preferencesTemplate,
+} from "./preferences/preferences";
 import { ProfileRepository } from "./profile-repository";
 import type {
   ProfileDocumentKind,
@@ -19,14 +24,34 @@ import {
   type ProfileValidation,
 } from "./schemas/validation";
 import { readSuggestionContent } from "./suggestions/propose-suggestion";
-import { parseBlocks, serializeBlocks } from "./truth/blocks";
+import {
+  parseBlocks,
+  serializeBlocks,
+  type ProfileBlock,
+} from "./truth/blocks";
 import { changedChunks } from "./truth/chunks";
 import { extractProfile, profilePassages } from "./truth/extract";
-import { hasFormatErrors, lintProfile } from "./truth/lint";
+import {
+  hasFormatErrors,
+  lintProfile,
+  type ProfileFinding,
+} from "./truth/lint";
 import type { ProfileLanguage } from "./truth/sections";
 import { profileTemplate } from "./truth/template";
 
-const kind: ProfileDocumentKind = "profile";
+const profileKind: ProfileDocumentKind = "profile";
+
+/** What differs between the profile and the job preferences documents. */
+const documentKinds = {
+  profile: { template: profileTemplate, lint: lintProfile },
+  preferences: { template: preferencesTemplate, lint: lintPreferences },
+} satisfies Record<
+  ProfileDocumentKind,
+  {
+    template: (language: ProfileLanguage) => ProfileBlock[];
+    lint: (blocks: ProfileBlock[]) => ProfileFinding[];
+  }
+>;
 
 function versionSummary(version: ProfileVersionSummary): ProfileVersionSummary {
   return {
@@ -58,12 +83,14 @@ export class ProfileService {
   async getDraft(input: {
     userId: string;
     language: ProfileLanguage;
+    kind?: ProfileDocumentKind;
   }): Promise<ProfileDraft> {
+    const kind = input.kind ?? profileKind;
     const repository = new ProfileRepository(this.db);
     const document = await repository.findDocument(input.userId, kind);
     if (!document) {
       return {
-        markdown: serializeBlocks(profileTemplate(input.language)),
+        markdown: serializeBlocks(documentKinds[kind].template(input.language)),
         revision: 0,
         updatedAt: null,
         publishedVersion: null,
@@ -94,7 +121,9 @@ export class ProfileService {
     userId: string;
     markdown: string;
     baseRevision: number;
+    kind?: ProfileDocumentKind;
   }) {
+    const kind = input.kind ?? profileKind;
     const cipher = await getUserCipher(this.db, input.userId);
     // Stored in the canonical layout, so the downloaded file is the method's.
     const blocks = parseBlocks(input.markdown);
@@ -129,7 +158,7 @@ export class ProfileService {
     return {
       revision: saved.draftRevision,
       updatedAt: saved.draftUpdatedAt,
-      findings: lintProfile(blocks),
+      findings: documentKinds[kind].lint(blocks),
     };
   }
 
@@ -138,7 +167,12 @@ export class ProfileService {
    * and publish"). Format findings block it; content findings never do. A
    * draft equal to the published version publishes nothing new.
    */
-  async publish(input: { userId: string; baseRevision: number }) {
+  async publish(input: {
+    userId: string;
+    baseRevision: number;
+    kind?: ProfileDocumentKind;
+  }) {
+    const kind = input.kind ?? profileKind;
     const cipher = await getUserCipher(this.db, input.userId);
     const published = await this.db.transaction(async (tx) => {
       const repository = new ProfileRepository(tx);
@@ -150,7 +184,7 @@ export class ProfileService {
       if (document.draftRevision !== input.baseRevision) throw staleDraft();
       const markdown = cipher.decrypt(document.encryptedDraft);
       const blocks = parseBlocks(markdown);
-      if (hasFormatErrors(lintProfile(blocks))) {
+      if (hasFormatErrors(documentKinds[kind].lint(blocks))) {
         throw new TRPCError({
           code: "BAD_REQUEST",
           message: "Fix the format findings before publishing.",
@@ -165,9 +199,21 @@ export class ProfileService {
           return {
             versionId: current.id,
             number: current.number,
-            isNew: false,
+            hasPassages: false,
           };
         }
+      }
+      // The job preferences are versioned without validation, and screening
+      // reads their text as it is.
+      if (kind === "preferences") {
+        const version = await publishVersion(repository, document.id, {
+          encryptedMarkdown: cipher.encrypt(markdown),
+        });
+        return {
+          versionId: version.id,
+          number: version.number,
+          hasPassages: false,
+        };
       }
       // Validated when a review finished since the last publish: fixing
       // what it found afterwards keeps the version validated.
@@ -175,9 +221,7 @@ export class ProfileService {
       const validated =
         validation?.status === "completed" &&
         validation.baseVersionId === document.publishedVersionId;
-      const version = await repository.insertVersion({
-        documentId: document.id,
-        number: await repository.nextVersionNumber(document.id),
+      const version = await publishVersion(repository, document.id, {
         encryptedMarkdown: cipher.encrypt(markdown),
         validatedAt: validated ? validation.completedAt : null,
       });
@@ -207,18 +251,21 @@ export class ProfileService {
         profilePassages(blocks).map((passage, ordinal) => ({
           versionId: version.id,
           ordinal,
+          kind: passage.kind,
           section: passage.section,
           experience: passage.experience,
           encryptedText: cipher.encrypt(passage.text),
           embedding: previousVectors.get(passage.text) ?? null,
         }))
       );
-      await repository.updateDocument(document.id, {
-        publishedVersionId: version.id,
-      });
-      return { versionId: version.id, number: version.number, isNew: true };
+      return {
+        versionId: version.id,
+        number: version.number,
+        hasPassages: true,
+      };
     });
-    if (published.isNew) {
+    // Only a new version of the profile has passages to embed.
+    if (published.hasPassages) {
       // Vectors are computed locally and cost the user nothing; a failure
       // to start them leaves the passages for the next publish to retry.
       try {
@@ -248,7 +295,7 @@ export class ProfileService {
 
   private async loadForValidation(userId: string) {
     const repository = new ProfileRepository(this.db);
-    const document = await repository.findDocument(userId, kind);
+    const document = await repository.findDocument(userId, profileKind);
     if (!document) throw new TRPCError({ code: "NOT_FOUND" });
     const cipher = await getUserCipher(this.db, userId);
     const version = document.publishedVersionId
@@ -324,7 +371,7 @@ export class ProfileService {
   /** The last validation, its progress while it runs and its report. */
   async latestValidation(userId: string): Promise<ProfileValidation | null> {
     const repository = new ProfileRepository(this.db);
-    const document = await repository.findDocument(userId, kind);
+    const document = await repository.findDocument(userId, profileKind);
     const validation = document
       ? await repository.latestValidation(document.id)
       : undefined;
@@ -368,15 +415,22 @@ export class ProfileService {
     };
   }
 
-  async listVersions(userId: string) {
+  async listVersions(userId: string, kind = profileKind) {
     const repository = new ProfileRepository(this.db);
     const document = await repository.findDocument(userId, kind);
     return document ? repository.listVersions(document.id) : [];
   }
 
-  async getVersion(input: { userId: string; profileVersionId: string }) {
+  async getVersion(input: {
+    userId: string;
+    profileVersionId: string;
+    kind?: ProfileDocumentKind;
+  }) {
     const repository = new ProfileRepository(this.db);
-    const document = await repository.findDocument(input.userId, kind);
+    const document = await repository.findDocument(
+      input.userId,
+      input.kind ?? profileKind
+    );
     const version = document
       ? await repository.findVersion(document.id, input.profileVersionId)
       : undefined;
@@ -393,10 +447,12 @@ export class ProfileService {
     userId: string;
     profileVersionId: string;
     baseRevision: number;
+    kind?: ProfileDocumentKind;
   }) {
     const { markdown } = await this.getVersion(input);
     return this.saveDraft({
       userId: input.userId,
+      kind: input.kind,
       markdown,
       baseRevision: input.baseRevision,
     });
@@ -405,7 +461,7 @@ export class ProfileService {
   /** The suggestions waiting for the user to accept or reject. */
   async listSuggestions(userId: string): Promise<ProfileSuggestion[]> {
     const repository = new ProfileRepository(this.db);
-    const document = await repository.findDocument(userId, kind);
+    const document = await repository.findDocument(userId, profileKind);
     if (!document) return [];
     const cipher = await getUserCipher(this.db, userId);
     return (await repository.listPendingSuggestions(document.id)).map(
@@ -429,7 +485,7 @@ export class ProfileService {
     profileSuggestionIds?: string[];
   }) {
     const repository = new ProfileRepository(this.db);
-    const document = await repository.findDocument(input.userId, kind);
+    const document = await repository.findDocument(input.userId, profileKind);
     if (!document) throw new TRPCError({ code: "NOT_FOUND" });
     const resolved = await repository.resolveSuggestions({
       documentId: document.id,
@@ -438,4 +494,91 @@ export class ProfileService {
     });
     return { resolved };
   }
+
+  /**
+   * Adds a company to the job preferences' excluded companies (profile
+   * spec: "A company can be excluded from an opening or the tracker, which
+   * adds it here"): in the draft, and in what screening reads, as a new
+   * published version, since the user asked for it to count from now on.
+   * Only the company is published: what else the draft holds unpublished
+   * stays a draft, and preferences never published start from the template.
+   */
+  async excludeCompany(input: {
+    userId: string;
+    company: string;
+    // The day it was excluded, in the user's own calendar (YYYY-MM-DD).
+    date: string;
+    language: ProfileLanguage;
+  }) {
+    const kind: ProfileDocumentKind = "preferences";
+    const cipher = await getUserCipher(this.db, input.userId);
+    const entry = {
+      section: "excludedCompanies" as const,
+      company: input.company,
+      date: input.date,
+    };
+    await this.db.transaction(async (tx) => {
+      const repository = new ProfileRepository(tx);
+      const existing = await repository.findDocumentForUpdate(
+        input.userId,
+        kind
+      );
+      const draft = addPreference(
+        existing
+          ? parseBlocks(cipher.decrypt(existing.encryptedDraft))
+          : preferencesTemplate(input.language),
+        entry
+      );
+      const document = existing
+        ? await repository.updateDocument(existing.id, {
+            encryptedDraft: cipher.encrypt(serializeBlocks(draft)),
+            draftUpdatedAt: new Date(),
+            draftRevision: existing.draftRevision + 1,
+          })
+        : await repository.insertDocument({
+            userId: input.userId,
+            kind,
+            encryptedDraft: cipher.encrypt(serializeBlocks(draft)),
+            draftUpdatedAt: new Date(),
+            draftRevision: 1,
+          });
+      if (!document) throw new TRPCError({ code: "CONFLICT" });
+      const current = document.publishedVersionId
+        ? await repository.findVersion(document.id, document.publishedVersionId)
+        : undefined;
+      const currentMarkdown = current
+        ? cipher.decrypt(current.encryptedMarkdown)
+        : null;
+      const markdown = serializeBlocks(
+        addPreference(
+          currentMarkdown === null
+            ? preferencesTemplate(input.language)
+            : parseBlocks(currentMarkdown),
+          entry
+        )
+      );
+      // Already excluded in what screening reads.
+      if (markdown === currentMarkdown) return;
+      await publishVersion(repository, document.id, {
+        encryptedMarkdown: cipher.encrypt(markdown),
+      });
+    });
+  }
+}
+
+/** A new version of a document, made the one the product reads. */
+async function publishVersion(
+  repository: ProfileRepository,
+  documentId: string,
+  content: { encryptedMarkdown: string; validatedAt?: Date | null }
+) {
+  const version = await repository.insertVersion({
+    documentId,
+    number: await repository.nextVersionNumber(documentId),
+    ...content,
+  });
+  await repository.updateDocument(documentId, {
+    publishedVersionId: version.id,
+  });
+  return version;
 }

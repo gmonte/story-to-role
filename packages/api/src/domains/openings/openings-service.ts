@@ -9,10 +9,17 @@ import type { RealtimeSubscription } from "@repo/api/domains/tasks/schemas/task"
 import { TasksService } from "@repo/api/domains/tasks/tasks-service";
 import type { DbClient } from "@repo/api/tools/db-client";
 import { TasksRepository } from "@repo/api/domains/tasks/tasks-repository";
+import { ProfileRepository } from "@repo/api/domains/profile/profile-repository";
+import { ProfileService } from "@repo/api/domains/profile/profile-service";
+import type { ProfileLanguage } from "@repo/api/domains/profile/truth/sections";
 
 import type { openingsTable } from "./db/openings-tables";
 import { OpeningsRepository } from "./openings-repository";
-import type { OpeningDetail, OpeningSummary } from "./schemas/opening-view";
+import {
+  preferenceConflictsSchema,
+  type OpeningDetail,
+  type OpeningSummary,
+} from "./schemas/opening-view";
 
 const notFound = () => new TRPCError({ code: "NOT_FOUND" });
 
@@ -165,11 +172,27 @@ export class OpeningsService {
       const [fitCheck] = await openings.latestFitChecks([row.id]);
 
       let items: OpeningDetail["fitCheck"] = null;
+      const profiles = new ProfileRepository(tx);
+      const [profileDocument, preferencesDocument] = await Promise.all([
+        profiles.findDocument(input.userId, "profile"),
+        profiles.findDocument(input.userId, "preferences"),
+      ]);
       if (fitCheck) {
         const [checkItems, terms] = await Promise.all([
           openings.listFitCheckItems(fitCheck.id),
           openings.listTerms(row.id),
         ]);
+        const passages = new Map(
+          (
+            await profiles.findPassages({
+              userId: input.userId,
+              passageIds: checkItems.flatMap((item) => item.evidenceIds),
+            })
+          ).map((passage) => [
+            passage.id,
+            cipher.decrypt(passage.encryptedText),
+          ])
+        );
         items = {
           band: fitCheck.band,
           createdAt: fitCheck.createdAt,
@@ -182,15 +205,28 @@ export class OpeningsService {
               term: term ? cipher.decrypt(term.encryptedText) : "",
               termKind: term?.kind ?? "keyword",
               category: term?.category ?? "other",
+              importance: term?.importance ?? "mandatory",
               verdict: item.verdict,
               explanation: cipher.decrypt(item.encryptedExplanation),
-              // Profile_truth replaces this in P5 (docs/plan.md): the
-              // passage backing each requirement.
-              evidence: [],
+              passages: item.evidenceIds.flatMap((id) =>
+                passages.has(id) ? [{ id, text: passages.get(id)! }] : []
+              ),
               gapQuestion: open(cipher, item.encryptedGapQuestion),
               gapAnswer: open(cipher, item.encryptedGapAnswer),
             };
           }),
+          preferenceConflicts: fitCheck.encryptedPreferenceConflicts
+            ? preferenceConflictsSchema.parse(
+                JSON.parse(
+                  cipher.decrypt(fitCheck.encryptedPreferenceConflicts)
+                )
+              )
+            : [],
+          outdated:
+            !!profileDocument?.publishedVersionId &&
+            (fitCheck.profileVersionId !== profileDocument.publishedVersionId ||
+              fitCheck.preferencesVersionId !==
+                (preferencesDocument?.publishedVersionId ?? null)),
         };
       }
 
@@ -217,6 +253,10 @@ export class OpeningsService {
         language: row.language,
         suggestedTone: row.suggestedTone,
         fitCheck: items,
+        warnings: row.warnings,
+        needsPublishedProfile:
+          row.kind === "posted" && row.status === "analyzed" && !fitCheck,
+        profilePublished: !!profileDocument?.publishedVersionId,
       };
     });
   }
@@ -254,6 +294,77 @@ export class OpeningsService {
         });
       }
     );
+  }
+
+  /**
+   * Runs the fit check again on an analyzed opening, at its usual cost: the
+   * profile was published (or published again) since the last one.
+   */
+  async reanalyze(input: { userId: string; openingId: string }) {
+    const profile = await this.requireProfile(input.userId);
+    const row = await new OpeningsRepository(this.db).findOpening({
+      profileId: profile.id,
+      openingId: input.openingId,
+    });
+    if (row?.status !== "analyzed" || row.kind !== "posted") throw notFound();
+    // Nothing to check against until a profile is published.
+    const published = await new ProfileRepository(this.db).findDocument(
+      input.userId,
+      "profile"
+    );
+    if (!published?.publishedVersionId) {
+      throw new TRPCError({
+        code: "PRECONDITION_FAILED",
+        message: "Publish your profile before running the fit check.",
+      });
+    }
+    await this.tasks.assertAffordable({
+      userId: input.userId,
+      type: "analyze_opening",
+    });
+    // Only one request moves it on: a second click analyzes nothing twice.
+    const claimed = await new OpeningsRepository(this.db).moveStatus(row.id, {
+      from: "analyzed",
+      to: "processing",
+    });
+    if (!claimed) throw new TRPCError({ code: "CONFLICT" });
+    return this.tasks.startOrUndo(
+      { userId: input.userId, type: "analyze_opening", subjectId: row.id },
+      async () => {
+        await new OpeningsRepository(this.db).moveStatus(row.id, {
+          from: "processing",
+          to: "analyzed",
+        });
+      }
+    );
+  }
+
+  /**
+   * Excludes the opening's company in the user's job preferences (profile
+   * spec, "Job preferences"): screening counts it from now on.
+   */
+  async excludeCompany(input: {
+    userId: string;
+    openingId: string;
+    date: string;
+    language: ProfileLanguage;
+  }) {
+    const profile = await this.requireProfile(input.userId);
+    const row = await new OpeningsRepository(this.db).findOpening({
+      profileId: profile.id,
+      openingId: input.openingId,
+    });
+    if (!row) throw notFound();
+    const cipher = await getUserCipher(this.db, input.userId);
+    const company = open(cipher, row.encryptedCompany);
+    if (!company) throw new TRPCError({ code: "PRECONDITION_FAILED" });
+    await new ProfileService(this.db, this.tasks).excludeCompany({
+      userId: input.userId,
+      company,
+      date: input.date,
+      language: input.language,
+    });
+    return { company };
   }
 
   /** The user can close an opening (the company has no vacancies…) and reopen it. */

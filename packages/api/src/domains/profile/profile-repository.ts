@@ -1,4 +1,14 @@
-import { and, asc, desc, eq, inArray, isNull, max } from "drizzle-orm";
+import {
+  and,
+  asc,
+  cosineDistance,
+  desc,
+  eq,
+  inArray,
+  isNotNull,
+  isNull,
+  max,
+} from "drizzle-orm";
 
 import type { DbClient } from "@repo/api/tools/db-client";
 
@@ -274,5 +284,58 @@ export class ProfileRepository {
       )
       .returning({ id: profileSuggestionsTable.id });
     return resolved.length;
+  }
+
+  /**
+   * The evidence passages of a version closest to a vector (ADR 0004):
+   * what the person lacks (not done, gaps, studied) and rules never come
+   * back as coverage.
+   */
+  nearestEvidencePassages(input: {
+    versionId: string;
+    embedding: number[];
+    limit: number;
+  }) {
+    return this.tx
+      .select({
+        id: profilePassagesTable.id,
+        encryptedText: profilePassagesTable.encryptedText,
+      })
+      .from(profilePassagesTable)
+      .where(
+        and(
+          eq(profilePassagesTable.versionId, input.versionId),
+          eq(profilePassagesTable.kind, "evidence"),
+          isNotNull(profilePassagesTable.embedding)
+        )
+      )
+      .orderBy(cosineDistance(profilePassagesTable.embedding, input.embedding))
+      .limit(input.limit);
+  }
+
+  /** Passages by id, among the user's own published versions. */
+  async findPassages(input: { userId: string; passageIds: string[] }) {
+    if (input.passageIds.length === 0) return [];
+    return this.tx
+      .select({
+        id: profilePassagesTable.id,
+        versionId: profilePassagesTable.versionId,
+        encryptedText: profilePassagesTable.encryptedText,
+      })
+      .from(profilePassagesTable)
+      .innerJoin(
+        profileVersionsTable,
+        eq(profileVersionsTable.id, profilePassagesTable.versionId)
+      )
+      .innerJoin(
+        profileDocumentsTable,
+        eq(profileDocumentsTable.id, profileVersionsTable.documentId)
+      )
+      .where(
+        and(
+          inArray(profilePassagesTable.id, input.passageIds),
+          eq(profileDocumentsTable.userId, input.userId)
+        )
+      );
   }
 }

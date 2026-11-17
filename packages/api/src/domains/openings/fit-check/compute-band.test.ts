@@ -2,48 +2,40 @@ import { describe, expect, it } from "vitest";
 
 import { computeBand, type JudgedTerm } from "./compute-band";
 
-const met = (category: JudgedTerm["category"] = "tool"): JudgedTerm => ({
-  category,
-  verdict: "met",
-});
-const gap = (category: JudgedTerm["category"] = "tool"): JudgedTerm => ({
-  category,
-  verdict: "gap",
-});
+const term = (
+  verdict: JudgedTerm["verdict"],
+  importance: JudgedTerm["importance"] = "mandatory"
+): JudgedTerm => ({ verdict, importance });
 
-describe("fit band", () => {
-  it("is high when nearly everything is met", () => {
-    expect(computeBand([met(), met(), met(), met(), gap()])).toBe("high");
+describe("the fit check's band", () => {
+  it("is high when every mandatory requirement is met", () => {
+    expect(
+      computeBand([term("met"), term("met"), term("gap", "desirable")])
+    ).toBe("high");
   });
 
-  it("counts partial matches as half", () => {
-    expect(
-      computeBand([
-        met(),
-        { category: "tool", verdict: "partial" },
-        gap(),
-        met(),
-      ])
-    ).toBe("medium");
+  it("is medium when a mandatory requirement is met only in part", () => {
+    expect(computeBand([term("met"), term("partial")])).toBe("medium");
   });
 
-  it("caps the band when a hard requirement is a gap", () => {
+  it("is low when a mandatory requirement is missing", () => {
     expect(
-      computeBand([met(), met(), met(), met(), met(), gap("seniority")])
-    ).toBe("medium");
-    expect(
-      computeBand([
-        met(),
-        met(),
-        met(),
-        met(),
-        gap("seniority"),
-        gap("location"),
-      ])
+      computeBand([term("met"), term("met"), term("met"), term("gap")])
     ).toBe("low");
   });
 
-  it("is low with nothing to compare", () => {
+  it("is low when the opening breaks a job preference, whatever it covers", () => {
+    expect(
+      computeBand([term("met"), term("met")], { breaksPreference: true })
+    ).toBe("low");
+  });
+
+  it("reads coverage when nothing is named mandatory", () => {
+    const desirable = (verdict: JudgedTerm["verdict"]) =>
+      term(verdict, "desirable");
+    expect(computeBand([desirable("met"), desirable("met")])).toBe("high");
+    expect(computeBand([desirable("met"), desirable("gap")])).toBe("medium");
+    expect(computeBand([desirable("gap"), desirable("gap")])).toBe("low");
     expect(computeBand([])).toBe("low");
   });
 });

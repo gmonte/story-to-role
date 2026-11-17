@@ -1,5 +1,6 @@
 import { z } from "zod";
 
+import { templateLanguage } from "@repo/api/domains/profile/template-language";
 import { realtimeSubscriptionSchema } from "@repo/api/domains/tasks/schemas/task";
 import { db } from "@repo/api/tools/db";
 import { ok, okSchema, openApiMeta } from "@repo/api/tools/openapi";
@@ -135,6 +136,51 @@ export const openingsRouter = createTRPCRouter({
       });
       return { realtime };
     }),
+
+  reanalyze: userProcedure
+    .use(rateLimited("taskStart"))
+    .meta(
+      openApiMeta(
+        "openings",
+        "POST",
+        "/openings/by-id/{openingId}/fit-check",
+        "Runs the fit check again on the published profile"
+      )
+    )
+    .input(z.object({ openingId: z.uuid() }))
+    .output(z.object({ realtime: realtimeSubscriptionSchema }))
+    .mutation(async ({ ctx, input }) => {
+      const { realtime } = await new OpeningsService(db).reanalyze({
+        userId: ctx.userId,
+        ...input,
+      });
+      return { realtime };
+    }),
+
+  excludeCompany: userProcedure
+    .meta(
+      openApiMeta(
+        "openings",
+        "POST",
+        "/openings/by-id/{openingId}/exclude-company",
+        "Adds the opening's company to the excluded companies of the job preferences"
+      )
+    )
+    .input(
+      z.object({
+        openingId: z.uuid(),
+        // The user's own day, written next to the company.
+        date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+      })
+    )
+    .output(z.object({ company: z.string() }))
+    .mutation(({ ctx, input }) =>
+      new OpeningsService(db).excludeCompany({
+        userId: ctx.userId,
+        language: templateLanguage(ctx),
+        ...input,
+      })
+    ),
 
   setClosed: userProcedure
     .meta(

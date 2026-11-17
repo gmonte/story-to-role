@@ -1,6 +1,6 @@
 # StoryToRole spec: Position accounts
 
-Draft for the owner's review. Amends [guided-interview.md](./guided-interview.md) (extraction, approval, data model) and [resume-and-cover-letter.md](./resume-and-cover-letter.md) (what generation reads); see [ADR 0008](../adr/0008-position-account-is-the-source-of-truth.md).
+Accepted Nov 16, 2026. Amends [guided-interview.md](./guided-interview.md) (extraction, approval, data model) and [resume-and-cover-letter.md](./resume-and-cover-letter.md) (what generation reads); see [ADR 0008](../adr/0008-position-account-is-the-source-of-truth.md).
 
 ## Goal
 
@@ -38,7 +38,22 @@ Clicking a position opens its space beside the chat, one page:
 - It reads the approved account and the conversation, asks one question at a time about what the account lacks (what it was like there, the user's own actions, challenges, results, what they did not do, where each figure comes from), following the existing behaviour rules: no leading questions, no suggested results or numbers, the user is the subject, partners credited, an old resume is a lead to confirm, not a fact.
 - For every figure the user gives, it asks where it comes from and marks it (`[medido]`, `[estimado]`, `[sem número]`); one the user doesn't remember becomes `[sem número]` and the interview moves on.
 - After a few answers, or when the user asks, it proposes a new version of the account that folds in only what the user said: nothing added, every new figure quoted from the user's words, checked in code.
-- The general chat keeps routing messages to the right position's interviewer; what happens in a position's space reaches the general chat as today.
+- What happens in a position's space reaches the general chat as today.
+
+## The general chat as a gateway
+
+The general chat is where the user can tell anything, in any order; it does not process their words a second time.
+
+1. **Routing.** A small, fast model reads only the message and the timeline (titles, employers, dates) and picks where it goes: the position being talked about (a follow-up stays with the same one), a new position to propose, or a question about the career. The orchestrator no longer writes the reply.
+2. **Forwarding.** The message goes verbatim to that position's interviewer, whose reply streams straight to the user, marked with the position it comes from. The user can tell a whole position's account in one message.
+3. **Another position mentioned.** The interviewer handles what belongs to its position and hands back the passages about another one (a `hand_off` tool: position, passage). Each passage becomes a **pending note** on that position, verbatim, at no extra model call, and the chat tells the user where it went ("Noted on Globex: the billing system served 2 million customers").
+4. **Questions about the career** ("where did I work with React?") are answered by a small model from the fact indexes of the approved accounts, each answer naming the positions and passages it rests on; no interviewer is called.
+
+## Pending notes
+
+- A position with pending notes shows it on its card and in its space ("2 new facts to bring into the account").
+- In the space, the interviewer proposes a new version that brings the notes in, and checks the proposal against each note: covered, or not and why (a figure without its origin, a detail that contradicts the account). Notes left uncovered stay pending; the user can also dismiss one.
+- Approving the version clears the notes it covers.
 
 ## Imports
 
@@ -85,3 +100,7 @@ Each existing position gets a first draft account written from its approved evid
 - [ ] Generation uses `[estimado]` figures only with a qualifier, never `[a confirmar]` ones, never what the user did not do, never what the account's "do not include" list holds.
 - [ ] Resumes and cover letters are generated from accounts, with bullets chosen for the focus, each line traced to the account, and a line with an unstated figure rejected.
 - [ ] Existing positions get a first draft account from their evidence and conversations.
+- [ ] The general chat routes each message with a small model and forwards it verbatim to one interviewer, whose reply reaches the user without being rewritten.
+- [ ] A passage about another position becomes a pending note there, with no extra model call, and the user is told where it went.
+- [ ] A position with pending notes says so; the interviewer's proposal is checked against each note, and approving clears the ones it covers.
+- [ ] A question about the career is answered from the fact indexes, naming the positions it rests on.

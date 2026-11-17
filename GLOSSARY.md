@@ -110,9 +110,13 @@ _Avoid_: Cover letter interview, questionnaire
 
 ## Guided interview
 
-**Account** (proposed, see ADR 0008):
+**Account** (see ADR 0008):
 A position's own text in the user's voice, telling what they did there; versioned and approved as a whole, the source every document is generated from. In Portuguese, "relato".
 _Avoid_: Profile, summary (a summary is the AI's reading of it), story (a problem-action-result record)
+
+**Pending note**:
+A passage the user told about a position while talking about another, kept verbatim on it until a new version of its account brings it in.
+_Avoid_: Cross note (the older, internal name)
 
 **Truth file**:
 A document the user already keeps with their own career facts, imported as a source document and validated like any extraction.

@@ -1,6 +1,6 @@
 # A position's account is its source of truth, not a set of facts
 
-Status: proposed, for the owner's review.
+Status: accepted (Nov 16, 2026).
 
 The guided interview turned each position into loose facts (achievements, responsibilities, metrics, tools), approved one by one, and generation built every resume line from them. In the walkthrough this read as bookkeeping: the user approved dozens of fragments, the same fact came twice from two files, and nowhere could they read what they had told about a position as a whole. The owner's own way of working, a `profile_truth.md` written as prose per position, was the model they wanted.
 
@@ -21,3 +21,4 @@ ADR 0001 holds unchanged, with a new source: the AI may only use approved accoun
 - Existing evidence, stories and interview turns seed the first draft account of each position, for the user to approve; nothing already approved is lost.
 - The fit check, resume and cover letter generation read accounts instead of evidence: their specs change with this one.
 - The trace of a generated line points to the passage of the account version it came from.
+- The general chat becomes a gateway: a small model routes each message, which goes verbatim to one position's interviewer (no second rewrite); passages about another position become pending notes there, brought into the account when the user next works on it; career questions are answered from the fact indexes. This amends the orchestrator of ADR 0007, not its transport.

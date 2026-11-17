@@ -196,6 +196,48 @@ Acceptance:
 - The interview language leaves the privacy notice and the screen: no control at all. The conversation follows the language the user writes in; the career language (the one facts are kept in) is the interface's when the profile is made, whatever language the files are in (documents can be in any), and locks once there is evidence, so facts never mix languages. A user may still set it through the API before the first evidence. Imports run one at a time per user (a Trigger.dev concurrency key), so each sees the facts the one before saved.
 - Generation gets each file fact's original wording (author notes removed, sensitive filter applied), to prefer when the document is in that language; it also backs the line's figures. Resumes and cover letters.
 
+## Position accounts
+
+Each position's account becomes the source of truth ([ADR 0008](./adr/0008-position-account-is-the-source-of-truth.md), [position-accounts.md](./specs/position-accounts.md)). Each slice ships behind what exists: until accounts are approved, generation keeps reading evidence.
+
+### A1: The account and its space
+
+- `position_accounts` and their versions (text in the user's voice, approved at, the version it came from, its "do not include" list), encrypted; a position's space shows the approved account, editable in place (an edit is a draft version to approve), its versions (read, restore) and its highlighter marks (`[medido]`, `[estimado]`, `[sem número]`, `[a confirmar]`, and unmarked figures) over the text.
+- Acceptance: write, edit, approve and restore an account; marks highlighted; another user's account not found; account content encrypted and in the export.
+
+### A2: The interviewer enriches the account
+
+- The position's interviewer works on the account: asks about what it lacks (what it was like, the user's actions, challenges, results, what they did not do, where each figure comes from) and proposes a new version, shown as a diff, adding only what the user said, every new figure in the user's words (checked in code) and marked.
+- "What I understood" becomes the reading of the account plus prompts for what would make it richer, each starting a message.
+- Acceptance: a proposed version adds nothing unsaid (code rejects an unquoted figure); the diff approves, edits or discards it; what the user did not do and figure origins are asked.
+
+### A3: The fact index
+
+- Rebuilt from each approved version, in a task at no credit to the user: skills, achievements, figures with their mark, tools, what the user did not do, each pointing to its passage; skills shown in the space.
+- Acceptance: approving a version rebuilds the index; a draft does not; entries point to passages.
+
+### A4: Imports into accounts
+
+- A file proposes a draft version only for positions where it says something new (a first draft for a position it brings first), merged with the account; a file's "do not include" rules for a position land on that account's list; locked-fact conflicts as today.
+- Acceptance: a file that only restates an account leaves it unchanged; one with a new fact proposes a version with only that folded in.
+
+### A5: The gateway and pending notes
+
+- The general chat routes each message with a small model and forwards it verbatim to one interviewer, whose reply reaches the user unrewritten; a `hand_off` tool turns passages about another position into pending notes there (no extra model call) and the chat says where each went; career questions are answered from the fact indexes.
+- A position with pending notes says so; the interviewer's proposal is checked against each note; approving clears the covered ones.
+- Acceptance: one routing call and one interviewer call per message; a mention of another position becomes a pending note and the user is told; "where did I work with React?" names the positions from the indexes.
+
+### A6: Migration
+
+- Each existing position (and credential with stories) gets a first draft account written from its approved evidence, stories and the user's own words in its sessions, for the user to approve.
+- Acceptance: nothing approved is lost; generation uses an account once approved, evidence until then.
+
+### A7: Generation from accounts
+
+- The fit check reads the indexes and the accounts' passages; resumes and cover letters are written from the approved accounts, bullets chosen for the document's focus; code rejects a line with an unstated figure, an `[estimado]` figure without a qualifier, anything `[a confirmar]`, what the user did not do, or the account's "do not include" list; each line traced to its passage.
+- Acceptance: a React Native library resume draws mobile achievements, a general one each position's strongest points; every rejection rule covered by a test.
+- Then the fact-by-fact review, draft facts and evidence kinds leave the interview.
+
 ## Not in the MVP
 
 Hiring interview prep, team or recruiter accounts, email reminders, OpenAI package and "Sign in with ChatGPT", languages beyond English and Brazilian Portuguese, final prices.

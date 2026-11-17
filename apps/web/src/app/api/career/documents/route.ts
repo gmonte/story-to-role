@@ -4,6 +4,7 @@ import { z } from "zod";
 
 import { documentLimits } from "@repo/api/domains/career/documents/document-limits";
 import { DocumentsService } from "@repo/api/domains/career/documents/documents-service";
+import { ImportService } from "@repo/api/domains/profile/import/import-service";
 import { UsersRepository } from "@repo/api/domains/users/users-repository";
 import { db } from "@repo/api/tools/db";
 import { upstashRateLimiter } from "@repo/api/tools/rate-limit";
@@ -15,7 +16,8 @@ const formSchema = z.object({
 /**
  * Receives a source, a resume, a LinkedIn PDF, notes or a truth file
  * (multipart, which tRPC doesn't carry). The file goes to storage
- * encrypted; nothing reads it yet (P4 re-adds importing).
+ * encrypted, and its import into profile suggestions starts at once; when
+ * it can't (no credits), the file stays and can be imported later.
  */
 export async function POST(request: NextRequest) {
   const { userId: clerkUserId } = await auth();
@@ -49,7 +51,12 @@ export async function POST(request: NextRequest) {
       mimeType: form.data.file.type,
       bytes: Buffer.from(await form.data.file.arrayBuffer()),
     });
-    return Response.json(result);
+    // The file is kept whatever happens to its import.
+    const importError = await new ImportService(db)
+      .start({ userId: user.id, sourceDocumentId: result.sourceDocumentId })
+      .then(() => null)
+      .catch((error: unknown) => (error as { code?: string }).code ?? "FAILED");
+    return Response.json({ ...result, importError });
   } catch (error) {
     // Matched by code: the error class may come from another copy of tRPC.
     const { code } = error as { code?: string };

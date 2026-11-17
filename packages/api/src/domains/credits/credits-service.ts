@@ -66,6 +66,7 @@ export class CreditsService {
           styleProfile: creditCap("extract_style_profile"),
           motivationTurn: creditCap("motivation_turn"),
           agentMessage: creditCap("profile_agent_turn"),
+          sourceImport: creditCap("import_document"),
         },
         courtesy: courtesy
           ? { monthlyCredits: courtesy.monthlyCredits, endsAt: courtesy.endsAt }

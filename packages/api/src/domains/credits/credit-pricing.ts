@@ -76,6 +76,9 @@ export function creditCap(type: TaskType, hints: CapHints = {}): number {
     case "split_instructions":
     case "extract_style_profile":
       return 3;
+    case "import_document":
+      // About 20 for a truth file of 12,000 words (billing spec).
+      return 30;
     case "research_company":
       return 20;
     case "adapt_document":

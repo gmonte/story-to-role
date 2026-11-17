@@ -88,12 +88,13 @@ One agent per user, on the chat transport of [ADR 0007](../adr/0007-profile-agen
 
 A resume, LinkedIn PDF or truth file (PDF, DOCX, Markdown or text, with the existing size and page limits) is read by code and checked to be a career document.
 
-- **Empty profile:** the AI writes the first draft in the template's format from the file.
+- **Empty profile:** the AI writes the first draft in the template's format from the file. It arrives as suggestions like everything else, accepted all at once with one click, so nothing is written without the user and nothing they typed meanwhile is overwritten.
 - **Existing profile:** the AI compares the file with the draft and proposes only what it lacks (a position, a project, a tool, a result), as suggestions in the right sections. What the profile already says creates nothing.
-- **Figures from a resume arrive as `[a confirmar]`**: an old resume may carry figures with no backing. They stay out of every generated document until the user says where they come from.
+- **Figures from a resume arrive as `[a confirmar]`**: an old resume may carry figures with no backing. They stay out of every generated document until the user says where they come from. Code enforces it: a result with a figure and no mark gets the open mark, a "measured" or "estimated" mark the file itself doesn't carry becomes the open one, and a line whose figure the user already marked is never rewritten by an import.
+- **Every change rests on the file**: it carries a passage of the file, checked by code, and its numbers must be in the file.
 - **Disagreements** with the profile (another date, another title) arrive as a suggested replacement with both versions side by side.
 - **A truth file's "do not include" rules** arrive as suggestions for Communication rules.
-- When it ends, the agent sums up what was proposed and what is still missing. Everything lands in the draft and counts once published. The import is charged as today.
+- When it ends, the agent sums up in the chat what was proposed and what is still missing (said once, at no cost). Everything lands in the draft once accepted and counts once published. The import starts when the file is uploaded and is charged per file, with the cap shown beside the upload; a file that couldn't be imported (no credits, a failure) stays in Sources with an "Import into the profile" button.
 
 ## Job preferences
 

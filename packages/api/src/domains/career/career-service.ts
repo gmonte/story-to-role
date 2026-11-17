@@ -1,5 +1,6 @@
 import { TRPCError } from "@trpc/server";
 
+import { TasksRepository } from "@repo/api/domains/tasks/tasks-repository";
 import type { DbClient } from "@repo/api/tools/db-client";
 import {
   getUserCipher,
@@ -119,12 +120,35 @@ export class CareerService {
         interviewLanguage: profile.interviewLanguage,
         privacyNoticeAccepted: !!profile.privacyNoticeAcceptedAt,
       },
-      documents: documents.map((row) => ({
-        id: row.id,
-        kind: row.kind,
-        fileName: cipher.decrypt(row.encryptedFileName),
-        createdAt: row.createdAt,
-      })),
+      documents: await Promise.all(
+        documents.map(async (row) => {
+          const tasks = new TasksRepository(this.db);
+          // An import whose run died leaves its row importing: past its
+          // task's life it counts as failed, so nothing waits on it forever.
+          const importing =
+            row.importStatus === "importing" &&
+            (Date.now() - (row.updatedAt ?? row.createdAt).getTime() < 30_000 ||
+              !!(await tasks.activeTask(row.id, "import_document")));
+          return {
+            id: row.id,
+            kind: row.kind,
+            fileName: cipher.decrypt(row.encryptedFileName),
+            createdAt: row.createdAt,
+            importStatus:
+              row.importStatus === "importing" && !importing
+                ? ("failed" as const)
+                : row.importStatus,
+            importRejection: row.importRejection,
+            importProgress: importing
+              ? await tasks.latestProgress(row.id, "import_document")
+              : null,
+            summaryPending:
+              row.importStatus === "imported" &&
+              !!row.encryptedImportSummary &&
+              !row.importSummarySaidAt,
+          };
+        })
+      ),
     };
   }
 

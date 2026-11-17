@@ -11,6 +11,8 @@ import type {
   PositionOrigin,
   PositionStatus,
   SourceDocumentKind,
+  SourceImportRejection,
+  SourceImportStatus,
   StartPath,
 } from "../schemas/career";
 
@@ -58,6 +60,14 @@ export const sourceDocumentsTable = createTable(
     mimeType: d.text().notNull(),
     storageKey: d.text().notNull(),
     encryptedText: d.text(),
+    // Reading the file into profile suggestions (profile spec, "Importing a
+    // resume"): null until an import starts.
+    importStatus: d.text().$type<SourceImportStatus>(),
+    importRejection: d.text().$type<SourceImportRejection>(),
+    // What the agent says when the import ends: what was proposed and what
+    // is still missing; said once in the chat.
+    encryptedImportSummary: d.text(),
+    importSummarySaidAt: d.timestamp({ withTimezone: true }),
   }),
   (t) => [index("source_documents_profile_id_idx").on(t.profileId)]
 );

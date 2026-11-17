@@ -44,3 +44,21 @@ export type CredentialStatus = z.infer<typeof credentialStatusSchema>;
 
 export const sourceDocumentKindSchema = z.enum(["resume", "truth_file"]);
 export type SourceDocumentKind = z.infer<typeof sourceDocumentKindSchema>;
+
+export const sourceImportStatusSchema = z.enum([
+  "importing",
+  "imported",
+  "rejected",
+  "failed",
+]);
+export type SourceImportStatus = z.infer<typeof sourceImportStatusSchema>;
+
+/** Why a file wasn't imported: code read it, or the content check did. */
+export const sourceImportRejectionSchema = z.enum([
+  "too_many_pages",
+  "too_long",
+  "too_short",
+  "unreadable",
+  "not_a_career_document",
+]);
+export type SourceImportRejection = z.infer<typeof sourceImportRejectionSchema>;

@@ -1,4 +1,13 @@
-import { arrayContains, desc, eq, sql } from "drizzle-orm";
+import {
+  and,
+  arrayContains,
+  desc,
+  eq,
+  inArray,
+  isNotNull,
+  isNull,
+  sql,
+} from "drizzle-orm";
 
 import { openingsTable } from "@repo/api/domains/openings/db/openings-tables";
 import type { DbClient } from "@repo/api/tools/db-client";
@@ -158,6 +167,44 @@ export class CareerRepository {
       .from(sourceDocumentsTable)
       .where(eq(sourceDocumentsTable.id, sourceDocumentId));
     return row;
+  }
+
+  /** Finished imports whose summary the agent hasn't said yet, oldest first. */
+  listUnsaidImportSummaries(profileId: string) {
+    return this.tx
+      .select({
+        sourceDocumentId: sourceDocumentsTable.id,
+        encryptedImportSummary: sourceDocumentsTable.encryptedImportSummary,
+      })
+      .from(sourceDocumentsTable)
+      .where(
+        and(
+          eq(sourceDocumentsTable.profileId, profileId),
+          eq(sourceDocumentsTable.importStatus, "imported"),
+          isNotNull(sourceDocumentsTable.encryptedImportSummary),
+          isNull(sourceDocumentsTable.importSummarySaidAt)
+        )
+      )
+      .orderBy(sourceDocumentsTable.createdAt);
+  }
+
+  /** Marks import summaries said, once the chat has said them. */
+  async markImportSummariesSaid(sourceDocumentIds: string[]) {
+    if (sourceDocumentIds.length === 0) return;
+    await this.tx
+      .update(sourceDocumentsTable)
+      .set({ importSummarySaidAt: new Date() })
+      .where(inArray(sourceDocumentsTable.id, sourceDocumentIds));
+  }
+
+  async updateDocument(
+    sourceDocumentId: string,
+    changes: Partial<Insert<typeof sourceDocumentsTable>>
+  ) {
+    await this.tx
+      .update(sourceDocumentsTable)
+      .set(changes)
+      .where(eq(sourceDocumentsTable.id, sourceDocumentId));
   }
 
   async insertDocument(document: Insert<typeof sourceDocumentsTable>) {

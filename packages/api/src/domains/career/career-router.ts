@@ -4,9 +4,12 @@ import { db } from "@repo/api/tools/db";
 import { ok, okSchema, openApiMeta } from "@repo/api/tools/openapi";
 import {
   createTRPCRouter,
+  rateLimited,
   userProcedure,
   type TRPCContext,
 } from "@repo/api/tools/trpc";
+import { ImportService } from "@repo/api/domains/profile/import/import-service";
+import { realtimeSubscriptionSchema } from "@repo/api/domains/tasks/schemas/task";
 
 import { CareerService } from "./career-service";
 import { DocumentsService } from "./documents/documents-service";
@@ -130,6 +133,22 @@ export const careerRouter = createTRPCRouter({
       await new DocumentsService(db).remove({ userId: ctx.userId, ...input });
       return ok;
     }),
+
+  importDocument: userProcedure
+    .use(rateLimited("taskStart"))
+    .meta(
+      openApiMeta(
+        "career",
+        "POST",
+        "/career/documents/by-id/{sourceDocumentId}/import",
+        "Reads a source into suggestions for the profile"
+      )
+    )
+    .input(z.object({ sourceDocumentId: z.uuid() }))
+    .output(z.object({ realtime: realtimeSubscriptionSchema }))
+    .mutation(({ ctx, input }) =>
+      new ImportService(db).start({ userId: ctx.userId, ...input })
+    ),
 
   documentPreview: userProcedure
     .meta(

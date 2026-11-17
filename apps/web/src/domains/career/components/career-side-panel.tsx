@@ -28,13 +28,20 @@ export function CareerSidePanel({
   onPreview: (sourceDocumentId: string) => void;
 }) {
   const t = useTranslation();
-  const { agentTopic } = useProfileEditor();
+  const { agentTopic, saveNow } = useProfileEditor();
   const [tab, setTab] = useState("agent");
   // A new topic (a passage, a finding) opens the agent, once per request.
   const [seenTopic, setSeenTopic] = useState(agentTopic?.id);
   if (agentTopic && agentTopic.id !== seenTopic) {
     setSeenTopic(agentTopic.id);
     setTab("agent");
+  }
+  // So does an import that just ended: the agent sums it up in the chat.
+  const summaryPending = documents.some((document) => document.summaryPending);
+  const [seenSummary, setSeenSummary] = useState(summaryPending);
+  if (summaryPending !== seenSummary) {
+    setSeenSummary(summaryPending);
+    if (summaryPending) setTab("agent");
   }
 
   return (
@@ -63,7 +70,11 @@ export function CareerSidePanel({
         <ProfileAgent />
       </TabsContent>
       <TabsContent value="sources" className="overflow-y-auto p-4">
-        <Sources documents={documents} onPreview={onPreview} />
+        <Sources
+          documents={documents}
+          onPreview={onPreview}
+          beforeUpload={saveNow}
+        />
       </TabsContent>
     </Tabs>
   );

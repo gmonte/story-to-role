@@ -250,10 +250,15 @@ export class MotivationService {
         drafts.map((point) => point.id),
         { status: "kept" }
       );
+      // This review's drafts, and the points kept by an earlier one whose
+      // suggestion never got created (a failure): a retry sends them again.
       return {
         interview,
-        toSend: drafts.filter(
-          (point) => point.kind !== "company" && saved.has(point.id)
+        toSend: (await repository.listPoints(interview.id)).filter(
+          (point) =>
+            point.status === "kept" &&
+            point.kind !== "company" &&
+            saved.has(point.id)
         ),
       };
     });

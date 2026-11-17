@@ -123,14 +123,39 @@ export function checkLetter(input: {
     });
   }
 
-  const figureSources = [
-    ...context.positions.map(
-      (position) => `${position.startDate ?? ""} ${position.endDate ?? ""}`
-    ),
-    ...context.evidence.map((row) => row.figures),
-    ...context.instructions.map((row) => row.text),
-    ...input.ownSources,
-  ];
+  const years = context.positions.map(
+    (position) => `${position.startDate ?? ""} ${position.endDate ?? ""}`
+  );
+  // What backs a paragraph's figures, as `assembleLetter` does: the
+  // sources it cites (profile lines, the career direction, instructions);
+  // a paragraph the user wrote by hand has no citations, so any measured
+  // profile line and the instructions back it, as in a resume line without
+  // a position.
+  const figureSources = (line: CoverLetterContent["paragraphs"][number]) => {
+    if (line.origin.kind !== "letter") {
+      return [
+        ...years,
+        ...context.evidence.map((row) => row.figures),
+        ...context.careerDirection.map((row) => row.text),
+        ...context.instructions.map((row) => row.text),
+        ...input.ownSources,
+      ];
+    }
+    const { evidenceIds, instructionIds } = line.origin;
+    return [
+      ...years,
+      ...context.evidence
+        .filter((row) => evidenceIds.includes(row.id))
+        .map((row) => row.figures),
+      ...context.careerDirection
+        .filter((row) => evidenceIds.includes(row.id))
+        .map((row) => row.text),
+      ...context.instructions
+        .filter((row) => instructionIds.includes(row.id))
+        .map((row) => row.text),
+      ...input.ownSources,
+    ];
+  };
   for (const line of content.paragraphs) {
     if (!line.text.trim()) continue;
     const finding = (
@@ -149,7 +174,7 @@ export function checkLetter(input: {
         line.text.slice(mark.from, mark.to)
       ),
     ];
-    const figures = ungivenFigures(line.text, figureSources);
+    const figures = ungivenFigures(line.text, figureSources(line));
     if (placeholders.length || figures.length) {
       findings.push(
         finding("figure", { figures: [...placeholders, ...figures].join(", ") })

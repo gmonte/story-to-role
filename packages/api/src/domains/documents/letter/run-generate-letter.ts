@@ -150,14 +150,23 @@ export async function loadLetterMaterial(input: {
       .filter((item) => item.verdict !== "gap")
       .flatMap((item) => item.evidenceIds)
       .slice(0, 15),
-    ...context.careerDirection.map((line) => line.id),
   ]);
   const lines = context.evidence.filter((line) => wanted.has(line.id));
-  const evidence = lines.map((line) => ({
+  // The career direction is not an evidence row: it is handed over as a
+  // citable source of its own, so a paragraph may cite it.
+  const direction = context.careerDirection.map((line) => ({
     id: line.id,
     text: line.text,
-    figures: line.figures,
+    figures: line.text,
   }));
+  const evidence = [
+    ...lines.map((line) => ({
+      id: line.id,
+      text: line.text,
+      figures: line.figures,
+    })),
+    ...direction,
+  ];
   const companyFacts = (
     await new ResearchRepository(db).listFacts(input.openingId)
   )
@@ -237,7 +246,7 @@ export async function loadLetterMaterial(input: {
           }
         : null,
       evidence: evidence.map(({ id, text }, index) => {
-        const position = positionOf(lines[index].positionId);
+        const position = positionOf(lines[index]?.positionId ?? null);
         return {
           id,
           text,

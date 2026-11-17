@@ -16,9 +16,20 @@ import {
   closeTestDatabase,
   getTestDatabase,
 } from "@repo/api/test/pglite";
+import type * as SuggestLineModule from "@repo/api/domains/profile/suggestions/suggest-line";
+import { suggestLine } from "@repo/api/domains/profile/suggestions/suggest-line";
 
 import { MotivationService } from "./motivation-service";
 import { runMotivationTurn } from "./run-motivation-turn";
+
+// The real suggestion, which a test can make fail once.
+vi.mock(
+  "@repo/api/domains/profile/suggestions/suggest-line",
+  async (importOriginal) => {
+    const original = await importOriginal<typeof SuggestLineModule>();
+    return { ...original, suggestLine: vi.fn(original.suggestLine) };
+  }
+);
 
 vi.mock("@repo/common/env/web.env", () => ({
   env: { ENCRYPTION_MASTER_KEY: `v1:${randomBytes(32).toString("base64")}` },
@@ -160,6 +171,81 @@ async function setup() {
 describe("motivation interview", () => {
   beforeEach(async () => {
     await clearTestDatabase();
+  });
+
+  /** Runs an interview to its end with the points the model proposes. */
+  async function finishInterview(
+    ctx: Awaited<ReturnType<typeof setup>>,
+    points: Array<{ text: string; kind: string; worth_saving: boolean }>
+  ) {
+    const ids = { userId: ctx.user.id, openingId: ctx.opening.id };
+    await ctx.motivation.start(ids);
+    for (const question of ["Why Hooli?", "Your goals?", "Fit?", "More?"]) {
+      await ctx.turn({ question: { done: false, question } });
+      await ctx.motivation.answer({
+        ...ids,
+        text: "I look for small teams.",
+      });
+    }
+    await ctx.turn({ question: { done: true, question: null }, points });
+    return ids;
+  }
+
+  it("keeps the profile's never-include terms out of the career direction the interviewer sees", async () => {
+    const ctx = await setup();
+    const draft = await ctx.profiles.getDraft({
+      userId: ctx.user.id,
+      language: "en-US",
+    });
+    const { revision } = await ctx.profiles.saveDraft({
+      userId: ctx.user.id,
+      markdown: profileMarkdown
+        .replace("Platform work at scale.", "Platform work at Initrode.")
+        .replace(
+          "## Communication rules\n",
+          "## Communication rules\n\n- Never include: Initrode\n"
+        ),
+      baseRevision: draft.revision,
+    });
+    await ctx.profiles.publish({ userId: ctx.user.id, baseRevision: revision });
+    await ctx.motivation.start({
+      userId: ctx.user.id,
+      openingId: ctx.opening.id,
+    });
+    const fake = await ctx.turn({
+      question: { done: false, question: "Why Hooli?" },
+    });
+    const prompt = fake.generateObject.mock.calls.find(([request]) =>
+      request.system.startsWith("You interview")
+    )![0];
+    expect(JSON.stringify(prompt)).not.toContain("Initrode");
+    expect(JSON.stringify(prompt)).toContain("careerDirectionInProfile");
+  });
+
+  it("marks a point promoted only once its suggestion exists, so a failure can be retried", async () => {
+    const ctx = await setup();
+    const ids = await finishInterview(ctx, [
+      { text: "I look for small teams", kind: "goal", worth_saving: true },
+    ]);
+    const [goal] = (await ctx.motivation.get(ids)).points;
+    vi.mocked(suggestLine).mockRejectedValueOnce(new Error("boom"));
+    await expect(
+      ctx.motivation.confirm({
+        ...ids,
+        decisions: [{ motivationPointId: goal.id, save: true }],
+      })
+    ).rejects.toThrow("boom");
+    expect(
+      (await ctx.motivation.get(ids)).points.map((point) => point.status)
+    ).toEqual(["kept"]);
+    const { sent } = await ctx.motivation.confirm({
+      ...ids,
+      decisions: [{ motivationPointId: goal.id, save: true }],
+    });
+    expect(sent).toHaveLength(1);
+    expect(
+      (await ctx.motivation.get(ids)).points.map((point) => point.status)
+    ).toEqual(["promoted"]);
   });
 
   afterAll(async () => {

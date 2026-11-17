@@ -365,12 +365,15 @@ function GapQuestion({
   const refresh = useRefreshOpenings();
   const [draft, setDraft] = useState(answer ?? "");
   const [asking, setAsking] = useState(false);
+  // The user changed their mind after confirming they lack it.
+  const [reopened, setReopened] = useState(false);
   const [positionId, setPositionId] = useState(notTiedToPosition);
   const save = useMutation(
     trpc.openings.answerGapQuestion.mutationOptions({
       onSuccess: async (result, input) => {
         await refresh();
         setAsking(false);
+        setReopened(false);
         if (!input.lacks) {
           toast.success(
             t.formatMessage({
@@ -403,15 +406,28 @@ function GapQuestion({
   return (
     <div className="flex flex-col gap-2 rounded-lg border p-3">
       <p className="text-sm">{question}</p>
-      {lacks ? (
-        <p className="text-muted-foreground text-xs">
-          {t.formatMessage({
-            defaultMessage:
-              "You said you don't have it. A suggestion for your profile's known gaps was sent to My career.",
-          })}
-        </p>
+      {lacks && !reopened ? (
+        <div className="flex flex-col items-start gap-2">
+          <p className="text-muted-foreground text-xs">
+            {t.formatMessage({
+              defaultMessage:
+                "You said you don't have it. A suggestion was sent to My career.",
+            })}
+          </p>
+          <Button size="sm" variant="ghost" onClick={() => setReopened(true)}>
+            {t.formatMessage({ defaultMessage: "Answer instead" })}
+          </Button>
+        </div>
       ) : (
         <>
+          {lacks && (
+            <p className="text-muted-foreground text-xs">
+              {t.formatMessage({
+                defaultMessage:
+                  "The suggestion already sent stays in My career until you reject it there.",
+              })}
+            </p>
+          )}
           <Textarea
             rows={2}
             value={draft}
@@ -470,6 +486,17 @@ function GapQuestion({
                   ))}
                 </SelectContent>
               </Select>
+              <p className="text-muted-foreground text-xs">
+                {positionId === notTiedToPosition
+                  ? t.formatMessage({
+                      defaultMessage:
+                        "The suggestion goes to your profile's known gaps.",
+                    })
+                  : t.formatMessage({
+                      defaultMessage:
+                        "The suggestion goes to “what I did not do” of this position.",
+                    })}
+              </p>
               <Button
                 size="sm"
                 className="self-start"

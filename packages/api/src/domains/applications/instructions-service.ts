@@ -213,7 +213,9 @@ export class InstructionsService {
    * under the point's position when it has one, else under Addenda; never
    * a change, the user accepts them there. Overrides not confirmed are
    * dropped. A point the draft refuses (it has the line already, or no
-   * longer has the position) stays in this application only.
+   * longer has the position) stays in this application only. A point is
+   * marked sent only once its suggestion exists, so a failure while
+   * sending can be retried by confirming again.
    */
   async confirm(input: {
     userId: string;
@@ -247,7 +249,15 @@ export class InstructionsService {
       await repository.deleteOverrides(
         pending.filter((row) => !confirmed.has(row.id)).map((row) => row.id)
       );
-      return drafts.filter((point) => wanted.has(point.id));
+      // The points still to send: this review's, and those kept by an
+      // earlier one whose suggestion never got created (a failure), so a
+      // retry can send them again.
+      return (await repository.listPoints(opening.id)).filter(
+        (point) =>
+          point.status === "kept" &&
+          !point.sentToProfileAt &&
+          wanted.has(point.id)
+      );
     });
     if (toSend.length === 0) return { sent: [] };
 

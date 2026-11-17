@@ -79,6 +79,8 @@ export async function runUpdateLetter(deps: {
       language: generation.language,
       resume: after,
       profileVersionId: generation.profileVersionId,
+      // The story the letter being updated was written around.
+      storyLineId: generation.storyLineId,
       settings: generationSettingsSchema
         .catch(defaultGenerationSettings)
         .parse(generation.settings ?? defaultGenerationSettings),

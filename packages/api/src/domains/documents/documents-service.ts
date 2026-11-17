@@ -22,7 +22,8 @@ import { outdatedVersions } from "./adaptation/sync-status";
 import {
   type CoverageReviewContent,
   coverageReviewContentSchema,
-  ownWordsFact,
+  bestFactFor,
+  ownWordsFacts,
 } from "./coverage-review/coverage-review";
 import { sendLineToProfile } from "./coverage-review/send-to-profile";
 import {
@@ -660,8 +661,11 @@ export class DocumentsService {
         : null,
       language: found.version.language,
     });
-    const fact = ownWordsFact(line, context.instructions);
-    if (!fact) throw new TRPCError({ code: "BAD_REQUEST" });
+    const facts = ownWordsFacts(line, context.instructions);
+    if (facts.length === 0) throw new TRPCError({ code: "BAD_REQUEST" });
+    // A paragraph may rest on several instructions: the one the review's
+    // suggestion speaks of (most words in common), else the first.
+    const fact = bestFactFor(facts, suggestion.text);
     return sendLineToProfile({
       db: this.db,
       cipher,

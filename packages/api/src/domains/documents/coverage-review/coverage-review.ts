@@ -141,29 +141,49 @@ function provable(terms: OpeningBrief["terms"]) {
 }
 
 /**
- * What a line resting on the user's own words says, and the position it is
- * about: a resume bullet from an instruction or written by hand, or a
- * letter paragraph resting on instructions (the instruction's statement is
- * the fact, never the paragraph). Null when the line isn't one, or its
- * position is unknown.
+ * What a line resting on the user's own words says, and the position each
+ * fact is about: a resume bullet from an instruction or written by hand
+ * (one fact), or a letter paragraph resting on instructions (one fact per
+ * cited instruction with a position: the instruction's statement is the
+ * fact, never the paragraph). Empty when the line isn't one, or no
+ * position is known.
  */
-export function ownWordsFact(
+export function ownWordsFacts(
   line: WrittenLine,
   instructions: CareerContext["instructions"]
-): { positionId: string; text: string } | null {
+): Array<{ positionId: string; text: string }> {
   const origin = line.origin;
   if (origin?.kind === "instruction" || origin?.kind === "manual") {
     return line.positionId
-      ? { positionId: line.positionId, text: line.text }
-      : null;
+      ? [{ positionId: line.positionId, text: line.text }]
+      : [];
   }
   if (origin?.kind === "letter") {
-    const point = instructions.find(
-      (row) => origin.instructionIds.includes(row.id) && row.positionId
+    return instructions.flatMap((row) =>
+      origin.instructionIds.includes(row.id) && row.positionId
+        ? [{ positionId: row.positionId, text: row.text }]
+        : []
     );
-    return point ? { positionId: point.positionId!, text: point.text } : null;
   }
-  return null;
+  return [];
+}
+
+/**
+ * Of the facts a line rests on, the one a suggestion's text speaks of: the
+ * most words in common with it (accents and case aside), else the first.
+ */
+export function bestFactFor<T extends { text: string }>(
+  facts: T[],
+  suggestion: string
+): T {
+  const words = (text: string) =>
+    new Set(normalize(text).match(/[\p{L}\p{N}]{3,}/gu) ?? []);
+  const wanted = words(suggestion);
+  const score = (fact: T) =>
+    [...words(fact.text)].filter((word) => wanted.has(word)).length;
+  return facts.reduce((best, fact) =>
+    score(fact) > score(best) ? fact : best
+  );
 }
 
 export function keepReview(input: {
@@ -264,7 +284,7 @@ export function keepReview(input: {
           : [{ kind: item.kind, lineId, text }];
       }
       const line = lineId ? lines.get(lineId) : null;
-      return line && ownWordsFact(line, context.instructions)
+      return line && ownWordsFacts(line, context.instructions).length > 0
         ? [{ kind: item.kind, lineId, text }]
         : [];
     }

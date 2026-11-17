@@ -443,9 +443,7 @@ export class OpeningsService {
    * story, kept with the opening and turned into an application
    * instruction when it is split; or the user confirming they really lack
    * it, which becomes a suggestion in the profile's draft: under "what I
-   * did not do" of the position the requirement is tied to (the one the
-   * user names, or the one the fit check's passages are in), else under
-   * Known gaps. Nothing changes until the user accepts it there.
+   * did not do" of the position the user names, else under Known gaps. Nothing changes until the user accepts it there.
    */
   async answerGapQuestion(input: {
     userId: string;

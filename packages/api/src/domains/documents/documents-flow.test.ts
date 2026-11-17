@@ -16,6 +16,8 @@ import { sensitiveItemsTable } from "@repo/api/domains/evidence/db/evidence-tabl
 import { loadSensitiveFilter } from "@repo/api/domains/evidence/sensitive/load-sensitive-filter";
 import { OpeningsRepository } from "@repo/api/domains/openings/openings-repository";
 import { ProfileService } from "@repo/api/domains/profile/profile-service";
+import type * as SuggestLineModule from "@repo/api/domains/profile/suggestions/suggest-line";
+import { suggestLine } from "@repo/api/domains/profile/suggestions/suggest-line";
 import { TasksService } from "@repo/api/domains/tasks/tasks-service";
 import { createTestUser } from "@repo/api/test/create-test-user";
 import { fakeProviderPackage } from "@repo/api/test/fake-provider-package";
@@ -35,6 +37,7 @@ import { TrackerService } from "@repo/api/domains/applications/tracker/tracker-s
 import { ProfileRepository } from "@repo/api/domains/profile/profile-repository";
 import { readSuggestionContent } from "@repo/api/domains/profile/suggestions/propose-suggestion";
 
+import { loadProfileSource } from "./generation/load-profile-source";
 import { AdaptationService } from "./adaptation/adaptation-service";
 import type { CoverageReviewDraft } from "./coverage-review/coverage-review";
 import { LibraryService } from "./library/library-service";
@@ -62,6 +65,15 @@ import { defaultGenerationSettings } from "./schemas/generation-settings";
 import type { ResumeContent } from "./schemas/resume-content";
 import { WritingService } from "./writing/writing-service";
 
+// The real suggestion, which a test can make fail once.
+vi.mock(
+  "@repo/api/domains/profile/suggestions/suggest-line",
+  async (importOriginal) => {
+    const original = await importOriginal<typeof SuggestLineModule>();
+    return { ...original, suggestLine: vi.fn(original.suggestLine) };
+  }
+);
+
 vi.mock("@repo/common/env/web.env", () => ({
   env: { ENCRYPTION_MASTER_KEY: `v1:${randomBytes(32).toString("base64")}` },
 }));
@@ -78,6 +90,7 @@ const profileMarkdown = (
     competencies?: string[];
     languages?: string[];
     rules?: string[];
+    direction?: string;
   } = {}
 ) => `# Profile
 
@@ -85,7 +98,7 @@ const profileMarkdown = (
 
 - Professional name: Ada Lovelace
 - Platform engineer and tech lead.
-
+${extra.direction ? `- Career direction (what I look for): ${extra.direction}\n` : ""}
 ## Contact (only what may appear on a resume)
 
 - Professional email: ada@example.com
@@ -1285,6 +1298,53 @@ describe("resume generation and snapshots", () => {
     ).toEqual({ sent: [] });
   });
 
+  it("marks an instruction sent only once its suggestion exists, so a failed send can be retried", async () => {
+    const ctx = await setup({
+      markdown: `${profileMarkdown()}\n## Addenda (details remembered later)\n`,
+    });
+    const instructions = new InstructionsService(
+      ctx.db,
+      new TasksService(ctx.db, ctx.trigger)
+    );
+    const [drafted] = await new InstructionsRepository(ctx.db).insertPoints([
+      {
+        profileId: ctx.profile.id,
+        openingId: ctx.opening.id,
+        source: "written",
+        sequence: 1,
+        encryptedText: ctx.cipher.encrypt("I speak at meetups"),
+        status: "draft",
+        positionId: null,
+      },
+    ]);
+    const confirm = () =>
+      instructions.confirm({
+        userId: ctx.user.id,
+        openingId: ctx.opening.id,
+        confirmedLockedFactOverrideIds: [],
+        sentToProfileInstructionPointIds: [drafted.id],
+      });
+    vi.mocked(suggestLine).mockRejectedValueOnce(new Error("boom"));
+    await expect(confirm()).rejects.toThrow("boom");
+    const afterFailure = await instructions.get({
+      userId: ctx.user.id,
+      openingId: ctx.opening.id,
+    });
+    expect(
+      afterFailure.points.map((row) => [row.status, row.sentToProfile])
+    ).toEqual([["kept", false]]);
+    const { sent } = await confirm();
+    expect(sent.map((row) => row.instructionPointId)).toEqual([drafted.id]);
+    expect(
+      (
+        await instructions.get({
+          userId: ctx.user.id,
+          openingId: ctx.opening.id,
+        })
+      ).points.map((row) => row.sentToProfile)
+    ).toEqual([true]);
+  });
+
   it("splits instructions into points that stay in the application, overrides apply", async () => {
     const ctx = await setup();
     const instructions = new InstructionsService(
@@ -2304,6 +2364,9 @@ describe("resume generation and snapshots", () => {
       motivation_point_ids: [point.id],
     });
 
+    const deploy = (await ctx.readCareer()).evidence.find((row) =>
+      row.text.includes("Cut deploy time by 40%")
+    )!;
     const { generationId } = await letters.generate({
       userId: ctx.user.id,
       openingId: ctx.opening.id,
@@ -2311,6 +2374,7 @@ describe("resume generation and snapshots", () => {
       tone: "warm",
       writingLevel: "standard",
       resumeVersionId: resumeVersion.id,
+      storyLineId: deploy.id,
     });
     const fake = await runLetter(generationId, [
       // A claim with no source: refused, then fixed on the second round.
@@ -2419,7 +2483,7 @@ describe("resume generation and snapshots", () => {
       userId: ctx.user.id,
       versionId: letter.id,
     });
-    await runLetter(updated.generationId, [
+    const updateFake = await runLetter(updated.generationId, [
       {
         greeting: "Dear Hooli team,",
         paragraphs: [
@@ -2433,6 +2497,10 @@ describe("resume generation and snapshots", () => {
         closing: "Sincerely,",
       },
     ]);
+    // The update keeps telling the story the letter was written around.
+    expect(
+      JSON.stringify(updateFake.generateObject.mock.calls[0][0])
+    ).toContain(`\\"story\\":{\\"id\\":\\"${deploy.id}\\"`);
     const { proposal } = await letterDocument();
     expect(
       proposal?.lines.map((line) => ({
@@ -3175,6 +3243,132 @@ describe("resume generation and snapshots", () => {
     ]);
     // The AI review isn't run again after an edit.
     expect(after.coverage).toMatchObject({ current: false });
+  });
+
+  it("lets a paragraph cite the career direction, and sends the instruction its review speaks of to the profile", async () => {
+    const ctx = await setup({ markdown: null });
+    await ctx.publishProfile(
+      profileMarkdown({ direction: "Platform work with 3 teams at scale." })
+    );
+    const tasks = new TasksService(ctx.db, ctx.trigger);
+    const letters = new LetterService(ctx.db, tasks);
+    const career = await ctx.readCareer();
+    const positionId = career.positions[0].id;
+    const direction = (
+      await loadProfileSource({
+        db: ctx.db,
+        cipher: ctx.cipher,
+        profileId: ctx.profile.id,
+      })
+    )?.careerDirection[0];
+    expect(direction?.text).toBe("Platform work with 3 teams at scale.");
+    const [led, mentored] = await new InstructionsRepository(
+      ctx.db
+    ).insertPoints(
+      ["I led 8 engineers at Globex.", "I mentored 4 juniors at Globex."].map(
+        (text, index) => ({
+          profileId: ctx.profile.id,
+          openingId: ctx.opening.id,
+          source: "written" as const,
+          sequence: index + 1,
+          encryptedText: ctx.cipher.encrypt(text),
+          status: "kept" as const,
+          positionId,
+          confirmedAt: new Date(),
+        })
+      )
+    );
+    const { generationId } = await letters.generate({
+      userId: ctx.user.id,
+      openingId: ctx.opening.id,
+      language: "en-US",
+      tone: "warm",
+      writingLevel: "standard",
+      resumeVersionId: null,
+    });
+    const cite = (
+      text: string,
+      ids: { evidence_ids?: string[]; instruction_ids?: string[] }
+    ) => ({
+      text,
+      evidence_ids: [],
+      company_fact_ids: [],
+      motivation_point_ids: [],
+      instruction_ids: [],
+      ...ids,
+    });
+    const aim = cite("I want platform work with 3 teams at scale.", {
+      evidence_ids: [direction!.id],
+    });
+    const people = cite("I led 8 engineers and mentored 4 juniors.", {
+      instruction_ids: [led.id, mentored.id],
+    });
+    const filter = await loadSensitiveFilter({
+      db: ctx.db,
+      cipher: ctx.cipher,
+      profileId: ctx.profile.id,
+    });
+    const fake = fakeProviderPackage({
+      object: ({ system }) =>
+        system.startsWith("You audit")
+          ? {
+              ...emptyCoverage,
+              suggestions: [
+                {
+                  kind: "profile",
+                  line_id: reviewedLineIds(system).get(people.text),
+                  text: "The juniors mentored are not in the profile.",
+                },
+              ],
+            }
+          : {
+              greeting: "Dear Hooli team,",
+              paragraphs: [aim, people],
+              closing: "Sincerely,",
+            },
+    });
+    await runGenerateLetter({
+      db: ctx.db,
+      ai: createAiClient({
+        db: ctx.db,
+        userId: ctx.user.id,
+        funding: "credits",
+        providerPackage: fake.providerPackage,
+        sensitiveFilter: filter,
+      }),
+      cipher: ctx.cipher,
+      userId: ctx.user.id,
+      generationId,
+    });
+    // The writer is handed the career direction as a source it may cite.
+    expect(JSON.stringify(fake.generateObject.mock.calls[0][0])).toContain(
+      `\\"id\\":\\"${direction!.id}\\"`
+    );
+    const [letter] = (
+      await ctx.documents.forOpening({
+        userId: ctx.user.id,
+        openingId: ctx.opening.id,
+      })
+    ).documents.find((document) => document.kind === "cover_letter")!.versions;
+    expect((letter.content as CoverLetterContent).paragraphs).toMatchObject([
+      { text: aim.text, origin: { evidenceIds: [direction!.id] } },
+      { text: people.text },
+    ]);
+    expect(letter.coverage?.findings).toEqual([]);
+
+    // “Send to my profile” sends the instruction the suggestion speaks of.
+    const review = letter.coverage!.review!;
+    await ctx.documents.sendToProfile({
+      userId: ctx.user.id,
+      coverageReviewId: review.id,
+      lineId: review.suggestions[0].lineId!,
+    });
+    const suggested = await new ProfileService(ctx.db, tasks).listSuggestions(
+      ctx.user.id
+    );
+    expect(suggested.map((row) => row.replace)).toEqual([
+      expect.stringContaining("I mentored 4 juniors at Globex."),
+    ]);
   });
 
   it("keeps a copied resume's profile version, and a cover letter takes its resume's", async () => {

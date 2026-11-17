@@ -237,8 +237,7 @@ export const openingsRouter = createTRPCRouter({
         answer: z.string().trim().min(1).max(4000).optional(),
         lacks: z.boolean().default(false),
         // With `lacks`: the position whose “what I did not do” gets it;
-        // without one, the position the fit check ties it to, else Known
-        // gaps.
+        // without one, Known gaps.
         positionId: z.uuid().optional(),
       })
     )

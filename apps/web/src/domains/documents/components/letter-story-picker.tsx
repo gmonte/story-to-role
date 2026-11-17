@@ -71,7 +71,13 @@ export function LetterStoryPicker({
                 )}
               </span>
             )}
-            {story.fits.length > 0 && (
+            {story.fits.length === 0 ? (
+              <span className="text-muted-foreground text-xs">
+                {t.formatMessage({
+                  defaultMessage: "Close to what the opening asks for.",
+                })}
+              </span>
+            ) : (
               <span className="flex flex-wrap items-center gap-1">
                 <span className="text-muted-foreground text-xs">
                   {t.formatMessage({ defaultMessage: "Fits:" })}

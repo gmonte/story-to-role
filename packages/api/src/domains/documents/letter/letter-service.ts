@@ -279,6 +279,10 @@ export class LetterService {
         // What the letter was written under, whatever was published since.
         profileVersionId: latest.profileVersionId ?? published.profileVersionId,
         settings: await writtenSettings(repository, version),
+        // The story the letter was written around stays the one told.
+        storyLineId:
+          (await repository.latestWrittenGeneration(version.id))?.storyLineId ??
+          null,
         reviewDepth: "quick",
         writingLevel: "standard",
         tone: application?.tone ?? "your_style",

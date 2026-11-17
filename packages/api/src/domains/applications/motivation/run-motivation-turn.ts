@@ -2,6 +2,7 @@ import type { AiClient } from "@repo/api/domains/ai/ai-client";
 import { checkTopic } from "@repo/api/domains/ai/topic-gate";
 import { CareerRepository } from "@repo/api/domains/career/career-repository";
 import type { UserCipher } from "@repo/api/domains/encryption/user-cipher";
+import { loadSensitiveFilter } from "@repo/api/domains/evidence/sensitive/load-sensitive-filter";
 import { loadProfileSource } from "@repo/api/domains/documents/generation/load-profile-source";
 import { findQuote } from "@repo/api/utils/text/verify-quote";
 import { OpeningsRepository } from "@repo/api/domains/openings/openings-repository";
@@ -125,11 +126,17 @@ export async function runMotivationTurn(deps: {
       )
         .filter((fact) => fact.approvedAt)
         .map((fact) => cipher.decrypt(fact.encryptedText));
-      // What the profile already says the user looks for next.
+      // What the profile already says the user looks for next, without
+      // what its communication rules say must never appear.
+      const filter = await loadSensitiveFilter({
+        db,
+        cipher,
+        profileId: profile.id,
+      });
       const goals = (
         (await loadProfileSource({ db, cipher, profileId: profile.id }))
           ?.careerDirection ?? []
-      ).map((line) => line.text);
+      ).map((line) => filter.apply(line.text));
       const { object } = await ai.generateObject({
         purpose: "motivation_question",
         role: "writing",

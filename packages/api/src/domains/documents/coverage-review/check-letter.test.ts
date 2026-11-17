@@ -137,6 +137,27 @@ describe("the cover letter's code checks", () => {
     ]);
   });
 
+  it("backs a paragraph's figures by what it cites; a hand-written one by any measured line", () => {
+    const cited = (
+      id: string,
+      text: string,
+      evidenceIds: string[]
+    ): CoverLetterContent => letter([{ id, text, evidenceIds }]);
+    // E2 shows no 40%: citing only it, the figure is not backed.
+    expect(check(cited("a", "I cut deploy time by 40%.", [E2]))).toEqual([
+      ["figure", "a"],
+    ]);
+    expect(check(cited("a", "I cut deploy time by 40%.", [E1]))).toEqual([]);
+    // Written by hand: no citations, any measured profile line backs it.
+    const manual = letter([{ id: "a", text: "x", evidenceIds: [] }]);
+    manual.paragraphs[0] = {
+      id: "a",
+      text: "I cut deploy time by 40%.",
+      origin: { kind: "manual" },
+    };
+    expect(check(manual)).toEqual([]);
+  });
+
   it("blocks forbidden terms and what a position says the person did not do", () => {
     expect(
       check(

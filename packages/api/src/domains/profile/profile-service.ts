@@ -510,13 +510,46 @@ export class ProfileService {
     date: string;
     language: ProfileLanguage;
   }) {
+    await this.addPreferenceLine({
+      userId: input.userId,
+      language: input.language,
+      entry: {
+        section: "excludedCompanies",
+        company: input.company,
+        date: input.date,
+      },
+    });
+  }
+
+  /**
+   * Adds a discard rule to the job preferences (tracker spec: a decline
+   * reason "can become a rule in the job preferences"): the same direct
+   * path as excludeCompany, with no suggestion in between. The rule is one
+   * line, so line breaks in the text become spaces.
+   */
+  async addDiscardRule(input: {
+    userId: string;
+    text: string;
+    language: ProfileLanguage;
+  }) {
+    const text = input.text.replace(/\s+/g, " ").trim();
+    if (!text) throw new TRPCError({ code: "BAD_REQUEST" });
+    await this.addPreferenceLine({
+      userId: input.userId,
+      language: input.language,
+      entry: { section: "discardRules", text },
+    });
+    return { text };
+  }
+
+  private async addPreferenceLine(input: {
+    userId: string;
+    language: ProfileLanguage;
+    entry: Parameters<typeof addPreference>[1];
+  }) {
+    const { entry } = input;
     const kind: ProfileDocumentKind = "preferences";
     const cipher = await getUserCipher(this.db, input.userId);
-    const entry = {
-      section: "excludedCompanies" as const,
-      company: input.company,
-      date: input.date,
-    };
     await this.db.transaction(async (tx) => {
       const repository = new ProfileRepository(tx);
       const existing = await repository.findDocumentForUpdate(
@@ -557,7 +590,7 @@ export class ProfileService {
           entry
         )
       );
-      // Already excluded in what screening reads.
+      // Already there in what screening reads.
       if (markdown === currentMarkdown) return;
       await publishVersion(repository, document.id, {
         encryptedMarkdown: cipher.encrypt(markdown),

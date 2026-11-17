@@ -11,15 +11,26 @@ import {
   type UserCipher,
 } from "@repo/api/domains/encryption/user-cipher";
 import { OpeningsRepository } from "@repo/api/domains/openings/openings-repository";
+import { OpeningsService } from "@repo/api/domains/openings/openings-service";
+import { ProfileService } from "@repo/api/domains/profile/profile-service";
+import type { ProfileLanguage } from "@repo/api/domains/profile/truth/sections";
 import type { DbClient } from "@repo/api/tools/db-client";
 
-import { type ApplicationStatus, closedStatuses } from "../schemas/application";
+import {
+  type ApplicationSource,
+  type ApplicationStatus,
+  type ApplicationType,
+  closedStatuses,
+} from "../schemas/application";
 import type {
   ApplicationDetail,
+  MetricsPeriod,
   Reminder,
+  ResumeVersionRef,
   TrackedApplication,
   TrackerSettings,
 } from "../schemas/tracker";
+import { computeMetrics, type MetricsRow } from "./metrics";
 import { computeReminders } from "./reminders";
 import { TrackerRepository } from "./tracker-repository";
 
@@ -66,6 +77,28 @@ const defaultSettings: TrackerSettings = {
 
 const open = (cipher: UserCipher, value: string | null) =>
   value ? cipher.decrypt(value) : null;
+
+type VersionRow = Awaited<
+  ReturnType<TrackerRepository["resumeVersions"]>
+>[number];
+
+/** A version's name: its label, else its document's focus, else its opening. */
+function versionRef(cipher: UserCipher, row: VersionRow): ResumeVersionRef {
+  const company = open(cipher, row.encryptedCompany);
+  const title = open(cipher, row.encryptedTitle);
+  return {
+    versionId: row.versionId,
+    language: row.language,
+    label:
+      open(cipher, row.encryptedLabel) ??
+      open(cipher, row.encryptedFocus) ??
+      ([company, title].filter(Boolean).join(" - ") || null),
+  };
+}
+
+/** Free text from a form: empty clears it. */
+const seal = (cipher: UserCipher, value: string | null) =>
+  value?.trim() ? cipher.encrypt(value.trim()) : null;
 
 /**
  * The tracker (tracker spec): every application from its first document to
@@ -118,8 +151,23 @@ export class TrackerService {
       const next = events
         .filter((event) => event.kind === "note" && event.occurredAt > now)
         .at(-1);
+      const submissions = await repository.listSubmissions(row.application.id);
+      const sentResume = submissions.find((s) => s.documentKind === "resume");
+      const [resume] = await repository.resumeVersions(
+        profile.id,
+        sentResume
+          ? [sentResume.versionId]
+          : row.application.pickedResumeVersionId
+            ? [row.application.pickedResumeVersionId]
+            : []
+      );
       return {
         ...this.summary(cipher, row),
+        sourceDetail: open(cipher, row.application.encryptedSourceDetail),
+        notes: open(cipher, row.application.encryptedNotes),
+        declineReason: open(cipher, row.application.encryptedDeclineReason),
+        resumeSent: resume ? versionRef(cipher, resume) : null,
+        resumeSentAutomatically: Boolean(sentResume),
         nextEvent: next
           ? {
               occurredAt: next.occurredAt,
@@ -134,12 +182,10 @@ export class TrackerService {
           fromStatus: event.fromStatus,
           toStatus: event.toStatus,
         })),
-        submissions: (await repository.listSubmissions(row.application.id)).map(
-          ({ encryptedLabel, ...submission }) => ({
-            ...submission,
-            label: open(cipher, encryptedLabel),
-          })
-        ),
+        submissions: submissions.map(({ encryptedLabel, ...submission }) => ({
+          ...submission,
+          label: open(cipher, encryptedLabel),
+        })),
       };
     });
   }
@@ -375,6 +421,157 @@ export class TrackerService {
     });
   }
 
+  /**
+   * The method's fields on an application (tracker spec): `undefined` keeps
+   * a field, `null` clears it. The resume sent is only picked by hand for an
+   * external application; one sent from StoryToRole records itself.
+   */
+  async updateDetails(input: {
+    userId: string;
+    applicationId: string;
+    source?: ApplicationSource | null;
+    sourceDetail?: string | null;
+    applicationType?: ApplicationType | null;
+    resumeVersionId?: string | null;
+    nextStep?: string | null;
+    notes?: string | null;
+    declineReason?: string | null;
+  }) {
+    const profile = await this.requireProfile(input.userId);
+    await this.db.transaction(async (tx) => {
+      const repository = new TrackerRepository(tx);
+      const row = await this.requireApplication(tx, profile.id, input);
+      const cipher = await getUserCipher(tx, input.userId);
+      if (input.resumeVersionId) {
+        const owned = await repository.resumeVersions(profile.id, [
+          input.resumeVersionId,
+        ]);
+        if (!row.application.external || owned.length === 0) {
+          throw new TRPCError({ code: "BAD_REQUEST" });
+        }
+      }
+      const text = (value: string | null | undefined) =>
+        value === undefined ? undefined : seal(cipher, value);
+      const changes = {
+        source: input.source,
+        encryptedSourceDetail: text(input.sourceDetail),
+        applicationType: input.applicationType,
+        pickedResumeVersionId: input.resumeVersionId,
+        encryptedNextStep: text(input.nextStep),
+        encryptedNotes: text(input.notes),
+        encryptedDeclineReason: text(input.declineReason),
+      };
+      await repository.updateApplication(
+        row.application.id,
+        Object.fromEntries(
+          Object.entries(changes).filter(([, value]) => value !== undefined)
+        )
+      );
+    });
+  }
+
+  /** The resume versions an external application can say it was sent with. */
+  async resumeVersionOptions(userId: string): Promise<ResumeVersionRef[]> {
+    const profile = await this.findProfile(userId);
+    if (!profile) return [];
+    const cipher = await getUserCipher(this.db, userId);
+    const rows = await new TrackerRepository(this.db).resumeVersions(
+      profile.id
+    );
+    return rows.map((row) => versionRef(cipher, row));
+  }
+
+  /**
+   * The metrics over the applications sent in a period (tracker spec,
+   * "Metrics"): from structured fields only, never free text or an AI.
+   */
+  async metrics(input: { userId: string; period: MetricsPeriod; now?: Date }) {
+    const now = input.now ?? new Date();
+    const profile = await this.findProfile(input.userId);
+    const empty = computeMetrics({ rows: [], period: input.period, now });
+    if (!profile) return empty;
+    const repository = new TrackerRepository(this.db);
+    const data = await repository.metricsInputs(profile.id);
+    if (data.applications.length === 0) return empty;
+    const cipher = await getUserCipher(this.db, input.userId);
+    const versionIds = [
+      ...new Set([
+        ...data.submissions.map((s) => s.versionId),
+        ...data.applications.flatMap((a) =>
+          a.pickedResumeVersionId ? [a.pickedResumeVersionId] : []
+        ),
+      ]),
+    ];
+    const versions = new Map(
+      (await repository.resumeVersions(profile.id, versionIds)).map((row) => [
+        row.versionId,
+        versionRef(cipher, row),
+      ])
+    );
+    const rows: MetricsRow[] = data.applications.map((application) => {
+      const sent = data.submissions
+        .filter((s) => s.applicationId === application.id)
+        .map((s) => s.versionId);
+      const resumeIds =
+        sent.length > 0
+          ? sent
+          : application.pickedResumeVersionId
+            ? [application.pickedResumeVersionId]
+            : [];
+      return {
+        appliedAt: application.appliedAt!,
+        source: application.source,
+        status: application.status,
+        changes: data.changes.filter((c) => c.applicationId === application.id),
+        resumes: resumeIds.flatMap((id) => versions.get(id) ?? []),
+        // Rows come newest first: the first is the latest check.
+        fitBand:
+          data.bands.find((b) => b.openingId === application.openingId)?.band ??
+          null,
+      };
+    });
+    return computeMetrics({ rows, period: input.period, now });
+  }
+
+  /**
+   * The user's decline reason becomes a discard rule in the job
+   * preferences, published at once (only that line), like excluding a
+   * company.
+   */
+  async addDeclineReasonAsRule(input: {
+    userId: string;
+    applicationId: string;
+    language: ProfileLanguage;
+  }) {
+    const profile = await this.requireProfile(input.userId);
+    const row = await this.requireApplication(this.db, profile.id, input);
+    const cipher = await getUserCipher(this.db, input.userId);
+    const reason = open(cipher, row.application.encryptedDeclineReason);
+    if (!reason) throw new TRPCError({ code: "PRECONDITION_FAILED" });
+    return new ProfileService(this.db).addDiscardRule({
+      userId: input.userId,
+      text: reason,
+      language: input.language,
+    });
+  }
+
+  /** Excludes the application's company in the job preferences. */
+  async excludeCompany(input: {
+    userId: string;
+    applicationId: string;
+    date: string;
+    language: ProfileLanguage;
+  }) {
+    const profile = await this.requireProfile(input.userId);
+    const row = await this.requireApplication(this.db, profile.id, input);
+    return new OpeningsService(this.db).excludeCompany({
+      userId: input.userId,
+      openingId: row.application.openingId,
+      date: input.date,
+      language: input.language,
+    });
+  }
+
   async reminders(userId: string, now = new Date()): Promise<Reminder[]> {
     const profile = await this.findProfile(userId);
     if (!profile) return [];
@@ -494,6 +691,9 @@ export class TrackerService {
       statusChangedAt: row.application.statusChangedAt,
       lastActivityAt: row.application.lastActivityAt,
       appliedAt: row.application.appliedAt,
+      source: row.application.source,
+      applicationType: row.application.applicationType,
+      nextStep: open(cipher, row.application.encryptedNextStep),
       nextEvent: null,
     };
   }

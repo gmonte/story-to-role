@@ -1,11 +1,24 @@
-import { and, asc, desc, eq, gt, inArray, lt, sql } from "drizzle-orm";
+import {
+  and,
+  asc,
+  desc,
+  eq,
+  gt,
+  inArray,
+  isNotNull,
+  lt,
+  sql,
+} from "drizzle-orm";
 
 import {
   documentsTable,
   documentSnapshotsTable,
   documentVersionsTable,
 } from "@repo/api/domains/documents/db/documents-tables";
-import { openingsTable } from "@repo/api/domains/openings/db/openings-tables";
+import {
+  fitChecksTable,
+  openingsTable,
+} from "@repo/api/domains/openings/db/openings-tables";
 import type { DbClient } from "@repo/api/tools/db-client";
 
 import { applicationsTable } from "../db/applications-tables";
@@ -135,6 +148,117 @@ export class TrackerRepository {
       .from(applicationEventsTable)
       .where(eq(applicationEventsTable.applicationId, applicationId))
       .orderBy(desc(applicationEventsTable.occurredAt));
+  }
+
+  /**
+   * The profile's resume versions (optionally only some), each with what
+   * names it when it has no label: its document's focus, or the opening of
+   * its application.
+   */
+  resumeVersions(profileId: string, versionIds?: string[]) {
+    if (versionIds?.length === 0) return Promise.resolve([]);
+    return this.tx
+      .select({
+        versionId: documentVersionsTable.id,
+        language: documentVersionsTable.language,
+        encryptedLabel: documentVersionsTable.encryptedLabel,
+        encryptedFocus: documentsTable.encryptedFocus,
+        encryptedCompany: openingsTable.encryptedCompany,
+        encryptedTitle: openingsTable.encryptedTitle,
+      })
+      .from(documentVersionsTable)
+      .innerJoin(
+        documentsTable,
+        eq(documentsTable.id, documentVersionsTable.documentId)
+      )
+      .leftJoin(
+        applicationsTable,
+        eq(applicationsTable.id, documentsTable.applicationId)
+      )
+      .leftJoin(
+        openingsTable,
+        eq(openingsTable.id, applicationsTable.openingId)
+      )
+      .where(
+        and(
+          eq(documentsTable.profileId, profileId),
+          eq(documentsTable.kind, "resume"),
+          versionIds ? inArray(documentVersionsTable.id, versionIds) : undefined
+        )
+      )
+      .orderBy(desc(documentVersionsTable.createdAt));
+  }
+
+  /** What the metrics read: sent applications and their structured facts. */
+  async metricsInputs(profileId: string) {
+    const applications = await this.tx
+      .select({
+        id: applicationsTable.id,
+        openingId: applicationsTable.openingId,
+        status: applicationsTable.status,
+        source: applicationsTable.source,
+        appliedAt: applicationsTable.appliedAt,
+        pickedResumeVersionId: applicationsTable.pickedResumeVersionId,
+      })
+      .from(applicationsTable)
+      .where(
+        and(
+          eq(applicationsTable.profileId, profileId),
+          isNotNull(applicationsTable.appliedAt)
+        )
+      );
+    const ids = applications.map((a) => a.id);
+    if (ids.length === 0) {
+      return { applications, changes: [], submissions: [], bands: [] };
+    }
+    const changes = await this.tx
+      .select({
+        applicationId: applicationEventsTable.applicationId,
+        fromStatus: applicationEventsTable.fromStatus,
+        toStatus: applicationEventsTable.toStatus,
+        occurredAt: applicationEventsTable.occurredAt,
+      })
+      .from(applicationEventsTable)
+      .where(
+        and(
+          inArray(applicationEventsTable.applicationId, ids),
+          eq(applicationEventsTable.kind, "status_change")
+        )
+      );
+    const submissions = await this.tx
+      .select({
+        applicationId: applicationSubmissionsTable.applicationId,
+        versionId: applicationSubmissionsTable.versionId,
+      })
+      .from(applicationSubmissionsTable)
+      .innerJoin(
+        documentVersionsTable,
+        eq(documentVersionsTable.id, applicationSubmissionsTable.versionId)
+      )
+      .innerJoin(
+        documentsTable,
+        eq(documentsTable.id, documentVersionsTable.documentId)
+      )
+      .where(
+        and(
+          inArray(applicationSubmissionsTable.applicationId, ids),
+          eq(documentsTable.kind, "resume")
+        )
+      );
+    const bands = await this.tx
+      .select({
+        openingId: fitChecksTable.openingId,
+        band: fitChecksTable.band,
+      })
+      .from(fitChecksTable)
+      .where(
+        inArray(
+          fitChecksTable.openingId,
+          applications.map((a) => a.openingId)
+        )
+      )
+      .orderBy(desc(fitChecksTable.createdAt));
+    return { applications, changes, submissions, bands };
   }
 
   /** The status a "No response" closed: what an event reopens it to. */

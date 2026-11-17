@@ -28,6 +28,7 @@ import { useRefreshTracker, useTracker } from "../hooks/use-tracker";
 import { useTrackerLabels } from "../hooks/use-tracker-labels";
 import { ExternalApplicationDialog } from "./external-application-dialog";
 import { ReminderList } from "./reminder-list";
+import { TrackerMetricsPanel } from "./tracker-metrics-panel";
 
 const openStatuses = applicationStatusSchema.options.filter(
   (status) => !closedStatuses.includes(status)
@@ -73,6 +74,8 @@ export function TrackerView() {
       </div>
 
       <ReminderList />
+
+      <TrackerMetricsPanel />
 
       {tracker.data && applications.length === 0 && (
         <p className="text-muted-foreground rounded-lg border border-dashed p-6 text-center">
@@ -137,23 +140,28 @@ function ApplicationRow({ application }: { application: TrackedApplication }) {
                     }),
                   }
                 )
-              : application.appliedAt
+              : application.nextStep
                 ? t.formatMessage(
-                    { defaultMessage: "Applied on {date}" },
-                    {
-                      date: t.formatDate(application.appliedAt, {
-                        dateStyle: "medium",
-                      }),
-                    }
+                    { defaultMessage: "Next step: {step}" },
+                    { step: application.nextStep }
                   )
-                : t.formatMessage(
-                    { defaultMessage: "Since {date}" },
-                    {
-                      date: t.formatDate(application.statusChangedAt, {
-                        dateStyle: "medium",
-                      }),
-                    }
-                  )}
+                : application.appliedAt
+                  ? t.formatMessage(
+                      { defaultMessage: "Applied on {date}" },
+                      {
+                        date: t.formatDate(application.appliedAt, {
+                          dateStyle: "medium",
+                        }),
+                      }
+                    )
+                  : t.formatMessage(
+                      { defaultMessage: "Since {date}" },
+                      {
+                        date: t.formatDate(application.statusChangedAt, {
+                          dateStyle: "medium",
+                        }),
+                      }
+                    )}
           </span>
         </span>
         <span className="flex gap-1">

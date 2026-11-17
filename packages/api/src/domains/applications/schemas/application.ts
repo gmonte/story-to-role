@@ -26,3 +26,17 @@ export const closedStatuses: ApplicationStatus[] = [
 
 /** Waiting on the company: what "No response" closes after a while. */
 export const awaitingStatuses: ApplicationStatus[] = ["applied", "in_process"];
+
+/** Where the opening was found (tracker spec, "What each application records"). */
+export const applicationSourceSchema = z.enum([
+  "linkedin",
+  "company_site",
+  "referral",
+  "job_board",
+  "other",
+]);
+export type ApplicationSource = z.infer<typeof applicationSourceSchema>;
+
+/** Simplified (one-click on a job board) or external (the company's own form). */
+export const applicationTypeSchema = z.enum(["simplified", "external"]);
+export type ApplicationType = z.infer<typeof applicationTypeSchema>;

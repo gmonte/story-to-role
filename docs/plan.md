@@ -161,8 +161,16 @@ Acceptance:
 
 - The method's fields (source, application type, resume version sent, next step, the user's decline reason, which can become a preference rule) and its metrics (response rate per resume version and per source, time to first response, high-fit openings that reached an interview); notes and next steps (free text, where names and contacts end up) are encrypted and never reach a prompt: anything the AI reads of the tracker is its structured fields.
 
+Notes (decisions the spec left open):
+- Response: the company responded when the application ever reached In process, Offer, Hired or Rejected (a rejection is an answer); Withdrawn and No response are not responses. Interview: reached In process or beyond (In process, Offer, Hired), the closest structured signal since In process covers screening, interview or test. Time to first response is the median (not the average the spec's older wording says) of days from applying to the first such status change on the timeline; an external application created already past Applied has no dated response and stays out of the median. Defined in `tracker/metrics.ts`.
+- Periods filter by the day applied: last 30 days, last 90 days, all. High-fit uses the band of the opening's latest fit check. Metrics read only structured fields; nothing calls an AI.
+- Resume sent: from the submissions when sent from StoryToRole; for an external application, picked by hand among the user's resume versions (no foreign key, a deleted version stops resolving). Applications with no resume recorded are grouped as “Not recorded”.
+- Source is a short list plus free text (shown for “Other”); the free text, notes, next step and decline reason are encrypted, and a test fails if any file outside the tracker reads them. The opening's own notes (unsolicited openings) are a different field and unchanged.
+- A decline reason becomes a discard rule, and the company is excluded from the tracker, by the same direct path as excluding a company from an opening: the line is added to the preferences draft and published alone (`ProfileService.addDiscardRule` / `excludeCompany`). The reason's line breaks become spaces; a rule already present is not added twice.
+- The next step also shows with the follow-up and “No response” soon reminders.
+
 Acceptance:
-- [ ] Sending a document from StoryToRole records its version on the application; the metrics count it.
+- [x] Sending a document from StoryToRole records its version on the application; the metrics count it.
 
 ### P10: LinkedIn
 

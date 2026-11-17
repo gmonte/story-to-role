@@ -7,7 +7,11 @@ import { openingsTable } from "@repo/api/domains/openings/db/openings-tables";
 import type { Tone } from "@repo/api/domains/openings/schemas/opening";
 import { createTable } from "@repo/api/utils/db/create-table";
 
-import type { ApplicationStatus } from "../schemas/application";
+import type {
+  ApplicationSource,
+  ApplicationStatus,
+  ApplicationType,
+} from "../schemas/application";
 
 /**
  * The user's pursuit of one opening: it starts when the opening's first
@@ -50,6 +54,20 @@ export const applicationsTable = createTable(
       .default(sql`CURRENT_TIMESTAMP`)
       .notNull(),
     appliedAt: d.timestamp({ withTimezone: true }),
+    // The method's tracker fields (tracker spec). The structured ones may
+    // reach a prompt; the free text (all encrypted) never does.
+    source: d.text().$type<ApplicationSource>(),
+    encryptedSourceDetail: d.text(),
+    applicationType: d.text().$type<ApplicationType>(),
+    // The resume the user says an external application was sent with: a
+    // resume version picked by hand. Applications sent from StoryToRole
+    // read it from their submissions instead.
+    // No foreign key (documents' tables already point here); a deleted
+    // version simply stops resolving.
+    pickedResumeVersionId: d.uuid(),
+    encryptedNextStep: d.text(),
+    encryptedNotes: d.text(),
+    encryptedDeclineReason: d.text(),
     // Sections forced in or out for this application only.
     sectionsForcedIn: d
       .text()

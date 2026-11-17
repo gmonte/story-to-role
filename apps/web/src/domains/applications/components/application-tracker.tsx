@@ -43,6 +43,7 @@ import { useOpening } from "~/domains/openings/hooks/use-opening";
 import { useRefreshTracker } from "../hooks/use-tracker";
 import { useTrackerLabels } from "../hooks/use-tracker-labels";
 import { dayToDate, today } from "../utils/dates";
+import { ApplicationDetails } from "./application-details";
 
 /**
  * The opening's application in the tracker (tracker spec): its status,
@@ -156,6 +157,8 @@ function TrackerBlock({
           ))}
         </div>
       )}
+
+      <ApplicationDetails key={detail.id} detail={detail} />
 
       <AddEventForm applicationId={detail.id} />
 

@@ -2074,7 +2074,7 @@ describe("resume generation and snapshots", () => {
     // Written under the default settings: two pages at most.
     expect(reference.maxPages).toBe(2);
 
-    // Thorough or not, an adjustment is one call and one review; and it
+    // Thorough or not, an adjustment is one call and no review; and it
     // is in the reference's language, whatever language is asked for.
     const { generationId } = await ctx.documents.generateResume({
       ...ctx.request,
@@ -2137,7 +2137,7 @@ describe("resume generation and snapshots", () => {
     });
     expect(
       fake.generateObject.mock.calls.map(([call]) => call.system.slice(0, 10))
-    ).toEqual(["You adjust", "You review"]);
+    ).toEqual(["You adjust"]);
     expect(fake.generateObject.mock.calls[0][0].system).toContain(
       `bullet [${deployLine.id}] Cut deploy time by 40% with Kubernetes.`
     );
@@ -2172,14 +2172,363 @@ describe("resume generation and snapshots", () => {
       lines: ["Team leadership first", "Node.js before Kubernetes"],
       adjusted: true,
     });
-    const rounds = await new DocumentsRepository(ctx.db).listReviewRounds(
-      generationId
-    );
-    expect(rounds.map((r) => [r.round, r.rating, r.kept])).toEqual([
-      [0, 6, true],
-    ]);
+    // Nothing was judged, so no round is stored and none is the best.
+    const repository = new DocumentsRepository(ctx.db);
+    expect(await repository.listReviewRounds(generationId)).toEqual([]);
+    expect(await repository.findGeneration(generationId)).toMatchObject({
+      status: "completed",
+      bestRound: null,
+    });
     // The version it started from is untouched.
     expect((await versions())[0].content).toEqual(reference.content);
+  });
+
+  it("re-checks what an adjustment keeps against the profile frozen now", async () => {
+    const ctx = await setup();
+    const [deploy, team] = ctx.evidence;
+    await ctx.generate("quick", {
+      drafts: [
+        {
+          ...ctx.draft([
+            {
+              text: "Cut deploy time by 40% with Kubernetes.",
+              evidence_ids: [deploy.id],
+            },
+            { text: "Led a team of 5 engineers.", evidence_ids: [team.id] },
+          ]),
+          skills: [
+            {
+              label: "Core",
+              items: ["Kubernetes", "Terraform"],
+              evidence_ids: [deploy.id],
+            },
+          ],
+        },
+      ],
+      ratings: [9],
+    });
+    const versions = async () =>
+      (
+        await ctx.documents.forOpening({
+          userId: ctx.user.id,
+          openingId: ctx.opening.id,
+        })
+      ).documents[0].versions;
+    const [reference] = await versions();
+    const before = experienceOf(reference.content);
+    const [deployLine, teamLine] = before.lines;
+    expect(resumeOf(reference.content).sections[0]).toMatchObject({
+      kind: "summary",
+      line: { text: "Engineer who cut deploy time by 40%." },
+    });
+
+    // Published since: the deploy figure is only estimated now, and
+    // Terraform was only studied.
+    await ctx.publishProfile(
+      profileMarkdown()
+        .replace("[measured: CI dashboard]", "[estimated]")
+        .replace(
+          "- I master: Kubernetes, Terraform",
+          "- I master: Kubernetes\n- Studied, without professional experience: Terraform"
+        )
+    );
+    const { generationId } = await ctx.documents.generateResume({
+      ...ctx.request,
+      referenceVersionId: reference.id,
+    });
+    const { fake } = await ctx.runScripted(generationId, {
+      drafts: [
+        {
+          changes: ["Team first"],
+          title_line: "Platform Engineer | Kubernetes",
+          summary: null,
+          skills: [],
+          experience: [
+            {
+              position_id: ctx.positionId,
+              relevance: null,
+              bullet_ids: [teamLine.id, deployLine.id],
+              added: [],
+            },
+          ],
+        },
+      ],
+      ratings: [],
+    });
+    // One call: the adjuster; nothing is reviewed.
+    expect(fake.generateObject).toHaveBeenCalledTimes(1);
+    expect(
+      await new DocumentsRepository(ctx.db).listReviewRounds(generationId)
+    ).toEqual([]);
+
+    const adjusted = (await versions()).find(
+      (version) => version.id !== reference.id
+    )!;
+    const { sections } = resumeOf(adjusted.content);
+    // The kept bullet with the figure, the kept summary with it, and the
+    // competency only studied no longer hold: they go.
+    expect(experienceOf(adjusted.content).lines).toEqual([teamLine]);
+    expect(sections.find((s) => s.kind === "summary")).toBeUndefined();
+    expect(sections.find((s) => s.kind === "skills")).toMatchObject({
+      groups: [{ text: "Kubernetes" }],
+    });
+    expect(JSON.stringify(adjusted.content)).not.toMatch(/40%|Terraform/);
+    // The reference keeps saying what it said.
+    expect((await versions())[0].content).toEqual(reference.content);
+  });
+
+  it("carries the profile version a snapshot's text was written from", async () => {
+    const ctx = await setup();
+    const repository = new DocumentsRepository(ctx.db);
+    const frozen = ctx.context.profileVersionId!;
+    const line = {
+      text: "Led a team of 5 engineers.",
+      evidence_ids: [ctx.evidence[1].id],
+    };
+    await ctx.generate("quick", { drafts: [ctx.draft([line])], ratings: [9] });
+    const load = async () =>
+      (
+        await ctx.documents.forOpening({
+          userId: ctx.user.id,
+          openingId: ctx.opening.id,
+        })
+      ).documents[0].versions;
+    const versionOf = async (snapshotId: string) =>
+      (await repository.findSnapshot(snapshotId))?.profileVersionId;
+    const [version] = await load();
+    const generated = version.snapshot.id;
+    // The generated snapshot holds the version the generation froze.
+    expect(await versionOf(generated)).toBe(frozen);
+
+    // An edit is of that text, so of that version.
+    await ctx.documents.saveEdit({
+      userId: ctx.user.id,
+      versionId: version.id,
+      baseSnapshotId: generated,
+      content: {
+        ...version.content,
+        header: { ...version.content.header, titleLine: "Platform Engineer" },
+      },
+    });
+    const [edited] = await load();
+    expect(edited.snapshot.id).not.toBe(generated);
+    expect(await versionOf(edited.snapshot.id)).toBe(frozen);
+
+    // The profile is republished with a corrected title, and the same
+    // version is generated again from it.
+    await ctx.publishProfile(
+      profileMarkdown().replace("Tech Lead", "Technical Lead")
+    );
+    const later = await ctx.readCareer();
+    expect(later.profileVersionId).not.toBe(frozen);
+    expect(later.positions[0].id).not.toBe(ctx.positionId);
+    const { generationId } = await ctx.documents.generateResume({
+      ...ctx.request,
+      versionId: version.id,
+    });
+    const laterTeam = ctx.lineOf("Led a team of 5 engineers", later);
+    await ctx.runScripted(generationId, {
+      drafts: [
+        {
+          ...ctx.draft([], laterTeam.id),
+          experience: [
+            {
+              position_id: later.positions[0].id,
+              context: null,
+              relevance: null,
+              bullets: [{ ...line, evidence_ids: [laterTeam.id] }],
+            },
+          ],
+        },
+      ],
+      ratings: [9],
+    });
+    const [regenerated] = await load();
+    expect(experienceOf(regenerated.content).title).toBe("Technical Lead");
+    expect(await versionOf(regenerated.snapshot.id)).toBe(
+      later.profileVersionId
+    );
+
+    // Restoring the first text brings its version back with it; an edit
+    // and a duplicate of that text inherit it, not the newer one.
+    await ctx.documents.restore({
+      userId: ctx.user.id,
+      snapshotId: generated,
+    });
+    const [restored] = await load();
+    expect(restored.snapshot.origin).toBe("restored");
+    expect(experienceOf(restored.content).title).toBe("Tech Lead");
+    expect(await versionOf(restored.snapshot.id)).toBe(frozen);
+    const { versionId: copyId } = await ctx.documents.duplicate({
+      userId: ctx.user.id,
+      versionId: version.id,
+    });
+    const copy = (await load()).find((row) => row.id === copyId)!;
+    expect(await versionOf(copy.snapshot.id)).toBe(frozen);
+
+    // Adapting that text reads its own version: its positions are the
+    // ones the content holds, whatever was generated in the document since.
+    const tasks = new TasksService(ctx.db, ctx.trigger);
+    const adapted = await new AdaptationService(ctx.db, tasks).adapt({
+      userId: ctx.user.id,
+      versionId: version.id,
+      language: "pt-BR",
+    });
+    const filter = await loadSensitiveFilter({
+      db: ctx.db,
+      cipher: ctx.cipher,
+      profileId: ctx.profile.id,
+    });
+    const [teamLine] = experienceOf(restored.content).lines;
+    const fake = fakeProviderPackage({
+      object: () => ({
+        title_line: "",
+        items: [
+          {
+            id: teamLine.id,
+            text: "Liderou uma equipe de 5 engenheiros.",
+            label: null,
+          },
+        ],
+        contexts: [],
+        title_equivalents: [],
+      }),
+    });
+    await runAdaptDocument({
+      db: ctx.db,
+      ai: createAiClient({
+        db: ctx.db,
+        userId: ctx.user.id,
+        funding: "credits",
+        providerPackage: fake.providerPackage,
+        sensitiveFilter: filter,
+      }),
+      cipher: ctx.cipher,
+      filter,
+      userId: ctx.user.id,
+      generationId: adapted.generationId,
+    });
+    const portuguese = (await load()).find((row) => row.language === "pt-BR")!;
+    expect(experienceOf(portuguese.content)).toMatchObject({
+      positionId: ctx.positionId,
+      title: "Tech Lead",
+      lines: [
+        { id: teamLine.id, text: "Liderou uma equipe de 5 engenheiros." },
+      ],
+    });
+    expect(await versionOf(portuguese.snapshot.id)).toBe(frozen);
+  });
+
+  it("keeps a copied resume's profile version, and a cover letter takes its resume's", async () => {
+    const ctx = await setup();
+    const repository = new DocumentsRepository(ctx.db);
+    const frozen = ctx.context.profileVersionId!;
+    const team = ctx.evidence[1];
+    const tasks = new TasksService(ctx.db, ctx.trigger);
+    const library = new LibraryService(ctx.db, tasks);
+    const created = await library.generateResume({
+      userId: ctx.user.id,
+      focus: "Platform",
+      language: "en-US",
+      reviewDepth: "quick",
+      writingLevel: "standard",
+      tone: "direct",
+    });
+    await ctx.runScripted(created.generationId, {
+      drafts: [
+        ctx.draft([
+          { text: "Led a team of 5 engineers.", evidence_ids: [team.id] },
+        ]),
+      ],
+      ratings: [9],
+    });
+    const [libraryVersion] = (
+      await ctx.documents.libraryDocument({
+        userId: ctx.user.id,
+        documentId: created.documentId,
+      })
+    ).versions;
+    const versionOf = async (snapshotId: string) =>
+      (await repository.findSnapshot(snapshotId))?.profileVersionId;
+    expect(await versionOf(libraryVersion.snapshot.id)).toBe(frozen);
+
+    // The profile moves on; the copy is still of the text as written.
+    await ctx.publishProfile(profileMarkdown().replace("40%", "45%"));
+    const later = await ctx.readCareer();
+    expect(later.profileVersionId).not.toBe(frozen);
+    await library.copyIntoApplication({
+      userId: ctx.user.id,
+      openingId: ctx.opening.id,
+      versionId: libraryVersion.id,
+      language: "en-US",
+    });
+    const view = () =>
+      ctx.documents.forOpening({
+        userId: ctx.user.id,
+        openingId: ctx.opening.id,
+      });
+    const [copied] = (await view()).documents[0].versions;
+    expect(copied.snapshot.origin).toBe("copied");
+    expect(await versionOf(copied.snapshot.id)).toBe(frozen);
+
+    // The letter reads the lines its resume cites from that version.
+    const letters = new LetterService(ctx.db, tasks);
+    const { generationId } = await letters.generate({
+      userId: ctx.user.id,
+      openingId: ctx.opening.id,
+      language: "en-US",
+      tone: "warm",
+      writingLevel: "standard",
+      resumeVersionId: copied.id,
+    });
+    const paragraph = (text: string, evidence_ids: string[]) => ({
+      text,
+      evidence_ids,
+      company_fact_ids: [],
+      motivation_point_ids: [],
+      career_goal_ids: [],
+    });
+    const filter = await loadSensitiveFilter({
+      db: ctx.db,
+      cipher: ctx.cipher,
+      profileId: ctx.profile.id,
+    });
+    const fake = fakeProviderPackage({
+      object: () => ({
+        greeting: "Dear Hooli team,",
+        paragraphs: [
+          paragraph("At Globex I led a team of 5 engineers.", [team.id]),
+        ],
+        closing: "Sincerely,",
+      }),
+    });
+    await runGenerateLetter({
+      db: ctx.db,
+      ai: createAiClient({
+        db: ctx.db,
+        userId: ctx.user.id,
+        funding: "credits",
+        providerPackage: fake.providerPackage,
+        sensitiveFilter: filter,
+      }),
+      cipher: ctx.cipher,
+      filter,
+      userId: ctx.user.id,
+      generationId,
+    });
+    const [letter] = (await view()).documents.find(
+      (document) => document.kind === "cover_letter"
+    )!.versions;
+    expect(letter.content).toMatchObject({
+      kind: "cover_letter",
+      paragraphs: [
+        {
+          text: "At Globex I led a team of 5 engineers.",
+          origin: { kind: "letter", evidenceIds: [team.id] },
+        },
+      ],
+    });
+    expect(await versionOf(letter.snapshot.id)).toBe(frozen);
   });
 
   it("refuses to generate before a profile is published", async () => {
@@ -2411,6 +2760,17 @@ describe("resume generation and snapshots", () => {
         settings: { resumeMaxPages: 9 },
       })
     ).rejects.toThrow();
+    // Nor settings that don't hold together: "very old" must start after
+    // "recent" ends, over the saved values too.
+    for (const settings of [
+      { veryOldYears: 3 },
+      { recentYears: 20 },
+      { recentYears: 10, veryOldYears: 10 },
+    ]) {
+      await expect(
+        ctx.documents.generateResume({ ...ctx.request, settings })
+      ).rejects.toMatchObject({ code: "BAD_REQUEST" });
+    }
   });
 
   it("keeps a position's bullets when adjusting a resume written before its title changed in the profile", async () => {

@@ -94,7 +94,7 @@ export const withheld = "[figure withheld]";
 // A number standing on its own ("30%", "1,8", "3x"), not the digits of a
 // name (EC2, B2B, S3) nor a year, which dates a fact and measures nothing.
 const standaloneNumber =
-  /(?<![\p{L}\p{N}])(?!(?:19|20)\d{2}(?![\d.,%]))\d+(?:[.,]\d+)*%?/gu;
+  /(?<![\p{L}\p{N}])(?!(?:19|20)\d{2}(?![\d%]|[.,]\d))\d+(?:[.,]\d+)*%?/gu;
 
 /**
  * A profile line as generation may use it. A figure enters a document only
@@ -130,7 +130,10 @@ export function readFigures(line: string, isResult: boolean) {
       .replace(/\s+([.,;])/g, "$1")
       .replace(/\s{2,}/g, " ")
       .trim(),
-    figures: figures.replace(/\s{2,}/g, " ").trim(),
+    figures: figures
+      .replace(/\s+([.,;])/g, "$1")
+      .replace(/\s{2,}/g, " ")
+      .trim(),
   };
 }
 

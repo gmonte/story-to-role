@@ -108,6 +108,14 @@ export function GenerationSettingsFields({
             "An experience that ended this many years ago or more.",
         })
       )}
+      {value.veryOldYears <= value.recentYears && (
+        <p className="text-destructive text-xs" role="alert">
+          {t.formatMessage({
+            defaultMessage:
+              "What counts as very old must be more years than what counts as recent.",
+          })}
+        </p>
+      )}
       {number(
         "resumeMaxPages",
         t.formatMessage({ defaultMessage: "Resume pages, at most" })

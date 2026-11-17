@@ -192,7 +192,7 @@ function writingRules(settings: GenerationSettings) {
     "- Invent nothing: no technology, figure, certification or responsibility the profile doesn't state. Never claim what a position says the person did not do, nor a requirement the fit check marks as a gap. A field with no information stays empty.",
     "- Bullets are reordered and rewritten to put first what the opening asks for; use the opening's vocabulary only where it is true of the person, spelled as the opening spells it.",
     ...lengthRules(settings),
-    "- title_line: the main technologies only, separated by commas, for example “React Native, Expo, TypeScript”; code prints the target title before them.",
+    "- title_line: for an opening, the main technologies only, separated by commas, for example “React Native, Expo, TypeScript”: code prints the opening's title before them. For a library resume, the target role the focus points to, a “|”, then the technologies, for example “Mobile Engineer | React Native, Expo, TypeScript”; the role claims no seniority the profile doesn't show and no number.",
     "- emphasis: up to five short lines, in the output language, saying what this document brings forward and what it leaves in the background.",
   ].join("\n");
 }

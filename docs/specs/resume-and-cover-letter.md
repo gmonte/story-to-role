@@ -79,7 +79,7 @@ Each user has global generation settings, shown as a form prefilled with them ev
 
 The user can also choose to always leave very old experiences out, or to keep them like older ones. A very old experience enters only when it matches the purpose of that document: it covers one of the opening's requirements, or the library document's focus, with the profile passage that proves it. It then gets one bullet, tied to that requirement, and the coverage review says why it entered.
 
-Code enforces the settings on the structured content and again after rendering the PDF. When a document runs over its length, it is shortened in this order: the bullet of a very old experience that entered for relevance; the bullets of older experiences; the summary down to 3 lines; the competencies least related to the opening. The bullets of recent experiences are never cut: if the document still doesn't fit, the user is warned instead. A cover letter one paragraph too long is rewritten to fit.
+Code enforces the settings on the structured content and again after rendering the PDF, for every generation and adaptation; a document the user edits by hand gets the length warning instead. "What counts as very old" must be more years than "what counts as recent". When a document runs over its length, it is shortened in this order: the bullet of a very old experience that entered for relevance; the bullets of older experiences; the summary down to 3 lines; the competencies least related to the opening. The bullets of recent experiences are never cut: if the document still doesn't fit, the user is warned instead. A cover letter one paragraph too long is rewritten to fit.
 
 ## Coverage review
 

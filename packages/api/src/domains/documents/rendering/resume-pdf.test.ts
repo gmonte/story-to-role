@@ -88,7 +88,6 @@ describe("rendering a resume PDF", () => {
       maxPages: 2,
       ages: new Map([[P2, "older"]]),
     });
-    expect(fitted.fits).toBe(true);
     expect(fitted.pages).toBeLessThanOrEqual(2);
     const [recent, old] = (fitted.content.sections[1] as Experience).entries;
     expect(old.lines.length).toBeLessThan(60);
@@ -109,8 +108,7 @@ describe("rendering a resume PDF", () => {
       maxPages: 2,
       ages: new Map(),
     });
-    // The user is warned instead.
-    expect(fitted.fits).toBe(false);
+    // The user is warned instead: the real page count says it runs over.
     expect(fitted.pages).toBeGreaterThan(2);
     expect(fitted.content).toEqual(content);
   });

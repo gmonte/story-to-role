@@ -266,7 +266,8 @@ export async function runGenerateResume(deps: {
         settings,
         today,
         purposes,
-        targetTitle: brief.title ?? "",
+        // A library document has no opening title: the writer names it.
+        targetTitle: application ? (brief.title ?? "") : null,
         fallbackName: setup.header.name,
       });
       return {

@@ -89,19 +89,21 @@ export function publishedOf(markdown: string): PublishedProfile {
 }
 
 describe("a profile line's figures", () => {
+  // `figures` is the line a written figure is checked against: its words
+  // stay (a name in it still backs a line), only withheld numbers go.
   it("keeps a measured figure, and takes the mark out", () => {
     expect(
       readFigures("Reduzi de 1,8 s para 0,6 s [medido: painel de APM].", true)
     ).toEqual({
       text: "Reduzi de 1,8 s para 0,6 s.",
-      figures: "Reduzi de 1,8 s para 0,6 s",
+      figures: "Reduzi de 1,8 s para 0,6 s.",
     });
   });
 
   it("withholds an estimated or unconfirmed figure", () => {
     expect(readFigures("Cortei o custo em 30% [estimado].", true)).toEqual({
       text: "Cortei o custo em [figure withheld].",
-      figures: "",
+      figures: "Cortei o custo em.",
     });
     expect(readFigures("Reduzi em 40% o tempo [a confirmar]", true).text).toBe(
       "Reduzi em [figure withheld] o tempo"
@@ -116,18 +118,60 @@ describe("a profile line's figures", () => {
       )
     ).toEqual({
       text: "Subi a conversão 12% e o NPS uns [figure withheld] pontos.",
-      figures: "Subi a conversão 12%",
+      figures: "Subi a conversão 12% e o NPS uns pontos.",
     });
   });
 
   it("withholds a result's number nobody marked, but not a fact's", () => {
     expect(readFigures("Automatizei o deploy de 3 serviços.", true)).toEqual({
       text: "Automatizei o deploy de [figure withheld] serviços.",
-      figures: "",
+      figures: "Automatizei o deploy de serviços.",
     });
     expect(readFigures("pagamentos B2B, time de 8.", false)).toEqual({
       text: "pagamentos B2B, time de 8.",
       figures: "pagamentos B2B, time de 8.",
+    });
+  });
+
+  it("withholds only a number standing on its own: not a name's digits nor a year", () => {
+    expect(
+      readFigures("Migrei 12 serviços B2B para EC2 e S3 em 2023 (AWS).", true)
+    ).toEqual({
+      text: "Migrei [figure withheld] serviços B2B para EC2 e S3 em 2023 (AWS).",
+      figures: "Migrei serviços B2B para EC2 e S3 em 2023 (AWS).",
+    });
+    // A year with a unit or a decimal is a figure; a count of 1,900 to
+    // 2,099 reads as a year, the price of dating a fact.
+    expect(
+      readFigures("Atendi 2023 lojas e cresci 1999% em 2020.5.", true).text
+    ).toBe(
+      "Atendi 2023 lojas e cresci [figure withheld] em [figure withheld]."
+    );
+  });
+
+  // Product bug (profile-source.ts, `standaloneNumber`): the lookahead
+  // `(?![\d.,%])` meant to keep "2020.5" a figure also sees the period that
+  // ends a sentence, so a year closing a sentence is withheld. Enable once
+  // the year test reads `(?![\d%]|[.,]\d)`.
+  it("keeps a year that ends the sentence", () => {
+    expect(readFigures("Migrei os serviços para EC2 em 2023.", true)).toEqual({
+      text: "Migrei os serviços para EC2 em 2023.",
+      figures: "Migrei os serviços para EC2 em 2023.",
+    });
+  });
+
+  it("tells a line marked as having no number as written", () => {
+    expect(
+      readFigures("Melhoramos a performance do checkout [sem número].", true)
+    ).toEqual({
+      text: "Melhoramos a performance do checkout.",
+      figures: "Melhoramos a performance do checkout.",
+    });
+    expect(
+      readFigures("Atendi 3 regiões [no number] e 4 países [estimado].", true)
+    ).toEqual({
+      text: "Atendi 3 regiões e [figure withheld] países.",
+      figures: "Atendi 3 regiões e países.",
     });
   });
 });
@@ -205,7 +249,11 @@ describe("the profile as generation reads it", () => {
     });
     expect(of("Cortei o custo")).toMatchObject({
       text: "Resultados: Cortei o custo de infraestrutura em [figure withheld].",
-      figures: "",
+      figures: "Cortei o custo de infraestrutura em.",
+    });
+    // Marked as having no number: told as written, the mark taken out.
+    expect(of("Melhoramos a performance")).toMatchObject({
+      text: "Resultados: Melhoramos a performance do checkout.",
     });
     expect(of("Tecnologias: Python, FastAPI")).toMatchObject({
       positionId: beta,
@@ -234,6 +282,27 @@ describe("the profile as generation reads it", () => {
       neverInclude: ["Projeto Fênix"],
       neverClaim: ["liderança de pessoas"],
     });
+    // What was only studied and the known gaps are named, so code can
+    // refuse a line that claims them.
+    expect(source.studied).toEqual(["Spark"]);
+    expect(source.gaps).toEqual(["Nuvem em produção."]);
+  });
+
+  it("ties a competency to its passage by the whole word", () => {
+    const { skills } = readProfileSource({
+      careerProfileId: "career",
+      profile: publishedOf(
+        profileMarkdown.replace(
+          "- Domino: Python, SQL\n- Uso com frequência: FastAPI, Django\n",
+          "- Domino: MongoDB\n- Uso com frequência: Go\n"
+        )
+      ),
+    });
+    const passageOf = (name: string) =>
+      skills.find((skill) => skill.name === name)!.evidenceIds;
+    // "Go" is not the "Go" in "MongoDB": each names its own passage.
+    expect(passageOf("Go")).toHaveLength(1);
+    expect(passageOf("Go")).not.toEqual(passageOf("MongoDB"));
   });
 
   it("reads credentials with their real status", () => {

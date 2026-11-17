@@ -111,6 +111,37 @@ function figuresBackedBy(text: string, sources: string[]) {
   return ungivenFigures(text, sources).length === 0;
 }
 
+// A target title is a role, in a few words.
+const maxTitleLength = 60;
+
+// Words that claim a level: a title may carry one only when the profile
+// shows it.
+const seniorityWords = [
+  "junior",
+  "júnior",
+  "pleno",
+  "mid-level",
+  "senior",
+  "sênior",
+  "staff",
+  "principal",
+  "lead",
+  "líder",
+  "head",
+  "manager",
+  "gerente",
+  "director",
+  "diretor",
+  "diretora",
+  "coordenador",
+  "coordenadora",
+  "architect",
+  "arquiteto",
+  "arquiteta",
+  "specialist",
+  "especialista",
+];
+
 // A group of competencies is named in a few words ("Languages").
 const maxLabelLength = 40;
 
@@ -119,8 +150,8 @@ function shortLabel(label: string) {
   return label
     .replace(/\d+/g, "")
     .replace(/\s{2,}/g, " ")
-    .trim()
-    .slice(0, maxLabelLength);
+    .slice(0, maxLabelLength)
+    .trim();
 }
 
 // A position's context is a note of a few words, never a place for facts.
@@ -195,9 +226,11 @@ export function assembleResume(input: {
   today: string;
   // What the document is for: the opening's requirements, or the focus.
   purposes: Purpose[];
-  // The document's target title: the opening's, or the focus. Printed by
-  // code, so the title line holds no claim.
-  targetTitle: string;
+  // An opening's title, printed by code so the title line holds no claim.
+  // Null for a library document: the writer names its target from the
+  // focus, and code keeps it only when it claims nothing the profile
+  // doesn't show (else the latest position's title).
+  targetTitle: string | null;
   // The account's name, printed only when the profile gives none.
   fallbackName?: string;
   newLineId?: () => string;
@@ -568,12 +601,38 @@ export function assembleResume(input: {
     ) as Record<CredentialSectionKind, () => ResumeSection | null>),
   };
 
-  // "Target title | technologies": code prints the document's target title
-  // (the opening's, or the focus), so the line holds no claim; each
-  // technology must be a competency in use or spelled out in the profile.
+  /**
+   * A library document's target title as the writer named it, when it
+   * claims nothing: no number, nothing long, no former employer, and no
+   * seniority the profile doesn't show.
+   */
+  function groundedTitle(title: string) {
+    const known = [
+      evidenceText,
+      ...context.positions.map((position) => position.title),
+    ].join("\n");
+    const claimsSeniority = seniorityWords.some(
+      (word) => mentions(title, word) && !mentions(known, word)
+    );
+    return title.length <= maxTitleLength &&
+      !/\d/.test(title) &&
+      !/\bex-/i.test(title) &&
+      !claimsSeniority
+      ? title
+      : null;
+  }
+
+  // "Target title | technologies": the target title comes from code (see
+  // `targetTitle`); each technology must be a competency in use or spelled
+  // out in the profile.
   function checkedTitleLine() {
+    const [head, ...tail] = draft.title_line.split("|");
+    const hasHead = input.targetTitle === null && tail.length > 0;
+    const writers = hasHead ? groundedTitle(head.trim()) : null;
+    const title =
+      input.targetTitle ?? writers ?? context.positions[0]?.title ?? "";
     const drafted = draft.title_line.includes("|")
-      ? draft.title_line.split("|").slice(1).join("|")
+      ? tail.join("|")
       : draft.title_line;
     const technologies = drafted
       .split(",")
@@ -584,9 +643,7 @@ export function assembleResume(input: {
         if (!known) dropped.push({ text: item, reason: "unknown_skill" });
         return known;
       });
-    return [input.targetTitle.trim(), technologies.join(", ")]
-      .filter(Boolean)
-      .join(" | ");
+    return [title.trim(), technologies.join(", ")].filter(Boolean).join(" | ");
   }
 
   // Contact data comes from the profile, like every other fact.

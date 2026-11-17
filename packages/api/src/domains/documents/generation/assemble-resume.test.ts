@@ -11,6 +11,8 @@ import {
   defaultGenerationSettings,
   type ExperienceAge,
   experienceAge,
+  type GenerationSettings,
+  generationSettingsSchema,
 } from "../schemas/generation-settings";
 import type { ResumeContent } from "../schemas/resume-content";
 import {
@@ -18,8 +20,14 @@ import {
   defaultTemplateSections,
 } from "../schemas/template";
 import { resolveSections } from "../template/resolve-sections";
-import { relinkReference } from "./adjust-resume";
-import { assembleResume, type ResumeDraft } from "./assemble-resume";
+import { adjustmentDraft, relinkReference } from "./adjust-resume";
+import {
+  type AssemblyDraft,
+  assembleResume,
+  matchPurpose,
+  type Purpose,
+  type ResumeDraft,
+} from "./assemble-resume";
 import { atsCheck } from "./ats-check";
 import {
   applyLockedFactOverrides,
@@ -42,6 +50,7 @@ const E1 = "00000000-0000-4000-8000-0000000000e1";
 const E2 = "00000000-0000-4000-8000-0000000000e2";
 const E3 = "00000000-0000-4000-8000-0000000000e3";
 const E4 = "00000000-0000-4000-8000-0000000000e4";
+const E5 = "00000000-0000-4000-8000-0000000000e5";
 const C1 = "00000000-0000-4000-8000-0000000000c1";
 const I1 = "00000000-0000-4000-8000-0000000000a1";
 const I2 = "00000000-0000-4000-8000-0000000000a2";
@@ -128,6 +137,8 @@ const context: CareerContext = {
   ],
   evidenceOfPassage: new Map(),
   rules: { neverInclude: [], neverClaim: [] },
+  studied: [],
+  gaps: [],
 };
 
 const draft: ResumeDraft = {
@@ -182,6 +193,8 @@ const assemble = (input: Partial<Parameters<typeof assembleResume>[0]> = {}) =>
     settings: defaultGenerationSettings,
     today,
     purposes: [],
+    // The opening's title: code prints it, whatever the writer wrote.
+    targetTitle: "Senior Platform Engineer",
     ...input,
   });
 
@@ -276,6 +289,108 @@ describe("assembling a resume", () => {
       "TypeScript, Kubernetes"
     );
     expect(dropped).toContainEqual({ text: "Rust", reason: "unknown_skill" });
+  });
+
+  it("matches a competency by the whole word, in the evidence and in the skills", () => {
+    const groupsOf = (items: string[]) => {
+      const { content, dropped } = assemble({
+        context: {
+          ...context,
+          evidence: [
+            ...context.evidence,
+            line(E4, P1, "tool", "Built the frontend in JavaScript and Go"),
+          ],
+          skills: [{ id: "s1", name: "Node.js", evidenceIds: [E3] }],
+        },
+        draft: {
+          ...draft,
+          skills: [{ label: "Core", items, evidence_ids: [E4] }],
+        },
+      });
+      const skills = content.sections.find((s) => s.kind === "skills");
+      return {
+        text: skills?.kind === "skills" ? skills.groups[0].text : null,
+        unknown: dropped
+          .filter((row) => row.reason === "unknown_skill")
+          .map((row) => row.text),
+      };
+    };
+    // "Java" is not in "JavaScript", nor "Node" in "Node.js"; "Go" is.
+    expect(groupsOf(["JavaScript", "Java", "Go", "Node", "node.js"])).toEqual({
+      text: "JavaScript, Go, node.js",
+      unknown: ["Java", "Node"],
+    });
+  });
+
+  it("names a competency group in a few words, with no number", () => {
+    const labelOf = (label: string) => {
+      const { content } = assemble({
+        draft: {
+          ...draft,
+          skills: [{ label, items: ["Kubernetes"], evidence_ids: [E1] }],
+        },
+      });
+      const skills = content.sections.find((s) => s.kind === "skills");
+      return skills?.kind === "skills" ? skills.groups[0].label : null;
+    };
+    expect(labelOf("Top 5 tools (2021)")).toBe("Top tools ()");
+    const long = "Infrastructure and container orchestration tools";
+    expect(labelOf(long)).toBe(long.slice(0, 40));
+  });
+
+  it("refuses a line that claims what the profile says is lacking, or shows a mark", () => {
+    const lacking: CareerContext = {
+      ...context,
+      studied: ["Rust"],
+      rules: { neverInclude: [], neverClaim: ["people management"] },
+    };
+    const texts = [
+      "Wrote services in Rust.",
+      "Trusted with people management.",
+      "Cut cloud costs by [figure withheld].",
+      "Cut deploy time by 40% [measured: CI dashboard].",
+      // Not the whole word: "Rusty" claims no Rust.
+      "Maintained the rusty deploy scripts.",
+    ];
+    const { content, dropped } = assemble({
+      context: lacking,
+      draft: {
+        ...draft,
+        summary: {
+          text: "Platform engineer learning Rust.",
+          evidence_ids: [E1],
+        },
+        skills: [
+          { label: "Core", items: ["Rust", "Kubernetes"], evidence_ids: [E1] },
+        ],
+        experience: [
+          {
+            position_id: P1,
+            context: null,
+            relevance: null,
+            bullets: texts.map((text) => ({ text, evidence_ids: [E1] })),
+          },
+        ],
+      },
+    });
+    expect(dropped).toEqual([
+      { text: "Platform engineer learning Rust.", reason: "studied_only" },
+      { text: "Rust", reason: "unknown_skill" },
+      { text: "Wrote services in Rust.", reason: "studied_only" },
+      { text: "Trusted with people management.", reason: "never_claim" },
+      {
+        text: "Cut cloud costs by [figure withheld].",
+        reason: "unsupported_figure",
+      },
+      {
+        text: "Cut deploy time by 40% [measured: CI dashboard].",
+        reason: "unsupported_figure",
+      },
+    ]);
+    expect(content.sections.find((s) => s.kind === "summary")).toBeUndefined();
+    expect(experienceOf(content)[0].lines.map((row) => row.text)).toEqual([
+      "Maintained the rusty deploy scripts.",
+    ]);
   });
 
   it("fills credentials by code and builds the header from the profile", () => {
@@ -408,14 +523,19 @@ describe("figures by the profile's marks", () => {
   });
 
   it("hands a writer the lines without marks, unusable figures withheld", () => {
+    // What a line's figures are checked against keeps the words (a name
+    // in them still backs a line) and loses the withheld numbers.
     expect(marked.evidence.map((row) => [row.text, row.figures])).toEqual([
-      ["Tools: Kubernetes", ""],
+      ["Tools: Kubernetes", "Kubernetes"],
       [
         "Results: Cut deploy time by 40% with Kubernetes.",
-        "Cut deploy time by 40% with Kubernetes",
+        "Cut deploy time by 40% with Kubernetes.",
       ],
-      ["Results: Cut cloud costs by [figure withheld].", ""],
-      ["Results: Brought on-call pages down [figure withheld].", ""],
+      ["Results: Cut cloud costs by [figure withheld].", "Cut cloud costs by."],
+      [
+        "Results: Brought on-call pages down [figure withheld].",
+        "Brought on-call pages down.",
+      ],
     ]);
   });
 
@@ -466,7 +586,7 @@ describe("figures as whole numbers", () => {
       settings: { ...defaultGenerationSettings, bulletsRecent: 8 },
       draft: {
         ...draft,
-        title_line: "Platform Engineer",
+        title_line: "",
         summary: null,
         skills: [],
         experience: [
@@ -615,6 +735,7 @@ describe("generation settings", () => {
     evidence: [
       ...context.evidence,
       line(E4, P3, "tool", "Wrote the billing batch jobs in Cobol"),
+      line(E5, P3, "responsibility", "Kept the mainframe schedules"),
     ],
   };
   const bullets = (count: number, evidenceId: string, label: string) =>
@@ -645,7 +766,12 @@ describe("generation settings", () => {
       },
     ],
   });
-  const purposes = ["Kubernetes", "Batch processing in Cobol"];
+  // The opening's requirements, each with the profile lines the fit check
+  // found behind it.
+  const purposes: Purpose[] = [
+    { text: "Kubernetes", evidenceIds: [E1] },
+    { text: "Batch processing in Cobol", evidenceIds: [E4] },
+  ];
   const linesByEmployer = (content: ResumeContent) =>
     Object.fromEntries(
       experienceOf(content).map((entry) => [
@@ -653,6 +779,18 @@ describe("generation settings", () => {
         entry.lines.map((line) => line.text),
       ])
     );
+
+  it("holds the settings together: very old starts after recent ends", () => {
+    const parsed = (changes: Partial<GenerationSettings>) =>
+      generationSettingsSchema.safeParse({
+        ...defaultGenerationSettings,
+        ...changes,
+      }).success;
+    expect(parsed({ recentYears: 14 })).toBe(true);
+    expect(parsed({ recentYears: 15 })).toBe(false);
+    expect(parsed({ veryOldYears: 5 })).toBe(false);
+    expect(parsed({ recentYears: 10, veryOldYears: 11 })).toBe(true);
+  });
 
   it("tells an experience's age by when it ended", () => {
     const age = (endDate: string | null) =>
@@ -723,6 +861,93 @@ describe("generation settings", () => {
     ).toEqual(["Globex", "Acme"]);
   });
 
+  it("names a purpose as the document writes it, never by a loose word", () => {
+    const [, cobol] = purposes;
+    expect(matchPurpose("batch processing in COBOL", purposes)).toBe(cobol);
+    // Most of the wording, either way round.
+    expect(matchPurpose("Batch processing", purposes)).toBe(cobol);
+    expect(
+      matchPurpose("Batch processing in Cobol (mainframe)", purposes)
+    ).toBe(cobol);
+    // A word that would match anything, or nothing at all.
+    expect(matchPurpose("Cobol", purposes)).toBeNull();
+    expect(matchPurpose("a", purposes)).toBeNull();
+    expect(
+      matchPurpose("experience", [
+        { text: "Experience with batch processing", evidenceIds: [] },
+      ])
+    ).toBeNull();
+    expect(matchPurpose(null, purposes)).toBeNull();
+    expect(matchPurpose("  ", purposes)).toBeNull();
+  });
+
+  it("proves a requirement by a line the fit check found behind it, and keeps that bullet", () => {
+    const initech = (bullets: ResumeDraft["experience"][number]["bullets"]) => {
+      const draft = written("Batch processing in Cobol");
+      draft.experience[2].bullets = bullets;
+      return draft;
+    };
+    const mainframe = {
+      text: "Kept the mainframe schedules.",
+      evidence_ids: [E5],
+    };
+    const cobol = { text: "Wrote the billing batch jobs.", evidence_ids: [E4] };
+    // The bullet kept is the one that proves it, not the first.
+    const { content } = assemble({
+      context: career,
+      draft: initech([mainframe, cobol]),
+      purposes,
+    });
+    expect(linesByEmployer(content).Initech).toEqual([
+      "Wrote the billing batch jobs.",
+    ]);
+    // A line of the position the fit check did not find behind the
+    // requirement proves nothing, however the bullet reads.
+    const unfound = assemble({
+      context: career,
+      draft: initech([
+        { text: "Wrote batch jobs in Cobol.", evidence_ids: [E5] },
+      ]),
+      purposes,
+    });
+    expect(linesByEmployer(unfound.content).Initech).toBeUndefined();
+    expect(unfound.dropped).toContainEqual({
+      text: "Programmer, Initech",
+      reason: "not_relevant",
+    });
+    // A requirement the fit check found nothing behind lets nothing in.
+    const nothing = assemble({
+      context: career,
+      draft: initech([cobol]),
+      purposes: [{ text: "Batch processing in Cobol", evidenceIds: [] }],
+    });
+    expect(linesByEmployer(nothing.content).Initech).toBeUndefined();
+  });
+
+  it("proves a library focus by a line that names one of its words", () => {
+    const focused = (focus: string) => {
+      const draft = written(focus);
+      draft.experience[2].bullets = [
+        { text: "Kept the mainframe schedules.", evidence_ids: [E5] },
+        { text: "Wrote the billing batch jobs.", evidence_ids: [E4] },
+      ];
+      return linesByEmployer(
+        assemble({
+          context: career,
+          draft,
+          purposes: [{ text: focus, evidenceIds: null }],
+        }).content
+      ).Initech;
+    };
+    expect(focused("Cobol batch")).toEqual(["Wrote the billing batch jobs."]);
+    expect(focused("Mainframe operations")).toEqual([
+      "Kept the mainframe schedules.",
+    ]);
+    // No line names it; and a word under three letters names nothing.
+    expect(focused("Data engineering")).toBeUndefined();
+    expect(focused("in")).toBeUndefined();
+  });
+
   it("leaves a very old experience out, or keeps it like an older one, as set", () => {
     const leftOut = assemble({
       context: career,
@@ -760,6 +985,179 @@ describe("generation settings", () => {
     expect(kept.dropped.filter((row) => row.reason === "not_relevant")).toEqual(
       []
     );
+  });
+});
+
+describe("an adjustment under the profile frozen now", () => {
+  // The resume being adjusted, written when the profile measured the cost
+  // cut and listed Rust among the competencies in use.
+  const reference: ResumeContent = {
+    kind: "resume",
+    header: { name: "Ana Souza", titleLine: "", contacts: [], city: null },
+    sections: [
+      {
+        kind: "summary",
+        line: {
+          id: "summary",
+          text: "Platform engineer who cut cloud costs by 30%.",
+          origin: { kind: "evidence", evidenceIds: [E4] },
+        },
+      },
+      {
+        kind: "skills",
+        groups: [
+          {
+            id: "core",
+            label: "Core",
+            text: "Kubernetes, Rust, TypeScript",
+            origin: { kind: "skill", evidenceIds: [] },
+          },
+        ],
+      },
+      {
+        kind: "experience",
+        entries: [
+          {
+            positionId: P1,
+            employer: "Globex",
+            title: "Tech Lead",
+            startDate: "2021-03",
+            endDate: null,
+            context: null,
+            lines: [
+              {
+                id: "deploy",
+                text: "Cut deploy time by 40% with Kubernetes.",
+                origin: { kind: "evidence", evidenceIds: [E1] },
+              },
+              {
+                id: "costs",
+                text: "Cut cloud costs by 30%.",
+                origin: { kind: "evidence", evidenceIds: [E4] },
+              },
+              {
+                id: "team",
+                text: "Led a team of 5 engineers.",
+                origin: { kind: "evidence", evidenceIds: [E2] },
+              },
+            ],
+          },
+        ],
+      },
+    ],
+  };
+  // Published since: the cost cut is now marked estimated, and Rust was
+  // moved to what was only studied.
+  const now: CareerContext = {
+    ...context,
+    evidence: [
+      ...context.evidence,
+      {
+        ...line(E4, P1, "achievement", "Cut cloud costs by [figure withheld]"),
+        figures: "Cut cloud costs by",
+      },
+    ],
+    studied: ["Rust"],
+  };
+  const kept: AssemblyDraft = {
+    emphasis: [],
+    title_line: "Kubernetes",
+    summary: { keep: "summary" },
+    skills: [{ keep: "core", items: ["TypeScript"] }],
+    experience: [
+      {
+        position_id: P1,
+        context: null,
+        relevance: null,
+        bullets: [{ keep: "costs" }, { keep: "team" }, { keep: "deploy" }],
+      },
+    ],
+    projects: [],
+  };
+
+  it("drops a kept line whose figure or competency the profile no longer backs", () => {
+    const { content, dropped } = assemble({
+      draft: kept,
+      reference,
+      context: now,
+    });
+    expect(experienceOf(content)[0].lines).toEqual([
+      reference.sections[2].kind === "experience" &&
+        reference.sections[2].entries[0].lines[2],
+      reference.sections[2].kind === "experience" &&
+        reference.sections[2].entries[0].lines[0],
+    ]);
+    const skills = content.sections.find((s) => s.kind === "skills");
+    expect(skills?.kind === "skills" && skills.groups).toEqual([
+      expect.objectContaining({ id: "core", text: "TypeScript, Kubernetes" }),
+    ]);
+    // The kept summary no longer holds either, so there is none.
+    expect(content.sections.find((s) => s.kind === "summary")).toBeUndefined();
+    expect(dropped).toEqual([
+      {
+        text: "Platform engineer who cut cloud costs by 30%.",
+        reason: "unsupported_figure",
+      },
+      { text: "Rust", reason: "unknown_skill" },
+      { text: "Cut cloud costs by 30%.", reason: "unsupported_figure" },
+    ]);
+  });
+
+  it("keeps every kept line that still holds", () => {
+    const { content, dropped } = assemble({
+      draft: kept,
+      reference,
+      // As the profile was when the resume was written.
+      context: {
+        ...now,
+        studied: [],
+        skills: [
+          ...context.skills,
+          { id: "s2", name: "Rust", evidenceIds: [] },
+        ],
+        evidence: [
+          ...context.evidence,
+          line(E4, P1, "achievement", "Cut cloud costs by 30%"),
+        ],
+      },
+    });
+    expect(dropped).toEqual([]);
+    expect(experienceOf(content)[0].lines.map((row) => row.id)).toEqual([
+      "costs",
+      "team",
+      "deploy",
+    ]);
+    expect(content.sections[0]).toMatchObject({
+      kind: "summary",
+      line: { id: "summary" },
+    });
+  });
+
+  it("adds at most one bullet per position", () => {
+    const added = (text: string) => ({ text, evidence_ids: [E2] });
+    const draft = adjustmentDraft(
+      {
+        changes: [],
+        title_line: "",
+        summary: null,
+        skills: [],
+        experience: [
+          {
+            position_id: P1,
+            relevance: null,
+            bullet_ids: ["team"],
+            added: [added("Hired two engineers."), added("Ran the on-call.")],
+          },
+        ],
+      },
+      reference
+    );
+    expect(draft.experience[0].bullets).toEqual([
+      { keep: "team" },
+      added("Hired two engineers."),
+      { keep: "deploy" },
+      { keep: "costs" },
+    ]);
   });
 });
 
@@ -1003,12 +1401,106 @@ describe("trimming to the page limit", () => {
     expect(trimToPages(content, estimatePages(content), ages)).toBe(content);
   });
 
+  it("shortens the summary by whole sentences", () => {
+    const summaryOnly: ResumeContent = {
+      ...content,
+      sections: [
+        {
+          kind: "summary",
+          line: {
+            id: "s",
+            text: "Built Node.js services answering in 1.8 s. Led a team of 5 engineers, e.g. on call. Shipped weekly! Mentored juniors? Wrote docs.",
+            origin: { kind: "evidence", evidenceIds: [E1] },
+          },
+        },
+      ],
+    };
+    const trimmed = trimToPages(summaryOnly, 0, ages);
+    // A sentence ends where the next starts with a capital: never inside
+    // "Node.js", "1.8 s" or "e.g.".
+    expect(trimmed.sections[0]).toMatchObject({
+      line: {
+        text: "Built Node.js services answering in 1.8 s. Led a team of 5 engineers, e.g. on call. Shipped weekly!",
+      },
+    });
+  });
+
   it("keeps only technologies in the title line that the evidence backs", () => {
     const { content: assembled, dropped } = assemble({
       draft: { ...draft, title_line: "Platform Engineer | Kubernetes, Elixir" },
+      targetTitle: "Platform Engineer",
     });
     expect(assembled.header.titleLine).toBe("Platform Engineer | Kubernetes");
     expect(dropped).toContainEqual({ text: "Elixir", reason: "unknown_skill" });
+  });
+
+  it("prints the target title, never the writer's", () => {
+    const titleOf = (title_line: string) =>
+      assemble({
+        context: {
+          ...context,
+          skills: [
+            ...context.skills,
+            { id: "s2", name: "React", evidenceIds: [] },
+          ],
+        },
+        draft: { ...draft, title_line },
+        targetTitle: "Platform Engineer",
+      }).content.header.titleLine;
+    // A title with a claim in it is discarded; the technologies stay.
+    expect(titleOf("Staff Engineer, 12 years | React")).toBe(
+      "Platform Engineer | React"
+    );
+    // With no title of its own, the line is all technologies.
+    expect(titleOf("React, Kubernetes")).toBe(
+      "Platform Engineer | React, Kubernetes"
+    );
+    expect(titleOf("")).toBe("Platform Engineer");
+    expect(titleOf("Staff Engineer | Elixir")).toBe("Platform Engineer");
+  });
+
+  it("keeps a library document's title from the writer only when it claims nothing", () => {
+    const titleOf = (title_line: string, positions = context.positions) =>
+      assemble({
+        context: {
+          ...context,
+          positions,
+          skills: [
+            ...context.skills,
+            { id: "s2", name: "React Native", evidenceIds: [] },
+          ],
+        },
+        draft: { ...draft, title_line },
+        // No opening: the writer names the role the focus points to.
+        targetTitle: null,
+      }).content.header.titleLine;
+    expect(titleOf("Mobile Engineer | React Native")).toBe(
+      "Mobile Engineer | React Native"
+    );
+    // A seniority the profile shows (the position is a Tech Lead) stays.
+    expect(titleOf("Engineering Lead | React Native")).toBe(
+      "Engineering Lead | React Native"
+    );
+    // One it doesn't, a number, a former employer or a long role fall
+    // back to the most recent position's title.
+    expect(titleOf("Staff Mobile Engineer | React Native")).toBe(
+      "Tech Lead | React Native"
+    );
+    expect(titleOf("Engineer, 10 years | React Native")).toBe(
+      "Tech Lead | React Native"
+    );
+    expect(titleOf("Ex-Globex Engineer | React Native")).toBe(
+      "Tech Lead | React Native"
+    );
+    expect(
+      titleOf(`${"Very ".repeat(12)}Senior Mobile Engineer | React Native`)
+    ).toBe("Tech Lead | React Native");
+    // No role before the technologies: the position's title.
+    expect(titleOf("React Native")).toBe("Tech Lead | React Native");
+    expect(titleOf("Mobile Engineer | React Native", [])).toBe(
+      "Mobile Engineer | React Native"
+    );
+    expect(titleOf("React Native", [])).toBe("React Native");
   });
 });
 

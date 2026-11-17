@@ -252,7 +252,9 @@ function GenerationSettingsForm({
       </div>
       <Button
         className="self-start"
-        disabled={save.isPending}
+        disabled={
+          save.isPending || settings.veryOldYears <= settings.recentYears
+        }
         onClick={() => save.mutate({ settings })}
       >
         {t.formatMessage({ defaultMessage: "Save generation settings" })}

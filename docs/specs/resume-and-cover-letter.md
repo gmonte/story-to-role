@@ -1,10 +1,10 @@
 # StoryToRole spec: Resume and cover letter generation
 
-Draft. Decisions are recorded here as they close; open points are listed at the end.
+Draft. Decisions are recorded here as they close; open points are listed at the end. Screening, generation and the coverage review follow the meu-emprego-novo method (its steps 03, 04, 04b and 05), from the user's profile ([profile-truth.md](./profile-truth.md), [ADR 0008](../adr/0008-profile-truth-is-the-source-of-truth.md)).
 
 ## Goal and scope
 
-For one opening, StoryToRole generates a tailored resume and cover letter from the approved evidence base (see [guided-interview.md](./guided-interview.md)) plus any application instructions the user adds. The AI invents nothing; what the user states is the user's responsibility.
+For one opening, StoryToRole generates a tailored resume and cover letter from the published version of the user's profile, frozen in each document it produces, plus any application instructions the user adds. The AI invents nothing: what the opening asks for and the profile doesn't show is a declared gap. What the user states is the user's responsibility (ADR 0001).
 
 Hiring interview prep is out of the MVP.
 
@@ -12,63 +12,109 @@ Hiring interview prep is out of the MVP.
 
 - An opening always has someone on the other side: a posted vacancy, or a company the user wants to approach with no vacancy open (for example, a cover letter for Airbnb). Openings of either kind can become applications and appear in the tracker.
 - An unsolicited opening (no vacancy) requires only the company; the intended role or area, free notes and links are optional. With no requirements to compare, the fit check does not run, but the opening's vector (company, role, notes) still suggests similar library documents, and the intended role feeds `<Title>` in file names. It starts open and the user can close it, for example when the company replies that it has no vacancies.
-- A **library document** is a resume or cover letter with no company behind it, generated from the evidence base. A user can keep several, each with a required **focus** that serves as its title: a stack or kind of role ("React Native", "React Web", "Frontend", "Full-stack Node"), or "General" for one that presents the strongest evidence overall. In the interface, the Library lists them by focus, with plain "New resume" and "New cover letter" actions. Library documents live outside any application, use the same versions, snapshots, undo, adaptation and language sync, skip the fit check and never appear in the tracker. Generating one does not start an application.
+- A **library document** is a resume or cover letter with no company behind it, generated from the published profile with the method's prompt 04 (a new version for a family of openings). A user can keep several, each with a required **focus** that serves as its title: a stack or kind of role ("React Native", "React Web", "Frontend", "Full-stack Node"), or "General" for one that presents each position's strongest points. In the interface, the Library lists them by focus, with plain "New resume" and "New cover letter" actions. Library documents live outside any application, use the same versions, snapshots, undo, adaptation and language sync, skip the fit check and never appear in the tracker. Generating one does not start an application.
 
 ## Flow
 
 1. The user adds an opening by pasting its description. Code first checks that the text looks like a job posting.
-2. StoryToRole runs a **fit check** automatically and shows it as a hint, never as a gate. A small AI call extracts the opening's keywords (hard skills, tools, certifications, languages) and requirements (seniority, years of experience, location, work model). Each keyword and requirement retrieves the closest evidence by vector similarity; a cheap AI call then judges each one, seeing only the requirements and the retrieved evidence, never the whole evidence base, as met, partial or a gap. Vector similarity alone does not decide, since it misses seniority ("8+ years" against a junior history reads as similar) and hard requirements such as location or language. The hint shows a band (high, medium or low fit), each requirement linked to its evidence, and the main gaps; there is no percentage score, which would claim a precision the analysis does not have. It counts as an evaluation in the plan, separate from generation.
+2. StoryToRole runs a **fit check** automatically, the method's screening (step 03), and shows it as a hint, never as a gate. A small AI call extracts the opening's keywords (hard skills, tools, certifications, languages) and requirements (seniority, years of experience, location, work model). Each keyword and requirement retrieves the closest passages of the published profile by vector similarity (ADR 0004); a cheap AI call then judges each one as met, partial or a gap, seeing only the requirements, the retrieved passages, the profile's declared gaps and the user's job preferences, never the whole profile. A competency marked "studied", anything under "what I did not do" and the known gaps count as gaps, never as coverage. Vector similarity alone does not decide, since it misses seniority ("8+ years" against a junior history reads as similar) and hard requirements such as location or language. The hint shows the method's band:
+   - **High:** covers the mandatory requirements with profile passages behind them, and the work model and location are acceptable.
+   - **Medium:** covers most of them; what is missing is desirable or can be learned.
+   - **Low:** a mandatory requirement is missing, or the opening breaks one of the user's job preferences.
+
+   Each requirement is linked to the passage that backs it ("without a passage, a verdict is an opinion"), and the main gaps are listed; there is no percentage score, which would claim a precision the analysis does not have. The method's warning signs (a description too vague to identify the company, contact only through a messaging app, a pay promise far above the market with no requirements, a request for payment or sensitive data before any conversation) show as a warning on the opening. It counts as an evaluation in the plan, separate from generation. The job preferences document (work model, locations, salary range, excluded companies and sectors, discard rules) is read only here, never by generation.
 3. Next to the fit check, StoryToRole suggests existing documents similar to this opening, ranked by vector similarity between the opening and each document: library documents and documents from other applications, including ones already sent.
 4. Whatever the fit check says, the user may get a resume, a cover letter or both, each only on demand, in one of three ways:
    - **Use as is:** the latest snapshot of the chosen document's version is copied as the first snapshot of this application's document. No AI call is made. If the chosen document is in another language than the output language, it is copied and adapted instead, following the adaptation rules; this makes an AI call and counts as a generation, which the user is told before confirming. The source document does not change.
-   - **Use as reference:** a new document is generated for this opening with the chosen document as a reference, keeping what still fits and tailoring the rest. The user reviews the result. The source document does not change.
-   - **Generate from scratch** from the evidence base.
+   - **Adjust** (the method's prompt 04b): a new document for this opening starting from the chosen version of the same family, changing only what is needed (see Generation rules). The user reviews the result. The source document does not change.
+   - **Generate a new version** (the method's prompt 04) from the published profile.
 5. The application starts when the first document is generated or copied for the opening. Openings that were analyzed but never generated for stay in a list of analyzed openings, outside the tracker.
 
 ## Embeddings
 
 Embeddings are part of the MVP.
 
-- Vectors exist for every approved evidence item, skill, document (the latest snapshot of each version), opening and opening keyword. An opening's vector is computed as soon as it is added, whether or not the user has documents yet.
-- They are computed by a local multilingual embedding model running in a Trigger.dev task, since an opening may be in English while the evidence is in Portuguese. No AI vendor receives the text for this.
+- Vectors exist for every passage of the published profile (recomputed on publish, only for what changed), document (the latest snapshot of each version), opening and opening keyword. An opening's vector is computed as soon as it is added, whether or not the user has documents yet.
+- They are computed by a local multilingual embedding model running in a Trigger.dev task, since an opening may be in English while the profile is in Portuguese. No AI vendor receives the text for this.
 - They are stored with pgvector in the application's Postgres database.
 
 ## Review rounds
 
-Generating a resume runs a loop: a strategist drafts, a reviewer rates the draft against the opening and lists gaps, and an editor applies the review. Each **review round** (review plus edit) rewrites the whole document, which makes rounds the largest generation cost.
+Generating a resume runs a loop: a strategist drafts, a reviewer judges the draft's **coverage** against the opening (or the library document's focus) and the frozen profile, the same blocks as the coverage review (strong coverage, partial coverage, gaps not invented, inconsistencies), and an editor applies the review, only reordering and rewording to cover better what the profile states, never covering a gap. Each **review round** (review plus edit) rewrites the whole document, which makes rounds the largest generation cost. The loop stops when coverage no longer improves.
 
-- The user picks the depth before generating: **Quick** (one round) or **Thorough** (up to three rounds, stopping early when the rating reaches the target or stops improving). The best-rated version is kept. Each option shows its credit estimate.
+- The user picks the depth before generating: **Quick** (one round) or **Thorough** (up to three rounds, stopping early when coverage stops improving). The best-rated version is kept. Each option shows its credit estimate.
 - The number of rounds behind each option is a setting, not a constant, so it can be tuned with real data.
 - Every round's rating, cost and outcome are stored, so the quality gained per extra round can be measured.
 
+## Generation rules
+
+From the method's prompts 04 (a new version) and 04b (an adjustment), checked in code where they can be:
+
+- The frozen profile version is the **only** source of facts, contact data included; the opening (or the library document's focus) only says what to prioritize.
+- Every employer, title and date is preserved (locked facts, ADR 0001).
+- No technology, figure, certification or responsibility the profile doesn't state.
+- Figures only when the profile marks them `[medido]`; `[estimado]` and `[a confirmar]` figures never appear, `[sem número]` results appear as qualitative ones. Nothing the profile lists under "what I did not do" is ever claimed, and nothing on its communication rules' "never include" list appears.
+- Bullets are reordered and rewritten to put first what the opening asks for; the opening's vocabulary is used only when it is true of the user.
+- Certifications with their real status (valid, expired, in progress).
+- A summary of 3 to 4 lines.
+- A field with no information in the profile stays empty; nothing is inferred.
+- **Adjusting (04b)** changes only the order of bullets, the order of competencies and the summary; it adds a bullet only when the fact is in the profile, and never tries to cover a gap the coverage review listed.
+- After each generation, StoryToRole lists in up to five lines what it emphasized and what it left in the background; after an adjustment, what changed from the version it started from.
+
+## Generation settings
+
+Each user has global generation settings, shown as a form prefilled with them every time a document is generated; the user changes there whatever they want for that document only.
+
+| Setting | Default |
+|---|---|
+| Bullets per recent experience (ended at most N years ago, or current) | 3 |
+| What counts as recent (N) | 5 years |
+| Bullets per older experience | 1 |
+| Very old experiences (ended M years ago or more) | Left out, unless relevant |
+| M | 15 years |
+| Resume length | At most 2 pages |
+| Cover letter length | At most 4 paragraphs and 1 page |
+
+A very old experience enters only when it matches the purpose of that document: it covers one of the opening's requirements, or the library document's focus, with the profile passage that proves it. It then gets one bullet, tied to that requirement, and the coverage review says why it entered.
+
+Code enforces the settings on the structured content and again after rendering the PDF. When a document runs over its length, it is shortened in this order: the bullet of a very old experience that entered for relevance; the bullets of older experiences; the summary down to 3 lines; the competencies least related to the opening. The bullets of recent experiences are never cut: if the document still doesn't fit, the user is warned instead. A cover letter one paragraph too long is rewritten to fit.
+
+## Coverage review
+
+Every generated resume and cover letter comes with a coverage review (the method's prompt 05), checked against the profile version frozen in that document and included in the generation's price.
+
+- **Code checks, exact:** employers, titles and dates preserved; the number of bullets and pages within the settings used for that document; every figure present in the profile and marked `[medido]`; no "never include" term; nothing from "what I did not do" claimed; a very old experience only with the requirement that justified it. A failure blocks the document until it is fixed.
+- **AI review:** the sources used; what was preserved; strong coverage (each requirement → the resume passage → the profile passage that proves it); partial coverage (requirements touched only indirectly); gaps not invented (requirements the document does not prove, listed by name); inconsistencies (any fact, date or figure that doesn't match the profile). Where the profile has no passage it says "no evidence in the profile". It never suggests covering a gap: it suggests reordering, or, for a true fact the profile omits, updating the profile, which opens it as a suggestion in the profile's draft. A document whose structure is broken gets a pointer to it; whatever code can fix, it fixes.
+- It ends with the method's statement: "This review does not claim that every mandatory requirement is met." ("Esta revisão não afirma que todos os requisitos obrigatórios são atendidos.")
+
 ## Gap questions
 
-The career interview is not repeated for every opening: the goal is that, once the evidence base is built, the user only adds an opening and asks for a document. Before generating, StoryToRole turns each gap found by the fit check into a question, one per point: does the user really lack it, or do they want to add a story for it? A story added there is an application instruction, so it can stay in this application or be promoted to the global evidence base, point by point, as any instruction.
+The profile is not rewritten for every opening: the goal is that, once it is published, the user only adds an opening and asks for a document. Before generating, StoryToRole turns each gap found by the fit check into a question, one per point: does the user really lack it, or do they have a story for it? An answer with a story is an application instruction, so it can stay in this application or, point by point, become a suggestion in the profile's draft. When the user confirms they lack it, the gap becomes a suggestion for "what I did not do" in the right position or for the known gaps.
 
 ## ATS check
 
 After a resume is generated for an opening, StoryToRole compares it against the opening's keywords (hard skills, tools, certifications, languages) the way an applicant tracking system reads it: literally, as the opening spells each term. The result is factual ("14 of 18 keywords"), and the missing keywords are split in two:
 
-- **You have it, use the opening's term:** the evidence base holds it under another spelling ("Postgres" for "PostgreSQL"); the user is advised to use the opening's term. A term is only suggested when evidence backs it.
-- **Real gap:** no evidence for it.
+- **You have it, use the opening's term:** the profile states it under another spelling ("Postgres" for "PostgreSQL"); the user is advised to use the opening's term. A term is only suggested when a profile passage backs it.
+- **Real gap:** no profile passage for it.
 
 The ATS check applies to generated resumes only; it plays no part in suggesting similar documents.
 
 ## Application instructions
 
-- On the generation screen, the user can add free-text instructions that apply to this application only: a detail they just remembered, a different framing of an old position, or experience that is not in the evidence base. They are saved with the application when its first document is generated.
+- On the generation screen, the user can add free-text instructions that apply to this application only: a detail they just remembered, a different framing of an old position, or experience that is not in the profile. They are saved with the application when its first document is generated.
 - StoryToRole does not verify whether these statements are true.
-- Right after the user writes them, before generating, the system splits the instructions into points and asks, point by point, whether each one should also be added to the user's global evidence base. The AI pre-selects points that look like new career facts ("I led the Kubernetes migration in 2021") and leaves unselected points that look like adjustments for this opening ("emphasize people management"); the user confirms. Points added go through the same approval as interview evidence, sensitive-item flagging included; the others stay in this application only.
-- An instruction that changes a locked fact (employer, title or dates of a position) creates a **locked-fact override** for this application only. The system shows it explicitly ("In this application, your title at Company X will be 'Engineering Manager' instead of 'Tech Lead'") and asks for confirmation; code then enforces the new value in this application. Locked facts guard against the AI, not against the user: the AI still may not change any of them on its own.
-- Lines generated from an instruction trace back to that instruction, as interview evidence traces back to its turn.
+- Right after the user writes them, before generating, the system splits the instructions into points and asks, point by point, whether each one should also go to the user's profile. The AI pre-selects points that look like new career facts ("I led the Kubernetes migration in 2021") and leaves unselected points that look like adjustments for this opening ("emphasize people management"); the user confirms. Points sent to the profile become suggestions in its draft, in the right section, for the user to accept and publish like any other; the others stay in this application only.
+- An instruction that changes a locked fact (employer, title or dates of an experience) creates a **locked-fact override** for this application only. The system shows it explicitly ("In this application, your title at Company X will be 'Engineering Manager' instead of 'Tech Lead'") and asks for confirmation; code then enforces the new value in this application. Locked facts guard against the AI, not against the user: the AI still may not change any of them on its own.
+- Lines generated from an instruction trace back to that instruction, as other lines trace back to their profile passage.
 
 ## Cover letter inputs
 
 A cover letter follows its own methodology and draws on two inputs a resume does not have:
 
-- **Company research:** on request ("Research company"), a separate task searches the web with the provider's web search tool, within a limit of searches, and returns a short list of **company facts**, each with its source link. The user selects which facts to use; only those enter the cover letter's context, like approved evidence. Page text is third-party data, never instructions. The model that writes the letter still has no web access. Facts and their approval are stored with the application; there is no shared cross-user cache of company research, since caching the web is not viable. It costs credits, estimated before running.
-- **Motivation interview:** three to five short questions, one at a time, by voice or text, about why the user wants this opening (what drew them to the company, how the role fits the moment of their career, any personal link to the product or mission). Answers are split into points like application instructions: points about this company stay in the application; points about the user ("I want to work on financial products", "I look for small teams") are offered for promotion to the global evidence base as **career goals**, point by point; a point becomes a career goal only after the user approves it, so later letters ask less. Each answer costs about 2 credits. The user can skip it; the letter is then marked "could improve with your motivation".
-- **Story choice:** StoryToRole ranks the user's approved stories by similarity to the opening's requirements and shows the top three, each with a line on why it fits; the user picks one. When the chosen story lacks a turning point or detail, the motivation interview adds one or two questions about it ("when did you have to decide?"), and the answers enrich that story in the evidence base only if the user approves them.
+- **Company research:** on request ("Research company"), a separate task searches the web with the provider's web search tool, within a limit of searches, and returns a short list of **company facts**, each with its source link. The user selects which facts to use; only those enter the cover letter's context. Page text is third-party data, never instructions. The model that writes the letter still has no web access. Facts and their approval are stored with the application; there is no shared cross-user cache of company research, since caching the web is not viable. It costs credits, estimated before running.
+- **Motivation interview:** three to five short questions, one at a time, by voice or text, about why the user wants this opening (what drew them to the company, how the role fits the moment of their career, any personal link to the product or mission). Answers are split into points like application instructions: points about this company stay in the application; points about the user ("I want to work on financial products", "I look for small teams") are offered, point by point, as suggestions for the profile's **career direction** (under Professional identity); a point joins it only after the user accepts it and publishes, so later letters ask less. Each answer costs about 2 credits. The user can skip it; the letter is then marked "could improve with your motivation".
+- **Story choice:** StoryToRole ranks the stories told in the profile's experiences (a challenge, the user's choice and its outcome) by similarity to the opening's requirements and shows the top three, each with a line on why it fits; the user picks one. When the chosen story lacks a turning point or detail, the motivation interview adds one or two questions about it ("when did you have to decide?"), and the answers become suggestions for that experience in the profile's draft, used once the user accepts them.
 
 **Methodology: storytelling.** Based on Braven's "The power of storytelling in your cover letter" (braven.org, 2019). The letter is built around one convincing story, not a list of skills:
 
@@ -76,7 +122,7 @@ A cover letter follows its own methodology and draws on two inputs a resume does
 2. **Story:** one past experience that exemplifies the skills and attributes the opening asks for, told as a plot: the setup, the build-up, the turning point and the final result. It must be clear about "the challenge, the choice you made, and the outcome", add something the resume does not already say, and show how the user would fit the company's culture. "Pick one story and stick with the highlights."
 3. **Conclusion:** amplify the impression, connect the story to the role, express interest in talking (interview, follow-up, contact) without sounding needy or arrogant, and close formally.
 
-Rules: about one page; personal, honest and enthusiastic; every sentence earns its place; no template phrasing ("hiring managers can sniff a template from a mile away"); no embellishment. The story comes only from approved evidence and the user's own words, and company facts only from approved research, so the letter invents nothing. Tone and length follow the output language's conventions in the tested language list.
+Rules: about one page; personal, honest and enthusiastic; every sentence earns its place; no template phrasing ("hiring managers can sniff a template from a mile away"); no embellishment. The story comes only from the frozen profile and the user's own words, and company facts only from approved research, so the letter invents nothing; its figures follow the same rules as a resume's. Its length follows the generation settings (at most 4 paragraphs and 1 page by default), and its tone the output language's conventions in the tested language list. It gets the same coverage review as a resume.
 
 ## Cover letter and its resume
 
@@ -90,18 +136,18 @@ Rules: about one page; personal, honest and enthusiastic; every sentence earns i
 - The user picks the output language before generating. It is preselected from the language detected in the opening description.
 - Output languages come from a tested list, starting with English and Brazilian Portuguese; each new language is added only after testing, with its market's conventions (date formats, section names, expected length) configured.
 - No resume includes a photo, age or marital status in the MVP, whatever the market's custom. A user who wants that kind of information asks for it in one opening (as an application instruction) or in their global template.
-- After generating, the user can ask for a document in another output language at any time, which creates a new version of that document. Every snapshot is kept. Two choices are offered, kept few on purpose so they stay clear to non-technical users: **Adapt from** an existing version (the default; same content rewritten for the new language, priced as an adjustment) or **Generate from scratch** from the evidence (priced as a generation). Only adaptation (and recreating, which is an adaptation) links the two versions for language sync; a version generated from scratch is independent.
+- After generating, the user can ask for a document in another output language at any time, which creates a new version of that document. Every snapshot is kept. Two choices are offered, kept few on purpose so they stay clear to non-technical users: **Adapt from** an existing version (the default; same content rewritten for the new language, priced as an adjustment) or **Generate a new version** from the profile (priced as a generation). Only adaptation (and recreating, which is an adaptation) links the two versions for language sync; a version generated from scratch is independent.
 
 ## Adaptations
 
 A snapshot in another output language is an **adaptation** of an existing snapshot, not a literal translation and not a fresh generation.
 
-- It keeps the same evidence selection and the same evidence trace for every line.
+- It keeps the same profile passages and the same trace for every line.
 - It rewrites wording for a native reader of that language and market: idiomatic action verbs, section names, date and number formats, and the opening's keywords in that language. Phrasing that does not work in the target language is reworked rather than translated word for word.
 - It adds no new fact and never converts figures (no currency conversion, which would invent an exchange rate).
-- The same code checks as any generation apply: locked facts and forbidden terms.
-- **Titles in another language:** the first adaptation into a language proposes an equivalent for each position's title ("Analista de Sistemas Sênior" becomes "Senior Systems Analyst"); the user approves or edits it once, and that version becomes a locked fact of the position in that language. Code then accepts either the original or the approved title. Company names are never translated.
-- Generating again from the evidence in the new language remains available as a separate action.
+- The same code checks as any generation apply: locked facts, figure marks and the communication rules' "never include" terms.
+- **Titles in another language:** the first adaptation into a language proposes an equivalent for each position's title ("Analista de Sistemas Sênior" becomes "Senior Systems Analyst"); the user approves or edits it once, and that version becomes a locked fact of the experience in that language. Code then accepts either the original or the approved title. Company names are never translated.
+- Generating again from the profile in the new language remains available as a separate action.
 
 ## Versions and snapshots
 
@@ -140,7 +186,7 @@ The interface calls snapshots "changes" ("alterações" in Brazilian Portuguese)
 
 ## Rendering
 
-Documents are downloaded as PDF only, in every plan, with no watermark. There is no DOCX export: edits stay inside StoryToRole, where every change is a snapshot and every line keeps its evidence trace, instead of drifting into a file edited elsewhere. PDFs are rendered on demand from a snapshot's structured content. Since snapshots are immutable, a rendered file never goes stale: it may be cached in private Vercel Blob storage keyed by snapshot and template, and the cache can be purged at any time without losing anything. File storage (this cache and uploaded files) sits behind a small interface (put, get, delete). An explicit `STORAGE_DRIVER` environment variable selects the implementation: `vercel-blob` (the default) or `local`, which writes to a git-ignored folder so development works offline without a token. The app refuses to start when `STORAGE_DRIVER=local` is set with `NEXT_PUBLIC_ENV` other than `development`, and it never falls back to local storage on its own (for example when the Blob token is missing); `.env.example` ships with `local`. A quick test against a real Blob store runs before release, since the production driver does not run in development. Each section of a document (summary, each position, the whole cover letter) also has a **Copy text** action, for application forms that ask for pasted text; no editable file leaves the platform. Markdown and DOCX exports are not offered; DOCX may come back only for a concrete case of an opening that requires it. File names follow two conventions, each for a different reader. A single PDF is named for the recruiter who receives it, so they recognize whose document it is at a glance; the application ZIP is named for the applicant, to keep their uploads organized by opening. PDF file names use the fixed words in the document's output language:
+Documents are downloaded as PDF only, in every plan, with no watermark. There is no DOCX export: edits stay inside StoryToRole, where every change is a snapshot and every line keeps its trace to the profile, instead of drifting into a file edited elsewhere. PDFs are rendered on demand from a snapshot's structured content. Since snapshots are immutable, a rendered file never goes stale: it may be cached in private Vercel Blob storage keyed by snapshot and template, and the cache can be purged at any time without losing anything. File storage (this cache and uploaded files) sits behind a small interface (put, get, delete). An explicit `STORAGE_DRIVER` environment variable selects the implementation: `vercel-blob` (the default) or `local`, which writes to a git-ignored folder so development works offline without a token. The app refuses to start when `STORAGE_DRIVER=local` is set with `NEXT_PUBLIC_ENV` other than `development`, and it never falls back to local storage on its own (for example when the Blob token is missing); `.env.example` ships with `local`. A quick test against a real Blob store runs before release, since the production driver does not run in development. Each section of a document (summary, each position, the whole cover letter) also has a **Copy text** action, for application forms that ask for pasted text; no editable file leaves the platform. Markdown and DOCX exports are not offered; DOCX may come back only for a concrete case of an opening that requires it. File names follow two conventions, each for a different reader. A single PDF is named for the recruiter who receives it, so they recognize whose document it is at a glance; the application ZIP is named for the applicant, to keep their uploads organized by opening. PDF file names use the fixed words in the document's output language:
 
 - Resume: `<FirstName>_<LastName>_<Title>_Resume.pdf` (Portuguese: `..._Curriculo.pdf`).
 - Cover letter: `<FirstName>_<LastName>_<Title>_Cover_Letter.pdf` (Portuguese: `..._Carta_de_Apresentacao.pdf`).
@@ -152,12 +198,12 @@ Documents are downloaded as PDF only, in every plan, with no watermark. There is
 
 ## Writing style and tone
 
-- **Style profile:** the user provides one to three samples of their own writing (an old cover letter, a post, a resume they like); when they provide none, their interview answers serve as the sample. A cheap call extracts a style profile (sentence length, formality, preferred vocabulary, words to avoid, use of first person), which the user reviews and approves. It enters every generation as a style instruction and never copies sentences or facts from the samples.
+- **Style profile:** the user provides one to three samples of their own writing (an old cover letter, a post, a resume they like); when they provide none, the text of their profile serves as the sample. A cheap call extracts a style profile (sentence length, formality, preferred vocabulary, words to avoid, use of first person), which the user reviews and approves. It enters every generation as a style instruction and never copies sentences or facts from the samples.
 - **Suggested tones**, chosen per document on top of the style profile: **Your style** (default), **Formal** (banks, government, traditional consultancies), **Direct** (startups, technical roles: short sentences, strong verbs, no adjectives), **Warm** (mission-driven organizations) and **Technical** (highly specialized roles: more domain vocabulary and numbers). When an opening is added, the AI suggests a tone from its description ("this is a traditional bank; we suggest Formal") and the user accepts or changes it. The choice is saved with the application. A tone changes form, never facts.
 
-## Evidence trace in the editor
+## Trace in the editor
 
-Hovering or tapping a line in the document editor shows where it came from: the exact quote of the user's words or of the source document, the position or credential and the approval date, or "from this application's instructions". Lines the user typed in the editor are marked "written by you". A **trace mode** toggle colors every line by origin: approved evidence, application instruction, manual edit. The trace appears only in the editor, never in the PDF.
+Hovering or tapping a line in the document editor shows where it came from: the passage of the profile version frozen in that document (its section and position, and the version's number and date), or "from this application's instructions". Lines the user typed in the editor are marked "written by you". A **trace mode** toggle colors every line by origin: profile, application instruction, manual edit. The trace appears only in the editor, never in the PDF.
 
 ## Global template
 
@@ -166,7 +212,7 @@ Each user has a global template that defines which sections their resume has. A 
 - on the output language or market ("Personal details only in German resumes");
 - on the opening's extracted keywords or the library document's focus ("Publications only when the opening mentions research").
 
-Conditions are checked by code, so the result is predictable. In any application, the user can force a section in or out, like other per-application overrides. AI-suggested sections ("include Publications for this opening?") may come later if fixed rules are not enough. Sections come from a catalog. On by default: Summary, Skills, Experience, Education, Languages. Optional, off by default: Certifications, Projects, Publications, Awards, Volunteering, Courses. Resumes should preferably fit in two pages, which is why optional sections start off; users who want one enable it, globally or per application.
+Conditions are checked by code, so the result is predictable. In any application, the user can force a section in or out, like other per-application overrides. AI-suggested sections ("include Publications for this opening?") may come later if fixed rules are not enough. Sections come from a catalog. On by default: Summary, Skills, Experience, Education, Languages. Optional, off by default: Certifications, Projects, Publications, Awards, Volunteering, Courses. Resumes are kept within the length the generation settings allow (two pages by default), which is why optional sections start off; users who want one enable it, globally or per application. Sections draw on the profile's matching section (education, certifications, competencies by level, languages); a competency marked "studied" appears only when the opening asks for it and the user allows it.
 
 ## Layout
 
@@ -180,7 +226,7 @@ One layout in the MVP, modeled on the resumes of the meu-emprego-novo CLI (gener
 - Experience: company in bold on the left, period in grey aligned right, title in italics below with optional context in parentheses ("parallel project"), and bullets with a hanging indent, each following action, result and "Built with ...". Dates follow the output language ("Nov/2024 – Jul/2026", "nov/2024 – jul/2026").
 - Education and languages: compact lines with the institution in bold.
 - The cover letter uses the same header (name, title line, contacts), then the letter body, on A4 in Helvetica.
-- Length: at most two pages for a resume and one for a cover letter; the user is warned when content goes over, with a suggestion of what to trim.
+- Length: as the generation settings set it (at most two pages for a resume and one for a cover letter by default), enforced as described there.
 - PDFs are rendered from structured content in a task with a JavaScript renderer (for example `@react-pdf/renderer`) reproducing this look, since ReportLab is Python.
 
 

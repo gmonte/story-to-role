@@ -36,6 +36,20 @@
       "when": 1794898501630,
       "tag": "0004_add_source_import_state",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1794901574659,
+      "tag": "0005_add_profile_passage_kind",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1794901603962,
+      "tag": "0006_add_screening_fields",
+      "breakpoints": true
     }
   ]
 }

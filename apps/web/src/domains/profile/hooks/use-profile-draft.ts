@@ -5,6 +5,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { TRPCClientError } from "@trpc/client";
 
+import type { ProfileDocumentKind } from "@repo/api/domains/profile/schemas/profile";
+
 import { useTRPC } from "~/tools/trpc/client";
 
 // How long the user pauses before the draft is saved.
@@ -14,10 +16,11 @@ const retryDelayMs = 5000;
 
 export type SaveStatus = "saved" | "pending" | "saving" | "error" | "conflict";
 
-export function useProfileDraftQuery() {
+/** The draft of one of the user's documents: the profile unless said. */
+export function useProfileDraftQuery(kind: ProfileDocumentKind = "profile") {
   const trpc = useTRPC();
   return useQuery({
-    ...trpc.profile.draft.queryOptions({}),
+    ...trpc.profile.draft.queryOptions({ kind }),
     // The editor owns the text once loaded; a refetch would reset it.
     refetchOnWindowFocus: false,
     staleTime: Infinity,
@@ -29,10 +32,10 @@ export function useProfileDraftQuery() {
  * revision the last one returned, the latest text winning. A save refused
  * because another tab saved first ends in "conflict" until a reload.
  */
-export function useDraftAutosave(initial: {
-  markdown: string;
-  revision: number;
-}) {
+export function useDraftAutosave(
+  initial: { markdown: string; revision: number },
+  kind: ProfileDocumentKind = "profile"
+) {
   const trpc = useTRPC();
   const queryClient = useQueryClient();
   const { mutateAsync: saveDraft } = useMutation(
@@ -61,6 +64,7 @@ export function useDraftAutosave(initial: {
         const result = await saveDraft({
           markdown,
           baseRevision: revision.current,
+          kind,
         });
         if (started !== generation.current) return;
         revision.current = result.revision;
@@ -78,7 +82,7 @@ export function useDraftAutosave(initial: {
     } finally {
       inFlight.current = false;
     }
-  }, [queryClient, saveDraft, trpc]);
+  }, [kind, queryClient, saveDraft, trpc]);
 
   const change = useCallback(
     (markdown: string) => {

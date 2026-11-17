@@ -5,6 +5,7 @@ import { usersTable } from "@repo/api/domains/users/db/users-tables";
 import { createTable } from "@repo/api/utils/db/create-table";
 import { embeddingDimensions } from "@repo/api/tools/embeddings/embedding-model";
 
+import type { PassageKind } from "../truth/extract";
 import type {
   ProfileDocumentKind,
   ProfileSuggestionOrigin,
@@ -114,6 +115,8 @@ export const profilePassagesTable = createTable(
       .notNull()
       .references(() => profileVersionsTable.id, { onDelete: "cascade" }),
     ordinal: d.integer().notNull(),
+    // Only "evidence" counts as coverage; the others say what is lacking.
+    kind: d.text().$type<PassageKind>().notNull().default("evidence"),
     section: d.text(),
     experience: d.integer(),
     encryptedText: d.text().notNull(),

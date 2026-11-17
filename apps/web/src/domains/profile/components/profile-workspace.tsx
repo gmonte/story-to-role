@@ -5,6 +5,7 @@ import type { ReactNode } from "react";
 import { Loader2 } from "lucide-react";
 
 import { useProfileDraftQuery } from "../hooks/use-profile-draft";
+import { DocumentSwitch } from "./document-switch";
 import { ProfileDocument } from "./profile-document";
 import { ProfileEditorProvider } from "./profile-editor-context";
 import { ProfileFindings } from "./profile-findings";
@@ -40,6 +41,7 @@ export function ProfileWorkspace() {
   return (
     <div className="flex min-h-0 flex-1">
       <aside className="hidden w-60 shrink-0 space-y-6 overflow-y-auto border-r p-4 md:block">
+        <DocumentSwitch current="profile" />
         <ProfileIndex />
         <ProfileFindings />
         <ProfileReview />

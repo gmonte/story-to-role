@@ -1,5 +1,8 @@
 "use client";
 
+import { useSearchParams } from "next/navigation";
+
+import { PreferencesEditor } from "~/domains/profile/components/preferences-editor";
 import {
   ProfileEditorGate,
   ProfileWorkspace,
@@ -18,6 +21,7 @@ import { SourcePreview } from "./source-preview";
  */
 export function CareerBody() {
   const timeline = useTimeline();
+  const searchParams = useSearchParams();
   const { previewSourceDocumentId, setPreviewSourceDocumentId } =
     useCareerWorkspace();
 
@@ -26,6 +30,11 @@ export function CareerBody() {
   // acknowledged.
   if (!timeline.data.profile.privacyNoticeAccepted) {
     return <WorkspaceBody layoutId="career" chat={<PrivacyNotice />} />;
+  }
+  // The job preferences are their own document, in the same editor; the
+  // agent and the sources belong to the profile.
+  if (searchParams.get("document") === "preferences") {
+    return <WorkspaceBody layoutId="career" chat={<PreferencesEditor />} />;
   }
   return (
     <ProfileEditorGate>

@@ -103,6 +103,7 @@ describe("the published profile's extract", () => {
   it("splits passages per line, with an experience's title", () => {
     const passages = profilePassages(parseBlocks(profile));
     expect(passages).toContainEqual({
+      kind: "evidence",
       section: "experience",
       lines: [6, 7, 8],
       experience: 0,
@@ -111,6 +112,24 @@ describe("the published profile's extract", () => {
     expect(passages).toContainEqual(
       expect.objectContaining({ section: "gaps", text: "Spark em produção." })
     );
+  });
+
+  it("tells evidence from what the profile says is lacking", () => {
+    const kinds = Object.fromEntries(
+      profilePassages(parseBlocks(profile)).map((passage) => [
+        passage.text.split("\n")[0],
+        passage.kind,
+      ])
+    );
+    expect(kinds).toMatchObject({
+      "Beta — Backend (2022-03 a atual): Tecnologias: Python": "evidence",
+      "Beta — Backend (2022-03 a atual): O que NÃO fiz: não administrei nuvem; não liderei pessoas.":
+        "notDone",
+      "Domino: Python, SQL": "evidence",
+      "Estudei, sem experiência profissional: Spark": "studied",
+      "Spark em produção.": "gap",
+      "Nunca incluir: Projeto Fênix, dados do cliente Alfa": "rule",
+    });
   });
 
   it("reads the method's example without losing experiences", () => {

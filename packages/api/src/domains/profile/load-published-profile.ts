@@ -1,7 +1,9 @@
 import type { UserCipher } from "@repo/api/domains/encryption/user-cipher";
 import type { DbClient } from "@repo/api/tools/db-client";
 
+import { extractPreferences } from "./preferences/preferences";
 import { ProfileRepository } from "./profile-repository";
+import { parseBlocks } from "./truth/blocks";
 import type { ProfileExtract, ProfilePassage } from "./truth/extract";
 
 export type PublishedProfile = {
@@ -42,9 +44,30 @@ export async function loadPublishedProfile(input: {
     ) as ProfileExtract,
     passages: passages.map((passage) => ({
       id: passage.id,
+      kind: passage.kind,
       section: passage.section as ProfilePassage["section"],
       experience: passage.experience,
       text: input.cipher.decrypt(passage.encryptedText),
     })),
   };
+}
+
+/**
+ * The user's published job preferences, as screening reads them (profile
+ * spec, "Job preferences"): their structure and their text, to quote a rule
+ * from. Null when none was published; generation never calls this.
+ */
+export async function loadPublishedPreferences(input: {
+  db: DbClient;
+  cipher: UserCipher;
+  userId: string;
+}) {
+  const repository = new ProfileRepository(input.db);
+  const document = await repository.findDocument(input.userId, "preferences");
+  const version = document?.publishedVersionId
+    ? await repository.findVersion(document.id, document.publishedVersionId)
+    : undefined;
+  if (!version) return null;
+  const markdown = input.cipher.decrypt(version.encryptedMarkdown);
+  return { markdown, extract: extractPreferences(parseBlocks(markdown)) };
 }

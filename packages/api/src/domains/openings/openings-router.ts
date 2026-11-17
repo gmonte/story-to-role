@@ -136,6 +136,45 @@ export const openingsRouter = createTRPCRouter({
       return { realtime };
     }),
 
+  reanalyze: userProcedure
+    .use(rateLimited("taskStart"))
+    .meta(
+      openApiMeta(
+        "openings",
+        "POST",
+        "/openings/by-id/{openingId}/fit-check",
+        "Runs the fit check again on the published profile"
+      )
+    )
+    .input(z.object({ openingId: z.uuid() }))
+    .output(z.object({ realtime: realtimeSubscriptionSchema }))
+    .mutation(async ({ ctx, input }) => {
+      const { realtime } = await new OpeningsService(db).reanalyze({
+        userId: ctx.userId,
+        ...input,
+      });
+      return { realtime };
+    }),
+
+  excludeCompany: userProcedure
+    .meta(
+      openApiMeta(
+        "openings",
+        "POST",
+        "/openings/by-id/{openingId}/exclude-company",
+        "Adds the opening's company to the excluded companies of the job preferences"
+      )
+    )
+    .input(z.object({ openingId: z.uuid() }))
+    .output(z.object({ company: z.string() }))
+    .mutation(({ ctx, input }) =>
+      new OpeningsService(db).excludeCompany({
+        userId: ctx.userId,
+        language: ctx.t.locale === "pt-BR" ? "pt-BR" : "en-US",
+        ...input,
+      })
+    ),
+
   setClosed: userProcedure
     .meta(
       openApiMeta(

@@ -32,7 +32,8 @@ const dot = "·";
 export function ProfileToolbar() {
   const t = useTranslation();
   const trpc = useTRPC();
-  const { blocks, findings, saveStatus, markdown, draft } = useProfileEditor();
+  const { blocks, findings, saveStatus, markdown, draft, saveNow, resetTo } =
+    useProfileEditor();
   const [versionsOpen, setVersionsOpen] = useState(false);
   const versions = useQuery(trpc.profile.versions.queryOptions({}));
   const latest = versions.data?.[0] ?? draft.publishedVersion;
@@ -150,7 +151,13 @@ export function ProfileToolbar() {
           </TooltipContent>
         </Tooltip>
       </div>
-      <VersionsDialog open={versionsOpen} onOpenChange={setVersionsOpen} />
+      <VersionsDialog
+        open={versionsOpen}
+        onOpenChange={setVersionsOpen}
+        markdown={markdown}
+        saveNow={saveNow}
+        resetTo={resetTo}
+      />
       <PublishDialog open={publishOpen} onOpenChange={setPublishOpen} />
     </div>
   );

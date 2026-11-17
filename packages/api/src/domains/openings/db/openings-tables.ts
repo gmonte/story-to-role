@@ -13,7 +13,9 @@ import type {
   OpeningRejectionReason,
   OpeningStatus,
   OpeningTermCategory,
+  OpeningTermImportance,
   OpeningTermKind,
+  OpeningWarning,
   Tone,
 } from "../schemas/opening";
 
@@ -69,6 +71,13 @@ export const openingTermsTable = createTable(
       .references(() => openingsTable.id, { onDelete: "cascade" }),
     kind: d.text().$type<OpeningTermKind>().notNull(),
     category: d.text().$type<OpeningTermCategory>().notNull(),
+    // Whether the opening requires it or only wishes for it: a mandatory
+    // gap makes the band low (the method's screening).
+    importance: d
+      .text()
+      .$type<OpeningTermImportance>()
+      .notNull()
+      .default("mandatory"),
     encryptedText: d.text().notNull(),
     embedding: d.vector({ dimensions: embeddingDimensions }),
   }),
@@ -89,13 +98,26 @@ export const fitChecksTable = createTable(
       .notNull()
       .references(() => openingsTable.id, { onDelete: "cascade" }),
     band: d.text().$type<FitBand>().notNull(),
+    // The published profile version the check read (ADR 0008).
+    profileVersionId: d.uuid(),
+    // The job preferences the opening breaks, each with the rule as the
+    // user wrote it (JSON); any of them makes the band low.
+    encryptedPreferenceConflicts: d.text(),
+    // The method's warning signs found in the posting.
+    warnings: d
+      .text()
+      .array()
+      .$type<OpeningWarning[]>()
+      .notNull()
+      .default(sql`'{}'::text[]`),
   }),
   (t) => [index("fit_checks_opening_id_idx").on(t.openingId)]
 );
 
 /**
- * The verdict on one term, the evidence it rests on, and (for a gap) the
- * question that asks whether the user really lacks it.
+ * The verdict on one term, the profile passages it rests on (`evidenceIds`
+ * holds their ids), and (for a gap) the question that asks whether the user
+ * really lacks it.
  */
 export const fitCheckItemsTable = createTable(
   "fit_check_items",

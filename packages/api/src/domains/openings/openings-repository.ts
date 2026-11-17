@@ -9,7 +9,7 @@ import {
   openingTermsTable,
   openingsTable,
 } from "./db/openings-tables";
-import type { OpeningStatus } from "./schemas/opening";
+import type { OpeningStatus, OpeningWarning } from "./schemas/opening";
 
 type Insert<T extends { $inferInsert: unknown }> = T["$inferInsert"];
 
@@ -125,11 +125,15 @@ export class OpeningsRepository {
   async insertFitCheck(input: {
     openingId: string;
     band: Insert<typeof fitChecksTable>["band"];
+    profileVersionId?: string | null;
+    encryptedPreferenceConflicts?: string | null;
+    warnings?: OpeningWarning[];
     items: Array<Omit<Insert<typeof fitCheckItemsTable>, "fitCheckId">>;
   }) {
+    const { items: _items, ...fitCheckRow } = input;
     const [fitCheck] = await this.tx
       .insert(fitChecksTable)
-      .values({ openingId: input.openingId, band: input.band })
+      .values(fitCheckRow)
       .returning();
     if (input.items.length > 0) {
       await this.tx

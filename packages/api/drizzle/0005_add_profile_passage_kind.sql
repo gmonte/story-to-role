@@ -1,0 +1,1 @@
+ALTER TABLE "profile_passages" ADD COLUMN IF NOT EXISTS "kind" text DEFAULT 'evidence' NOT NULL;

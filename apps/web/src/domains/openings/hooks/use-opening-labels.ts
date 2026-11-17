@@ -5,6 +5,7 @@ import type {
   FitVerdict,
   OpeningRejectionReason,
   OpeningTermCategory,
+  OpeningWarning,
   Tone,
 } from "@repo/api/domains/openings/schemas/opening";
 import { useTranslation } from "@repo/intl/use-translation";
@@ -53,6 +54,35 @@ export function useOpeningLabels() {
           return t.formatMessage({ defaultMessage: "Work model" });
         case "other":
           return t.formatMessage({ defaultMessage: "Requirement" });
+      }
+    },
+    warning(warning: OpeningWarning) {
+      switch (warning) {
+        case "vague_company":
+          return t.formatMessage({
+            defaultMessage:
+              "The description is too vague to identify the company.",
+          });
+        case "messaging_only_contact":
+          return t.formatMessage({
+            defaultMessage:
+              "Contact is only through a messaging app, with no corporate channel.",
+          });
+        case "pay_too_good":
+          return t.formatMessage({
+            defaultMessage:
+              "The pay promised is far above the market, with no requirements.",
+          });
+        case "asks_payment_or_data":
+          return t.formatMessage({
+            defaultMessage:
+              "It asks for payment or sensitive data before any conversation.",
+          });
+        case "code_download_test":
+          return t.formatMessage({
+            defaultMessage:
+              "Its test requires downloading and running code outside known platforms.",
+          });
       }
     },
     tone(tone: Tone) {

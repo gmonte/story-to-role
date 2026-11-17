@@ -74,7 +74,7 @@ export class CareerService {
     const profile = await repository.findProfileByUserId(userId);
     if (!profile) return { path: null, hasStarted: false, hasOpening: false };
     const [hasStarted, hasOpening] = await Promise.all([
-      repository.hasStarted(profile.id),
+      repository.hasStarted(profile.id, userId),
       repository.hasOpening(profile.id),
     ]);
     return { path: profile.startPath, hasStarted, hasOpening };

@@ -54,6 +54,7 @@ export class AccountRepository {
     const byProfile = (table: PgTable & { profileId: PgColumn }) =>
       this.rowsWhere(table, table.profileId, profileIds);
 
+    const profileDocuments = await byUser(t.profileDocumentsTable);
     const positions = await byProfile(t.positionsTable);
     const openings = await byProfile(t.openingsTable);
     const fitChecks = await this.rowsWhere(
@@ -86,6 +87,12 @@ export class AccountRepository {
       billing_customers: await byUser(t.billingCustomersTable),
       subscriptions: await byUser(t.subscriptionsTable),
       career_profiles: profiles,
+      profile_documents: profileDocuments,
+      profile_versions: await this.rowsWhere(
+        t.profileVersionsTable,
+        t.profileVersionsTable.documentId,
+        idsOf(profileDocuments)
+      ),
       source_documents: await byProfile(t.sourceDocumentsTable),
       positions,
       credentials: await byProfile(t.credentialsTable),

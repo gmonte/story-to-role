@@ -14,6 +14,8 @@ type Row = Record<string, unknown>;
 /** Where each table goes in the ZIP. */
 export const exportPaths: Record<string, string> = {
   career_profiles: "career/profile",
+  profile_documents: "career/profile-documents",
+  profile_versions: "career/profile-versions",
   positions: "career/positions",
   credentials: "career/credentials",
   career_goals: "career/goals",

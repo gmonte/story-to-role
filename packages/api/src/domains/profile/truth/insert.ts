@@ -1,0 +1,220 @@
+import type { ProfileBlock } from "./blocks";
+import type { DateRange } from "./dates";
+import {
+  competencyLabels,
+  competencyLevelOf,
+  profileSectionKeys,
+  type CompetencyLevel,
+  type ProfileLanguage,
+  type ProfileSectionKey,
+} from "./sections";
+import { readStructure, sectionOf, splitLabel } from "./structure";
+import { experienceTemplate, sectionTemplate } from "./template";
+
+/** What the insert menu adds (profile spec, "The editor"). */
+export type ProfileEntry =
+  | { kind: "experience"; company: string; title: string; range: DateRange }
+  | {
+      kind: "education";
+      course: string;
+      institution: string;
+      // Null when completed; the month it ends while in progress.
+      inProgressUntil: string | null;
+    }
+  | {
+      kind: "certification";
+      name: string;
+      issuer: string;
+      date: string;
+      status: "valid" | "expired" | "renewing";
+      expiredOn: string | null;
+    }
+  | { kind: "language"; language: string; level: string }
+  | { kind: "competency"; name: string; level: CompetencyLevel }
+  | { kind: "gap"; text: string }
+  | { kind: "rule"; rule: "neverInclude" | "neverClaim"; text: string }
+  | { kind: "addendum"; date: string; text: string };
+
+export type ProfileEntryKind = ProfileEntry["kind"];
+
+const sectionOfEntry: Record<ProfileEntryKind, ProfileSectionKey> = {
+  experience: "experience",
+  education: "education",
+  certification: "certifications",
+  language: "languages",
+  competency: "competencies",
+  gap: "gaps",
+  rule: "rules",
+  addendum: "addenda",
+};
+
+const words: Record<
+  ProfileLanguage,
+  {
+    completed: string;
+    inProgressUntil: string;
+    valid: string;
+    expiredOn: string;
+    renewing: string;
+    neverInclude: string;
+    neverClaim: string;
+  }
+> = {
+  "pt-BR": {
+    completed: "concluído",
+    inProgressUntil: "em andamento até",
+    valid: "válida",
+    expiredOn: "expirada em",
+    renewing: "em renovação",
+    neverInclude: "Nunca incluir",
+    neverClaim: "Nunca afirmar",
+  },
+  "en-US": {
+    completed: "completed",
+    inProgressUntil: "in progress until",
+    valid: "valid",
+    expiredOn: "expired in",
+    renewing: "renewing",
+    neverInclude: "Never include",
+    neverClaim: "Never claim",
+  },
+};
+
+/** The line an entry is written as (all but an experience, which is a block). */
+export function entryLine(entry: ProfileEntry, language: ProfileLanguage) {
+  const w = words[language];
+  switch (entry.kind) {
+    case "education":
+      return `${entry.course} — ${entry.institution} — ${
+        entry.inProgressUntil
+          ? `${w.inProgressUntil} ${entry.inProgressUntil}`
+          : w.completed
+      }`;
+    case "certification": {
+      const status =
+        entry.status === "valid"
+          ? w.valid
+          : entry.status === "renewing"
+            ? w.renewing
+            : `${w.expiredOn} ${entry.expiredOn ?? ""}`.trim();
+      return `${entry.name} — ${entry.issuer} — ${entry.date} — ${status}`;
+    }
+    case "language":
+      return `${entry.language} — ${entry.level}`;
+    case "gap":
+      return entry.text;
+    case "addendum":
+      return `${entry.date}: ${entry.text}`;
+    default:
+      return "";
+  }
+}
+
+/** Where the section ends, after creating it when it's missing. */
+function ensureSection(blocks: ProfileBlock[], key: ProfileSectionKey) {
+  let structure = readStructure(blocks);
+  if (!sectionOf(structure, key)) {
+    const after = structure.sections.filter(
+      (section) =>
+        section.key &&
+        profileSectionKeys.indexOf(section.key) >
+          profileSectionKeys.indexOf(key)
+    );
+    const at = after.length
+      ? Math.min(...after.map((s) => s.heading))
+      : blocks.length;
+    blocks = [
+      ...blocks.slice(0, at),
+      ...sectionTemplate(key, structure.language),
+      ...blocks.slice(at),
+    ];
+    structure = readStructure(blocks);
+  }
+  return { blocks, structure, section: sectionOf(structure, key)! };
+}
+
+function insertAt(
+  blocks: ProfileBlock[],
+  at: number,
+  inserted: ProfileBlock[]
+) {
+  return [...blocks.slice(0, at), ...inserted, ...blocks.slice(at)];
+}
+
+/**
+ * Inserts an entry in its section, in the template's format and in order
+ * (an experience by its dates, most recent first), creating the section
+ * when it's missing. Returns the new blocks and the line of the entry.
+ */
+export function insertEntry(
+  input: ProfileBlock[],
+  entry: ProfileEntry
+): { blocks: ProfileBlock[]; line: number } {
+  const { blocks, structure, section } = ensureSection(
+    input,
+    sectionOfEntry[entry.kind]
+  );
+  const language = structure.language;
+
+  if (entry.kind === "experience") {
+    const end = entry.range.end === "present" ? "9999-12" : entry.range.end;
+    // Before the first experience that started earlier (or ended earlier).
+    const before = structure.experiences.find((experience) => {
+      if (!experience.parsed) return false;
+      const other = experience.parsed.range;
+      const otherEnd = other.end === "present" ? "9999-12" : other.end;
+      return (
+        other.start < entry.range.start ||
+        (other.start === entry.range.start && otherEnd < end)
+      );
+    });
+    const at = before?.heading ?? section.end;
+    return {
+      blocks: insertAt(blocks, at, experienceTemplate(entry, language)),
+      line: at,
+    };
+  }
+
+  if (entry.kind === "competency" || entry.kind === "rule") {
+    const label =
+      entry.kind === "competency"
+        ? competencyLabels[language][entry.level]
+        : words[language][entry.rule];
+    const name = entry.kind === "competency" ? entry.name : entry.text;
+    for (let line = section.start; line < section.end; line++) {
+      const block = blocks[line];
+      if (block.type !== "item" || block.depth) continue;
+      const labelled = splitLabel(block.text);
+      if (!labelled) continue;
+      const matches =
+        entry.kind === "competency"
+          ? competencyLevelOf(labelled.label) === entry.level
+          : labelled.label.trim().toLowerCase() === label.toLowerCase();
+      if (!matches) continue;
+      const value = labelled.value.replace(/\.$/, "");
+      const text = `${block.text.slice(0, block.text.indexOf(":") + 1)} ${
+        value ? `${value}, ${name}` : name
+      }`;
+      return {
+        blocks: blocks.map((b, i) => (i === line ? { ...b, text } : b)),
+        line,
+      };
+    }
+    const at = section.end;
+    return {
+      blocks: insertAt(blocks, at, [
+        { type: "item", depth: 0, text: `${label}: ${name}` },
+      ]),
+      line: at,
+    };
+  }
+
+  // A line at the end of its section, after the section's last line.
+  const at = section.end;
+  return {
+    blocks: insertAt(blocks, at, [
+      { type: "item", depth: 0, text: entryLine(entry, language) },
+    ]),
+    line: at,
+  };
+}

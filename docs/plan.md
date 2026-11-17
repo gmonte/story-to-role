@@ -57,6 +57,8 @@ Acceptance:
 - A small prototype first: a TipTap/ProseMirror block editor whose Markdown round trip is lossless for the template.
 - My career becomes the editor: index, document, agent panel. The template with hints for a new profile; the "+" and `/` insert menu for each section type, in place and format, with date and status pickers; autosave of the draft and undo.
 - The linter (format and content rules, in the browser and on the server) marking findings in the text; "Fix format" per finding and for the whole document; published versions read, compared and restored.
+- Note: since versions need publishing, P1 also ships Publish without its Validate step (format findings block it; an unchanged draft publishes nothing new). P2 adds Validate in front of it and the extract behind it.
+- Note: the editor holds the profile as flat blocks, one per Markdown line (heading, paragraph, quote line, list item with its depth), so the round trip is lossless and each finding maps to its line; the official TipTap drag handle needs the Yjs collaboration packages, so the margin's "+" and handle and the `/` menu are the app's own.
 
 Acceptance:
 - [ ] A new profile starts from the template; each insert lands in its section, in format.

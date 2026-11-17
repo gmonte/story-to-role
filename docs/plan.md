@@ -223,9 +223,9 @@ Each position's account becomes the source of truth ([ADR 0008](./adr/0008-posit
 
 ### A5: The gateway and pending notes
 
-- The general chat routes each message with a small model and forwards it verbatim to one interviewer, whose reply reaches the user unrewritten; a `hand_off` tool turns passages about another position into pending notes there (no extra model call) and the chat says where each went; career questions are answered from the fact indexes.
+- The general chat routes each message with a small model and forwards it verbatim to one interviewer, whose reply reaches the user unrewritten; a `hand_off` tool turns passages about another position into pending notes there, unless its fact index or notes already hold them (checked by vector similarity, a small model only when close), and the chat says where each went or that it was already there; career questions are answered from the fact indexes.
 - A position with pending notes says so; the interviewer's proposal is checked against each note; approving clears the covered ones.
-- Acceptance: one routing call and one interviewer call per message; a mention of another position becomes a pending note and the user is told; "where did I work with React?" names the positions from the indexes.
+- Acceptance: one routing call and one interviewer call per message; a mention of another position becomes a pending note, or nothing when already held, and the user is told either way; "where did I work with React?" names the positions from the indexes.
 
 ### A6: Migration
 

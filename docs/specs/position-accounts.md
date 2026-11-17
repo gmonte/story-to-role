@@ -46,7 +46,7 @@ The general chat is where the user can tell anything, in any order; it does not 
 
 1. **Routing.** A small, fast model reads only the message and the timeline (titles, employers, dates) and picks where it goes: the position being talked about (a follow-up stays with the same one), a new position to propose, or a question about the career. The orchestrator no longer writes the reply.
 2. **Forwarding.** The message goes verbatim to that position's interviewer, whose reply streams straight to the user, marked with the position it comes from. The user can tell a whole position's account in one message.
-3. **Another position mentioned.** The interviewer handles what belongs to its position and hands back the passages about another one (a `hand_off` tool: position, passage). Each passage becomes a **pending note** on that position, verbatim, at no extra model call, and the chat tells the user where it went ("Noted on Globex: the billing system served 2 million customers").
+3. **Another position mentioned.** The interviewer handles what belongs to its position and hands back the passages about another one (a `hand_off` tool: position, passage). Each passage is first checked against that position's fact index and its pending notes (vector similarity, then a small model only when close): what the account or a note already holds creates nothing, and the chat says so ("Already in Globex's account: the billing system served 2 million customers"). Anything new becomes a **pending note** on that position, verbatim, and the chat tells the user where it went ("Noted on Globex: …").
 4. **Questions about the career** ("where did I work with React?") are answered by a small model from the fact indexes of the approved accounts, each answer naming the positions and passages it rests on; no interviewer is called.
 
 ## Pending notes
@@ -101,6 +101,6 @@ Each existing position gets a first draft account written from its approved evid
 - [ ] Resumes and cover letters are generated from accounts, with bullets chosen for the focus, each line traced to the account, and a line with an unstated figure rejected.
 - [ ] Existing positions get a first draft account from their evidence and conversations.
 - [ ] The general chat routes each message with a small model and forwards it verbatim to one interviewer, whose reply reaches the user without being rewritten.
-- [ ] A passage about another position becomes a pending note there, with no extra model call, and the user is told where it went.
+- [ ] A passage about another position becomes a pending note there only when its account and notes don't already hold it; either way the user is told.
 - [ ] A position with pending notes says so; the interviewer's proposal is checked against each note, and approving clears the ones it covers.
 - [ ] A question about the career is answered from the fact indexes, naming the positions it rests on.

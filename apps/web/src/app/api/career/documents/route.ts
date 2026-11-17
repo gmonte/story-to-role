@@ -14,8 +14,8 @@ const formSchema = z.object({
 
 /**
  * Receives a source, a resume, a LinkedIn PDF, notes or a truth file
- * (multipart, which tRPC doesn't carry). The file goes to storage encrypted
- * and its import runs in a task, which works out what kind of file it is.
+ * (multipart, which tRPC doesn't carry). The file goes to storage
+ * encrypted; nothing reads it yet (P4 re-adds importing).
  */
 export async function POST(request: NextRequest) {
   const { userId: clerkUserId } = await auth();
@@ -26,7 +26,7 @@ export async function POST(request: NextRequest) {
   );
   if (!user) return new Response(null, { status: 404 });
 
-  if (!(await upstashRateLimiter.allow("taskStart", user.id))) {
+  if (!(await upstashRateLimiter.allow("sourceUpload", user.id))) {
     return new Response(null, { status: 429 });
   }
 
@@ -52,23 +52,7 @@ export async function POST(request: NextRequest) {
     return Response.json(result);
   } catch (error) {
     // Matched by code: the error class may come from another copy of tRPC.
-    const { code, cause } = error as {
-      code?: string;
-      cause?: { needed?: number; available?: number; stored?: number };
-    };
-    if (code === "PAYMENT_REQUIRED") {
-      // The same shortfall tRPC errors carry, for the out-of-credits notice.
-      return Response.json(
-        {
-          credits: cause && {
-            needed: cause.needed,
-            available: cause.available,
-            stored: cause.stored,
-          },
-        },
-        { status: 402 }
-      );
-    }
+    const { code } = error as { code?: string };
     const status: Record<string, number> = {
       PRECONDITION_FAILED: 412,
       // Already holding the most sources a user can keep.

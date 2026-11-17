@@ -16,10 +16,6 @@ import {
   scopeOf,
 } from "@repo/api/domains/credits/credit-pricing";
 import { CreditsRepository } from "@repo/api/domains/credits/credits-repository";
-import {
-  creditReserve,
-  keepsReserve,
-} from "@repo/api/domains/credits/credit-reserve";
 import type { DbClient } from "@repo/api/tools/db-client";
 import { triggerClient } from "@repo/api/tools/trigger/trigger-client";
 
@@ -40,13 +36,15 @@ const asPaymentRequired = (error: unknown) => {
     : error;
 };
 
-/** What an action may not touch: the credit reserve, for the interview. */
-const keptFor = (tx: DbClient, userId: string, type: TaskType, now: Date) =>
-  keepsReserve(type) ? creditReserve(tx, userId, now) : Promise.resolve(0);
+/**
+ * What an action may not touch. Nothing since the interview went: the
+ * profile agent (P3, docs/plan.md) will keep the credit reserve again.
+ */
+const keep = 0;
 
-// Tasks that run one at a time per user (their task caps the key): an
-// import must see the facts the one before it saved.
-const queuedPerUser: ReadonlySet<TaskType> = new Set(["import_document"]);
+// Tasks that run one at a time per user (their task caps the key). None
+// since importing was removed; P4 (docs/plan.md) re-adds importing.
+const queuedPerUser: ReadonlySet<TaskType> = new Set<TaskType>();
 
 export class TasksService {
   constructor(
@@ -74,7 +72,6 @@ export class TasksService {
     await this.db
       .transaction(async (tx) => {
         await ensureMonthlyCredits(tx, input.userId, now);
-        const keep = await keptFor(tx, input.userId, input.type, now);
         const funding = await decideFunding(tx, {
           userId: input.userId,
           cap,
@@ -148,7 +145,6 @@ export class TasksService {
         await new CreditsRepository(tx).lockUser(input.userId);
         const cap = creditCap(input.type, input.hints);
         const scope = scopeOf(input.type);
-        const keep = await keptFor(tx, input.userId, input.type, now);
         const funding = await decideFunding(tx, {
           userId: input.userId,
           cap,

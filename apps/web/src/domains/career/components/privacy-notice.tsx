@@ -11,8 +11,9 @@ import { useTRPC } from "~/tools/trpc/client";
 import { useRefreshCareer } from "../hooks/use-career-queries";
 
 /**
- * Shown before the first question (guided interview spec): what goes to the
- * AI provider, what to avoid saying, and that sensitive items can be hidden.
+ * Shown before career data arrives (privacy spec): how it is stored, what
+ * goes to the AI provider, what to avoid writing, and how names and figures
+ * stay out of documents.
  */
 export function PrivacyNotice() {
   const t = useTranslation();
@@ -25,11 +26,11 @@ export function PrivacyNotice() {
   const points = [
     t.formatMessage({
       defaultMessage:
-        "What you tell the interviewer is sent to our AI provider to understand it. Providers don't train models on this data.",
+        "What you write in your profile and the files you upload are stored encrypted with your own key.",
     }),
     t.formatMessage({
       defaultMessage:
-        "The conversation travels through our task service (Trigger.dev), which keeps it for up to 7 days. Our own copy is encrypted and deleted on the same schedule.",
+        "To propose and review content, the passages needed are sent to our AI provider. Providers don't train models on this data.",
     }),
     t.formatMessage({
       defaultMessage:
@@ -37,11 +38,11 @@ export function PrivacyNotice() {
     }),
     t.formatMessage({
       defaultMessage:
-        "Names, codenames and figures you mention can be generalized or hidden later, before anything is generated.",
+        "Names and figures can be kept out of your documents with your profile's communication rules.",
     }),
     t.formatMessage({
       defaultMessage:
-        "Voice input uses your browser's speech recognition (Google's in Chrome and Edge, Apple's in Safari); StoryToRole never receives the audio. Your interview answers are encrypted and deleted 7 days after you approve what was extracted.",
+        "Voice input uses your browser's speech recognition (Google's in Chrome and Edge, Apple's in Safari); StoryToRole never receives the audio.",
     }),
   ];
 

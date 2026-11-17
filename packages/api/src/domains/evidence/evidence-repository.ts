@@ -1,70 +1,17 @@
-import { and, arrayContains, eq, inArray, sql } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 
 import type { DbClient } from "@repo/api/tools/db-client";
 
-import {
-  careerGoalsTable,
-  evidenceTable,
-  sensitiveItemsTable,
-  skillsTable,
-  storiesTable,
-} from "./db/evidence-tables";
+import { careerGoalsTable, sensitiveItemsTable } from "./db/evidence-tables";
 
 type Insert<T extends { $inferInsert: unknown }> = T["$inferInsert"];
 
+/**
+ * Sensitive items and career goals: what is left of the old evidence base
+ * that applications and generation still read.
+ */
 export class EvidenceRepository {
   constructor(private readonly tx: DbClient) {}
-
-  listEvidence(profileId: string) {
-    return this.tx
-      .select()
-      .from(evidenceTable)
-      .where(eq(evidenceTable.profileId, profileId));
-  }
-
-  listEvidenceForPosition(positionId: string) {
-    return this.tx
-      .select()
-      .from(evidenceTable)
-      .where(eq(evidenceTable.positionId, positionId));
-  }
-
-  async insertEvidence(rows: Array<Insert<typeof evidenceTable>>) {
-    if (rows.length === 0) return [];
-    return this.tx.insert(evidenceTable).values(rows).returning();
-  }
-
-  listStories(profileId: string) {
-    return this.tx
-      .select()
-      .from(storiesTable)
-      .where(eq(storiesTable.profileId, profileId));
-  }
-
-  async insertStories(rows: Array<Insert<typeof storiesTable>>) {
-    if (rows.length === 0) return [];
-    return this.tx.insert(storiesTable).values(rows).returning();
-  }
-
-  async findStory(input: { profileId: string; storyId: string }) {
-    const [row] = await this.tx
-      .select()
-      .from(storiesTable)
-      .where(
-        and(
-          eq(storiesTable.id, input.storyId),
-          eq(storiesTable.profileId, input.profileId)
-        )
-      );
-    return row ?? null;
-  }
-
-  async updateStoryEvidence(input: { storyId: string; evidenceIds: string[] }) {
-    await this.tx
-      .update(storiesTable)
-      .set({ evidenceIds: input.evidenceIds })
-      .where(eq(storiesTable.id, input.storyId));
-  }
 
   listCareerGoals(profileId: string) {
     return this.tx
@@ -77,25 +24,6 @@ export class EvidenceRepository {
   async insertCareerGoals(rows: Array<Insert<typeof careerGoalsTable>>) {
     if (rows.length === 0) return;
     await this.tx.insert(careerGoalsTable).values(rows);
-  }
-
-  listSkills(profileId: string) {
-    return this.tx
-      .select()
-      .from(skillsTable)
-      .where(eq(skillsTable.profileId, profileId));
-  }
-
-  async insertSkills(rows: Array<Insert<typeof skillsTable>>) {
-    if (rows.length === 0) return;
-    await this.tx.insert(skillsTable).values(rows);
-  }
-
-  async updateSkillEvidence(input: { skillId: string; evidenceIds: string[] }) {
-    await this.tx
-      .update(skillsTable)
-      .set({ evidenceIds: input.evidenceIds })
-      .where(eq(skillsTable.id, input.skillId));
   }
 
   listSensitiveItems(profileId: string) {
@@ -134,83 +62,5 @@ export class EvidenceRepository {
       .update(sensitiveItemsTable)
       .set(changes)
       .where(eq(sensitiveItemsTable.id, sensitiveItemId));
-  }
-
-  /** Merging positions: everything owned by one moves to the other. */
-  async movePositionContent(input: {
-    fromPositionId: string;
-    toPositionId: string;
-  }) {
-    await this.tx
-      .update(evidenceTable)
-      .set({ positionId: input.toPositionId })
-      .where(eq(evidenceTable.positionId, input.fromPositionId));
-    await this.tx
-      .update(storiesTable)
-      .set({ positionId: input.toPositionId })
-      .where(eq(storiesTable.positionId, input.fromPositionId));
-    await this.tx
-      .update(sensitiveItemsTable)
-      .set({ positionId: input.toPositionId })
-      .where(eq(sensitiveItemsTable.positionId, input.fromPositionId));
-  }
-
-  async findEvidence(input: { profileId: string; evidenceId: string }) {
-    const [row] = await this.tx
-      .select()
-      .from(evidenceTable)
-      .where(
-        and(
-          eq(evidenceTable.profileId, input.profileId),
-          eq(evidenceTable.id, input.evidenceId)
-        )
-      );
-    return row;
-  }
-
-  async updateEvidenceText(evidenceId: string, encryptedText: string) {
-    await this.tx
-      .update(evidenceTable)
-      .set({ encryptedText })
-      .where(eq(evidenceTable.id, evidenceId));
-  }
-
-  /** Deletes a fact and drops it from the stories and skills citing it. */
-  async deleteEvidence(evidenceId: string) {
-    await this.tx
-      .update(storiesTable)
-      .set({
-        evidenceIds: sql`array_remove(${storiesTable.evidenceIds}, ${evidenceId}::uuid)`,
-      })
-      .where(arrayContains(storiesTable.evidenceIds, [evidenceId]));
-    await this.tx
-      .update(skillsTable)
-      .set({
-        evidenceIds: sql`array_remove(${skillsTable.evidenceIds}, ${evidenceId}::uuid)`,
-      })
-      .where(arrayContains(skillsTable.evidenceIds, [evidenceId]));
-    await this.tx.delete(evidenceTable).where(eq(evidenceTable.id, evidenceId));
-  }
-
-  async moveCredentialContent(input: {
-    fromCredentialId: string;
-    toCredentialId: string;
-  }) {
-    await this.tx
-      .update(evidenceTable)
-      .set({ credentialId: input.toCredentialId })
-      .where(eq(evidenceTable.credentialId, input.fromCredentialId));
-    await this.tx
-      .update(storiesTable)
-      .set({ credentialId: input.toCredentialId })
-      .where(eq(storiesTable.credentialId, input.fromCredentialId));
-  }
-
-  countEvidenceByIds(evidenceIds: string[]) {
-    if (evidenceIds.length === 0) return Promise.resolve([]);
-    return this.tx
-      .select({ id: evidenceTable.id })
-      .from(evidenceTable)
-      .where(inArray(evidenceTable.id, evidenceIds));
   }
 }

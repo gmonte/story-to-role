@@ -45,6 +45,8 @@ The meu-emprego-novo method in the product (ADR 0008): the profile document, its
 - Remove the old engine, code, tables and Trigger.dev tasks: the guided interview (sessions, turns, draft facts, approval screen), the career chat's orchestrator and per-position agents, career events and reactions, position summaries, narratives, cross notes, timeline proposals, position accounts, the position space, evidence, stories and skills. Keep the profile anchor, sources, users, credits, billing, openings, documents, applications, tracker, tasks and encryption, with whatever reads the removed tables stubbed until its slice adapts it.
 - Squash every migration into one baseline generated from the remaining schema (idempotent as usual); rebuild the local and staging databases from scratch with it. All their data is lost, which is fine: nothing runs outside local and staging yet.
 - The owner recreates their Clerk user while ngrok forwards the webhook (say when it's running); the test users used in live checks are recreated after asking.
+- Note: the career chat's `chat.agent` transport (the agent task, encrypted transcript storage, the 7-day purge and closing sessions on account deletion) went with the old chat; P3 rebuilds it from git history as the profile agent.
+- Note: `positions`, `credentials`, `sensitive_items` and `career_goals` stay on purpose until P5, P6 and P8 move their readers to the profile; until then the `evidence` domain folder holds only the last two.
 
 Acceptance:
 - [ ] No table, task, route or component of the old engine remains; `pnpm lint` and `pnpm test` pass.

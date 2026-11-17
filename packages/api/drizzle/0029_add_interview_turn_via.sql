@@ -1,1 +1,0 @@
-ALTER TABLE "interview_turns" ADD COLUMN IF NOT EXISTS "via" text;

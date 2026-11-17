@@ -367,9 +367,8 @@ export class DocumentsService {
   }
 
   /**
-   * Where lines come from, loaded once per view: each evidence item's quote,
-   * position or credential and approval date, each instruction point's
-   * text, and each credential's approval date.
+   * Where lines come from, loaded once per view: each instruction point's
+   * text and each credential's approval date.
    */
   private async traceSource(
     tx: DbClient,
@@ -381,7 +380,6 @@ export class DocumentsService {
     const career = new CareerRepository(tx);
     const positions = await career.listPositions(profileId);
     const credentials = await career.listCredentials(profileId);
-    const evidence = await new EvidenceRepository(tx).listEvidence(profileId);
     const equivalents = await new DocumentsRepository(tx).listTitleEquivalents(
       profileId
     );
@@ -398,41 +396,11 @@ export class DocumentsService {
         : []
       ).map((point) => [point.id, cipher.decrypt(point.encryptedText)])
     );
-    const byId = new Map(
-      evidence.map((row): [string, EvidenceTrace] => {
-        const position = positions.find((p) => p.id === row.positionId);
-        const credential = credentials.find((c) => c.id === row.credentialId);
-        return [
-          row.id,
-          {
-            evidenceId: row.id,
-            text: cipher.decrypt(row.encryptedText),
-            quote: cipher.decrypt(row.encryptedSourceQuote),
-            source: position
-              ? {
-                  kind: "position",
-                  title: cipher.decrypt(position.encryptedTitle),
-                  employer: cipher.decrypt(position.encryptedEmployer),
-                }
-              : credential
-                ? {
-                    kind: "credential",
-                    title: cipher.decrypt(credential.encryptedTitle),
-                  }
-                : null,
-            approvedAt: row.approvedAt,
-          },
-        ];
-      })
-    );
     return {
-      evidenceFor(content: DocumentContent) {
-        const ids = new Set(
-          documentLines(content).flatMap((line) =>
-            "evidenceIds" in line.origin ? line.origin.evidenceIds : []
-          )
-        );
-        return [...ids].flatMap((id) => byId.get(id) ?? []);
+      // Profile_truth replaces this in P7 (docs/plan.md): no evidence
+      // exists, so no line traces to a fact.
+      evidenceFor(_content: DocumentContent): EvidenceTrace[] {
+        return [];
       },
       instructionsFor(content: DocumentContent) {
         const ids = new Set(

@@ -70,20 +70,10 @@ export function creditCap(type: TaskType, hints: CapHints = {}): number {
   switch (type) {
     case "analyze_opening":
       return 3;
-    case "chat_turn":
-    case "interview_turn":
     case "motivation_turn":
     case "split_instructions":
     case "extract_style_profile":
       return 3;
-    // Up to two position agents beside the orchestrator.
-    case "career_chat_turn":
-      return 8;
-    case "summarize_position":
-    case "draft_narrative":
-      return 5;
-    case "import_document":
-      return 30;
     case "research_company":
       return 20;
     case "adapt_document":
@@ -96,9 +86,6 @@ export function creditCap(type: TaskType, hints: CapHints = {}): number {
     }
     case "sample":
     case "render_pdf":
-      return 0;
-    // Asked for by no one: StoryToRole pays (or the user's own key).
-    case "understand_session":
       return 0;
   }
 }

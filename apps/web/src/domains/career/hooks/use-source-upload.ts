@@ -3,18 +3,11 @@
 import {
   acceptedDocumentTypes,
   documentLimits,
-  slotStatuses,
   typesByExtension,
 } from "@repo/api/domains/career/documents/document-limits";
 import type { Timeline } from "@repo/api/domains/career/schemas/timeline";
-import type { RealtimeSubscription } from "@repo/api/domains/tasks/schemas/task";
 import { useTranslation } from "@repo/intl/use-translation";
 import { toast } from "@repo/web/components/ui/sonner";
-
-import {
-  type CreditsShortfall,
-  useOutOfCreditsToast,
-} from "~/domains/credits/components/out-of-credits-notice";
 
 import { useRefreshCareer } from "./use-career-queries";
 
@@ -28,28 +21,18 @@ export const sourceAccept = [
 
 export const sourceMegabytes = documentLimits.maxBytes / (1024 * 1024);
 
-/** A running import, with the name of its file. */
-export type SourceImport = RealtimeSubscription & { fileName: string };
-
-const takesSlot = (document: Timeline["documents"][number]) =>
-  (slotStatuses as readonly string[]).includes(document.status);
-
 /**
- * Uploads career sources, from the Sources panel or the career chat alike:
- * format, size and the slots left are checked here first; the server checks
- * them again (the content too) and has the last word. Each upload that
- * starts an import is handed to `onStarted`.
+ * Uploads career sources: format, size and the slots left are checked here
+ * first; the server checks them again (the content too) and has the last
+ * word. A source is only stored for now (P4 re-adds importing).
  */
 export function useSourceUpload({
   documents,
-  onStarted,
 }: {
   documents: Timeline["documents"];
-  onStarted: (started: SourceImport) => void;
 }) {
   const t = useTranslation();
   const refresh = useRefreshCareer();
-  const showOutOfCredits = useOutOfCreditsToast();
 
   const invalidFile = t.formatMessage(
     {
@@ -73,21 +56,10 @@ export function useSourceUpload({
       method: "POST",
       body: form,
     });
-    if (response.status === 402) {
-      const { credits } = (await response.json()) as {
-        credits: CreditsShortfall;
-      };
-      showOutOfCredits(credits);
-      return;
-    }
     if (!response.ok) {
       toast.error(response.status === 409 ? tooMany : invalidFile);
       return;
     }
-    const { realtime } = (await response.json()) as {
-      realtime: RealtimeSubscription;
-    };
-    onStarted({ ...realtime, fileName: file.name });
     await refresh();
   }
 
@@ -102,7 +74,7 @@ export function useSourceUpload({
     });
     if (valid.length < files.length) toast.error(invalidFile);
     // As many as fit; the rest wait for a free slot.
-    const free = documentLimits.maxSources - documents.filter(takesSlot).length;
+    const free = documentLimits.maxSources - documents.length;
     if (valid.length > free) toast.error(tooMany);
     for (const file of valid.slice(0, Math.max(free, 0))) void upload(file);
   }

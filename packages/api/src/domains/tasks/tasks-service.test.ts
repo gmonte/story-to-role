@@ -122,8 +122,11 @@ describe("tasks", () => {
     });
 
     await expect(
-      runTask({ db, taskId: task.id, type: "chat_turn" }, async () => undefined)
-    ).rejects.toThrow("is not a chat_turn task");
+      runTask(
+        { db, taskId: task.id, type: "motivation_turn" },
+        async () => undefined
+      )
+    ).rejects.toThrow("is not a motivation_turn task");
   });
 
   it("stores a fixed message when a run fails, never the error's content", async () => {

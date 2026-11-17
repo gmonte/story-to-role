@@ -5,7 +5,6 @@ import {
   getUserCipher,
   type UserCipher,
 } from "@repo/api/domains/encryption/user-cipher";
-import { EvidenceRepository } from "@repo/api/domains/evidence/evidence-repository";
 import type { RealtimeSubscription } from "@repo/api/domains/tasks/schemas/task";
 import { TasksService } from "@repo/api/domains/tasks/tasks-service";
 import type { DbClient } from "@repo/api/tools/db-client";
@@ -167,10 +166,9 @@ export class OpeningsService {
 
       let items: OpeningDetail["fitCheck"] = null;
       if (fitCheck) {
-        const [checkItems, terms, evidence] = await Promise.all([
+        const [checkItems, terms] = await Promise.all([
           openings.listFitCheckItems(fitCheck.id),
           openings.listTerms(row.id),
-          new EvidenceRepository(tx).listEvidence(profile.id),
         ]);
         items = {
           band: fitCheck.band,
@@ -186,13 +184,9 @@ export class OpeningsService {
               category: term?.category ?? "other",
               verdict: item.verdict,
               explanation: cipher.decrypt(item.encryptedExplanation),
-              evidence: evidence
-                .filter((row) => item.evidenceIds.includes(row.id))
-                .map((row) => ({
-                  id: row.id,
-                  kind: row.kind,
-                  text: cipher.decrypt(row.encryptedText),
-                })),
+              // Profile_truth replaces this in P5 (docs/plan.md): the
+              // passage backing each requirement.
+              evidence: [],
               gapQuestion: open(cipher, item.encryptedGapQuestion),
               gapAnswer: open(cipher, item.encryptedGapAnswer),
             };

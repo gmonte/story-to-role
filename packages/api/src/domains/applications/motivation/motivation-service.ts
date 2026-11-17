@@ -1,46 +1,26 @@
 import { TRPCError } from "@trpc/server";
-import { z } from "zod";
 
 import { CareerRepository } from "@repo/api/domains/career/career-repository";
-import {
-  getUserCipher,
-  type UserCipher,
-} from "@repo/api/domains/encryption/user-cipher";
+import { getUserCipher } from "@repo/api/domains/encryption/user-cipher";
 import { EvidenceRepository } from "@repo/api/domains/evidence/evidence-repository";
-import { defaultSensitivityChoice } from "@repo/api/domains/evidence/schemas/evidence";
 import { OpeningsRepository } from "@repo/api/domains/openings/openings-repository";
 import type { RealtimeSubscription } from "@repo/api/domains/tasks/schemas/task";
 import { TasksService } from "@repo/api/domains/tasks/tasks-service";
 import type { DbClient } from "@repo/api/tools/db-client";
 
-import { flaggedSensitiveItemSchema } from "../schemas/instructions";
-import type { MotivationView, StoryChoice } from "../schemas/motivation";
+import type { MotivationView } from "../schemas/motivation";
 import { MotivationRepository } from "./motivation-repository";
 import { awaitingInterviewer } from "./motivation-turns";
-
-const sensitiveItemsOf = (cipher: UserCipher, encrypted: string | null) =>
-  encrypted
-    ? z
-        .array(flaggedSensitiveItemSchema)
-        .parse(JSON.parse(cipher.decrypt(encrypted)))
-    : [];
 
 const notFound = () => new TRPCError({ code: "NOT_FOUND" });
 
 /** Longer than a turn may take: the interviewer is gone, not thinking. */
 const staleTurnMs = 3 * 60_000;
 
-/** How many stories the user chooses from (resume spec: the top three). */
-const storyChoices = 3;
-/** How much evidence is retrieved to rank stories by. */
-const rankedEvidence = 60;
-
 /**
- * The cover letter's motivation interview and story choice (resume spec,
- * "Cover letter inputs"): the story is chosen among the user's approved
- * stories closest to the opening; the interview asks a few short questions
- * in tasks; its points stay in the application or, approved one by one,
- * become career goals or enrich the story.
+ * The cover letter's motivation interview (resume spec, "Cover letter
+ * inputs"): a few short questions asked in tasks; its points stay in the
+ * application or, approved one by one, become career goals.
  */
 export class MotivationService {
   constructor(
@@ -77,7 +57,6 @@ export class MotivationService {
         return {
           interviewId: null,
           status: null,
-          storyId: null,
           thinking: false,
           turns: [],
           points: [],
@@ -93,7 +72,6 @@ export class MotivationService {
       return {
         interviewId: interview.id,
         status: stale ? "failed" : interview.status,
-        storyId: interview.storyId,
         thinking: waiting && !stale,
         turns: turns.map((turn) => ({
           role: turn.role,
@@ -109,79 +87,6 @@ export class MotivationService {
             status: point.status,
           })),
       };
-    });
-  }
-
-  /**
-   * The approved stories closest to the opening, by the vectors of their
-   * evidence, each with the requirements its evidence answers in the fit
-   * check: why it fits. No AI call.
-   */
-  async storyChoices(input: {
-    userId: string;
-    openingId: string;
-  }): Promise<StoryChoice[]> {
-    const { profile, opening } = await this.requireOpening(
-      input.userId,
-      input.openingId
-    );
-    return this.db.transaction(async (tx) => {
-      const openings = new OpeningsRepository(tx);
-      const cipher = await getUserCipher(tx, input.userId);
-      const stories = await new EvidenceRepository(tx).listStories(profile.id);
-      const rank = new Map(
-        opening.embedding
-          ? (
-              await openings.nearestEvidence({
-                profileId: profile.id,
-                embedding: opening.embedding,
-                limit: rankedEvidence,
-              })
-            ).map((row, index) => [row.id, index])
-          : []
-      );
-      const score = (evidenceIds: string[]) =>
-        Math.min(...evidenceIds.map((id) => rank.get(id) ?? Infinity));
-      // Closest first; ties (or no vector yet) go to the newest stories.
-      const ranked = [...stories]
-        .sort(
-          (a, b) =>
-            score(a.evidenceIds) - score(b.evidenceIds) ||
-            b.approvedAt.getTime() - a.approvedAt.getTime()
-        )
-        .slice(0, storyChoices);
-
-      const [fitCheck] = await openings.latestFitChecks([opening.id]);
-      const items = fitCheck
-        ? await openings.listFitCheckItems(fitCheck.id)
-        : [];
-      const terms = new Map(
-        (await openings.listTerms(opening.id)).map((term) => [
-          term.id,
-          cipher.decrypt(term.encryptedText),
-        ])
-      );
-      const positions = await new CareerRepository(tx).listPositions(
-        profile.id
-      );
-      return ranked.map((story) => {
-        const position = positions.find((row) => row.id === story.positionId);
-        return {
-          storyId: story.id,
-          problem: cipher.decrypt(story.encryptedProblem),
-          result: cipher.decrypt(story.encryptedResult),
-          position: position
-            ? `${cipher.decrypt(position.encryptedTitle)} · ${cipher.decrypt(position.encryptedEmployer)}`
-            : null,
-          fits: items
-            .filter(
-              (item) =>
-                item.verdict !== "gap" &&
-                item.evidenceIds.some((id) => story.evidenceIds.includes(id))
-            )
-            .flatMap((item) => terms.get(item.termId) ?? []),
-        };
-      });
     });
   }
 
@@ -202,11 +107,13 @@ export class MotivationService {
     }
   }
 
-  /** Starts (or starts over) the interview, with the story the letter tells. */
+  /**
+   * Starts (or starts over) the interview. Profile_truth replaces this in
+   * P8 (docs/plan.md): the letter's story will come from the profile.
+   */
   async start(input: {
     userId: string;
     openingId: string;
-    storyId: string | null;
   }): Promise<{ realtime: RealtimeSubscription }> {
     const { profile, opening } = await this.requireOpening(
       input.userId,
@@ -216,20 +123,9 @@ export class MotivationService {
       userId: input.userId,
       type: "motivation_turn",
     });
-    const interview = await this.db.transaction(async (tx) => {
-      if (input.storyId) {
-        const stories = await new EvidenceRepository(tx).listStories(
-          profile.id
-        );
-        if (!stories.some((story) => story.id === input.storyId)) {
-          throw notFound();
-        }
-      }
-      return new MotivationRepository(tx).replaceInterview({
-        profileId: profile.id,
-        openingId: opening.id,
-        storyId: input.storyId,
-      });
+    const interview = await new MotivationRepository(this.db).replaceInterview({
+      profileId: profile.id,
+      openingId: opening.id,
     });
     return this.askNext(input.userId, interview.id);
   }
@@ -273,12 +169,7 @@ export class MotivationService {
   }
 
   /** Skipping: the letter is then marked "could improve with your motivation". */
-  async skip(input: {
-    userId: string;
-    openingId: string;
-    // The story still matters: the letter tells it without the interview.
-    storyId: string | null;
-  }) {
+  async skip(input: { userId: string; openingId: string }) {
     const { profile, opening } = await this.requireOpening(
       input.userId,
       input.openingId
@@ -286,35 +177,21 @@ export class MotivationService {
     await this.db.transaction(async (tx) => {
       const repository = new MotivationRepository(tx);
       const interview = await repository.findInterviewByOpening(opening.id);
-      if (
-        input.storyId &&
-        !(await new EvidenceRepository(tx).findStory({
-          profileId: profile.id,
-          storyId: input.storyId,
-        }))
-      ) {
-        throw notFound();
-      }
       if (interview) {
-        await repository.updateInterview(interview.id, {
-          status: "skipped",
-          storyId: input.storyId ?? interview.storyId,
-        });
+        await repository.updateInterview(interview.id, { status: "skipped" });
       } else {
         await repository.replaceInterview({
           profileId: profile.id,
           openingId: opening.id,
           status: "skipped",
-          storyId: input.storyId,
         });
       }
     });
   }
 
   /**
-   * The user's decision on each goal or story detail: saved, it becomes a
-   * career goal or new evidence of the story (approved now, the user's
-   * words as the quote); otherwise it stays in this application.
+   * The user's decision on each goal: saved, it becomes a career goal;
+   * otherwise (and every story detail) it stays in this application.
    */
   async confirm(input: {
     userId: string;
@@ -341,14 +218,7 @@ export class MotivationService {
       const drafts = (await repository.listPoints(interview.id)).filter(
         (point) => point.status === "draft"
       );
-      const story = interview.storyId
-        ? await evidence.findStory({
-            profileId: profile.id,
-            storyId: interview.storyId,
-          })
-        : null;
       const approvedAt = new Date();
-      const cipher = await getUserCipher(tx, input.userId);
 
       const goals = drafts.filter(
         (point) => point.kind === "goal" && saved.has(point.id)
@@ -363,48 +233,9 @@ export class MotivationService {
           approvedAt,
         }))
       );
-      const details = story
-        ? drafts.filter(
-            (point) => point.kind === "story_detail" && saved.has(point.id)
-          )
-        : [];
-      if (story && details.length > 0) {
-        const rows = await evidence.insertEvidence(
-          details.map((point) => ({
-            profileId: profile.id,
-            positionId: story.positionId,
-            credentialId: story.credentialId,
-            kind: "achievement" as const,
-            encryptedText: point.encryptedText,
-            encryptedSourceQuote: point.encryptedText,
-            language: profile.interviewLanguage,
-            approvedAt,
-          }))
-        );
-        await evidence.updateStoryEvidence({
-          storyId: story.id,
-          evidenceIds: [...story.evidenceIds, ...rows.map((row) => row.id)],
-        });
-        // Through the same approval as interview evidence: flagged names
-        // and figures go to the sensitive-data review.
-        await evidence.insertSensitiveItems(
-          details.flatMap((point) =>
-            sensitiveItemsOf(cipher, point.encryptedSensitiveItems).map(
-              (item) => ({
-                profileId: profile.id,
-                positionId: story.positionId,
-                kind: item.kind,
-                encryptedOriginal: cipher.encrypt(item.original),
-                choice: defaultSensitivityChoice(item.kind),
-                encryptedGeneralized: item.suggestedGeneralization
-                  ? cipher.encrypt(item.suggestedGeneralization)
-                  : null,
-              })
-            )
-          )
-        );
-      }
-      const promoted = [...goals, ...details].map((point) => point.id);
+      // Profile_truth replaces this in P8 (docs/plan.md): a story detail
+      // has no story to enrich, so it stays in this application.
+      const promoted = goals.map((point) => point.id);
       await repository.updatePoints(promoted, { status: "promoted" });
       await repository.updatePoints(
         drafts

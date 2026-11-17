@@ -1,2 +1,0 @@
-ALTER TABLE "interview_sessions" ADD COLUMN IF NOT EXISTS "encryptedUnderstanding" text;--> statement-breakpoint
-ALTER TABLE "interview_sessions" ADD COLUMN IF NOT EXISTS "understandingFingerprint" text;

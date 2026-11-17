@@ -1,17 +1,11 @@
 import { randomBytes } from "node:crypto";
 
-import { eq } from "drizzle-orm";
 import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { createAiClient } from "@repo/api/domains/ai/ai-client";
-import { positionsTable } from "@repo/api/domains/career/db/career-tables";
 import { CareerService } from "@repo/api/domains/career/career-service";
 import { getUserCipher } from "@repo/api/domains/encryption/user-cipher";
-import {
-  careerGoalsTable,
-  evidenceTable,
-  storiesTable,
-} from "@repo/api/domains/evidence/db/evidence-tables";
+import { careerGoalsTable } from "@repo/api/domains/evidence/db/evidence-tables";
 import { OpeningsRepository } from "@repo/api/domains/openings/openings-repository";
 import { TasksService } from "@repo/api/domains/tasks/tasks-service";
 import { createTestUser } from "@repo/api/test/create-test-user";
@@ -35,66 +29,12 @@ const vector = (seed: number) =>
 async function setup() {
   const db = await getTestDatabase();
   const user = await createTestUser();
-  const career = new CareerService(db, { start: vi.fn() } as never);
+  const career = new CareerService(db);
   const profile = await career.getOrCreateProfile({
     userId: user.id,
     defaultLanguage: "en-US",
   });
-  const { positionId } = await career.addPosition({
-    userId: user.id,
-    position: { employer: "Globex", title: "Tech Lead", startDate: "2021-03" },
-  });
-  await db
-    .update(positionsTable)
-    .set({ status: "approved", approvedAt: new Date() })
-    .where(eq(positionsTable.id, positionId));
   const cipher = await getUserCipher(db, user.id);
-  const evidence = await db
-    .insert(evidenceTable)
-    .values(
-      [
-        "Moved 12 services to Kubernetes",
-        "Cut the billing batch from 6h to 20m",
-      ].map((text, index) => ({
-        profileId: profile.id,
-        positionId,
-        kind: "achievement" as const,
-        encryptedText: cipher.encrypt(text),
-        encryptedSourceQuote: cipher.encrypt(text),
-        language: "en-US" as const,
-        approvedAt: new Date(),
-        embedding: vector(index === 0 ? 3 : 7),
-      }))
-    )
-    .returning();
-  const stories = await db
-    .insert(storiesTable)
-    .values(
-      [
-        [
-          "Deploys took hours",
-          "Moved services to Kubernetes",
-          "Deploys in minutes",
-          evidence[0].id,
-        ],
-        [
-          "Billing ran all night",
-          "Rewrote the batch",
-          "Billing in 20 minutes",
-          evidence[1].id,
-        ],
-      ].map(([problem, action, result, evidenceId]) => ({
-        profileId: profile.id,
-        positionId,
-        encryptedProblem: cipher.encrypt(problem),
-        encryptedAction: cipher.encrypt(action),
-        encryptedResult: cipher.encrypt(result),
-        language: "en-US" as const,
-        evidenceIds: [evidenceId],
-        approvedAt: new Date(),
-      }))
-    )
-    .returning();
   const openings = new OpeningsRepository(db);
   const opening = await openings.insertOpening({
     profileId: profile.id,
@@ -102,7 +42,6 @@ async function setup() {
     status: "analyzed",
     encryptedTitle: cipher.encrypt("Platform Engineer"),
     encryptedCompany: cipher.encrypt("Hooli"),
-    // Closest to the Kubernetes evidence.
     embedding: vector(3),
   });
   const trigger = {
@@ -162,7 +101,6 @@ async function setup() {
     user,
     profile,
     opening,
-    stories,
     motivation,
     trigger,
     turn,
@@ -170,7 +108,7 @@ async function setup() {
   };
 }
 
-describe("motivation interview and story choice", () => {
+describe("motivation interview", () => {
   beforeEach(async () => {
     await clearTestDatabase();
   });
@@ -179,17 +117,10 @@ describe("motivation interview and story choice", () => {
     await closeTestDatabase();
   });
 
-  it("ranks stories, interviews in turns, and saves only approved goals and details", async () => {
+  it("interviews in turns and saves only approved goals", async () => {
     const ctx = await setup();
     const ids = { userId: ctx.user.id, openingId: ctx.opening.id };
-    const choices = await ctx.motivation.storyChoices(ids);
-    expect(choices.map((choice) => choice.problem)).toEqual([
-      "Deploys took hours",
-      "Billing ran all night",
-    ]);
-    expect(choices[0].position).toBe("Tech Lead · Globex");
-
-    await ctx.motivation.start({ ...ids, storyId: choices[0].storyId });
+    await ctx.motivation.start(ids);
     expect(ctx.trigger.trigger).toHaveBeenLastCalledWith(
       "motivation_turn",
       expect.anything()
@@ -265,6 +196,7 @@ describe("motivation interview and story choice", () => {
           kind: "goal",
           worth_saving: true,
         },
+        // Without a story to enrich: dropped.
         {
           text: "I decided after a release took a whole night",
           kind: "story_detail",
@@ -280,27 +212,18 @@ describe("motivation interview and story choice", () => {
       ["company", "kept"],
       ["goal", "draft"],
       ["goal", "draft"],
-      ["story_detail", "draft"],
     ]);
 
-    const [, smallTeams, , detail] = finished.points;
+    const [, smallTeams] = finished.points;
     await ctx.motivation.confirm({
       ...ids,
-      decisions: [
-        { motivationPointId: smallTeams.id, save: true },
-        { motivationPointId: detail.id, save: true },
-      ],
+      decisions: [{ motivationPointId: smallTeams.id, save: true }],
     });
     const goals = await ctx.db.select().from(careerGoalsTable);
     expect(goals).toHaveLength(1);
-    const [story] = await ctx.db
-      .select()
-      .from(storiesTable)
-      .where(eq(storiesTable.id, choices[0].storyId));
-    expect(story.evidenceIds).toHaveLength(2);
     expect(
       (await ctx.motivation.get(ids)).points.map((point) => point.status)
-    ).toEqual(["kept", "promoted", "kept", "promoted"]);
+    ).toEqual(["kept", "promoted", "kept"]);
   });
 
   it("can be skipped", async () => {
@@ -308,7 +231,6 @@ describe("motivation interview and story choice", () => {
     await ctx.motivation.skip({
       userId: ctx.user.id,
       openingId: ctx.opening.id,
-      storyId: ctx.stories[0].id,
     });
     expect(
       await ctx.motivation.get({

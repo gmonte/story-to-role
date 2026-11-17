@@ -6,10 +6,7 @@ import {
   credentialsTable,
   positionsTable,
 } from "@repo/api/domains/career/db/career-tables";
-import {
-  evidenceTable,
-  sensitiveItemsTable,
-} from "@repo/api/domains/evidence/db/evidence-tables";
+import { sensitiveItemsTable } from "@repo/api/domains/evidence/db/evidence-tables";
 import type {
   EvidenceKind,
   SensitivityChoice,
@@ -56,8 +53,7 @@ export const applicationInstructionsTable = createTable(
 
 /**
  * One point of the instructions, in the user's words. A draft carries the
- * AI's preselection; once confirmed it is kept for this application, or
- * promoted, when it also became evidence.
+ * AI's preselection; once confirmed it is kept for this application.
  */
 export const instructionPointsTable = createTable(
   "instruction_points",
@@ -95,11 +91,8 @@ export const instructionPointsTable = createTable(
       .uuid()
       .references(() => credentialsTable.id, { onDelete: "set null" }),
     evidenceKind: d.text().$type<EvidenceKind>(),
-    // Flagged names and figures, inserted as sensitive items on promotion.
+    // Flagged names and figures in the point.
     encryptedSensitiveItems: d.text(),
-    evidenceId: d
-      .uuid()
-      .references(() => evidenceTable.id, { onDelete: "set null" }),
     confirmedAt: d.timestamp({ withTimezone: true }),
   }),
   (t) => [index("instruction_points_opening_id_idx").on(t.openingId)]

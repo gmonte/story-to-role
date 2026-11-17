@@ -9,14 +9,15 @@ import { env } from "@repo/common/env/web.env";
  * REDIS_KEY_PREFIX.
  */
 export const rateLimits = {
-  // Chat messages and the tasks they start: a person types, a script bursts.
+  // Answers in a conversation (the motivation interview) and the tasks they
+  // start: a person types, a script bursts.
   chatMessage: Ratelimit.slidingWindow(10, "1 m"),
-  // Starting any other task (imports, generations, the sample task).
+  // Starting any other task (generations, research, the sample task).
   taskStart: Ratelimit.slidingWindow(5, "1 m"),
+  // Source files uploaded (the most a user keeps is 5 at once).
+  sourceUpload: Ratelimit.slidingWindow(10, "1 m"),
   // Source preview pages rendered on the server (a 20-page PDF is 20).
   pageRender: Ratelimit.slidingWindow(60, "1 m"),
-  // Interview sessions opened or resumed per day (guardrail 7).
-  sessionOpen: Ratelimit.slidingWindow(40, "1 d"),
 } as const;
 
 export type RateLimitName = keyof typeof rateLimits;

@@ -16,7 +16,7 @@ describe("OpenAPI document", () => {
     });
 
     expect(Object.keys(document.paths ?? {})).toEqual(
-      expect.arrayContaining(["/users/me", "/tasks/sample", "/chat/messages"])
+      expect.arrayContaining(["/users/me", "/tasks/sample", "/career/timeline"])
     );
   });
 });

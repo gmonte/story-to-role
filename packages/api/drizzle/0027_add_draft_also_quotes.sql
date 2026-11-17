@@ -1,1 +1,0 @@
-ALTER TABLE "draft_facts" ADD COLUMN IF NOT EXISTS "encryptedAlsoQuotes" text;

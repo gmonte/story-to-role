@@ -12,12 +12,10 @@ import { billingRouter } from "./domains/billing/billing-router";
 import { careerRouter } from "./domains/career/career-router";
 import { adaptationRouter } from "./domains/documents/adaptation/adaptation-router";
 import { creditsRouter } from "./domains/credits/credits-router";
-import { chatRouter } from "./domains/chat/chat-router";
 import { documentsRouter } from "./domains/documents/documents-router";
 import { letterRouter } from "./domains/documents/letter/letter-router";
 import { libraryRouter } from "./domains/documents/library/library-router";
 import { writingRouter } from "./domains/documents/writing/writing-router";
-import { interviewRouter } from "./domains/interview/interview-router";
 import { openingsRouter } from "./domains/openings/openings-router";
 import { tasksRouter } from "./domains/tasks/tasks-router";
 import { usersRouter } from "./domains/users/users-router";
@@ -28,11 +26,9 @@ export const appRouter = createTRPCRouter({
   aiKeys: aiKeysRouter,
   billing: billingRouter,
   career: careerRouter,
-  chat: chatRouter,
   credits: creditsRouter,
   documents: documentsRouter,
   instructions: instructionsRouter,
-  interview: interviewRouter,
   letters: letterRouter,
   library: libraryRouter,
   motivation: motivationRouter,

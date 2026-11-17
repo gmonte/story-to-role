@@ -3,7 +3,6 @@ import { z } from "zod";
 import type { AiClient } from "@repo/api/domains/ai/ai-client";
 import { CareerRepository } from "@repo/api/domains/career/career-repository";
 import type { UserCipher } from "@repo/api/domains/encryption/user-cipher";
-import { EvidenceRepository } from "@repo/api/domains/evidence/evidence-repository";
 import type { DbClient } from "@repo/api/tools/db-client";
 
 import { DocumentsRepository } from "../documents-repository";
@@ -39,12 +38,9 @@ export async function runExtractStyle(deps: {
   const samples = z
     .array(z.string())
     .parse(JSON.parse(cipher.decrypt(row.encryptedSamples)));
-  const material =
-    samples.length > 0
-      ? samples
-      : (await new EvidenceRepository(db).listEvidence(profile.id))
-          .filter((evidence) => evidence.sourceTurnId)
-          .map((evidence) => cipher.decrypt(evidence.encryptedSourceQuote));
+  // Without samples it once read the user's interview quotes. Profile_truth
+  // replaces this in P6 (docs/plan.md).
+  const material = samples;
   let text = "";
   for (const [index, sample] of material.entries()) {
     if (text.length > MAX_SAMPLE_CHARACTERS) break;

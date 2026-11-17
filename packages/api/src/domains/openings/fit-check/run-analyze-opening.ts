@@ -4,7 +4,6 @@ import type { AiClient } from "@repo/api/domains/ai/ai-client";
 import { CareerRepository } from "@repo/api/domains/career/career-repository";
 import { interviewLanguages } from "@repo/api/domains/career/schemas/career";
 import type { UserCipher } from "@repo/api/domains/encryption/user-cipher";
-import { EvidenceRepository } from "@repo/api/domains/evidence/evidence-repository";
 import { loadSensitiveFilter } from "@repo/api/domains/evidence/sensitive/load-sensitive-filter";
 import { createNarrator } from "@repo/api/domains/tasks/narrate";
 import type { TaskProgress } from "@repo/api/domains/tasks/schemas/task";
@@ -41,8 +40,6 @@ export const fitCheckSteps = [
   "matching",
   "judging",
 ] as const;
-
-const RETRIEVED_PER_TERM = 5;
 
 const postingCheckSchema = z.object({ is_job_posting: z.boolean() });
 
@@ -206,20 +203,6 @@ export async function runAnalyzeOpening(deps: Deps) {
     }))
   );
 
-  // Vectors exist for every approved evidence item: embed what's missing.
-  const missing = await openings.listEvidenceWithoutEmbedding(
-    opening.profileId
-  );
-  const missingVectors = await embedder.embed(
-    missing.map((row) => cipher.decrypt(row.encryptedText)),
-    "passage"
-  );
-  for (const [index, row] of missing.entries()) {
-    await openings.setEvidenceEmbedding({
-      evidenceId: row.id,
-      embedding: missingVectors[index],
-    });
-  }
   // And for every document version, so similar documents can be suggested.
   await embedStaleVersions({ db, cipher, embedder, userId: deps.userId });
 
@@ -240,13 +223,12 @@ export async function runAnalyzeOpening(deps: Deps) {
       : "outside a position";
   };
 
-  // The whole approved history, credentials and skills, so the judge can add
+  // The whole approved history and credentials, so the judge can add
   // up years across positions and see certifications and languages, which
   // live outside the evidence that retrieval returns.
   const credentials = await new CareerRepository(db).listCredentials(
     opening.profileId
   );
-  const skills = await new EvidenceRepository(db).listSkills(opening.profileId);
   const overview = filter.dropFactsMentioningExcluded([
     ...positions
       .filter((position) => position.status === "approved")
@@ -257,28 +239,14 @@ export async function runAnalyzeOpening(deps: Deps) {
         (credential) =>
           `- ${credential.kind}: ${cipher.decrypt(credential.encryptedTitle)}${credential.level ? ` (${credential.level})` : ""}${credential.status === "completed" ? "" : ` [${credential.status}]`}`
       ),
-    ...skills.map((skill) => `- skill: ${cipher.decrypt(skill.encryptedName)}`),
   ]);
 
-  const retrieved = new Map<string, Array<{ id: string; line: string }>>();
-  for (const [index, term] of termRows.entries()) {
-    const nearest = await openings.nearestEvidence({
-      profileId: opening.profileId,
-      embedding: termVectors[index],
-      limit: RETRIEVED_PER_TERM,
-    });
-    retrieved.set(
-      term.id,
-      nearest
-        .map((row) => ({
-          id: row.id,
-          line: `${row.kind}: ${cipher.decrypt(row.encryptedText)} (${positionLabel(row.positionId)})`,
-        }))
-        .filter(
-          (row) => filter.dropFactsMentioningExcluded([row.line]).length > 0
-        )
-    );
-  }
+  // Profile_truth replaces this in P5 (docs/plan.md): no evidence exists,
+  // so retrieval finds no passages and requirements come out as gaps
+  // unless the overview meets them.
+  const retrieved = new Map<string, Array<{ id: string; line: string }>>(
+    termRows.map((term) => [term.id, []])
+  );
 
   await step("judging", found);
   const { object: judgment } = await ai.generateObject({
@@ -293,7 +261,7 @@ export async function runAnalyzeOpening(deps: Deps) {
       "- gap: no evidence satisfies it. Similar wording is not enough: a senior or many-years requirement against a junior or short history is a gap; location, language and work model must be stated in the evidence to count.",
       "Cite only evidence ids listed under the requirement. Explain in one short sentence.",
       "",
-      "Career overview (approved positions with periods, credentials and skills):",
+      "Career overview (approved positions with periods and credentials):",
       ...(overview.length > 0 ? overview : ["- nothing approved yet"]),
       "",
       ...termRows.flatMap((term) => [

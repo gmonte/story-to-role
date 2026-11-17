@@ -8,7 +8,7 @@ import { ActiveOverrides } from "./sensitive-overrides";
 
 /**
  * The side panel's Context block (workspace spec): what the AI uses for
- * this application besides the evidence base: the instructions, the
+ * this application besides the profile: the instructions, the
  * locked-fact overrides and the sensitive items treated their own way.
  */
 export function ApplicationContext({ openingId }: { openingId: string }) {
@@ -26,14 +26,12 @@ export function ApplicationContext({ openingId }: { openingId: string }) {
         instructions={instructions.data}
       />
       <ActiveOverrides openingId={openingId} />
-      {!instructions.data.points.some(
-        (point) => point.status === "kept" || point.status === "promoted"
-      ) &&
+      {!instructions.data.points.some((point) => point.status === "kept") &&
         !instructions.data.overrides.some((row) => row.confirmed) && (
           <p className="text-muted-foreground text-xs">
             {t.formatMessage({
               defaultMessage:
-                "Only your evidence base. Instructions you add when generating show here.",
+                "Only your profile. Instructions you add when generating show here.",
             })}
           </p>
         )}

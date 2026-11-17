@@ -17,9 +17,5 @@ export function useRefreshInstructions() {
   const trpc = useTRPC();
   const queryClient = useQueryClient();
   return () =>
-    Promise.all([
-      queryClient.invalidateQueries({ queryKey: trpc.instructions.pathKey() }),
-      // A promoted point is new evidence.
-      queryClient.invalidateQueries({ queryKey: trpc.career.pathKey() }),
-    ]);
+    queryClient.invalidateQueries({ queryKey: trpc.instructions.pathKey() });
 }

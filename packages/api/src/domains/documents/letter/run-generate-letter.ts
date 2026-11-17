@@ -1,9 +1,9 @@
 import type { AiClient } from "@repo/api/domains/ai/ai-client";
+import { EvidenceRepository } from "@repo/api/domains/evidence/evidence-repository";
 import { MotivationRepository } from "@repo/api/domains/applications/motivation/motivation-repository";
 import { ResearchRepository } from "@repo/api/domains/applications/research/research-repository";
 import { CareerRepository } from "@repo/api/domains/career/career-repository";
 import type { UserCipher } from "@repo/api/domains/encryption/user-cipher";
-import { EvidenceRepository } from "@repo/api/domains/evidence/evidence-repository";
 import type { SensitiveFilter } from "@repo/api/domains/evidence/sensitive/sensitive-filter";
 import { OpeningsRepository } from "@repo/api/domains/openings/openings-repository";
 import type { Tone } from "@repo/api/domains/openings/schemas/opening";
@@ -89,15 +89,16 @@ export async function loadLetterMaterial(input: {
   );
   const decryptOptional = (value: string | null | undefined) =>
     value ? cipher.decrypt(value) : null;
-  const evidenceRepository = new EvidenceRepository(db);
   const motivation = new MotivationRepository(db);
   const interview = await motivation.findInterviewByOpening(input.openingId);
-  const story = interview?.storyId
-    ? await evidenceRepository.findStory({
-        profileId: input.profileId,
-        storyId: interview.storyId,
-      })
-    : null;
+  // Profile_truth replaces this in P8 (docs/plan.md): no story exists.
+  const story = null as {
+    problem: string;
+    action: string;
+    partners: string | null;
+    result: string;
+    evidenceIds: string[];
+  } | null;
 
   // The story's evidence and the evidence behind the resume's lines.
   const fromResume = input.resume
@@ -135,7 +136,7 @@ export async function loadLetterMaterial(input: {
         }))
     : [];
   const careerGoals = (
-    await evidenceRepository.listCareerGoals(input.profileId)
+    await new EvidenceRepository(db).listCareerGoals(input.profileId)
   ).map((goal) => ({
     id: goal.id,
     text: filter.apply(cipher.decrypt(goal.encryptedText)),
@@ -168,15 +169,7 @@ export async function loadLetterMaterial(input: {
         title: decryptOptional(opening?.encryptedTitle),
         company: decryptOptional(opening?.encryptedCompany),
       },
-      story: story && {
-        problem: filter.apply(cipher.decrypt(story.encryptedProblem)),
-        action: filter.apply(cipher.decrypt(story.encryptedAction)),
-        partners: story.encryptedPartners
-          ? filter.apply(cipher.decrypt(story.encryptedPartners))
-          : null,
-        result: filter.apply(cipher.decrypt(story.encryptedResult)),
-        evidenceIds: story.evidenceIds,
-      },
+      story,
       evidence,
       companyFacts,
       motivationPoints,

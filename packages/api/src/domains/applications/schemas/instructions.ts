@@ -8,13 +8,12 @@ import {
 /**
  * A point of the application instructions (resume spec, "Application
  * instructions"): a draft until the user confirms it, then kept in this
- * application only or promoted to the evidence base. A removed point stays
- * as a row so its gap answer is not split again.
+ * application only. A removed point stays as a row so its gap answer is
+ * not split again.
  */
 export const instructionPointStatusSchema = z.enum([
   "draft",
   "kept",
-  "promoted",
   "removed",
 ]);
 export type InstructionPointStatus = z.infer<
@@ -130,15 +129,3 @@ export const applicationInstructionsSchema = z.object({
 export type ApplicationInstructions = z.infer<
   typeof applicationInstructionsSchema
 >;
-
-/** The user's decision on one draft point. */
-export const instructionDecisionSchema = z.object({
-  instructionPointId: z.uuid(),
-  promote: z.boolean(),
-  // The wording to keep as evidence, when the user edited it.
-  text: z.string().trim().min(1).max(1000).nullable(),
-  positionId: z.uuid().nullable(),
-  credentialId: z.uuid().nullable(),
-  evidenceKind: evidenceKindSchema.nullable(),
-});
-export type InstructionDecision = z.infer<typeof instructionDecisionSchema>;

@@ -2,7 +2,6 @@ import { sql } from "drizzle-orm";
 import { index, unique } from "drizzle-orm/pg-core";
 
 import { careerProfilesTable } from "@repo/api/domains/career/db/career-tables";
-import { storiesTable } from "@repo/api/domains/evidence/db/evidence-tables";
 import { openingsTable } from "@repo/api/domains/openings/db/openings-tables";
 import { createTable } from "@repo/api/utils/db/create-table";
 
@@ -38,9 +37,6 @@ export const motivationInterviewsTable = createTable(
       .notNull()
       .references(() => openingsTable.id, { onDelete: "cascade" }),
     status: d.text().$type<MotivationStatus>().notNull().default("in_progress"),
-    storyId: d
-      .uuid()
-      .references(() => storiesTable.id, { onDelete: "set null" }),
   }),
   (t) => [unique("motivation_interviews_opening_unique").on(t.openingId)]
 );

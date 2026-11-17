@@ -6,8 +6,6 @@ import type { Tone } from "@repo/api/domains/openings/schemas/opening";
 import type { RealtimeSubscription } from "@repo/api/domains/tasks/schemas/task";
 import { TasksService } from "@repo/api/domains/tasks/tasks-service";
 import type { DbClient } from "@repo/api/tools/db-client";
-import { MotivationRepository } from "@repo/api/domains/applications/motivation/motivation-repository";
-import { EvidenceRepository } from "@repo/api/domains/evidence/evidence-repository";
 
 import { DocumentsRepository } from "../documents-repository";
 import { failGeneration } from "../documents-service";
@@ -87,15 +85,8 @@ export class LetterService {
       if (input.versionId && existing?.documentId !== document.id) {
         throw notFound();
       }
-      // A letter tells one story (resume spec): when the user has approved
-      // stories, the interview must have chosen one.
-      const interview = await new MotivationRepository(
-        tx
-      ).findInterviewByOpening(opening.id);
-      const stories = await new EvidenceRepository(tx).listStories(profile.id);
-      if (stories.length > 0 && !interview?.storyId) {
-        throw new TRPCError({ code: "PRECONDITION_FAILED" });
-      }
+      // A letter tells one story (resume spec). Profile_truth replaces this
+      // in P8 (docs/plan.md): until the profile supplies it, none is required.
       // The resume it accompanies: a version of this application's resume.
       const resume = input.resumeVersionId
         ? await requireUserVersion(tx, input.userId, input.resumeVersionId)

@@ -10,10 +10,7 @@ import {
 } from "@repo/api/tools/trpc";
 
 import { InstructionsService } from "./instructions-service";
-import {
-  applicationInstructionsSchema,
-  instructionDecisionSchema,
-} from "./schemas/instructions";
+import { applicationInstructionsSchema } from "./schemas/instructions";
 
 export const instructionsRouter = createTRPCRouter({
   get: userProcedure
@@ -53,13 +50,12 @@ export const instructionsRouter = createTRPCRouter({
         "instructions",
         "POST",
         "/openings/by-id/{openingId}/instructions/confirm",
-        "Keeps or promotes each draft point and confirms overrides"
+        "Keeps every draft point and confirms overrides"
       )
     )
     .input(
       z.object({
         openingId: z.uuid(),
-        decisions: z.array(instructionDecisionSchema),
         confirmedLockedFactOverrideIds: z.array(z.uuid()),
       })
     )

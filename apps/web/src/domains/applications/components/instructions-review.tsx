@@ -11,22 +11,13 @@ import type {
   LockedFactOverrideView,
 } from "@repo/api/domains/applications/schemas/instructions";
 import { useTranslation } from "@repo/intl/use-translation";
-import { Badge } from "@repo/web/components/ui/badge";
 import { Button } from "@repo/web/components/ui/button";
 import { Checkbox } from "@repo/web/components/ui/checkbox";
 import { Label } from "@repo/web/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@repo/web/components/ui/select";
 import { toast } from "@repo/web/components/ui/sonner";
 import { Textarea } from "@repo/web/components/ui/textarea";
 
 import { AiAtWork } from "~/domains/workspace/components/ai-at-work";
-import { useTimeline } from "~/domains/career/hooks/use-career-queries";
 import { useTRPC } from "~/tools/trpc/client";
 
 import {
@@ -37,9 +28,9 @@ import { useInstructionLabels } from "../hooks/use-instruction-labels";
 
 /**
  * Application instructions on the generation screen (resume spec): the
- * user writes them, a task splits them (with the gap answers) into points,
- * and the user decides, point by point, which ones also go to the evidence
- * base and confirms any locked-fact override before generating.
+ * user writes them, a task splits them (with the gap answers) into points
+ * kept for this application, and confirms any locked-fact override before
+ * generating.
  */
 export function InstructionsReview({
   openingId,
@@ -114,7 +105,7 @@ export function InstructionsReview({
             rows={3}
             placeholder={t.formatMessage({
               defaultMessage:
-                "A detail you just remembered, a different framing of an old position, experience that is not in your evidence…",
+                "A detail you just remembered, a different framing of an old position, experience that is not in your profile…",
             })}
           />
           <div className="flex items-center justify-between gap-2">
@@ -171,9 +162,7 @@ export function ConfirmedInstructions({
       onError,
     })
   );
-  const points = instructions.points.filter(
-    (point) => point.status === "kept" || point.status === "promoted"
-  );
+  const points = instructions.points.filter((point) => point.status === "kept");
   const overrides = instructions.overrides.filter((row) => row.confirmed);
   if (points.length === 0 && overrides.length === 0) return null;
 
@@ -184,14 +173,7 @@ export function ConfirmedInstructions({
           key={point.id}
           className="bg-background flex items-start justify-between gap-2 rounded-md border p-2 text-xs"
         >
-          <span className="flex flex-col gap-1">
-            <span>{point.text}</span>
-            {point.status === "promoted" && (
-              <Badge variant="secondary" className="self-start">
-                {t.formatMessage({ defaultMessage: "Also in your evidence" })}
-              </Badge>
-            )}
-          </span>
+          <span>{point.text}</span>
           {point.status === "kept" && (
             <Button
               size="icon"
@@ -232,19 +214,6 @@ export function ConfirmedInstructions({
   );
 }
 
-/**
- * The user's choice on a point: whether to promote it, its target
- * ("position:<id>", "credential:<id>" or none) and its wording as evidence.
- */
-type Decision = { promote: boolean; target: string; text: string };
-
-const targetOf = (point: InstructionPointView) =>
-  point.positionId
-    ? `position:${point.positionId}`
-    : point.credentialId
-      ? `credential:${point.credentialId}`
-      : "";
-
 function DraftReview({
   openingId,
   drafts,
@@ -258,28 +227,6 @@ function DraftReview({
   const trpc = useTRPC();
   const labels = useInstructionLabels();
   const refresh = useRefreshInstructions();
-  const timeline = useTimeline();
-  const positions = (timeline.data?.positions ?? []).filter(
-    (position) => position.status === "approved"
-  );
-  const credentials = (timeline.data?.credentials ?? []).filter(
-    (credential) => credential.approved
-  );
-  const [decisions, setDecisions] = useState<Record<string, Decision>>(() =>
-    Object.fromEntries(
-      drafts.map((point) => [
-        point.id,
-        {
-          // A locked-fact change stays in this application.
-          promote:
-            point.suggestedPromotion &&
-            !overrides.some((row) => row.instructionPointId === point.id),
-          target: targetOf(point),
-          text: point.text,
-        },
-      ])
-    )
-  );
   const [confirmed, setConfirmed] = useState<string[]>([]);
   const confirm = useMutation(
     trpc.instructions.confirm.mutationOptions({
@@ -287,112 +234,22 @@ function DraftReview({
       onError: (error) => toast.error(error.message),
     })
   );
-  const incomplete = drafts.some(
-    (point) =>
-      decisions[point.id].promote &&
-      (!decisions[point.id].target || !decisions[point.id].text.trim())
-  );
 
+  // Profile_truth replaces this in P8 (docs/plan.md): "send to my profile"
+  // will turn a point into a profile suggestion.
   return (
     <div className="grid gap-2 rounded-md border p-2.5">
       <p className="text-muted-foreground text-xs">
         {t.formatMessage({
-          defaultMessage:
-            "These points apply to this application. Check the ones that are facts about your career to add them to your evidence too.",
+          defaultMessage: "These points apply to this application only.",
         })}
       </p>
       <ul className="grid gap-2">
-        {drafts.map((point) => {
-          const decision = decisions[point.id];
-          const set = (changes: Partial<Decision>) =>
-            setDecisions({
-              ...decisions,
-              [point.id]: { ...decision, ...changes },
-            });
-          return (
-            <li key={point.id} className="grid gap-1.5 text-sm">
-              <span>{point.text}</span>
-              {!overrides.some(
-                (row) => row.instructionPointId === point.id
-              ) && (
-                <label className="flex items-center gap-2 text-xs">
-                  <Checkbox
-                    checked={decision.promote}
-                    onCheckedChange={(checked) => set({ promote: !!checked })}
-                  />
-                  {t.formatMessage({
-                    defaultMessage: "Also add to my evidence",
-                  })}
-                </label>
-              )}
-              {decision.promote && (
-                <Textarea
-                  value={decision.text}
-                  onChange={(event) => set({ text: event.target.value })}
-                  maxLength={1000}
-                  rows={2}
-                  className="text-xs"
-                  aria-label={t.formatMessage({
-                    defaultMessage: "Wording in your evidence",
-                  })}
-                />
-              )}
-              {decision.promote && (
-                <Select
-                  value={decision.target}
-                  onValueChange={(target) => set({ target })}
-                >
-                  <SelectTrigger className="h-7 w-full text-xs">
-                    <SelectValue
-                      placeholder={t.formatMessage({
-                        defaultMessage: "Where does it belong?",
-                      })}
-                    />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {positions.map((position) => (
-                      <SelectItem
-                        key={position.id}
-                        value={`position:${position.id}`}
-                      >
-                        {t.formatMessage(
-                          { defaultMessage: "{title} · {employer}" },
-                          {
-                            title: position.title,
-                            employer: position.employer,
-                          }
-                        )}
-                      </SelectItem>
-                    ))}
-                    {credentials.map((credential) => (
-                      <SelectItem
-                        key={credential.id}
-                        value={`credential:${credential.id}`}
-                      >
-                        {credential.title}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              )}
-              {decision.promote && point.sensitiveItems.length > 0 && (
-                <span className="text-muted-foreground text-xs">
-                  {t.formatMessage(
-                    {
-                      defaultMessage:
-                        "Goes to your sensitive-data review: {items}",
-                    },
-                    {
-                      items: point.sensitiveItems
-                        .map((item) => item.original)
-                        .join(", "),
-                    }
-                  )}
-                </span>
-              )}
-            </li>
-          );
-        })}
+        {drafts.map((point) => (
+          <li key={point.id} className="text-sm">
+            {point.text}
+          </li>
+        ))}
       </ul>
       {overrides.map((row) => (
         <label
@@ -416,23 +273,10 @@ function DraftReview({
       <Button
         size="sm"
         className="justify-self-end"
-        disabled={confirm.isPending || incomplete}
+        disabled={confirm.isPending}
         onClick={() =>
           confirm.mutate({
             openingId,
-            decisions: drafts.map((point) => {
-              const { promote, target, text } = decisions[point.id];
-              const [kind, id] = target.split(":");
-              return {
-                instructionPointId: point.id,
-                promote,
-                text:
-                  promote && text.trim() !== point.text ? text.trim() : null,
-                positionId: kind === "position" ? id : null,
-                credentialId: kind === "credential" ? id : null,
-                evidenceKind: point.evidenceKind,
-              };
-            }),
             confirmedLockedFactOverrideIds: confirmed,
           })
         }

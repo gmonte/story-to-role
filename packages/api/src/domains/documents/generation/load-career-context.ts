@@ -6,11 +6,9 @@ import {
 import { CareerRepository } from "@repo/api/domains/career/career-repository";
 import type { CredentialKind } from "@repo/api/domains/career/schemas/career";
 import type { UserCipher } from "@repo/api/domains/encryption/user-cipher";
-import { EvidenceRepository } from "@repo/api/domains/evidence/evidence-repository";
 import type { EvidenceKind } from "@repo/api/domains/evidence/schemas/evidence";
 import type { SensitiveFilter } from "@repo/api/domains/evidence/sensitive/sensitive-filter";
 import type { DbClient } from "@repo/api/tools/db-client";
-import { withoutAuthorNotes } from "@repo/api/domains/career/documents/run-import-document";
 
 import {
   approvedTitles,
@@ -95,10 +93,9 @@ export function applyLockedFactOverrides(
 }
 
 /**
- * The approved evidence base as generation may see it: approved positions
- * (most recent first) and credentials, and evidence with the user's
- * sensitivity choices applied by code; facts resting on an excluded item
- * are left out (guided-interview spec, "Sensitive-data control"). For an
+ * The career as generation may see it: approved positions (most recent
+ * first) and credentials, with the user's sensitivity choices applied by
+ * code (guided-interview spec, "Sensitive-data control"). For an
  * opening, it adds the instructions the user kept for its application and
  * applies their confirmed locked-fact overrides.
  */
@@ -113,7 +110,6 @@ export async function loadCareerContext(input: {
 }): Promise<CareerContext> {
   const { db, cipher, profileId, filter } = input;
   const career = new CareerRepository(db);
-  const evidenceRepository = new EvidenceRepository(db);
   const open = (value: string | null) => (value ? cipher.decrypt(value) : null);
 
   const positions = (await career.listPositions(profileId))
@@ -152,53 +148,11 @@ export async function loadCareerContext(input: {
     }));
   const credentialIds = new Set(credentials.map((row) => row.id));
 
-  const evidence = (await evidenceRepository.listEvidence(profileId))
-    .filter(
-      (row) =>
-        (!!row.positionId && positionIds.has(row.positionId)) ||
-        (!!row.credentialId && credentialIds.has(row.credentialId))
-    )
-    .map((row) => ({ row, text: cipher.decrypt(row.encryptedText) }))
-    .filter(({ text }) => filter.dropFactsMentioningExcluded([text]).length)
-    .map(({ row, text }) => {
-      // A fact from a file keeps the file's own words beside its text (which
-      // is in the career's language): a document in that file's language
-      // can use them instead of translating the translation back.
-      // The author's own notes ("[medido]") stay out of documents.
-      const quote = row.sourceDocumentId
-        ? withoutAuthorNotes(cipher.decrypt(row.encryptedSourceQuote))
-        : null;
-      return {
-        id: row.id,
-        positionId: row.positionId,
-        credentialId: row.credentialId,
-        projectId: row.projectId,
-        kind: row.kind,
-        text: filter.apply(text),
-        sourceWording:
-          quote && filter.dropFactsMentioningExcluded([quote]).length
-            ? filter.apply(quote)
-            : null,
-      };
-    });
-  const evidenceIds = new Set(evidence.map((row) => row.id));
-
-  const skills = (await evidenceRepository.listSkills(profileId))
-    .map((skill) => ({
-      id: skill.id,
-      name: filter.apply(cipher.decrypt(skill.encryptedName)),
-      evidenceIds: skill.evidenceIds.filter((id) => evidenceIds.has(id)),
-    }))
-    // A skill is usable only through the evidence that shows it.
-    .filter((skill) => skill.evidenceIds.length > 0);
-
-  const projects = (await career.listProjects(profileId))
-    .filter((project) => positionIds.has(project.positionId))
-    .map((project) => ({
-      id: project.id,
-      positionId: project.positionId,
-      name: filter.apply(cipher.decrypt(project.encryptedName)),
-    }));
+  // Profile_truth replaces this in P6 (docs/plan.md): no evidence, skills
+  // or projects exist until the published profile's extract feeds them.
+  const evidence: ContextEvidence[] = [];
+  const skills: CareerContext["skills"] = [];
+  const projects: CareerContext["projects"] = [];
 
   const instructionsRepository = new InstructionsRepository(db);
   const instructions = input.openingId

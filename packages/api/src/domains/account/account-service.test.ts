@@ -7,7 +7,6 @@ import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { TrackerService } from "@repo/api/domains/applications/tracker/tracker-service";
 import { AiKeysRepository } from "@repo/api/domains/ai/ai-keys-repository";
-import { PositionAccountsRepository } from "@repo/api/domains/career/accounts/position-accounts-repository";
 import { CareerRepository } from "@repo/api/domains/career/career-repository";
 import { getUserCipher } from "@repo/api/domains/encryption/user-cipher";
 import { createTestUser } from "@repo/api/test/create-test-user";
@@ -69,21 +68,12 @@ async function setup() {
 
   // Some of everything: a position, an imported file, an application with
   // an event, an own key.
-  const position = await career.insertPosition({
+  await career.insertPosition({
     profileId: profile.id,
     encryptedEmployer: cipher.encrypt("Initech"),
     encryptedTitle: cipher.encrypt("Platform Engineer"),
     status: "approved",
     origin: "manual",
-  });
-  await new PositionAccountsRepository(db).insertVersion({
-    profileId: profile.id,
-    positionId: position.id,
-    version: 1,
-    encryptedText: cipher.encrypt("I ran the platform team [medido]."),
-    encryptedDoNotInclude: cipher.encrypt(JSON.stringify(["Initrode"])),
-    source: "user",
-    approvedAt: new Date(),
   });
   const storageKey = `users/${user.id}/documents/1`;
   await storage.put(
@@ -143,12 +133,6 @@ describe("account", () => {
       expect.objectContaining({
         employer: "Initech",
         title: "Platform Engineer",
-      }),
-    ]);
-    expect(read("career/position-accounts.json")).toEqual([
-      expect.objectContaining({
-        text: "I ran the platform team [medido].",
-        doNotInclude: ["Initrode"],
       }),
     ]);
     expect(read("applications/events.json")).toContainEqual(

@@ -10,7 +10,13 @@ import {
   type TRPCContext,
 } from "@repo/api/tools/trpc";
 
+import { PositionAccountsService } from "./accounts/position-accounts-service";
 import { CareerService } from "./career-service";
+import {
+  accountDraftInputSchema,
+  accountVersionSchema,
+  accountViewSchema,
+} from "./schemas/account";
 import { DocumentsService } from "./documents/documents-service";
 import {
   interviewLanguageSchema,
@@ -271,6 +277,118 @@ export const careerRouter = createTRPCRouter({
     .output(okSchema)
     .mutation(async ({ ctx, input }) => {
       await new CareerService(db).removeFact({ userId: ctx.userId, ...input });
+      return ok;
+    }),
+
+  positionAccount: userProcedure
+    .meta(
+      openApiMeta(
+        "career",
+        "GET",
+        "/positions/by-id/{positionId}/account",
+        "A position's account: approved version, draft and history"
+      )
+    )
+    .input(z.object({ positionId: z.uuid() }))
+    .output(accountViewSchema)
+    .query(({ ctx, input }) =>
+      new PositionAccountsService(db).getAccount({
+        userId: ctx.userId,
+        ...input,
+      })
+    ),
+
+  accountVersion: userProcedure
+    .meta(
+      openApiMeta(
+        "career",
+        "GET",
+        "/account-versions/by-id/{accountVersionId}",
+        "One version of a position's account"
+      )
+    )
+    .input(z.object({ accountVersionId: z.uuid() }))
+    .output(accountVersionSchema)
+    .query(({ ctx, input }) =>
+      new PositionAccountsService(db).getVersion({
+        userId: ctx.userId,
+        ...input,
+      })
+    ),
+
+  saveAccountDraft: userProcedure
+    .meta(
+      openApiMeta(
+        "career",
+        "PUT",
+        "/positions/by-id/{positionId}/account/draft",
+        "Writes the draft of a position's account"
+      )
+    )
+    .input(accountDraftInputSchema)
+    .output(okSchema)
+    .mutation(async ({ ctx, input }) => {
+      await new PositionAccountsService(db).saveDraft({
+        userId: ctx.userId,
+        ...input,
+      });
+      return ok;
+    }),
+
+  approveAccountDraft: userProcedure
+    .meta(
+      openApiMeta(
+        "career",
+        "POST",
+        "/positions/by-id/{positionId}/account/draft/approve",
+        "Approves the draft as the position's account"
+      )
+    )
+    .input(z.object({ positionId: z.uuid() }))
+    .output(okSchema)
+    .mutation(async ({ ctx, input }) => {
+      await new PositionAccountsService(db).approveDraft({
+        userId: ctx.userId,
+        ...input,
+      });
+      return ok;
+    }),
+
+  discardAccountDraft: userProcedure
+    .meta(
+      openApiMeta(
+        "career",
+        "DELETE",
+        "/positions/by-id/{positionId}/account/draft",
+        "Discards the draft of a position's account"
+      )
+    )
+    .input(z.object({ positionId: z.uuid() }))
+    .output(okSchema)
+    .mutation(async ({ ctx, input }) => {
+      await new PositionAccountsService(db).discardDraft({
+        userId: ctx.userId,
+        ...input,
+      });
+      return ok;
+    }),
+
+  restoreAccountVersion: userProcedure
+    .meta(
+      openApiMeta(
+        "career",
+        "POST",
+        "/account-versions/by-id/{accountVersionId}/restore",
+        "Brings an earlier version back as the draft"
+      )
+    )
+    .input(z.object({ accountVersionId: z.uuid() }))
+    .output(okSchema)
+    .mutation(async ({ ctx, input }) => {
+      await new PositionAccountsService(db).restoreVersion({
+        userId: ctx.userId,
+        ...input,
+      });
       return ok;
     }),
 

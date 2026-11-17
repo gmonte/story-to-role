@@ -32,6 +32,7 @@ export const exportPaths: Record<string, string> = {
   interview_turns: "interview/turns",
   draft_facts: "interview/draft-facts",
   draft_sensitive_items: "interview/draft-sensitive-items",
+  position_account_versions: "career/position-accounts",
   career_events: "interview/career-events",
   career_chats: "interview/career-chats",
   career_chat_messages: "interview/career-chat-messages",

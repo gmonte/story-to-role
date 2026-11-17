@@ -202,7 +202,7 @@ Each position's account becomes the source of truth ([ADR 0008](./adr/0008-posit
 
 ### A1: The account and its space
 
-- `position_accounts` and their versions (text in the user's voice, approved at, the version it came from, its "do not include" list), encrypted; a position's space shows the approved account, editable in place (an edit is a draft version to approve), its versions (read, restore) and its highlighter marks (`[medido]`, `[estimado]`, `[sem número]`, `[a confirmar]`, and unmarked figures) over the text.
+- `position_account_versions` (text in the user's voice, approved at, the version it came from, its "do not include" list), encrypted; the account is the highest approved version, a newer unapproved one its draft (one per position, version numbers unique, both enforced by the database); a position's space shows the approved account, editable in place (an edit is a draft version to approve), its versions (read, restore) and its highlighter marks (`[medido]`, `[estimado]`, `[sem número]`, `[a confirmar]`, and unmarked figures) over the text.
 - Acceptance: write, edit, approve and restore an account; marks highlighted; another user's account not found; account content encrypted and in the export.
 
 ### A2: The interviewer enriches the account

@@ -211,6 +211,13 @@
       "when": 1794876442322,
       "tag": "0029_add_interview_turn_via",
       "breakpoints": true
+    },
+    {
+      "idx": 30,
+      "version": "7",
+      "when": 1794879826444,
+      "tag": "0030_add_position_account_versions",
+      "breakpoints": true
     }
   ]
 }

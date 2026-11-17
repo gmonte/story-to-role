@@ -5,8 +5,12 @@ import { CareerEventsRepository } from "./career-events-repository";
 import { careerEventKinds, type CareerEventKind } from "./schemas/career";
 
 // Every change gets a word from the chat (a burst of them, one), a message
-// in a position's own chat included: the user sees it follow along.
-const reactiveKinds: ReadonlySet<CareerEventKind> = new Set(careerEventKinds);
+// in a position's own chat included: the user sees it follow along. An
+// account's approval is context only until the chat can read accounts
+// (plan slice A5): it would only say it can't see what changed.
+const reactiveKinds: ReadonlySet<CareerEventKind> = new Set(
+  careerEventKinds.filter((kind) => kind !== "account_approved")
+);
 
 /**
  * Records what the user just did to their career outside the chat, in the

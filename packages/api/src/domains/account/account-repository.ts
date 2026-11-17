@@ -137,6 +137,9 @@ export class AccountRepository {
         sessions
       ),
       career_events: await byProfile(t.careerEventsTable),
+      position_account_versions: await byProfile(
+        t.positionAccountVersionsTable
+      ),
       career_chats: careerChats,
       career_chat_messages: await below(
         t.careerChatMessagesTable,

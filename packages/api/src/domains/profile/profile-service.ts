@@ -167,11 +167,12 @@ export class ProfileService {
           };
         }
       }
-      // Validated when the last review covered exactly this draft.
+      // Validated when a review finished since the last publish: fixing
+      // what it found afterwards keeps the version validated.
       const validation = await repository.latestValidation(document.id);
       const validated =
         validation?.status === "completed" &&
-        validation.draftRevision === document.draftRevision;
+        validation.baseVersionId === document.publishedVersionId;
       const version = await repository.insertVersion({
         documentId: document.id,
         number: await repository.nextVersionNumber(document.id),
@@ -185,6 +186,21 @@ export class ProfileService {
           JSON.stringify(extractProfile(blocks))
         ),
       });
+      // A passage unchanged since the last version keeps its vector
+      // (ADR 0004): only what changed is embedded again.
+      const previousVectors = new Map<string, number[]>();
+      if (document.publishedVersionId) {
+        for (const row of await repository.listPassages(
+          document.publishedVersionId
+        )) {
+          if (row.embedding) {
+            previousVectors.set(
+              cipher.decrypt(row.encryptedText),
+              row.embedding
+            );
+          }
+        }
+      }
       await repository.insertPassages(
         profilePassages(blocks).map((passage, ordinal) => ({
           versionId: version.id,
@@ -192,6 +208,7 @@ export class ProfileService {
           section: passage.section,
           experience: passage.experience,
           encryptedText: cipher.encrypt(passage.text),
+          embedding: previousVectors.get(passage.text) ?? null,
         }))
       );
       await repository.updateDocument(document.id, {
@@ -222,7 +239,7 @@ export class ProfileService {
     return {
       parts: parts.map((part) => part.title),
       credits: parts.length
-        ? creditCap("validate_profile", { sections: parts.length })
+        ? creditCap("validate_profile", { parts: parts.length })
         : 0,
     };
   }
@@ -269,9 +286,12 @@ export class ProfileService {
         "validate_profile"
       );
       if (active) throw new TRPCError({ code: "CONFLICT" });
-      await repository.updateValidation(latest.id, { status: "failed" });
+      await repository.updateValidation(latest.id, {
+        status: "failed",
+        completedAt: new Date(),
+      });
     }
-    const hints = { sections: parts.length };
+    const hints = { parts: parts.length };
     await this.tasks.assertAffordable({
       userId: input.userId,
       type: "validate_profile",
@@ -307,6 +327,23 @@ export class ProfileService {
       ? await repository.latestValidation(document.id)
       : undefined;
     if (!validation) return null;
+    // A run that died (a crashed worker) leaves its row running: past its
+    // task's life it counts as failed, so nothing waits on it forever.
+    if (
+      validation.status === "running" &&
+      // Its task is created a moment after the row.
+      Date.now() - validation.createdAt.getTime() > 30_000 &&
+      !(await new TasksRepository(this.db).activeTask(
+        validation.id,
+        "validate_profile"
+      ))
+    ) {
+      await repository.updateValidation(validation.id, {
+        status: "failed",
+        completedAt: new Date(),
+      });
+      validation.status = "failed";
+    }
     const cipher = await getUserCipher(this.db, userId);
     const progress =
       validation.status === "running"

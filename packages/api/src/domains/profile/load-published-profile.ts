@@ -9,7 +9,7 @@ export type PublishedProfile = {
   number: number;
   markdown: string;
   extract: ProfileExtract;
-  passages: Array<ProfilePassage & { id: string }>;
+  passages: Array<Omit<ProfilePassage, "lines"> & { id: string }>;
 };
 
 /**

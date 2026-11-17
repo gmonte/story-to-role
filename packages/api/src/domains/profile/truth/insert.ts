@@ -8,6 +8,7 @@ import {
   type ProfileLanguage,
   type ProfileSectionKey,
 } from "./sections";
+import { splitNames } from "./lint";
 import { readStructure, sectionOf, splitLabel } from "./structure";
 import { experienceTemplate, sectionTemplate } from "./template";
 
@@ -239,15 +240,14 @@ export function setCompetencyLevel(
       ? block.text.slice(0, block.text.indexOf(":") + 1)
       : "";
     const value = labelled ? labelled.value : block.text;
-    const names = value
-      .split(/\s*,\s*/)
-      .map((part) => part.trim())
-      .filter(Boolean);
-    const kept = names.filter(
-      (part) => part.replace(/\.$/, "").toLowerCase() !== wanted
-    );
-    if (kept.length === names.length) return block;
-    const rest = kept.join(", ");
+    // The same names the extract reads, so the proposal leaves the list.
+    const names = splitNames(value, 0, { anyLength: true });
+    const found = names.find((n) => n.name.toLowerCase() === wanted);
+    if (!found) return block;
+    const rest = names
+      .filter((n) => n !== found)
+      .map((n) => n.name)
+      .join(", ");
     return {
       ...block,
       text: prefix ? `${prefix}${rest ? ` ${rest}` : ""}` : rest,

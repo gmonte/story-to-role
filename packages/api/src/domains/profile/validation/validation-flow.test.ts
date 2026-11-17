@@ -228,4 +228,36 @@ describe("validating and publishing the profile", () => {
     expect(loaded?.extract.experiences[0].company).toBe("Beta");
     expect(loaded?.passages.length).toBe(passages.length);
   });
+
+  it("embeds again only the passages that changed", async () => {
+    const ctx = await setup();
+    const cipher = await getUserCipher(ctx.db, ctx.user.id);
+    const first = await ctx.save(profileText("reduzi custos [medido]."), 0);
+    const v1 = await ctx.profile.publish({
+      userId: ctx.user.id,
+      baseRevision: first,
+    });
+    await embedProfileVersion({
+      db: ctx.db,
+      cipher,
+      embedder: fakeEmbedder,
+      profileVersionId: v1.versionId,
+    });
+    const second = await ctx.save(
+      profileText("reduzi custos em 10% [medido]."),
+      first
+    );
+    const v2 = await ctx.profile.publish({
+      userId: ctx.user.id,
+      baseRevision: second,
+    });
+    const passages = await ctx.db
+      .select()
+      .from(profilePassagesTable)
+      .where(eq(profilePassagesTable.versionId, v2.versionId));
+    const missing = passages.filter((passage) => !passage.embedding);
+    expect(missing.map((p) => cipher.decrypt(p.encryptedText))).toEqual([
+      "Beta — Backend (2022-03 a atual): Resultados: reduzi custos em 10% [medido].",
+    ]);
+  });
 });

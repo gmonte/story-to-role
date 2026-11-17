@@ -38,8 +38,10 @@ export function locateReviewFindings(
 ): LocatedReviewFinding[] {
   if (!report) return [];
   return report.findings.flatMap((finding) => {
+    // A quote across an item and the lines under it is marked on its first.
+    const firstLine = finding.quote.split("\n")[0];
     for (const [line, block] of blocks.entries()) {
-      const quote = findQuote(block.text, finding.quote);
+      const quote = findQuote(block.text, firstLine);
       if (!quote) continue;
       const from = block.text.indexOf(quote);
       return [{ ...finding, line, from, to: from + quote.length }];

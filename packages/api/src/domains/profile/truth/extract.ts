@@ -32,12 +32,21 @@ export type ProfileExtract = {
   languages: string[];
   gaps: string[];
   rules: { neverInclude: string[]; neverClaim: string[] };
-  figures: Array<{ mark: FigureMark; text: string; experience: number | null }>;
+  // Each marked figure, with the passage it is in (its ordinal among the
+  // version's passages, null when the line isn't one).
+  figures: Array<{
+    mark: FigureMark;
+    text: string;
+    experience: number | null;
+    passage: number | null;
+  }>;
 };
 
 /** A passage of a published version, embedded for retrieval (ADR 0004). */
 export type ProfilePassage = {
   section: ProfileSectionKey | null;
+  // The document lines it holds.
+  lines: number[];
   // The experience it belongs to, by order in the document.
   experience: number | null;
   text: string;
@@ -131,6 +140,7 @@ export function extractProfile(blocks: ProfileBlock[]): ProfileExtract {
   }
 
   const figures: ProfileExtract["figures"] = [];
+  const passages = profilePassages(blocks);
   blocks.forEach((block, line) => {
     const experience = structure.experiences.findIndex(
       (e) => line > e.heading && line < e.end
@@ -140,6 +150,7 @@ export function extractProfile(blocks: ProfileBlock[]): ProfileExtract {
         mark: match.mark,
         text: block.text,
         experience: experience >= 0 ? experience : null,
+        passage: passageOfLine(passages, line),
       });
     }
   });
@@ -181,6 +192,7 @@ export function profilePassages(blocks: ProfileBlock[]): ProfilePassage[] {
           : "";
       if (block.type === "item" && block.depth > 0 && current) {
         current.text += `\n${block.text}`;
+        current.lines.push(line);
         continue;
       }
       if (block.type === "heading" || !block.text.trim()) {
@@ -189,6 +201,7 @@ export function profilePassages(blocks: ProfileBlock[]): ProfilePassage[] {
       }
       current = {
         section: section.key,
+        lines: [line],
         experience: experience >= 0 ? experience : null,
         text: `${prefix}${block.text}`,
       };
@@ -197,4 +210,9 @@ export function profilePassages(blocks: ProfileBlock[]): ProfilePassage[] {
   }
   // A label with nothing written after it says nothing.
   return passages.filter((passage) => !/:\s*$/.test(passage.text));
+}
+
+function passageOfLine(passages: ProfilePassage[], line: number) {
+  const index = passages.findIndex((passage) => passage.lines.includes(line));
+  return index >= 0 ? index : null;
 }

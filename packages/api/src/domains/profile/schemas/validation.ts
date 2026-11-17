@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 import { competencyLevels } from "../truth/sections";
+import { profileValidationStatusSchema } from "./profile";
 
 /** What the quality review looks for (profile spec, "Validate and publish"). */
 export const validationFindingKinds = [
@@ -67,7 +68,7 @@ export type ValidationReport = z.infer<typeof validationReportSchema>;
 
 export const profileValidationSchema = z.object({
   id: z.uuid(),
-  status: z.enum(["running", "completed", "failed"]),
+  status: profileValidationStatusSchema,
   draftRevision: z.number().int(),
   createdAt: z.date(),
   progress: z

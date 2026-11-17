@@ -88,6 +88,10 @@ describe("the published profile's extract", () => {
       neverInclude: ["Projeto Fênix", "dados do cliente Alfa"],
       neverClaim: ["liderança de pessoas"],
     });
+    const passages = profilePassages(parseBlocks(profile));
+    for (const figure of extract.figures) {
+      expect(passages[figure.passage!].text).toContain(figure.text);
+    }
     expect(extract.figures.map((f) => [f.mark, f.experience])).toEqual([
       ["measured", 0],
       ["estimated", 0],
@@ -100,14 +104,13 @@ describe("the published profile's extract", () => {
     const passages = profilePassages(parseBlocks(profile));
     expect(passages).toContainEqual({
       section: "experience",
+      lines: [6, 7, 8],
       experience: 0,
       text: "Beta — Backend (2022-03 a atual): Resultados:\nReduzi a latência em 60% [medido: APM].\nGanhei tempo do time [estimado].",
     });
-    expect(passages).toContainEqual({
-      section: "gaps",
-      experience: null,
-      text: "Spark em produção.",
-    });
+    expect(passages).toContainEqual(
+      expect.objectContaining({ section: "gaps", text: "Spark em produção." })
+    );
   });
 
   it("reads the method's example without losing experiences", () => {

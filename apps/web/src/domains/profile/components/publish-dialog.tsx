@@ -1,6 +1,7 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { TRPCClientError } from "@trpc/client";
 import { Loader2, Send, Sparkles } from "lucide-react";
 
 import { useTranslation } from "@repo/intl/use-translation";
@@ -16,6 +17,7 @@ import {
 } from "@repo/web/components/ui/dialog";
 import { toast } from "@repo/web/components/ui/sonner";
 
+import { useCredits } from "~/domains/credits/hooks/use-credits";
 import { AiAtWork } from "~/domains/workspace/components/ai-at-work";
 import { useTRPC } from "~/tools/trpc/client";
 
@@ -46,6 +48,7 @@ export function PublishDialog({
     staleTime: 0,
   });
   const validate = useMutation(trpc.profile.validate.mutationOptions());
+  const credits = useCredits();
   const publish = useMutation(trpc.profile.publish.mutationOptions());
 
   const blocked = hasFormatErrors(findings);
@@ -72,12 +75,21 @@ export function PublishDialog({
       await validate.mutateAsync({ baseRevision: saved });
       await refresh();
     } catch (error) {
+      const code =
+        error instanceof TRPCClientError
+          ? (error.data as { code?: string } | undefined)?.code
+          : undefined;
+      // Out of credits comes translated from the server; the rest here.
       toast.error(
-        error instanceof Error
+        code === "PAYMENT_REQUIRED" && error instanceof Error
           ? error.message
-          : t.formatMessage({
-              defaultMessage: "The validation couldn't start.",
-            })
+          : code === "BAD_REQUEST"
+            ? t.formatMessage({
+                defaultMessage: "Nothing changed since the published version.",
+              })
+            : t.formatMessage({
+                defaultMessage: "The validation couldn't start.",
+              })
       );
     }
   }
@@ -203,6 +215,14 @@ export function PublishDialog({
                   )}
                 </p>
               )}
+              {credits.data?.nearReserve && (
+                <p className="text-xs text-amber-600">
+                  {t.formatMessage({
+                    defaultMessage:
+                      "Your credits are close to the reserve kept for your resume: validating now uses part of it.",
+                  })}
+                </p>
+              )}
               {validation.data?.status === "failed" && (
                 <p className="text-destructive text-xs">
                   {t.formatMessage({
@@ -246,7 +266,7 @@ export function PublishDialog({
 
         <DialogFooter>
           <Button
-            disabled={blocked || publish.isPending || running}
+            disabled={blocked || publish.isPending}
             onClick={() => void publishDraft()}
           >
             {publish.isPending && <Loader2 className="size-4 animate-spin" />}

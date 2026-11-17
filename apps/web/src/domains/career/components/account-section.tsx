@@ -8,7 +8,7 @@ import { Check, History, Pencil, Plus, RotateCcw, X } from "lucide-react";
 import {
   highlightAccount,
   type AccountSegment,
-  type FigureOrigin,
+  type FigureHighlight,
 } from "@repo/api/domains/career/accounts/account-marks";
 import { useTranslation } from "@repo/intl/use-translation";
 import { Badge } from "@repo/web/components/ui/badge";
@@ -22,8 +22,11 @@ import { useTRPC } from "~/tools/trpc/client";
 
 import { useRefreshCareer } from "../hooks/use-career-queries";
 
+/** What the user edits: the text and its "do not include" list. */
+type AccountDraft = { text: string; doNotInclude: string[] };
+
 /** The highlighter's colour for each figure origin. */
-const highlight: Record<FigureOrigin | "unmarked", string> = {
+const highlight: Record<FigureHighlight, string> = {
   measured: "bg-emerald-500/20",
   estimated: "bg-amber-500/25",
   no_number: "bg-muted",
@@ -45,10 +48,7 @@ export function AccountSection({ positionId }: { positionId: string }) {
   const refresh = useRefreshCareer();
   const query = trpc.career.positionAccount.queryOptions({ positionId });
   const account = useQuery(query);
-  const [editing, setEditing] = useState<{
-    text: string;
-    doNotInclude: string[];
-  } | null>(null);
+  const [editing, setEditing] = useState<AccountDraft | null>(null);
   const [showVersions, setShowVersions] = useState(false);
 
   const done = async () => {
@@ -127,41 +127,53 @@ export function AccountSection({ positionId }: { positionId: string }) {
           onSave={() => save.mutate({ positionId, ...editing })}
         />
       ) : current ? (
-        <div className="flex flex-col gap-2">
-          <AccountText text={current.text} />
-          {current.doNotInclude.length > 0 && (
-            <DoNotInclude items={current.doNotInclude} />
-          )}
+        <div className="flex flex-col gap-3">
+          {/* The draft first, to approve or discard; the account it would
+              replace stays readable below it. */}
           {draft && (
-            <div className="flex flex-wrap items-center gap-1.5">
-              <p className="text-muted-foreground mr-auto text-xs">
-                {approved
-                  ? t.formatMessage({
-                      defaultMessage:
-                        "This draft replaces the account once approved.",
-                    })
-                  : t.formatMessage({
-                      defaultMessage:
-                        "Approve it to make it this position's account.",
-                    })}
-              </p>
-              <Button
-                size="sm"
-                disabled={approve.isPending}
-                onClick={() => approve.mutate({ positionId })}
-              >
-                <Check />
-                {t.formatMessage({ defaultMessage: "Approve" })}
-              </Button>
-              <Button
-                size="sm"
-                variant="ghost"
-                disabled={discard.isPending}
-                onClick={() => discard.mutate({ positionId })}
-              >
-                <X />
-                {t.formatMessage({ defaultMessage: "Discard" })}
-              </Button>
+            <div className="border-primary/40 bg-primary/5 flex flex-col gap-2 rounded-lg border border-dashed p-3">
+              <AccountText text={draft.text} />
+              {draft.doNotInclude.length > 0 && (
+                <DoNotInclude items={draft.doNotInclude} />
+              )}
+              <div className="flex flex-wrap items-center gap-1.5">
+                <p className="text-muted-foreground mr-auto text-xs">
+                  {approved
+                    ? t.formatMessage({
+                        defaultMessage:
+                          "This draft replaces the account once approved.",
+                      })
+                    : t.formatMessage({
+                        defaultMessage:
+                          "Approve it to make it this position's account.",
+                      })}
+                </p>
+                <Button
+                  size="sm"
+                  disabled={approve.isPending}
+                  onClick={() => approve.mutate({ positionId })}
+                >
+                  <Check />
+                  {t.formatMessage({ defaultMessage: "Approve" })}
+                </Button>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  disabled={discard.isPending}
+                  onClick={() => discard.mutate({ positionId })}
+                >
+                  <X />
+                  {t.formatMessage({ defaultMessage: "Discard" })}
+                </Button>
+              </div>
+            </div>
+          )}
+          {approved && (
+            <div className="flex flex-col gap-2">
+              <AccountText text={approved.text} />
+              {approved.doNotInclude.length > 0 && (
+                <DoNotInclude items={approved.doNotInclude} />
+              )}
             </div>
           )}
           <MarksLegend />
@@ -253,7 +265,7 @@ function Segment({ segment }: { segment: AccountSegment }) {
 /** What each highlight means. */
 function MarksLegend() {
   const t = useTranslation();
-  const items: Array<[FigureOrigin | "unmarked", string]> = [
+  const items: Array<[FigureHighlight, string]> = [
     ["measured", t.formatMessage({ defaultMessage: "measured" })],
     ["estimated", t.formatMessage({ defaultMessage: "estimated" })],
     ["no_number", t.formatMessage({ defaultMessage: "no number" })],
@@ -295,8 +307,8 @@ function AccountEditor({
   onCancel,
   onSave,
 }: {
-  value: { text: string; doNotInclude: string[] };
-  onChange: (value: { text: string; doNotInclude: string[] }) => void;
+  value: AccountDraft;
+  onChange: (value: AccountDraft) => void;
   saving: boolean;
   onCancel: () => void;
   onSave: () => void;
@@ -362,7 +374,9 @@ function AccountEditor({
                 add();
               }
             }}
-            placeholder={t.formatMessage({ defaultMessage: "Banco X" })}
+            placeholder={t.formatMessage({
+              defaultMessage: "A name or figure",
+            })}
           />
           <Button type="button" size="sm" variant="outline" onClick={add}>
             <Plus />

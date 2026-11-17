@@ -6,7 +6,7 @@ import { positionAccountVersionsTable } from "../db/career-tables";
 
 type Insert<T extends { $inferInsert: unknown }> = T["$inferInsert"];
 
-export class AccountsRepository {
+export class PositionAccountsRepository {
   constructor(private readonly tx: DbClient) {}
 
   /** A position's versions, newest first. */

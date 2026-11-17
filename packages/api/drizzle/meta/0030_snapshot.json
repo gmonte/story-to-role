@@ -1,5 +1,5 @@
 {
-  "id": "3bdfbb84-d15d-48d4-9107-82d426a42ccd",
+  "id": "2ac37889-e2d2-466e-be1e-d74fbdf94240",
   "prevId": "ca5ca192-af41-4687-8827-7eb70a943fd2",
   "version": "7",
   "dialect": "postgresql",
@@ -1719,8 +1719,8 @@
           "primaryKey": false,
           "notNull": true
         },
-        "restoredFromId": {
-          "name": "restoredFromId",
+        "basedOnVersionId": {
+          "name": "basedOnVersionId",
           "type": "uuid",
           "primaryKey": false,
           "notNull": false
@@ -1747,6 +1747,22 @@
           "concurrently": false,
           "method": "btree",
           "with": {}
+        },
+        "position_account_versions_one_draft_idx": {
+          "name": "position_account_versions_one_draft_idx",
+          "columns": [
+            {
+              "expression": "positionId",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "\"position_account_versions\".\"approvedAt\" is null",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
         }
       },
       "foreignKeys": {
@@ -1770,7 +1786,13 @@
         }
       },
       "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
+      "uniqueConstraints": {
+        "position_account_versions_version_unique": {
+          "name": "position_account_versions_version_unique",
+          "nullsNotDistinct": false,
+          "columns": ["positionId", "version"]
+        }
+      },
       "policies": {},
       "checkConstraints": {},
       "isRLSEnabled": false

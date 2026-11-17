@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { index, unique } from "drizzle-orm/pg-core";
+import { index, unique, uniqueIndex } from "drizzle-orm/pg-core";
 
 import { usersTable } from "@repo/api/domains/users/db/users-tables";
 import { createTable } from "@repo/api/utils/db/create-table";
@@ -303,9 +303,20 @@ export const positionAccountVersionsTable = createTable(
     encryptedDoNotInclude: d.text().notNull(),
     // Who wrote it: the user, the interviewer, an import, the migration.
     source: d.text().$type<AccountSource>().notNull(),
-    // The approved version a restore copied, when it is one.
-    restoredFromId: d.uuid(),
+    // The approved version it came from: the account an edit started from,
+    // or the earlier version a restore brought back. Null for a first one.
+    basedOnVersionId: d.uuid(),
     approvedAt: d.timestamp({ withTimezone: true }),
   }),
-  (t) => [index("position_account_versions_position_id_idx").on(t.positionId)]
+  (t) => [
+    index("position_account_versions_position_id_idx").on(t.positionId),
+    // One draft per position, and each version number once.
+    uniqueIndex("position_account_versions_one_draft_idx")
+      .on(t.positionId)
+      .where(sql`${t.approvedAt} is null`),
+    unique("position_account_versions_version_unique").on(
+      t.positionId,
+      t.version
+    ),
+  ]
 );

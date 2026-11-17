@@ -8,8 +8,9 @@ CREATE TABLE IF NOT EXISTS "position_account_versions" (
 	"encryptedText" text NOT NULL,
 	"encryptedDoNotInclude" text NOT NULL,
 	"source" text NOT NULL,
-	"restoredFromId" uuid,
-	"approvedAt" timestamp with time zone
+	"basedOnVersionId" uuid,
+	"approvedAt" timestamp with time zone,
+	CONSTRAINT "position_account_versions_version_unique" UNIQUE("positionId","version")
 );
 --> statement-breakpoint
 DO $$ BEGIN
@@ -22,4 +23,5 @@ DO $$ BEGIN
 EXCEPTION
  WHEN duplicate_object THEN null;
 END $$;--> statement-breakpoint
-CREATE INDEX IF NOT EXISTS "position_account_versions_position_id_idx" ON "position_account_versions" USING btree ("positionId");
+CREATE INDEX IF NOT EXISTS "position_account_versions_position_id_idx" ON "position_account_versions" USING btree ("positionId");--> statement-breakpoint
+CREATE UNIQUE INDEX IF NOT EXISTS "position_account_versions_one_draft_idx" ON "position_account_versions" USING btree ("positionId") WHERE "position_account_versions"."approvedAt" is null;

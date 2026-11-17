@@ -14,7 +14,7 @@ import {
   careerEventsTable,
   positionAccountVersionsTable,
 } from "../db/career-tables";
-import { AccountsService } from "./accounts-service";
+import { PositionAccountsService } from "./position-accounts-service";
 
 vi.mock("@repo/common/env/web.env", () => ({
   env: { ENCRYPTION_MASTER_KEY: `v1:${randomBytes(32).toString("base64")}` },
@@ -37,7 +37,7 @@ async function setup() {
       startDate: "2021-01",
     },
   });
-  return { db, user, positionId, accounts: new AccountsService(db) };
+  return { db, user, positionId, accounts: new PositionAccountsService(db) };
 }
 
 describe("position accounts", () => {
@@ -96,6 +96,10 @@ describe("position accounts", () => {
 
     const { approved, versions } = await ctx.accounts.getAccount(owner);
     expect(approved).toMatchObject({ version: 2, text: "Second." });
+    // An edit records the account it started from.
+    expect(approved?.basedOnVersionId).toBe(
+      versions.find((version) => version.version === 1)?.accountVersionId
+    );
     expect(versions.map((version) => version.version)).toEqual([2, 1]);
 
     const first = versions.find((version) => version.version === 1)!;
@@ -110,10 +114,11 @@ describe("position accounts", () => {
       userId: ctx.user.id,
       accountVersionId: first.accountVersionId,
     });
-    // Back as a draft: the account stays the second until approved.
+    // Back as a draft, from the version it restores: the account stays the
+    // second until approved.
     expect(await ctx.accounts.getAccount(owner)).toMatchObject({
       approved: { version: 2 },
-      draft: { text: "First." },
+      draft: { text: "First.", basedOnVersionId: first.accountVersionId },
     });
     await ctx.accounts.approveDraft(owner);
     expect((await ctx.accounts.getAccount(owner)).approved).toMatchObject({

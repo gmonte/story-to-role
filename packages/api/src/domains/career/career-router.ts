@@ -10,7 +10,7 @@ import {
   type TRPCContext,
 } from "@repo/api/tools/trpc";
 
-import { AccountsService } from "./accounts/accounts-service";
+import { PositionAccountsService } from "./accounts/position-accounts-service";
 import { CareerService } from "./career-service";
 import {
   accountDraftInputSchema,
@@ -292,7 +292,10 @@ export const careerRouter = createTRPCRouter({
     .input(z.object({ positionId: z.uuid() }))
     .output(accountViewSchema)
     .query(({ ctx, input }) =>
-      new AccountsService(db).getAccount({ userId: ctx.userId, ...input })
+      new PositionAccountsService(db).getAccount({
+        userId: ctx.userId,
+        ...input,
+      })
     ),
 
   accountVersion: userProcedure
@@ -307,7 +310,10 @@ export const careerRouter = createTRPCRouter({
     .input(z.object({ accountVersionId: z.uuid() }))
     .output(accountVersionSchema)
     .query(({ ctx, input }) =>
-      new AccountsService(db).getVersion({ userId: ctx.userId, ...input })
+      new PositionAccountsService(db).getVersion({
+        userId: ctx.userId,
+        ...input,
+      })
     ),
 
   saveAccountDraft: userProcedure
@@ -322,7 +328,10 @@ export const careerRouter = createTRPCRouter({
     .input(accountDraftInputSchema)
     .output(okSchema)
     .mutation(async ({ ctx, input }) => {
-      await new AccountsService(db).saveDraft({ userId: ctx.userId, ...input });
+      await new PositionAccountsService(db).saveDraft({
+        userId: ctx.userId,
+        ...input,
+      });
       return ok;
     }),
 
@@ -338,7 +347,7 @@ export const careerRouter = createTRPCRouter({
     .input(z.object({ positionId: z.uuid() }))
     .output(okSchema)
     .mutation(async ({ ctx, input }) => {
-      await new AccountsService(db).approveDraft({
+      await new PositionAccountsService(db).approveDraft({
         userId: ctx.userId,
         ...input,
       });
@@ -357,7 +366,7 @@ export const careerRouter = createTRPCRouter({
     .input(z.object({ positionId: z.uuid() }))
     .output(okSchema)
     .mutation(async ({ ctx, input }) => {
-      await new AccountsService(db).discardDraft({
+      await new PositionAccountsService(db).discardDraft({
         userId: ctx.userId,
         ...input,
       });
@@ -376,7 +385,7 @@ export const careerRouter = createTRPCRouter({
     .input(z.object({ accountVersionId: z.uuid() }))
     .output(okSchema)
     .mutation(async ({ ctx, input }) => {
-      await new AccountsService(db).restoreVersion({
+      await new PositionAccountsService(db).restoreVersion({
         userId: ctx.userId,
         ...input,
       });

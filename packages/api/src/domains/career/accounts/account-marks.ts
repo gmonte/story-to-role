@@ -5,11 +5,14 @@ export type FigureOrigin =
   | "no_number"
   | "to_confirm";
 
+/** How a figure is highlighted: by its origin, or as one with none said. */
+export type FigureHighlight = FigureOrigin | "unmarked";
+
 /** One stretch of an account, plain or highlighted. */
 export type AccountSegment =
   | { text: string }
   | { text: string; mark: FigureOrigin }
-  | { text: string; figure: FigureOrigin | "unmarked" };
+  | { text: string; figure: FigureHighlight };
 
 // The marks of the meu-emprego-novo method, in Portuguese and English.
 const markWords: Record<string, FigureOrigin> = {
@@ -29,16 +32,19 @@ const markPattern = new RegExp(
   "gi"
 );
 // A figure: an optional currency, digits with their separators, an
-// optional unit or multiplier.
+// optional unit or multiplier ("40%", "R$ 1.5 mil", "2 million").
 const figurePattern =
-  /(?:R\$|US\$|\$|€)?\s?\d+(?:[.,]\d+)*(?:\s?(?:%|k|K|M|mil|bi|x|h|min))?(?![\p{L}\d])/gu;
-// Where a sentence ends: a figure's mark is the first one before it.
-const sentenceEnd = /[.!?;](?=\s|$)|\n/g;
+  /(?:R\$|US\$|\$|€)?\s?\d+(?:[.,]\d+)*(?:\s?(?:%|k|K|M|x|h|min|mil|bi|million|millions|thousand|billion|milhão|milhões|bilhão|bilhões))?(?![\p{L}\d])/gu;
+// A bare year ("In 2021") is a date, not a figure to mark.
+const bareYear = /^(?:19|20)\d{2}$/;
+// Where a mark's reach ends: the end of a sentence, a comma, a semicolon,
+// or a conjunction joining two claims ("led 6 engineers and cut 40%").
+const clauseEnd = /[.!?;,](?=\s|$)|\n|\s(?:and|but|e|mas|while|enquanto)\s/gi;
 
 /**
  * Splits an account into the stretches the space highlights: each mark, and
- * each figure with the origin of the first mark after it in the same
- * sentence, or "unmarked" when that sentence has none.
+ * each figure with the origin of the first mark after it in the same clause,
+ * or "unmarked" when that clause has none.
  */
 export function highlightAccount(text: string): AccountSegment[] {
   const marks = [...text.matchAll(markPattern)].map((match) => ({
@@ -46,18 +52,20 @@ export function highlightAccount(text: string): AccountSegment[] {
     end: match.index + match[0].length,
     origin: markWords[match[1].toLowerCase()],
   }));
-  const ends = [...text.matchAll(sentenceEnd)].map((match) => match.index);
+  const ends = [...text.matchAll(clauseEnd)].map((match) => match.index);
   const insideMark = (at: number) =>
     marks.some((mark) => at >= mark.start && at < mark.end);
   const figures = [...text.matchAll(figurePattern)]
-    .filter((match) => !insideMark(match.index))
+    .filter(
+      (match) => !insideMark(match.index) && !bareYear.test(match[0].trim())
+    )
     .map((match) => {
       const start =
         match.index + (match[0].length - match[0].trimStart().length);
       const end = match.index + match[0].length;
-      const sentenceStop = ends.find((at) => at >= end) ?? text.length;
+      const clauseStop = ends.find((at) => at >= end) ?? text.length;
       const mark = marks.find(
-        (candidate) => candidate.start >= end && candidate.start < sentenceStop
+        (candidate) => candidate.start >= end && candidate.start < clauseStop
       );
       return { start, end, origin: mark?.origin ?? ("unmarked" as const) };
     });

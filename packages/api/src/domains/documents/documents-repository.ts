@@ -29,6 +29,8 @@ import {
   reviewRoundsTable,
 } from "./db/documents-tables";
 import { resumeTemplatesTable, styleProfilesTable } from "./db/writing-tables";
+import type { GenerationSettings } from "./schemas/generation-settings";
+import { defaultTemplateSections } from "./schemas/template";
 
 type Insert<T extends { $inferInsert: unknown }> = T["$inferInsert"];
 
@@ -310,10 +312,19 @@ export class DocumentsRepository {
     return row ?? null;
   }
 
+  /**
+   * A snapshot carries the profile version its content was written from:
+   * the one given, or its parent's (an edit of a text is of that text's
+   * profile).
+   */
   async insertSnapshot(snapshot: Insert<typeof documentSnapshotsTable>) {
+    const profileVersionId =
+      snapshot.profileVersionId === undefined && snapshot.parentSnapshotId
+        ? (await this.findSnapshot(snapshot.parentSnapshotId))?.profileVersionId
+        : snapshot.profileVersionId;
     const [row] = await this.tx
       .insert(documentSnapshotsTable)
-      .values(snapshot)
+      .values({ ...snapshot, profileVersionId: profileVersionId ?? null })
       .returning();
     // A document now exists for its application: an external one isn't
     // external anymore (tracker spec).
@@ -350,6 +361,43 @@ export class DocumentsRepository {
       .select()
       .from(generationsTable)
       .where(eq(generationsTable.id, generationId));
+    return row ?? null;
+  }
+
+  /**
+   * The generation settings a document was written with: those of the
+   * latest generation from the profile that wrote it.
+   */
+  async writtenSettings(documentId: string) {
+    const [row] = await this.tx
+      .select({ settings: generationsTable.settings })
+      .from(generationsTable)
+      .where(
+        and(
+          eq(generationsTable.documentId, documentId),
+          eq(generationsTable.status, "completed"),
+          isNotNull(generationsTable.profileVersionId)
+        )
+      )
+      .orderBy(desc(generationsTable.createdAt))
+      .limit(1);
+    return row?.settings ?? null;
+  }
+
+  /** The latest generation from the profile that wrote this version. */
+  async latestWrittenGeneration(versionId: string) {
+    const [row] = await this.tx
+      .select()
+      .from(generationsTable)
+      .where(
+        and(
+          eq(generationsTable.versionId, versionId),
+          eq(generationsTable.kind, "generate"),
+          eq(generationsTable.status, "completed")
+        )
+      )
+      .orderBy(desc(generationsTable.createdAt))
+      .limit(1);
     return row ?? null;
   }
 
@@ -598,10 +646,21 @@ export class DocumentsRepository {
       .values(template)
       .onConflictDoUpdate({
         target: resumeTemplatesTable.profileId,
-        set: {
-          sections: template.sections,
-          encryptedHeader: template.encryptedHeader,
-        },
+        set: { sections: template.sections },
+      });
+  }
+
+  /** The user's generation settings, kept with their template. */
+  async saveGenerationSettings(input: {
+    profileId: string;
+    generationSettings: GenerationSettings;
+  }) {
+    await this.tx
+      .insert(resumeTemplatesTable)
+      .values({ ...input, sections: defaultTemplateSections })
+      .onConflictDoUpdate({
+        target: resumeTemplatesTable.profileId,
+        set: { generationSettings: input.generationSettings },
       });
   }
 

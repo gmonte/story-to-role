@@ -140,7 +140,7 @@ function AdaptForm({
               })
             : t.formatMessage({
                 defaultMessage:
-                  "Adapting keeps the same content and evidence, rewritten for the new language. It adds no facts.",
+                  "Adapting keeps the same content, and the profile passages behind it, rewritten for the new language. It adds no facts.",
               })}
         </DialogDescription>
       </DialogHeader>
@@ -158,7 +158,8 @@ function AdaptForm({
           <label className="flex items-center gap-2 text-sm">
             <RadioGroupItem value="scratch" />
             {t.formatMessage({
-              defaultMessage: "Generate from scratch from your evidence",
+              defaultMessage:
+                "Generate a new version from your published profile",
             })}
           </label>
         </RadioGroup>

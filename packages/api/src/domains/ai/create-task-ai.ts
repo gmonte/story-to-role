@@ -9,15 +9,14 @@ import { resolveAiFunding } from "./ai-funding";
 
 /**
  * What a task needs to call a model for a user: their cipher, and an AI
- * client on their funding that records usage against the task and applies
- * their sensitivity choices to every system prompt.
+ * client on their funding that records usage against the task and takes
+ * what their profile's communication rules forbid out of every system
+ * prompt.
  */
 export async function createTaskAi(input: {
   db: DbClient;
   userId: string;
   taskId: string;
-  // An application's task: its sensitive-item overrides apply.
-  openingId?: string | null;
 }) {
   const cipher = await getUserCipher(input.db, input.userId);
   const profile = await new CareerRepository(input.db).findProfileByUserId(
@@ -28,7 +27,6 @@ export async function createTaskAi(input: {
         db: input.db,
         cipher,
         profileId: profile.id,
-        openingId: input.openingId,
       })
     : undefined;
   const task = await new TasksRepository(input.db).findOwner(input.taskId);

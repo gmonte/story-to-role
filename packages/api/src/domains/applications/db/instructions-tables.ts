@@ -1,11 +1,7 @@
 import { sql } from "drizzle-orm";
 import { index, unique } from "drizzle-orm/pg-core";
 
-import {
-  careerProfilesTable,
-  credentialsTable,
-  positionsTable,
-} from "@repo/api/domains/career/db/career-tables";
+import { careerProfilesTable } from "@repo/api/domains/career/db/career-tables";
 import { sensitiveItemsTable } from "@repo/api/domains/evidence/db/evidence-tables";
 import type {
   EvidenceKind,
@@ -84,12 +80,10 @@ export const instructionPointsTable = createTable(
     encryptedText: d.text().notNull(),
     status: d.text().$type<InstructionPointStatus>().notNull().default("draft"),
     suggestedPromotion: d.boolean().notNull().default(false),
-    positionId: d
-      .uuid()
-      .references(() => positionsTable.id, { onDelete: "set null" }),
-    credentialId: d
-      .uuid()
-      .references(() => credentialsTable.id, { onDelete: "set null" }),
+    // A position or a credential of the published profile, by the id
+    // generation derives for it.
+    positionId: d.uuid(),
+    credentialId: d.uuid(),
     evidenceKind: d.text().$type<EvidenceKind>(),
     // Flagged names and figures in the point.
     encryptedSensitiveItems: d.text(),
@@ -119,10 +113,8 @@ export const lockedFactOverridesTable = createTable(
       .uuid()
       .notNull()
       .references(() => openingsTable.id, { onDelete: "cascade" }),
-    positionId: d
-      .uuid()
-      .notNull()
-      .references(() => positionsTable.id, { onDelete: "cascade" }),
+    // The position of the published profile, by its derived id.
+    positionId: d.uuid().notNull(),
     field: d.text().$type<LockedField>().notNull(),
     encryptedValue: d.text().notNull(),
     instructionPointId: d

@@ -3,20 +3,18 @@ import { mkdtemp, readdir, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
-import { eq } from "drizzle-orm";
 import { unzipSync } from "fflate";
 import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { createAiClient } from "@repo/api/domains/ai/ai-client";
-import {
-  credentialsTable,
-  positionsTable,
-} from "@repo/api/domains/career/db/career-tables";
 import { CareerService } from "@repo/api/domains/career/career-service";
+import { creditCap } from "@repo/api/domains/credits/credit-pricing";
+import { creditReserve } from "@repo/api/domains/credits/credit-reserve";
 import { getUserCipher } from "@repo/api/domains/encryption/user-cipher";
 import { sensitiveItemsTable } from "@repo/api/domains/evidence/db/evidence-tables";
 import { loadSensitiveFilter } from "@repo/api/domains/evidence/sensitive/load-sensitive-filter";
 import { OpeningsRepository } from "@repo/api/domains/openings/openings-repository";
+import { ProfileService } from "@repo/api/domains/profile/profile-service";
 import { TasksService } from "@repo/api/domains/tasks/tasks-service";
 import { createTestUser } from "@repo/api/test/create-test-user";
 import { fakeProviderPackage } from "@repo/api/test/fake-provider-package";
@@ -25,6 +23,7 @@ import {
   closeTestDatabase,
   getTestDatabase,
 } from "@repo/api/test/pglite";
+import { lockedFactOverridesTable } from "@repo/api/domains/applications/db/instructions-tables";
 import { InstructionsRepository } from "@repo/api/domains/applications/instructions-repository";
 import { InstructionsService } from "@repo/api/domains/applications/instructions-service";
 import { MotivationRepository } from "@repo/api/domains/applications/motivation/motivation-repository";
@@ -43,18 +42,100 @@ import { runUpdateLetter } from "./letter/run-update-letter";
 import type { CoverLetterContent } from "./schemas/cover-letter-content";
 import { DocumentsRepository } from "./documents-repository";
 import { DocumentsService } from "./documents-service";
+import type { AdjustDraft } from "./generation/adjust-resume";
 import type { ResumeDraft } from "./generation/assemble-resume";
-import { runGenerateResume } from "./generation/run-generate-resume";
+import { loadCareerContext } from "./generation/load-career-context";
+import {
+  coverageRating,
+  runGenerateResume,
+} from "./generation/run-generate-resume";
 import { PdfService } from "./rendering/pdf-service";
 import { runRenderPdf } from "./rendering/run-render-pdf";
 import type { DocumentContent } from "./schemas/document-content";
+import { defaultGenerationSettings } from "./schemas/generation-settings";
 import type { ResumeContent } from "./schemas/resume-content";
+import { WritingService } from "./writing/writing-service";
 
 vi.mock("@repo/common/env/web.env", () => ({
   env: { ENCRYPTION_MASTER_KEY: `v1:${randomBytes(32).toString("base64")}` },
 }));
 
-async function setup() {
+/**
+ * The profile these tests publish: the only source of a document's facts
+ * (ADR 0008). `extra` adds what one test needs to the sections it names.
+ */
+const profileMarkdown = (
+  extra: {
+    results?: string[];
+    experience?: string;
+    certifications?: string[];
+    competencies?: string[];
+    languages?: string[];
+    rules?: string[];
+  } = {}
+) => `# Profile
+
+## Professional identity
+
+- Professional name: Ada Lovelace
+- Platform engineer and tech lead.
+
+## Contact (only what may appear on a resume)
+
+- Professional email: ada@example.com
+- City and state: Belo Horizonte, MG
+
+## Experience (most recent first)
+
+### Globex — Tech Lead (2021-03 to present)
+
+- Responsibilities: Led a team of 5 engineers.
+- Tools: Kubernetes, Terraform
+- Results:
+  - Cut deploy time by 40% with Kubernetes [measured: CI dashboard].
+  - Cut cloud costs by 30% [estimated].
+${(extra.results ?? []).map((line) => `  - ${line}\n`).join("")}
+${extra.experience ?? ""}
+## Education
+
+## Certifications
+
+${(extra.certifications ?? []).map((line) => `- ${line}\n`).join("")}
+## Competencies
+
+- I master: Kubernetes, Terraform
+${(extra.competencies ?? []).map((line) => `- ${line}\n`).join("")}
+## Languages
+
+- English — C1
+${(extra.languages ?? []).map((line) => `- ${line}\n`).join("")}
+## Known gaps
+
+- Go in production.
+
+## Communication rules
+
+${(extra.rules ?? []).map((line) => `- ${line}\n`).join("")}`;
+
+/**
+ * A review whose coverage rates the draft `rating` out of 10: that many
+ * requirements shown strongly, the rest not proven.
+ */
+const reviewRated = (rating: number) => ({
+  coverage: Array.from({ length: 10 }, (_, index) => ({
+    requirement: `Requirement ${index + 1}`,
+    level: index < rating ? ("strong" as const) : ("not_proven" as const),
+  })),
+  inconsistencies: [],
+  advice: ["Be more concrete"],
+});
+
+async function setup({
+  markdown = profileMarkdown(),
+}: {
+  // Null publishes nothing.
+  markdown?: string | null;
+} = {}) {
   const db = await getTestDatabase();
   const user = await createTestUser();
   const career = new CareerService(db);
@@ -62,29 +143,50 @@ async function setup() {
     userId: user.id,
     defaultLanguage: "en-US",
   });
-  const { positionId } = await career.addPosition({
-    userId: user.id,
-    position: {
-      employer: "Globex",
-      title: "Tech Lead",
-      startDate: "2021-03",
-    },
-  });
-  await db
-    .update(positionsTable)
-    .set({ status: "approved", approvedAt: new Date() })
-    .where(eq(positionsTable.id, positionId));
   const cipher = await getUserCipher(db, user.id);
-  // Profile_truth replaces this in P6 (docs/plan.md): no evidence exists,
-  // so these ids back nothing and code drops the lines citing them.
-  const evidence = [{ id: crypto.randomUUID() }, { id: crypto.randomUUID() }];
-  await db.insert(credentialsTable).values({
-    profileId: profile.id,
-    kind: "language",
-    encryptedTitle: cipher.encrypt("English"),
-    level: "C1",
-    approvedAt: new Date(),
-  });
+  const trigger = {
+    trigger: vi.fn(async () => ({ runId: "run", accessToken: "t" })),
+  };
+  const tasks = new TasksService(db, trigger);
+  const profiles = new ProfileService(db, tasks);
+
+  /** Saves and publishes the profile: a new version from then on. */
+  async function publishProfile(text: string) {
+    const current = await profiles.getDraft({
+      userId: user.id,
+      language: "en-US",
+    });
+    const { revision } = await profiles.saveDraft({
+      userId: user.id,
+      markdown: text,
+      baseRevision: current.revision,
+    });
+    await profiles.publish({ userId: user.id, baseRevision: revision });
+  }
+  if (markdown !== null) await publishProfile(markdown);
+
+  /** The career as generation reads it from the version published now. */
+  const readCareer = async () =>
+    loadCareerContext({
+      db,
+      cipher,
+      profileId: profile.id,
+      filter: await loadSensitiveFilter({ db, cipher, profileId: profile.id }),
+    });
+  const context = await readCareer();
+  // Ids are derived from the profile: nothing here is a table row's.
+  const positionId = context.positions[0]?.id;
+  /** The profile line holding this text, as a draft cites it. */
+  const lineOf = (text: string, from = context) =>
+    from.evidence.find((row) => row.text.includes(text))!;
+  /** The fit check passage a profile line is in. */
+  const passageOf = (evidenceId: string, from = context) =>
+    [...from.evidenceOfPassage].find(([, ids]) => ids.includes(evidenceId))![0];
+  // The measured result and the team: the lines most drafts cite.
+  const evidence =
+    markdown === null
+      ? []
+      : [lineOf("Cut deploy time by 40%"), lineOf("Led a team of 5 engineers")];
 
   const openings = new OpeningsRepository(db);
   const opening = await openings.insertOpening({
@@ -109,6 +211,8 @@ async function setup() {
   );
   const term = (text: string) =>
     terms.find((row) => cipher.decrypt(row.encryptedText) === text)!.id;
+  // A fit check cites the profile's passages.
+  const met = evidence.length ? [passageOf(evidence[0].id)] : [];
   await openings.insertFitCheck({
     openingId: opening.id,
     band: "medium",
@@ -116,13 +220,13 @@ async function setup() {
       {
         termId: term("Kubernetes"),
         verdict: "met",
-        evidenceIds: [evidence[0].id],
+        evidenceIds: met,
         encryptedExplanation: cipher.encrypt("Runs Kubernetes"),
       },
       {
         termId: term("K8s operators"),
         verdict: "met",
-        evidenceIds: [evidence[0].id],
+        evidenceIds: met,
         encryptedExplanation: cipher.encrypt("Same thing, other words"),
       },
       {
@@ -136,8 +240,8 @@ async function setup() {
   });
 
   /**
-   * Points the user kept for this application: until profile_truth (P6),
-   * the only source a resume line can rest on.
+   * Points the user kept for this application: their own statements, which
+   * a resume line can rest on like a line of the profile.
    */
   async function keepInstructions(texts: string[]) {
     const repository = new InstructionsRepository(db);
@@ -159,17 +263,16 @@ async function setup() {
     );
   }
 
-  const trigger = {
-    trigger: vi.fn(async () => ({ runId: "run", accessToken: "t" })),
-  };
-  const documents = new DocumentsService(db, new TasksService(db, trigger));
+  const documents = new DocumentsService(db, tasks);
 
   // `sourceId` backs the summary and skills: a kept point's id, or by
-  // default one that backs nothing.
+  // default the profile's measured result.
   const draft = (
     bullets: ResumeDraft["experience"][number]["bullets"],
-    sourceId = evidence[0].id
-  ) => ({
+    sourceId = evidence[0].id,
+    emphasis = ["Kubernetes and deploys first"]
+  ): ResumeDraft => ({
+    emphasis,
     title_line: "Platform Engineer | Kubernetes",
     summary: {
       text: "Engineer who cut deploy time by 40%.",
@@ -178,25 +281,37 @@ async function setup() {
     skills: [
       { label: "Core", items: ["Kubernetes"], evidence_ids: [sourceId] },
     ],
-    experience: [{ position_id: positionId, context: null, bullets }],
+    experience: [
+      { position_id: positionId, context: null, relevance: null, bullets },
+    ],
     projects: [],
   });
 
-  type Script = { drafts: ResumeDraft[]; ratings: number[] };
+  // `ratings`: what each review's coverage rates its draft, in order.
+  type Script = {
+    drafts: Array<ResumeDraft | AdjustDraft>;
+    ratings: number[];
+    /** This month (YYYY-MM), for what "recent" is measured from. */
+    today?: string;
+  };
+  const request = {
+    userId: user.id,
+    openingId: opening.id,
+    language: "en-US" as const,
+    reviewDepth: "quick" as const,
+    writingLevel: "standard" as const,
+    tone: "direct" as const,
+  };
 
   async function generate(reviewDepth: "quick" | "thorough", script: Script) {
     const { generationId } = await documents.generateResume({
-      userId: user.id,
-      openingId: opening.id,
-      language: "en-US",
+      ...request,
       reviewDepth,
-      writingLevel: "standard",
-      tone: "direct",
     });
     return { generationId, ...(await runScripted(generationId, script)) };
   }
 
-  /** Runs a generation's task with scripted drafts and ratings. */
+  /** Runs a generation's task with scripted drafts and reviews. */
   async function runScripted(generationId: string, script: Script) {
     const drafts = [...script.drafts];
     const ratings = [...script.ratings];
@@ -208,7 +323,7 @@ async function setup() {
     const fake = fakeProviderPackage({
       object: ({ system }) => {
         if (system.startsWith("You review")) {
-          return { rating: ratings.shift() ?? 5, gaps: ["Be more concrete"] };
+          return reviewRated(ratings.shift() ?? 5);
         }
         return drafts.shift();
       },
@@ -223,9 +338,9 @@ async function setup() {
         sensitiveFilter: filter,
       }),
       cipher,
-      filter,
       userId: user.id,
       generationId,
+      today: script.today,
     });
     return { fake };
   }
@@ -234,13 +349,19 @@ async function setup() {
     db,
     user,
     profile,
+    context,
     positionId,
     evidence,
+    lineOf,
+    passageOf,
+    readCareer,
+    publishProfile,
     opening,
     openings,
     cipher,
     trigger,
     documents,
+    request,
     draft,
     generate,
     runScripted,
@@ -273,31 +394,31 @@ describe("resume generation and snapshots", () => {
 
   it("generates with locked facts, a source trace and an ATS check, keeping the best round", async () => {
     const ctx = await setup();
-    const [kubernetes, team] = await ctx.keepInstructions([
-      "Cut deploy time by 40% with Kubernetes at Initrode",
-      "Led a team of 5 engineers",
-    ]);
+    const [deploy] = ctx.evidence;
+    const [team] = await ctx.keepInstructions(["Led a team of 5 engineers"]);
     const { generationId } = await ctx.generate("quick", {
       drafts: [
         ctx.draft(
           [
             {
               text: "Cut deploy time by 40% with Kubernetes.",
-              evidence_ids: [kubernetes.id],
+              evidence_ids: [deploy.id],
             },
           ],
-          kubernetes.id
+          deploy.id,
+          ["The first draft's emphasis"]
         ),
         ctx.draft(
           [
             {
               text: "Cut deploy time by 40% with Kubernetes.",
-              evidence_ids: [kubernetes.id],
+              evidence_ids: [deploy.id],
             },
             { text: "Led a team of 5 engineers.", evidence_ids: [team.id] },
             { text: "Saved $2M a year.", evidence_ids: [team.id] },
           ],
-          kubernetes.id
+          deploy.id,
+          ["One", "Two", " Three ", "", "Four", "Five", "Six"]
         ),
       ],
       ratings: [6, 8],
@@ -338,11 +459,24 @@ describe("resume generation and snapshots", () => {
       "languages",
     ]);
     expect(version.pages).toBeLessThanOrEqual(2);
+    // The header comes from the profile's identity and contact.
+    expect(resumeOf(version.content).header).toEqual({
+      name: "Ada Lovelace",
+      titleLine: "Platform Engineer | Kubernetes",
+      contacts: ["ada@example.com"],
+      city: "Belo Horizonte, MG",
+    });
+    // What the kept draft emphasizes, in at most five lines.
+    expect(version.emphasis).toEqual({
+      lines: ["One", "Two", "Three", "Four", "Five"],
+      adjusted: false,
+    });
 
-    // Every line traces to the user's own words.
-    expect(
-      entry.lines.every((line) => line.origin.kind === "instruction")
-    ).toBe(true);
+    // Every line traces to the profile or to the user's own words.
+    expect(entry.lines.map((line) => line.origin)).toEqual([
+      { kind: "evidence", evidenceIds: [deploy.id] },
+      { kind: "instruction", instructionIds: [team.id], evidenceIds: [] },
+    ]);
     expect(version.instructionTrace).toContainEqual({
       instructionId: team.id,
       text: "Led a team of 5 engineers",
@@ -395,30 +529,41 @@ describe("resume generation and snapshots", () => {
     expect(fake.generateObject).toHaveBeenCalledTimes(2);
   });
 
-  it("prints generalized employers, leaves out unusable credentials and locks credentials", async () => {
-    const ctx = await setup();
-    const cipher = await getUserCipher(ctx.db, ctx.user.id);
-    await ctx.db.insert(sensitiveItemsTable).values({
-      profileId: ctx.profile.id,
-      positionId: ctx.positionId,
-      kind: "client",
-      encryptedOriginal: cipher.encrypt("Globex"),
-      choice: "generalize",
-      encryptedGeneralized: cipher.encrypt("a global tech company"),
+  it("prints the profile's facts, leaves out what it must not use and locks credentials", async () => {
+    const ctx = await setup({
+      markdown: profileMarkdown({
+        results: ["Moved the billing platform of Initrode [no number]."],
+        competencies: ["Studied, without professional experience: Rust"],
+        rules: ["Never include: Initrode"],
+      }),
     });
-    await ctx.db.insert(credentialsTable).values({
-      profileId: ctx.profile.id,
-      kind: "language",
-      encryptedTitle: cipher.encrypt("Klingon"),
-      status: "do_not_use",
-      approvedAt: new Date(),
-    });
+    // The line naming what must never be included isn't handed to a writer.
+    expect(JSON.stringify(ctx.context.evidence)).not.toContain("Initrode");
+    const results = ctx.context.evidenceOfPassage.get(
+      ctx.passageOf(ctx.evidence[0].id)
+    )!;
+    expect(results).toHaveLength(3);
     const line = {
       text: "Led a team of 5 engineers.",
       evidence_ids: [ctx.evidence[1].id],
     };
+    const written: ResumeDraft = {
+      ...ctx.draft([
+        line,
+        // Citing the line left out backs nothing.
+        { text: "Moved a billing platform.", evidence_ids: [results[2]] },
+      ]),
+      skills: [
+        {
+          label: "Core",
+          // A competency only studied is never a skill.
+          items: ["Kubernetes", "Rust"],
+          evidence_ids: [ctx.evidence[0].id],
+        },
+      ],
+    };
     await ctx.generate("quick", {
-      drafts: [ctx.draft([line]), ctx.draft([line])],
+      drafts: [written, written],
       ratings: [7, 6],
     });
     const [version] = (
@@ -427,15 +572,26 @@ describe("resume generation and snapshots", () => {
         openingId: ctx.opening.id,
       })
     ).documents[0].versions;
-    expect(experienceOf(version.content).employer).toBe(
-      "a global tech company"
+    expect(experienceOf(version.content)).toMatchObject({
+      employer: "Globex",
+      lines: [{ text: "Led a team of 5 engineers." }],
+    });
+    expect(JSON.stringify(version.content)).not.toMatch(
+      /Initrode|Rust|billing|Go in production/
     );
-    expect(JSON.stringify(version.content)).not.toMatch(/Globex|Klingon/);
+    const languages = resumeOf(version.content).sections.find(
+      (s) => s.kind === "languages"
+    );
+    expect(languages).toMatchObject({
+      entries: [{ title: "English", level: "C1" }],
+    });
 
     const tampered = structuredClone(resumeOf(version.content));
-    const languages = tampered.sections.find((s) => s.kind === "languages");
-    if (languages && "entries" in languages && languages.kind === "languages") {
-      languages.entries[0].level = "Native";
+    const tamperedLanguages = tampered.sections.find(
+      (s) => s.kind === "languages"
+    );
+    if (tamperedLanguages?.kind === "languages") {
+      tamperedLanguages.entries[0].level = "Native";
     }
     await expect(
       ctx.documents.saveEdit({
@@ -448,15 +604,8 @@ describe("resume generation and snapshots", () => {
   });
 
   it("never lets an excluded name through, even in the best draft", async () => {
-    const ctx = await setup();
-    await ctx.db.insert(sensitiveItemsTable).values({
-      profileId: ctx.profile.id,
-      positionId: ctx.positionId,
-      kind: "client",
-      encryptedOriginal: (await getUserCipher(ctx.db, ctx.user.id)).encrypt(
-        "Initrode"
-      ),
-      choice: "exclude",
+    const ctx = await setup({
+      markdown: profileMarkdown({ rules: ["Never include: Initrode"] }),
     });
     const [team] = await ctx.keepInstructions([
       "Led a team of 5 engineers at Initrode",
@@ -484,6 +633,11 @@ describe("resume generation and snapshots", () => {
     });
     const content = view.documents[0].versions[0].content;
     expect(JSON.stringify(content)).not.toContain("Initrode");
+    // Whatever the review says, a draft carrying the name rates 1.
+    const rounds = await new DocumentsRepository(ctx.db).listReviewRounds(
+      view.documents[0].generation!.id
+    );
+    expect(rounds.map((round) => round.rating)).toEqual([1, 1]);
   });
 
   it("keeps snapshots as a stack: edits, undo, restore, duplicate", async () => {
@@ -851,6 +1005,149 @@ describe("resume generation and snapshots", () => {
     ).toMatchObject({ overrides: [] });
   });
 
+  it("prints a confirmed locked-fact override in the generated resume", async () => {
+    const ctx = await setup();
+    const tasks = new TasksService(ctx.db, ctx.trigger);
+    const instructions = new InstructionsService(ctx.db, tasks);
+    const team = ctx.evidence[1];
+    const written =
+      "In this application my title at Globex is Engineering Manager. I started there in January 2021.";
+    await instructions.split({
+      userId: ctx.user.id,
+      openingId: ctx.opening.id,
+      text: written,
+    });
+    const submitted = await new InstructionsRepository(
+      ctx.db
+    ).latestInstructions(ctx.opening.id);
+    const point = {
+      gap_ref: null,
+      looks_like_career_fact: false,
+      position_id: null,
+      credential_id: null,
+      evidence_kind: null,
+      sensitive_items: [],
+    };
+    const fake = fakeProviderPackage({
+      object: () => ({
+        points: [
+          {
+            ...point,
+            text: "In this application my title at Globex is Engineering Manager",
+            locked_fact_change: {
+              position_id: ctx.positionId,
+              field: "title",
+              value: "Engineering Manager",
+            },
+          },
+          {
+            ...point,
+            text: "I started there in January 2021",
+            locked_fact_change: {
+              position_id: ctx.positionId,
+              field: "start_date",
+              value: "2021-01",
+            },
+          },
+        ],
+      }),
+    });
+    await runSplitInstructions({
+      db: ctx.db,
+      ai: createAiClient({
+        db: ctx.db,
+        userId: ctx.user.id,
+        funding: "credits",
+        providerPackage: fake.providerPackage,
+      }),
+      cipher: ctx.cipher,
+      userId: ctx.user.id,
+      applicationInstructionsId: submitted.id,
+    });
+    // The split is told the profile's positions, by the ids generation
+    // knows them by.
+    expect(fake.generateObject.mock.calls[0][0].system).toContain(
+      `- ${ctx.positionId}: Tech Lead at Globex, 2021-03 to present`
+    );
+    const review = await instructions.get({
+      userId: ctx.user.id,
+      openingId: ctx.opening.id,
+    });
+    expect(review.overrides).toMatchObject([
+      {
+        positionId: ctx.positionId,
+        employer: "Globex",
+        field: "title",
+        original: "Tech Lead",
+        value: "Engineering Manager",
+        confirmed: false,
+      },
+      {
+        positionId: ctx.positionId,
+        field: "start_date",
+        original: "2021-03",
+        value: "2021-01",
+        confirmed: false,
+      },
+    ]);
+    // Only the title is confirmed: the other stays as the profile has it.
+    const [title, start] = review.overrides;
+    await instructions.confirm({
+      userId: ctx.user.id,
+      openingId: ctx.opening.id,
+      confirmedLockedFactOverrideIds: [title.id],
+    });
+    expect(
+      (
+        await instructions.get({
+          userId: ctx.user.id,
+          openingId: ctx.opening.id,
+        })
+      ).overrides.map((row) => [row.id, row.confirmed])
+    ).toEqual([[title.id, true]]);
+    expect(start.confirmed).toBe(false);
+
+    const line = {
+      text: "Led a team of 5 engineers.",
+      evidence_ids: [team.id],
+    };
+    await ctx.generate("quick", { drafts: [ctx.draft([line])], ratings: [9] });
+    const [version] = (
+      await ctx.documents.forOpening({
+        userId: ctx.user.id,
+        openingId: ctx.opening.id,
+      })
+    ).documents[0].versions;
+    expect(experienceOf(version.content)).toMatchObject({
+      positionId: ctx.positionId,
+      employer: "Globex",
+      title: "Engineering Manager",
+      startDate: "2021-03",
+      lines: [{ text: "Led a team of 5 engineers." }],
+    });
+
+    // It is this application's only: a library document prints the profile.
+    const library = await new LibraryService(ctx.db, tasks).generateResume({
+      userId: ctx.user.id,
+      focus: "Platform",
+      language: "en-US",
+      reviewDepth: "quick",
+      writingLevel: "standard",
+      tone: "direct",
+    });
+    await ctx.runScripted(library.generationId, {
+      drafts: [ctx.draft([line])],
+      ratings: [9],
+    });
+    const [libraryVersion] = (
+      await ctx.documents.libraryDocument({
+        userId: ctx.user.id,
+        documentId: library.documentId,
+      })
+    ).versions;
+    expect(experienceOf(libraryVersion.content).title).toBe("Tech Lead");
+  });
+
   it("adapts into another language, approves a title and syncs changes", async () => {
     const ctx = await setup();
     const [kubernetes, team] = await ctx.keepInstructions([
@@ -1125,7 +1422,8 @@ describe("resume generation and snapshots", () => {
     expect(version.pdf).toEqual({
       ready: false,
       rendering: false,
-      fileName: "Platform_Engineer_Resume.pdf",
+      // Named after the person, now that the profile gives the name.
+      fileName: "Ada_Lovelace_Platform_Engineer_Resume.pdf",
     });
 
     expect(
@@ -1172,7 +1470,7 @@ describe("resume generation and snapshots", () => {
     });
     expect(zip?.fileName).toBe("Hooli_Platform_Engineer.zip");
     expect(Object.keys(unzipSync(new Uint8Array(zip!.bytes)))).toEqual([
-      "Platform_Engineer_Resume.pdf",
+      "Ada_Lovelace_Platform_Engineer_Resume.pdf",
     ]);
 
     // A new snapshot needs its own PDF; undoing it deletes that file.
@@ -1240,7 +1538,9 @@ describe("resume generation and snapshots", () => {
     });
     const [libraryVersion] = view.versions;
     expect(libraryVersion.atsCheck).toBeNull();
-    expect(libraryVersion.pdf.fileName).toBe("Platform_Resume.pdf");
+    expect(libraryVersion.pdf.fileName).toBe(
+      "Ada_Lovelace_Platform_Resume.pdf"
+    );
     // Not an application: the opening still has none.
     expect(
       (
@@ -1309,7 +1609,7 @@ describe("resume generation and snapshots", () => {
       expect.anything()
     );
 
-    // Use as reference: the document guides the next draft.
+    // Adjust: the library document is what the next one starts from.
     const { generationId } = await ctx.documents.generateResume({
       userId: ctx.user.id,
       openingId: ctx.opening.id,
@@ -1319,13 +1619,35 @@ describe("resume generation and snapshots", () => {
       tone: "direct",
       referenceVersionId: similar.versionId,
     });
+    const [libraryLine] = experienceOf(libraryVersion.content).lines;
     const { fake } = await ctx.runScripted(generationId, {
-      drafts: [ctx.draft([line]), ctx.draft([line])],
-      ratings: [8, 5],
+      drafts: [
+        {
+          changes: ["Summary rewritten for Hooli"],
+          title_line: "Platform Engineer | Kubernetes",
+          summary: null,
+          skills: [],
+          experience: [],
+        },
+      ],
+      ratings: [8],
     });
-    expect(fake.generateObject.mock.calls[0][0].system).toContain(
-      "A resume the user made for a similar target"
+    const adjuster = fake.generateObject.mock.calls[0][0].system;
+    expect(adjuster).toMatch(/^You adjust an existing resume/);
+    expect(adjuster).toContain(
+      `bullet [${libraryLine.id}] Led a team of 5 engineers.`
     );
+    // Named or not, what the library document says is kept as it is.
+    const adjusted = (
+      await ctx.documents.forOpening({
+        userId: ctx.user.id,
+        openingId: ctx.opening.id,
+      })
+    ).documents[0].versions.find((version) => version.emphasis?.adjusted)!;
+    expect(resumeOf(adjusted.content).sections).toEqual(
+      resumeOf(libraryVersion.content).sections
+    );
+    expect(adjusted.emphasis?.lines).toEqual(["Summary rewritten for Hooli"]);
   });
 
   it("writes a cover letter from approved sources and keeps it in step with its resume", async () => {
@@ -1537,6 +1859,7 @@ describe("resume generation and snapshots", () => {
       },
     ]);
     expect(letter.pages).toBeLessThanOrEqual(1);
+    expect(letter.maxPages).toBe(defaultGenerationSettings.letterMaxPages);
 
     // The resume changes: the letter is outdated relative to it.
     const editResume = async (title: string) => {
@@ -1641,4 +1964,1275 @@ describe("resume generation and snapshots", () => {
       origin: { kind: "manual" },
     });
   });
+  it("adjusts an existing resume: only the order, the summary and bullets the profile has", async () => {
+    const ctx = await setup({
+      markdown: profileMarkdown({
+        experience: `### Acme — Developer (2017-01 to 2021-02)
+
+- Tools: Node.js, PostgreSQL
+- Results:
+  - Built the order services in Node.js [no number].
+`,
+        competencies: ["I use often: Node.js"],
+      }),
+    });
+    const [deploy, team] = ctx.evidence;
+    const tools = ctx.lineOf("Tools: Kubernetes");
+    const services = ctx.lineOf("Built the order services");
+    const acmeId = ctx.context.positions[1].id;
+    // Both positions are recent to this month.
+    const today = "2025-06";
+    // The Free plan's reserve is sized by the published profile's positions.
+    expect(await creditReserve(ctx.db, ctx.user.id, new Date())).toBe(
+      creditCap("generate_document", { positions: 2 })
+    );
+    const base = ctx.draft([
+      {
+        text: "Cut deploy time by 40% with Kubernetes.",
+        evidence_ids: [deploy.id],
+      },
+      { text: "Led a team of 5 engineers.", evidence_ids: [team.id] },
+    ]);
+    await ctx.generate("quick", {
+      drafts: [
+        {
+          ...base,
+          skills: [
+            {
+              label: "Core",
+              items: ["Kubernetes", "Terraform", "Node.js"],
+              evidence_ids: [],
+            },
+          ],
+          experience: [
+            ...base.experience,
+            {
+              position_id: acmeId,
+              context: null,
+              relevance: null,
+              bullets: [
+                {
+                  text: "Built the order services in Node.js.",
+                  evidence_ids: [services.id],
+                },
+              ],
+            },
+          ],
+        },
+      ],
+      ratings: [9],
+      today,
+    });
+    const versions = async () =>
+      (
+        await ctx.documents.forOpening({
+          userId: ctx.user.id,
+          openingId: ctx.opening.id,
+        })
+      ).documents[0].versions;
+    const [reference] = await versions();
+    // The resume the user came for exists: nothing is kept any more.
+    expect(await creditReserve(ctx.db, ctx.user.id, new Date())).toBe(0);
+    const sectionsOf = (content: DocumentContent) => {
+      const { sections } = resumeOf(content);
+      const summary = sections.find((s) => s.kind === "summary");
+      const skills = sections.find((s) => s.kind === "skills");
+      const experience = sections.find((s) => s.kind === "experience");
+      if (
+        summary?.kind !== "summary" ||
+        skills?.kind !== "skills" ||
+        experience?.kind !== "experience"
+      ) {
+        throw new Error("a section is missing");
+      }
+      return {
+        summary: summary.line,
+        groups: skills.groups,
+        globex: experience.entries[0],
+        acme: experience.entries[1],
+      };
+    };
+    const before = sectionsOf(reference.content);
+    const [deployLine, teamLine] = before.globex.lines;
+    expect(before.groups.map((group) => group.text)).toEqual([
+      "Kubernetes, Terraform, Node.js",
+    ]);
+    expect(reference.emphasis).toEqual({
+      lines: ["Kubernetes and deploys first"],
+      adjusted: false,
+    });
+    const documentView = async () =>
+      (
+        await ctx.documents.forOpening({
+          userId: ctx.user.id,
+          openingId: ctx.opening.id,
+        })
+      ).documents[0];
+    expect((await documentView()).generation).toMatchObject({
+      adjusted: false,
+    });
+    // Written under the default settings: two pages at most.
+    expect(reference.maxPages).toBe(2);
+
+    // Thorough or not, an adjustment is one call and no review; and it
+    // is in the reference's language, whatever language is asked for.
+    const { generationId } = await ctx.documents.generateResume({
+      ...ctx.request,
+      language: "pt-BR",
+      reviewDepth: "thorough",
+      referenceVersionId: reference.id,
+    });
+    expect(
+      await new DocumentsRepository(ctx.db).findGeneration(generationId)
+    ).toMatchObject({ language: "en-US" });
+    expect((await documentView()).generation).toMatchObject({
+      id: generationId,
+      adjusted: true,
+      language: "en-US",
+    });
+    const { fake } = await ctx.runScripted(generationId, {
+      drafts: [
+        {
+          changes: ["Team leadership first", "Node.js before Kubernetes"],
+          title_line: "Platform Engineer | Kubernetes",
+          summary: {
+            text: "Tech lead of a team of 5 engineers.",
+            evidence_ids: [team.id],
+          },
+          skills: [
+            {
+              group_id: before.groups[0].id,
+              // Rust is not in the resume: nothing new enters.
+              items: ["node.js", "Terraform", "Rust"],
+            },
+          ],
+          experience: [
+            {
+              position_id: ctx.positionId,
+              relevance: null,
+              // An unknown id and a repeated one change nothing.
+              bullet_ids: [teamLine.id, "not-a-bullet", teamLine.id],
+              added: [
+                {
+                  text: "Ran the platform's Terraform modules.",
+                  evidence_ids: [tools.id],
+                },
+                // A line of another position backs nothing here.
+                {
+                  text: "Built order services in Node.js.",
+                  evidence_ids: [services.id],
+                },
+                // Nor does a line of this one back a number it doesn't show.
+                {
+                  text: "Ran Terraform for 12 teams.",
+                  evidence_ids: [tools.id],
+                },
+              ],
+            },
+          ],
+        },
+      ],
+      ratings: [6],
+      today,
+    });
+    expect(
+      fake.generateObject.mock.calls.map(([call]) => call.system.slice(0, 10))
+    ).toEqual(["You adjust"]);
+    expect(fake.generateObject.mock.calls[0][0].system).toContain(
+      `bullet [${deployLine.id}] Cut deploy time by 40% with Kubernetes.`
+    );
+
+    const adjusted = (await versions()).find(
+      (version) => version.id !== reference.id
+    )!;
+    expect(adjusted.language).toBe("en-US");
+    const after = sectionsOf(adjusted.content);
+    // Every bullet of the reference, word for word, in the order asked;
+    // the one the profile backs is added after the ones named.
+    expect(after.globex.lines).toEqual([
+      teamLine,
+      expect.objectContaining({
+        text: "Ran the platform's Terraform modules.",
+        origin: { kind: "evidence", evidenceIds: [tools.id] },
+      }),
+      deployLine,
+    ]);
+    expect(after.acme).toEqual(before.acme);
+    // The same competencies, reordered.
+    expect(after.groups).toEqual([
+      { ...before.groups[0], text: "Node.js, Terraform, Kubernetes" },
+    ]);
+    // Only the summary is rewritten.
+    expect(after.summary).toMatchObject({
+      text: "Tech lead of a team of 5 engineers.",
+      origin: { kind: "evidence", evidenceIds: [team.id] },
+    });
+    expect(after.summary.id).not.toBe(before.summary.id);
+    expect(adjusted.emphasis).toEqual({
+      lines: ["Team leadership first", "Node.js before Kubernetes"],
+      adjusted: true,
+    });
+    // Nothing was judged, so no round is stored and none is the best.
+    const repository = new DocumentsRepository(ctx.db);
+    expect(await repository.listReviewRounds(generationId)).toEqual([]);
+    expect(await repository.findGeneration(generationId)).toMatchObject({
+      status: "completed",
+      bestRound: null,
+    });
+    // The version it started from is untouched.
+    expect((await versions())[0].content).toEqual(reference.content);
+  });
+
+  it("re-checks what an adjustment keeps against the profile frozen now", async () => {
+    const ctx = await setup();
+    const [deploy, team] = ctx.evidence;
+    await ctx.generate("quick", {
+      drafts: [
+        {
+          ...ctx.draft([
+            {
+              text: "Cut deploy time by 40% with Kubernetes.",
+              evidence_ids: [deploy.id],
+            },
+            { text: "Led a team of 5 engineers.", evidence_ids: [team.id] },
+          ]),
+          skills: [
+            {
+              label: "Core",
+              items: ["Kubernetes", "Terraform"],
+              evidence_ids: [deploy.id],
+            },
+          ],
+        },
+      ],
+      ratings: [9],
+    });
+    const versions = async () =>
+      (
+        await ctx.documents.forOpening({
+          userId: ctx.user.id,
+          openingId: ctx.opening.id,
+        })
+      ).documents[0].versions;
+    const [reference] = await versions();
+    const before = experienceOf(reference.content);
+    const [deployLine, teamLine] = before.lines;
+    expect(resumeOf(reference.content).sections[0]).toMatchObject({
+      kind: "summary",
+      line: { text: "Engineer who cut deploy time by 40%." },
+    });
+
+    // Published since: the deploy figure is only estimated now, and
+    // Terraform was only studied.
+    await ctx.publishProfile(
+      profileMarkdown()
+        .replace("[measured: CI dashboard]", "[estimated]")
+        .replace(
+          "- I master: Kubernetes, Terraform",
+          "- I master: Kubernetes\n- Studied, without professional experience: Terraform"
+        )
+    );
+    const { generationId } = await ctx.documents.generateResume({
+      ...ctx.request,
+      referenceVersionId: reference.id,
+    });
+    const { fake } = await ctx.runScripted(generationId, {
+      drafts: [
+        {
+          changes: ["Team first"],
+          title_line: "Platform Engineer | Kubernetes",
+          summary: null,
+          skills: [],
+          experience: [
+            {
+              position_id: ctx.positionId,
+              relevance: null,
+              bullet_ids: [teamLine.id, deployLine.id],
+              added: [],
+            },
+          ],
+        },
+      ],
+      ratings: [],
+    });
+    // One call: the adjuster; nothing is reviewed.
+    expect(fake.generateObject).toHaveBeenCalledTimes(1);
+    expect(
+      await new DocumentsRepository(ctx.db).listReviewRounds(generationId)
+    ).toEqual([]);
+
+    const adjusted = (await versions()).find(
+      (version) => version.id !== reference.id
+    )!;
+    const { sections } = resumeOf(adjusted.content);
+    // The kept bullet with the figure, the kept summary with it, and the
+    // competency only studied no longer hold: they go.
+    expect(experienceOf(adjusted.content).lines).toEqual([teamLine]);
+    expect(sections.find((s) => s.kind === "summary")).toBeUndefined();
+    expect(sections.find((s) => s.kind === "skills")).toMatchObject({
+      groups: [{ text: "Kubernetes" }],
+    });
+    expect(JSON.stringify(adjusted.content)).not.toMatch(/40%|Terraform/);
+    // The reference keeps saying what it said.
+    expect((await versions())[0].content).toEqual(reference.content);
+  });
+
+  it("carries the profile version a snapshot's text was written from", async () => {
+    const ctx = await setup();
+    const repository = new DocumentsRepository(ctx.db);
+    const frozen = ctx.context.profileVersionId!;
+    const line = {
+      text: "Led a team of 5 engineers.",
+      evidence_ids: [ctx.evidence[1].id],
+    };
+    await ctx.generate("quick", { drafts: [ctx.draft([line])], ratings: [9] });
+    const load = async () =>
+      (
+        await ctx.documents.forOpening({
+          userId: ctx.user.id,
+          openingId: ctx.opening.id,
+        })
+      ).documents[0].versions;
+    const versionOf = async (snapshotId: string) =>
+      (await repository.findSnapshot(snapshotId))?.profileVersionId;
+    const [version] = await load();
+    const generated = version.snapshot.id;
+    // The generated snapshot holds the version the generation froze.
+    expect(await versionOf(generated)).toBe(frozen);
+
+    // An edit is of that text, so of that version.
+    await ctx.documents.saveEdit({
+      userId: ctx.user.id,
+      versionId: version.id,
+      baseSnapshotId: generated,
+      content: {
+        ...version.content,
+        header: { ...version.content.header, titleLine: "Platform Engineer" },
+      },
+    });
+    const [edited] = await load();
+    expect(edited.snapshot.id).not.toBe(generated);
+    expect(await versionOf(edited.snapshot.id)).toBe(frozen);
+
+    // The profile is republished with a corrected title, and the same
+    // version is generated again from it.
+    await ctx.publishProfile(
+      profileMarkdown().replace("Tech Lead", "Technical Lead")
+    );
+    const later = await ctx.readCareer();
+    expect(later.profileVersionId).not.toBe(frozen);
+    expect(later.positions[0].id).not.toBe(ctx.positionId);
+    const { generationId } = await ctx.documents.generateResume({
+      ...ctx.request,
+      versionId: version.id,
+    });
+    const laterTeam = ctx.lineOf("Led a team of 5 engineers", later);
+    await ctx.runScripted(generationId, {
+      drafts: [
+        {
+          ...ctx.draft([], laterTeam.id),
+          experience: [
+            {
+              position_id: later.positions[0].id,
+              context: null,
+              relevance: null,
+              bullets: [{ ...line, evidence_ids: [laterTeam.id] }],
+            },
+          ],
+        },
+      ],
+      ratings: [9],
+    });
+    const [regenerated] = await load();
+    expect(experienceOf(regenerated.content).title).toBe("Technical Lead");
+    expect(await versionOf(regenerated.snapshot.id)).toBe(
+      later.profileVersionId
+    );
+
+    // Restoring the first text brings its version back with it; an edit
+    // and a duplicate of that text inherit it, not the newer one.
+    await ctx.documents.restore({
+      userId: ctx.user.id,
+      snapshotId: generated,
+    });
+    const [restored] = await load();
+    expect(restored.snapshot.origin).toBe("restored");
+    expect(experienceOf(restored.content).title).toBe("Tech Lead");
+    expect(await versionOf(restored.snapshot.id)).toBe(frozen);
+    const { versionId: copyId } = await ctx.documents.duplicate({
+      userId: ctx.user.id,
+      versionId: version.id,
+    });
+    const copy = (await load()).find((row) => row.id === copyId)!;
+    expect(await versionOf(copy.snapshot.id)).toBe(frozen);
+
+    // Adapting that text reads its own version: its positions are the
+    // ones the content holds, whatever was generated in the document since.
+    const tasks = new TasksService(ctx.db, ctx.trigger);
+    const adapted = await new AdaptationService(ctx.db, tasks).adapt({
+      userId: ctx.user.id,
+      versionId: version.id,
+      language: "pt-BR",
+    });
+    const filter = await loadSensitiveFilter({
+      db: ctx.db,
+      cipher: ctx.cipher,
+      profileId: ctx.profile.id,
+    });
+    const [teamLine] = experienceOf(restored.content).lines;
+    const fake = fakeProviderPackage({
+      object: () => ({
+        title_line: "",
+        items: [
+          {
+            id: teamLine.id,
+            text: "Liderou uma equipe de 5 engenheiros.",
+            label: null,
+          },
+        ],
+        contexts: [],
+        title_equivalents: [],
+      }),
+    });
+    await runAdaptDocument({
+      db: ctx.db,
+      ai: createAiClient({
+        db: ctx.db,
+        userId: ctx.user.id,
+        funding: "credits",
+        providerPackage: fake.providerPackage,
+        sensitiveFilter: filter,
+      }),
+      cipher: ctx.cipher,
+      filter,
+      userId: ctx.user.id,
+      generationId: adapted.generationId,
+    });
+    const portuguese = (await load()).find((row) => row.language === "pt-BR")!;
+    expect(experienceOf(portuguese.content)).toMatchObject({
+      positionId: ctx.positionId,
+      title: "Tech Lead",
+      lines: [
+        { id: teamLine.id, text: "Liderou uma equipe de 5 engenheiros." },
+      ],
+    });
+    expect(await versionOf(portuguese.snapshot.id)).toBe(frozen);
+  });
+
+  it("keeps a copied resume's profile version, and a cover letter takes its resume's", async () => {
+    const ctx = await setup();
+    const repository = new DocumentsRepository(ctx.db);
+    const frozen = ctx.context.profileVersionId!;
+    const team = ctx.evidence[1];
+    const tasks = new TasksService(ctx.db, ctx.trigger);
+    const library = new LibraryService(ctx.db, tasks);
+    const created = await library.generateResume({
+      userId: ctx.user.id,
+      focus: "Platform",
+      language: "en-US",
+      reviewDepth: "quick",
+      writingLevel: "standard",
+      tone: "direct",
+    });
+    await ctx.runScripted(created.generationId, {
+      drafts: [
+        ctx.draft([
+          { text: "Led a team of 5 engineers.", evidence_ids: [team.id] },
+        ]),
+      ],
+      ratings: [9],
+    });
+    const [libraryVersion] = (
+      await ctx.documents.libraryDocument({
+        userId: ctx.user.id,
+        documentId: created.documentId,
+      })
+    ).versions;
+    const versionOf = async (snapshotId: string) =>
+      (await repository.findSnapshot(snapshotId))?.profileVersionId;
+    expect(await versionOf(libraryVersion.snapshot.id)).toBe(frozen);
+
+    // The profile moves on; the copy is still of the text as written.
+    await ctx.publishProfile(profileMarkdown().replace("40%", "45%"));
+    const later = await ctx.readCareer();
+    expect(later.profileVersionId).not.toBe(frozen);
+    await library.copyIntoApplication({
+      userId: ctx.user.id,
+      openingId: ctx.opening.id,
+      versionId: libraryVersion.id,
+      language: "en-US",
+    });
+    const view = () =>
+      ctx.documents.forOpening({
+        userId: ctx.user.id,
+        openingId: ctx.opening.id,
+      });
+    const [copied] = (await view()).documents[0].versions;
+    expect(copied.snapshot.origin).toBe("copied");
+    expect(await versionOf(copied.snapshot.id)).toBe(frozen);
+
+    // The letter reads the lines its resume cites from that version.
+    const letters = new LetterService(ctx.db, tasks);
+    const { generationId } = await letters.generate({
+      userId: ctx.user.id,
+      openingId: ctx.opening.id,
+      language: "en-US",
+      tone: "warm",
+      writingLevel: "standard",
+      resumeVersionId: copied.id,
+    });
+    const paragraph = (text: string, evidence_ids: string[]) => ({
+      text,
+      evidence_ids,
+      company_fact_ids: [],
+      motivation_point_ids: [],
+      career_goal_ids: [],
+    });
+    const filter = await loadSensitiveFilter({
+      db: ctx.db,
+      cipher: ctx.cipher,
+      profileId: ctx.profile.id,
+    });
+    const fake = fakeProviderPackage({
+      object: () => ({
+        greeting: "Dear Hooli team,",
+        paragraphs: [
+          paragraph("At Globex I led a team of 5 engineers.", [team.id]),
+        ],
+        closing: "Sincerely,",
+      }),
+    });
+    await runGenerateLetter({
+      db: ctx.db,
+      ai: createAiClient({
+        db: ctx.db,
+        userId: ctx.user.id,
+        funding: "credits",
+        providerPackage: fake.providerPackage,
+        sensitiveFilter: filter,
+      }),
+      cipher: ctx.cipher,
+      filter,
+      userId: ctx.user.id,
+      generationId,
+    });
+    const [letter] = (await view()).documents.find(
+      (document) => document.kind === "cover_letter"
+    )!.versions;
+    expect(letter.content).toMatchObject({
+      kind: "cover_letter",
+      paragraphs: [
+        {
+          text: "At Globex I led a team of 5 engineers.",
+          origin: { kind: "letter", evidenceIds: [team.id] },
+        },
+      ],
+    });
+    expect(await versionOf(letter.snapshot.id)).toBe(frozen);
+  });
+
+  it("refuses to generate before a profile is published", async () => {
+    const ctx = await setup({ markdown: null });
+    const refusal = {
+      code: "PRECONDITION_FAILED",
+      message: "Publish your profile before generating a document.",
+    };
+    await expect(
+      ctx.documents.generateResume(ctx.request)
+    ).rejects.toMatchObject(refusal);
+    await expect(
+      new LibraryService(
+        ctx.db,
+        new TasksService(ctx.db, ctx.trigger)
+      ).generateResume({
+        userId: ctx.user.id,
+        focus: "Platform",
+        language: "en-US",
+        reviewDepth: "quick",
+        writingLevel: "standard",
+        tone: "direct",
+      })
+    ).rejects.toMatchObject(refusal);
+    // Nothing was started.
+    expect(ctx.trigger.trigger).not.toHaveBeenCalled();
+    // Until a profile is published, a resume is sized for a usual career.
+    expect(await creditReserve(ctx.db, ctx.user.id, new Date())).toBe(
+      creditCap("generate_document", {})
+    );
+    expect(
+      (
+        await ctx.documents.forOpening({
+          userId: ctx.user.id,
+          openingId: ctx.opening.id,
+        })
+      ).application
+    ).toBeNull();
+  });
+
+  it("freezes the published version and the settings when a generation is asked for", async () => {
+    const ctx = await setup();
+    const [deploy, team] = ctx.evidence;
+    const repository = new DocumentsRepository(ctx.db);
+    const { generationId } = await ctx.documents.generateResume({
+      ...ctx.request,
+      settings: { bulletsRecent: 1, veryOld: "leave_out" },
+    });
+    expect(await repository.findGeneration(generationId)).toMatchObject({
+      profileVersionId: ctx.context.profileVersionId,
+      settings: {
+        ...defaultGenerationSettings,
+        bulletsRecent: 1,
+        veryOld: "leave_out",
+      },
+    });
+
+    // The profile changes before the task runs.
+    await ctx.publishProfile(
+      profileMarkdown()
+        .replace("Ada Lovelace", "Ada King")
+        .replace("Tech Lead", "Engineering Director")
+        .replace("by 40%", "by 55%")
+        .replace("English — C1", "English — C2")
+    );
+    const later = await ctx.readCareer();
+    expect(later.profileVersionId).not.toBe(ctx.context.profileVersionId);
+    expect(later.positions).toMatchObject([{ title: "Engineering Director" }]);
+
+    const bullets = (figure: string, deployId: string, teamId: string) => [
+      {
+        text: `Cut deploy time by ${figure} with Kubernetes.`,
+        evidence_ids: [deployId],
+      },
+      { text: "Led a team of 5 engineers.", evidence_ids: [teamId] },
+    ];
+    await ctx.runScripted(generationId, {
+      drafts: [ctx.draft(bullets("40%", deploy.id, team.id))],
+      ratings: [9],
+    });
+    const versions = async () =>
+      (
+        await ctx.documents.forOpening({
+          userId: ctx.user.id,
+          openingId: ctx.opening.id,
+        })
+      ).documents[0].versions;
+    const languageOf = (content: DocumentContent) => {
+      const section = resumeOf(content).sections.find(
+        (s) => s.kind === "languages"
+      );
+      return section?.kind === "languages" ? section.entries[0].level : null;
+    };
+    // The resume prints the version it froze, under its own settings.
+    const [frozen] = await versions();
+    expect(resumeOf(frozen.content).header.name).toBe("Ada Lovelace");
+    expect(experienceOf(frozen.content)).toMatchObject({
+      positionId: ctx.positionId,
+      title: "Tech Lead",
+      lines: [{ text: "Cut deploy time by 40% with Kubernetes." }],
+    });
+    expect(experienceOf(frozen.content).lines).toHaveLength(1);
+    expect(languageOf(frozen.content)).toBe("C1");
+    expect(JSON.stringify(frozen.content)).not.toMatch(/Director|55%|King/);
+
+    // One asked for now reads the version published since.
+    const next = await ctx.documents.generateResume(ctx.request);
+    expect(await repository.findGeneration(next.generationId)).toMatchObject({
+      profileVersionId: later.profileVersionId,
+      settings: defaultGenerationSettings,
+    });
+    const laterDeploy = ctx.lineOf("Cut deploy time by 55%", later);
+    const laterTeam = ctx.lineOf("Led a team of 5 engineers", later);
+    const draftOf = (figure: string): ResumeDraft => ({
+      ...ctx.draft([], laterDeploy.id),
+      summary: null,
+      experience: [
+        {
+          position_id: later.positions[0].id,
+          context: null,
+          relevance: null,
+          bullets: bullets(figure, laterDeploy.id, laterTeam.id),
+        },
+      ],
+    });
+    // The figure of the version before is no longer one the profile shows.
+    await ctx.runScripted(next.generationId, {
+      drafts: [draftOf("40%"), draftOf("55%")],
+      ratings: [6, 9],
+    });
+    const current = (await versions()).find(
+      (version) => version.id !== frozen.id
+    )!;
+    expect(resumeOf(current.content).header.name).toBe("Ada King");
+    expect(experienceOf(current.content)).toMatchObject({
+      positionId: later.positions[0].id,
+      title: "Engineering Director",
+      lines: [
+        { text: "Cut deploy time by 55% with Kubernetes." },
+        { text: "Led a team of 5 engineers." },
+      ],
+    });
+    expect(languageOf(current.content)).toBe("C2");
+    // The first document still says what its version said.
+    expect((await versions())[0].content).toEqual(frozen.content);
+  });
+
+  it("starts each generation from the user's saved generation settings", async () => {
+    const ctx = await setup();
+    const tasks = new TasksService(ctx.db, ctx.trigger);
+    const writing = new WritingService(ctx.db, tasks);
+    const repository = new DocumentsRepository(ctx.db);
+    expect((await writing.get(ctx.user.id)).generationSettings).toEqual(
+      defaultGenerationSettings
+    );
+
+    const saved = {
+      ...defaultGenerationSettings,
+      bulletsRecent: 5,
+      bulletsOlder: 2,
+      veryOld: "keep" as const,
+      resumeMaxPages: 1,
+    };
+    await writing.updateGenerationSettings({
+      userId: ctx.user.id,
+      settings: saved,
+    });
+    const setupAfter = await writing.get(ctx.user.id);
+    expect(setupAfter.generationSettings).toEqual(saved);
+    // Saving the template keeps them, and the other way around.
+    const withoutSummary = setupAfter.templateSections.map((section) =>
+      section.kind === "summary" ? { ...section, enabled: false } : section
+    );
+    await writing.updateTemplate({
+      userId: ctx.user.id,
+      sections: withoutSummary,
+    });
+    await writing.updateGenerationSettings({
+      userId: ctx.user.id,
+      settings: saved,
+    });
+    expect(await writing.get(ctx.user.id)).toMatchObject({
+      generationSettings: saved,
+      templateSections: withoutSummary,
+    });
+
+    const { generationId } = await ctx.documents.generateResume(ctx.request);
+    expect((await repository.findGeneration(generationId))?.settings).toEqual(
+      saved
+    );
+    // The document's page limit is the one it was written under.
+    await ctx.runScripted(generationId, {
+      drafts: [
+        ctx.draft([
+          {
+            text: "Led a team of 5 engineers.",
+            evidence_ids: [ctx.evidence[1].id],
+          },
+        ]),
+      ],
+      ratings: [9],
+    });
+    const [version] = (
+      await ctx.documents.forOpening({
+        userId: ctx.user.id,
+        openingId: ctx.opening.id,
+      })
+    ).documents[0].versions;
+    expect(version.maxPages).toBe(1);
+    expect(version.pages).toBeLessThanOrEqual(1);
+    // What the form changes is for that document only.
+    const library = await new LibraryService(ctx.db, tasks).generateResume({
+      userId: ctx.user.id,
+      focus: "Platform",
+      language: "en-US",
+      reviewDepth: "quick",
+      writingLevel: "standard",
+      tone: "direct",
+      settings: { bulletsRecent: 2 },
+    });
+    expect(
+      (await repository.findGeneration(library.generationId))?.settings
+    ).toEqual({ ...saved, bulletsRecent: 2 });
+    expect((await writing.get(ctx.user.id)).generationSettings).toEqual(saved);
+    // A value out of range never reaches a generation.
+    await expect(
+      ctx.documents.generateResume({
+        ...ctx.request,
+        settings: { resumeMaxPages: 9 },
+      })
+    ).rejects.toThrow();
+    // Nor settings that don't hold together: "very old" must start after
+    // "recent" ends, over the saved values too.
+    for (const settings of [
+      { veryOldYears: 3 },
+      { recentYears: 20 },
+      { recentYears: 10, veryOldYears: 10 },
+    ]) {
+      await expect(
+        ctx.documents.generateResume({ ...ctx.request, settings })
+      ).rejects.toMatchObject({ code: "BAD_REQUEST" });
+    }
+  });
+
+  it("keeps a position's bullets when adjusting a resume written before its title changed in the profile", async () => {
+    const ctx = await setup();
+    const [deploy, team] = ctx.evidence;
+    await ctx.generate("quick", {
+      drafts: [
+        ctx.draft([
+          {
+            text: "Cut deploy time by 40% with Kubernetes.",
+            evidence_ids: [deploy.id],
+          },
+          { text: "Led a team of 5 engineers.", evidence_ids: [team.id] },
+        ]),
+      ],
+      ratings: [9],
+    });
+    const versions = async () =>
+      (
+        await ctx.documents.forOpening({
+          userId: ctx.user.id,
+          openingId: ctx.opening.id,
+        })
+      ).documents[0].versions;
+    const [reference] = await versions();
+    const before = experienceOf(reference.content);
+    expect(before.lines).toHaveLength(2);
+
+    // The title is corrected in the profile: the position's id changes.
+    await ctx.publishProfile(
+      profileMarkdown().replace("Tech Lead", "Technical Lead")
+    );
+    const later = await ctx.readCareer();
+    expect(later.positions).toMatchObject([{ title: "Technical Lead" }]);
+    expect(later.positions[0].id).not.toBe(ctx.positionId);
+
+    const { generationId } = await ctx.documents.generateResume({
+      ...ctx.request,
+      referenceVersionId: reference.id,
+    });
+    const [deployLine, teamLine] = before.lines;
+    const { fake } = await ctx.runScripted(generationId, {
+      drafts: [
+        {
+          changes: ["Team leadership first"],
+          title_line: "Platform Engineer | Kubernetes",
+          summary: null,
+          skills: [],
+          experience: [
+            {
+              // The model is shown the position by the id it has now.
+              position_id: later.positions[0].id,
+              relevance: null,
+              bullet_ids: [teamLine.id],
+              added: [],
+            },
+          ],
+        },
+      ],
+      ratings: [7],
+    });
+    expect(fake.generateObject.mock.calls[0][0].system).toContain(
+      `Position ${later.positions[0].id}: `
+    );
+    const adjusted = (await versions()).find(
+      (version) => version.id !== reference.id
+    )!;
+    // Found again by its start and its employer: the bullets go with it,
+    // under the title the profile has now.
+    expect(experienceOf(adjusted.content)).toEqual({
+      ...before,
+      positionId: later.positions[0].id,
+      title: "Technical Lead",
+      lines: [teamLine, deployLine],
+    });
+    // The reference keeps saying what it said.
+    expect((await versions())[0].content).toEqual(reference.content);
+  });
+
+  it("never prints “[omitted]” as an employer or a credential", async () => {
+    const markdown = profileMarkdown({
+      experience: `### Acme — Phoenix Program Lead (2017-01 to 2021-02)
+
+- Tools: Node.js
+
+### Hooli — Phoenix (2012-01 to 2016-12)
+
+- Tools: Java
+`,
+      certifications: [
+        "CKA — CNCF — 2023-05 — valid",
+        "Cloud Architect — Initrode Academy — 2022-01 — valid",
+      ],
+      languages: ["Klingon — basic"],
+      rules: ["Never include: Globex, Phoenix, Initrode, Klingon"],
+    });
+    const ctx = await setup({ markdown });
+    // As code prints them: a forbidden employer is confidential, a title
+    // keeps what is left of it, a credential naming one is left out.
+    expect(
+      ctx.context.positions.map((position) => [
+        position.employer,
+        position.title,
+      ])
+    ).toEqual([
+      ["Confidential", "Tech Lead"],
+      ["Acme", "Program Lead"],
+      ["Hooli", "Confidential"],
+    ]);
+    expect(
+      ctx.context.credentials.map((credential) => [
+        credential.kind,
+        credential.title,
+      ])
+    ).toEqual([
+      ["certification", "CKA"],
+      ["language", "English"],
+    ]);
+    // In the document's language.
+    const portuguese = await loadCareerContext({
+      db: ctx.db,
+      cipher: ctx.cipher,
+      profileId: ctx.profile.id,
+      filter: await loadSensitiveFilter({
+        db: ctx.db,
+        cipher: ctx.cipher,
+        profileId: ctx.profile.id,
+      }),
+      language: "pt-BR",
+    });
+    expect(
+      portuguese.positions.map((position) => [
+        position.employer,
+        position.title,
+      ])
+    ).toEqual([
+      ["Confidencial", "Tech Lead"],
+      ["Acme", "Program Lead"],
+      ["Hooli", "Confidencial"],
+    ]);
+
+    const line = {
+      text: "Led a team of 5 engineers.",
+      evidence_ids: [ctx.evidence[1].id],
+    };
+    // Every position is recent enough to this month to be printed.
+    await ctx.generate("quick", {
+      drafts: [ctx.draft([line])],
+      ratings: [9],
+      today: "2026-01",
+    });
+    const [version] = (
+      await ctx.documents.forOpening({
+        userId: ctx.user.id,
+        openingId: ctx.opening.id,
+      })
+    ).documents[0].versions;
+    const { sections } = resumeOf(version.content);
+    const experience = sections.find((s) => s.kind === "experience");
+    expect(experience).toMatchObject({
+      entries: [
+        { employer: "Confidential", title: "Tech Lead", startDate: "2021-03" },
+        { employer: "Acme", title: "Program Lead" },
+        { employer: "Hooli", title: "Confidential" },
+      ],
+    });
+    expect(sections.find((s) => s.kind === "languages")).toMatchObject({
+      entries: [{ title: "English", level: "C1" }],
+    });
+    expect(JSON.stringify(version.content)).not.toMatch(
+      /\[omitted\]|Globex|Phoenix|Initrode|Klingon/
+    );
+    // The locked facts stay locked as printed.
+    const tampered = structuredClone(resumeOf(version.content));
+    experienceOf(tampered).employer = "Globex";
+    await expect(
+      ctx.documents.saveEdit({
+        userId: ctx.user.id,
+        versionId: version.id,
+        baseSnapshotId: version.snapshot.id,
+        content: tampered,
+      })
+    ).rejects.toMatchObject({ code: "BAD_REQUEST" });
+  });
+
+  it("never prints “[omitted]” in a locked-fact override's value", async () => {
+    const ctx = await setup({
+      markdown: profileMarkdown({
+        rules: ["Never include: Phoenix, Initrode"],
+      }),
+    });
+    // What the user confirmed for this application names what the
+    // profile's rules forbid.
+    await ctx.db.insert(lockedFactOverridesTable).values(
+      (
+        [
+          ["title", "Phoenix Lead"],
+          ["employer", "Initrode Labs"],
+          ["start_date", "2021-01"],
+        ] as const
+      ).map(([field, value]) => ({
+        profileId: ctx.profile.id,
+        openingId: ctx.opening.id,
+        positionId: ctx.positionId,
+        field,
+        encryptedValue: ctx.cipher.encrypt(value),
+        confirmedAt: new Date(),
+      }))
+    );
+    const filter = await loadSensitiveFilter({
+      db: ctx.db,
+      cipher: ctx.cipher,
+      profileId: ctx.profile.id,
+    });
+    const printedIn = async (language: "en-US" | "pt-BR") => {
+      const [position] = (
+        await loadCareerContext({
+          db: ctx.db,
+          cipher: ctx.cipher,
+          profileId: ctx.profile.id,
+          filter,
+          openingId: ctx.opening.id,
+          language,
+        })
+      ).positions;
+      return [position.employer, position.title, position.startDate];
+    };
+    // The same rule as for the profile's own facts: a forbidden employer
+    // is confidential, a title keeps what is left of it.
+    expect(await printedIn("en-US")).toEqual([
+      "Confidential",
+      "Lead",
+      "2021-01",
+    ]);
+    expect(await printedIn("pt-BR")).toEqual([
+      "Confidencial",
+      "Lead",
+      "2021-01",
+    ]);
+    // Outside the application nothing is overridden.
+    expect(ctx.context.positions).toMatchObject([
+      { employer: "Globex", title: "Tech Lead", startDate: "2021-03" },
+    ]);
+
+    const line = {
+      text: "Led a team of 5 engineers.",
+      evidence_ids: [ctx.evidence[1].id],
+    };
+    await ctx.generate("quick", { drafts: [ctx.draft([line])], ratings: [9] });
+    const [version] = (
+      await ctx.documents.forOpening({
+        userId: ctx.user.id,
+        openingId: ctx.opening.id,
+      })
+    ).documents[0].versions;
+    expect(experienceOf(version.content)).toMatchObject({
+      positionId: ctx.positionId,
+      employer: "Confidential",
+      title: "Lead",
+      startDate: "2021-01",
+      lines: [{ text: "Led a team of 5 engineers." }],
+    });
+    expect(JSON.stringify(version.content)).not.toMatch(
+      /\[omitted\]|Phoenix|Initrode/
+    );
+  });
+
+  it("shows each version the page limit it was written under", async () => {
+    const ctx = await setup();
+    const line = {
+      text: "Led a team of 5 engineers.",
+      evidence_ids: [ctx.evidence[1].id],
+    };
+    const limits = async () =>
+      (
+        await ctx.documents.forOpening({
+          userId: ctx.user.id,
+          openingId: ctx.opening.id,
+        })
+      ).documents[0].versions.map(
+        (version) => [version.id, version.maxPages] as const
+      );
+    await ctx.generate("quick", { drafts: [ctx.draft([line])], ratings: [9] });
+    const [[first]] = await limits();
+    expect(await limits()).toEqual([[first, 2]]);
+
+    // Another one is only asked for, with another limit: nothing changes
+    // for the version already written.
+    const { generationId } = await ctx.documents.generateResume({
+      ...ctx.request,
+      settings: { resumeMaxPages: 1 },
+    });
+    expect(await limits()).toEqual([[first, 2]]);
+
+    // Once written, each version has its own.
+    await ctx.runScripted(generationId, {
+      drafts: [ctx.draft([line])],
+      ratings: [9],
+    });
+    const after = await limits();
+    expect(after).toHaveLength(2);
+    expect(after).toContainEqual([first, 2]);
+    expect(after.find(([id]) => id !== first)?.[1]).toBe(1);
+
+    // A generation that fails leaves the limits as they were.
+    const failing = await ctx.documents.generateResume({
+      ...ctx.request,
+      versionId: first,
+      settings: { resumeMaxPages: 3 },
+    });
+    await expect(
+      ctx.runScripted(failing.generationId, { drafts: [], ratings: [] })
+    ).rejects.toThrow("The strategist returned no draft");
+    expect(await limits()).toEqual(after);
+  });
+
+  it("refuses to adjust into a version written in another language", async () => {
+    const ctx = await setup();
+    const line = {
+      text: "Led a team of 5 engineers.",
+      evidence_ids: [ctx.evidence[1].id],
+    };
+    const repository = new DocumentsRepository(ctx.db);
+    // A Portuguese version and an English one of the same resume.
+    for (const language of ["pt-BR", "en-US"] as const) {
+      const { generationId } = await ctx.documents.generateResume({
+        ...ctx.request,
+        language,
+      });
+      await ctx.runScripted(generationId, {
+        drafts: [ctx.draft([line])],
+        ratings: [9],
+      });
+    }
+    const { versions } = (
+      await ctx.documents.forOpening({
+        userId: ctx.user.id,
+        openingId: ctx.opening.id,
+      })
+    ).documents[0];
+    const portuguese = versions.find((v) => v.language === "pt-BR")!;
+    const english = versions.find((v) => v.language === "en-US")!;
+
+    // The English reference's bullets can't land in the Portuguese version.
+    await expect(
+      ctx.documents.generateResume({
+        ...ctx.request,
+        language: "pt-BR",
+        versionId: portuguese.id,
+        referenceVersionId: english.id,
+      })
+    ).rejects.toMatchObject({ code: "BAD_REQUEST" });
+    await expect(
+      ctx.documents.generateResume({
+        ...ctx.request,
+        versionId: english.id,
+        referenceVersionId: portuguese.id,
+      })
+    ).rejects.toMatchObject({ code: "BAD_REQUEST" });
+
+    // Into a version in the reference's language it starts, in that
+    // language whatever is asked for.
+    const adjusting = await ctx.documents.generateResume({
+      ...ctx.request,
+      language: "pt-BR",
+      versionId: english.id,
+      referenceVersionId: english.id,
+    });
+    expect(
+      await repository.findGeneration(adjusting.generationId)
+    ).toMatchObject({ versionId: english.id, language: "en-US" });
+    // Generating again into a version stays in that version's language,
+    // whatever language was sent.
+    const again = await ctx.documents.generateResume({
+      ...ctx.request,
+      language: "pt-BR",
+      versionId: english.id,
+    });
+    expect(await repository.findGeneration(again.generationId)).toMatchObject({
+      versionId: english.id,
+      language: "en-US",
+    });
+  });
+});
+
+describe("a draft's rating by its coverage", () => {
+  const review = (
+    levels: Array<"strong" | "partial" | "not_proven">,
+    inconsistencies: string[] = []
+  ) => ({
+    coverage: levels.map((level, index) => ({
+      requirement: `Requirement ${index + 1}`,
+      level,
+    })),
+    inconsistencies,
+    advice: [],
+  });
+
+  it("counts strong coverage whole and partial half, over what was judged", () => {
+    expect(coverageRating(review(["strong", "strong"]), [])).toBe(10);
+    expect(coverageRating(review(["strong", "partial"]), [])).toBe(8);
+    expect(
+      coverageRating(
+        review(["strong", "partial", "not_proven", "not_proven"]),
+        []
+      )
+    ).toBe(4);
+    // Never under 1.
+    expect(coverageRating(review(["not_proven", "not_proven"]), [])).toBe(1);
+    expect(reviewRatings()).toEqual([1, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
+  });
+
+  it("leaves the fit check's gaps out of the count", () => {
+    const judged = {
+      ...review([]),
+      coverage: [
+        { requirement: "Kubernetes", level: "strong" as const },
+        { requirement: "Go", level: "not_proven" as const },
+        { requirement: "Liderança técnica", level: "not_proven" as const },
+      ],
+    };
+    expect(coverageRating(judged, [])).toBe(3);
+    // Named as the fit check names them, whatever the case and accents.
+    expect(coverageRating(judged, [" go ", "lideranca tecnica"])).toBe(10);
+    // A gap the review calls covered doesn't count for the draft either.
+    expect(
+      coverageRating(
+        {
+          ...judged,
+          coverage: [
+            { requirement: "Kubernetes", level: "not_proven" },
+            { requirement: "Go", level: "strong" },
+          ],
+        },
+        ["Go"]
+      )
+    ).toBe(1);
+  });
+
+  it("caps a draft that disagrees with the profile at 4", () => {
+    const wrong = ["Says 2019 where the profile says 2021"];
+    expect(coverageRating(review(["strong", "strong"], wrong), [])).toBe(4);
+    expect(coverageRating(review(["strong", "not_proven"], wrong), [])).toBe(4);
+    expect(
+      coverageRating(review(["partial", "not_proven", "not_proven"], wrong), [])
+    ).toBe(2);
+  });
+
+  it("rates a draft 5 when nothing is judged", () => {
+    expect(coverageRating(review([]), [])).toBe(5);
+    expect(
+      coverageRating(
+        { ...review([]), coverage: [{ requirement: "Go", level: "strong" }] },
+        ["Go"]
+      )
+    ).toBe(5);
+  });
+
+  /** What the scripted reviews of these tests rate, from 0 to 10 strong. */
+  function reviewRatings() {
+    return Array.from({ length: 11 }, (_, rating) =>
+      coverageRating(reviewRated(rating), [])
+    );
+  }
 });

@@ -2,6 +2,7 @@ import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 
 import { CareerRepository } from "@repo/api/domains/career/career-repository";
+import { loadProfileSource } from "@repo/api/domains/documents/generation/load-profile-source";
 import {
   getUserCipher,
   type UserCipher,
@@ -66,18 +67,21 @@ export class InstructionsService {
       const repository = new InstructionsRepository(tx);
       const cipher = await getUserCipher(tx, input.userId);
       const latest = await repository.latestInstructions(opening.id);
+      const source = await loadProfileSource({
+        db: tx,
+        cipher,
+        profileId: profile.id,
+      });
       const positions = new Map(
-        (await new CareerRepository(tx).listPositions(profile.id)).map(
-          (position) => [
-            position.id,
-            {
-              employer: cipher.decrypt(position.encryptedEmployer),
-              title: cipher.decrypt(position.encryptedTitle),
-              startDate: position.startDate,
-              endDate: position.endDate,
-            },
-          ]
-        )
+        (source?.positions ?? []).map((position) => [
+          position.id,
+          {
+            employer: position.employer,
+            title: position.title,
+            startDate: position.startDate,
+            endDate: position.endDate,
+          },
+        ])
       );
 
       return {

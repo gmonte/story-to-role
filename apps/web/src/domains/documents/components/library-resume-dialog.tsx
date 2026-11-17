@@ -40,14 +40,16 @@ import { useOpeningLabels } from "~/domains/openings/hooks/use-opening-labels";
 import { useTRPC } from "~/tools/trpc/client";
 
 import { useDocumentLabels } from "../hooks/use-document-labels";
+import { useDocumentSettings } from "../hooks/use-document-settings";
 import { useRefreshDocuments } from "../hooks/use-opening-documents";
+import { DocumentSettings, PublishProfileNotice } from "./document-settings";
 
 const languages: OutputLanguage[] = ["en-US", "pt-BR"];
 const tones: Tone[] = ["your_style", "formal", "direct", "warm", "technical"];
 
 /**
  * A library resume (resume spec, "Openings and library documents"): from
- * the evidence base, for a focus such as "React Native" or "General",
+ * the published profile, for a focus such as "React Native" or "General",
  * with no company behind it. With a version, it generates that one again.
  */
 export function LibraryResumeDialog({
@@ -64,7 +66,7 @@ export function LibraryResumeDialog({
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>{trigger}</DialogTrigger>
-      <DialogContent>
+      <DialogContent className="max-h-[90vh] overflow-y-auto">
         {/* Mounted per opening: the form starts fresh each time. */}
         <LibraryResumeForm
           versionId={versionId}
@@ -93,10 +95,15 @@ function LibraryResumeForm({
   const refresh = useRefreshDocuments();
   const credits = useCredits();
   const [focus, setFocus] = useState("");
-  const [language, setLanguage] = useState<OutputLanguage>("en-US");
+  // The interface's language is the likeliest one for a first resume.
+  const [language, setLanguage] = useState<OutputLanguage>(
+    t.locale === "pt-BR" ? "pt-BR" : "en-US"
+  );
   const [reviewDepth, setReviewDepth] = useState<ReviewDepth>("quick");
   const [writingLevel, setWritingLevel] = useState<WritingLevel>("standard");
   const [tone, setTone] = useState<Tone>(defaultTone);
+  // Mounted while the dialog is open: its defaults are read each time.
+  const documentSettings = useDocumentSettings(true);
   const generate = useMutation(
     trpc.library.generateResume.mutationOptions({
       onSuccess: async ({ documentId }) => {
@@ -119,10 +126,11 @@ function LibraryResumeForm({
         <DialogDescription>
           {t.formatMessage({
             defaultMessage:
-              "A resume with no company behind it, from your approved evidence, titled by its focus.",
+              "A resume with no company behind it, from your published profile, titled by its focus.",
           })}
         </DialogDescription>
       </DialogHeader>
+      {documentSettings.unpublished && <PublishProfileNotice />}
       <div className="grid gap-4">
         {!versionId && (
           <>
@@ -209,6 +217,10 @@ function LibraryResumeForm({
             </SelectContent>
           </Select>
         </div>
+        <DocumentSettings
+          value={documentSettings.value}
+          onChange={documentSettings.onChange}
+        />
       </div>
       <DialogFooter className="items-center">
         <CreditCost
@@ -218,7 +230,12 @@ function LibraryResumeForm({
           })}
         />
         <Button
-          disabled={generate.isPending || (!versionId && !focus.trim())}
+          disabled={
+            generate.isPending ||
+            (!versionId && !focus.trim()) ||
+            documentSettings.unpublished ||
+            documentSettings.invalid
+          }
           onClick={() =>
             generate.mutate({
               focus: versionId ? undefined : focus,
@@ -227,6 +244,7 @@ function LibraryResumeForm({
               reviewDepth,
               writingLevel,
               tone,
+              settings: documentSettings.settings,
             })
           }
         >

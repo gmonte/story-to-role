@@ -46,7 +46,7 @@ export function LibraryView() {
         <p className="text-muted-foreground rounded-lg border border-dashed p-6 text-center text-sm">
           {t.formatMessage({
             defaultMessage:
-              "No library documents yet. Start with a “General” resume that presents your strongest evidence.",
+              "No library documents yet. Start with a “General” resume, written from your published profile.",
           })}
         </p>
       )}

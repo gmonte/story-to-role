@@ -5,7 +5,6 @@ import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { CareerRepository } from "@repo/api/domains/career/career-repository";
 import { getUserCipher } from "@repo/api/domains/encryption/user-cipher";
 import { EvidenceRepository } from "@repo/api/domains/evidence/evidence-repository";
-import { loadSensitiveFilter } from "@repo/api/domains/evidence/sensitive/load-sensitive-filter";
 import { OpeningsRepository } from "@repo/api/domains/openings/openings-repository";
 import { createTestUser } from "@repo/api/test/create-test-user";
 import {
@@ -53,17 +52,13 @@ async function setup() {
   const [item] = await new EvidenceRepository(db).listSensitiveItems(
     profile.id
   );
-  const filterFor = (openingId: string | null) =>
-    loadSensitiveFilter({ db, cipher, profileId: profile.id, openingId });
-  return {
-    db,
-    user,
-    item,
-    competitor,
-    other,
-    filterFor,
-    overrides: new OverridesService(db),
-  };
+  const overrides = new OverridesService(db);
+  // The filter generation applies comes from the published profile's
+  // communication rules since P6 and no longer reads these overrides, so
+  // they are checked as the service keeps them, per application.
+  const overrideFor = async (openingId: string) =>
+    (await overrides.list({ userId: user.id, openingId }))[0].override;
+  return { db, user, item, competitor, other, overrideFor, overrides };
 }
 
 describe("per-application overrides", () => {
@@ -84,14 +79,11 @@ describe("per-application overrides", () => {
       choice: "exclude",
     });
 
-    const text = "Led the Phoenix migration for Banco X.";
-    expect((await ctx.filterFor(ctx.competitor.id)).apply(text)).not.toContain(
-      "Banco X"
-    );
-    expect((await ctx.filterFor(ctx.other.id)).apply(text)).toContain(
-      "Banco X"
-    );
-    expect((await ctx.filterFor(null)).apply(text)).toContain("Banco X");
+    expect(await ctx.overrideFor(ctx.competitor.id)).toEqual({
+      choice: "exclude",
+      generalized: null,
+    });
+    expect(await ctx.overrideFor(ctx.other.id)).toBeNull();
   });
 
   it("generalizes with this application's wording, and goes back on removal", async () => {
@@ -112,10 +104,6 @@ describe("per-application overrides", () => {
       choice: "generalize",
       generalized: "a large private bank",
     });
-    const text = "Led the migration for Banco X.";
-    expect((await ctx.filterFor(ctx.competitor.id)).apply(text)).toBe(
-      "Led the migration for a large private bank."
-    );
     expect(
       await ctx.overrides.list({
         userId: ctx.user.id,
@@ -134,9 +122,7 @@ describe("per-application overrides", () => {
       openingId: ctx.competitor.id,
       sensitiveItemId: ctx.item.id,
     });
-    expect((await ctx.filterFor(ctx.competitor.id)).apply(text)).toContain(
-      "Banco X"
-    );
+    expect(await ctx.overrideFor(ctx.competitor.id)).toBeNull();
   });
 
   it("keeps other users' openings out of reach", async () => {

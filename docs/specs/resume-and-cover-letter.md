@@ -52,15 +52,15 @@ Generating a resume runs a loop: a strategist drafts, a reviewer judges the draf
 
 From the method's prompts 04 (a new version) and 04b (an adjustment), checked in code where they can be:
 
-- The frozen profile version is the **only** source of facts, contact data included; the opening (or the library document's focus) only says what to prioritize.
+- The frozen profile version is the **only** source of facts, contact data included; the opening (or the library document's focus) only says what to prioritize. The version published when the document is asked for is the one frozen, with the settings chosen in the form; nothing is generated before a profile is published. The header (name, email, phone, LinkedIn, website, city) is read from the profile's Professional identity and Contact sections.
 - Every employer, title and date is preserved (locked facts, ADR 0001).
 - No technology, figure, certification or responsibility the profile doesn't state.
-- Figures only when the profile marks them `[medido]`; `[estimado]` and `[a confirmar]` figures never appear, `[sem número]` results appear as qualitative ones. Nothing the profile lists under "what I did not do" is ever claimed, and nothing on its communication rules' "never include" list appears.
+- Figures only when the profile marks them `[medido]`; `[estimado]` and `[a confirmar]` figures never appear, `[sem número]` results appear as qualitative ones. Code withholds those figures from the writer (it reads the line without the number) and refuses a written line carrying a number its profile lines don't show as measured; a result's number with no mark at all is withheld too, while a number in a plain fact (a team's size) is a fact like any other. Marks never appear in a document. Nothing the profile lists under "what I did not do" is ever claimed, and nothing on its communication rules' "never include" list appears: a profile line naming such a term is not handed to the writer, a written line carrying one is removed, a credential naming one is left out, and an employer naming one prints as "Confidential" (a title keeps what is left of it).
 - Bullets are reordered and rewritten to put first what the opening asks for; the opening's vocabulary is used only when it is true of the user.
 - Certifications with their real status (valid, expired, in progress).
 - A summary of 3 to 4 lines.
 - A field with no information in the profile stays empty; nothing is inferred.
-- **Adjusting (04b)** changes only the order of bullets, the order of competencies and the summary; it adds a bullet only when the fact is in the profile, and never tries to cover a gap the coverage review listed.
+- **Adjusting (04b)** changes only the order of bullets, the order of competencies and the summary; it adds a bullet only when the fact is in the profile, and never tries to cover a gap the coverage review listed. Code guarantees it: the model names the existing bullets and competencies in a new order and never rewrites one. The result is in the language of the version it started from, and it runs no review round.
 - After each generation, StoryToRole lists in up to five lines what it emphasized and what it left in the background; after an adjustment, what changed from the version it started from.
 
 ## Generation settings
@@ -77,9 +77,9 @@ Each user has global generation settings, shown as a form prefilled with them ev
 | Resume length | At most 2 pages |
 | Cover letter length | At most 4 paragraphs and 1 page |
 
-A very old experience enters only when it matches the purpose of that document: it covers one of the opening's requirements, or the library document's focus, with the profile passage that proves it. It then gets one bullet, tied to that requirement, and the coverage review says why it entered.
+The user can also choose to always leave very old experiences out, or to keep them like older ones. A very old experience enters only when it matches the purpose of that document: it covers one of the opening's requirements, or the library document's focus, with the profile passage that proves it. It then gets one bullet, tied to that requirement, and the coverage review says why it entered.
 
-Code enforces the settings on the structured content and again after rendering the PDF. When a document runs over its length, it is shortened in this order: the bullet of a very old experience that entered for relevance; the bullets of older experiences; the summary down to 3 lines; the competencies least related to the opening. The bullets of recent experiences are never cut: if the document still doesn't fit, the user is warned instead. A cover letter one paragraph too long is rewritten to fit.
+Code enforces the settings on the structured content and again after rendering the PDF, for every generation and adaptation; a document the user edits by hand gets the length warning instead. "What counts as very old" must be more years than "what counts as recent". When a document runs over its length, it is shortened in this order: the bullet of a very old experience that entered for relevance; the bullets of older experiences; the summary down to 3 lines; the competencies least related to the opening. The bullets of recent experiences are never cut: if the document still doesn't fit, the user is warned instead. A cover letter one paragraph too long is rewritten to fit.
 
 ## Coverage review
 

@@ -138,6 +138,7 @@ describe("adapting a version into another language", () => {
         title: "Analista de Sistemas Sênior",
         startDate: "2021-03",
         endDate: null,
+        notDone: [],
       },
     ];
     expect(lockedFactViolations(content, positions)).toEqual([P1]);
@@ -329,6 +330,7 @@ describe("relocking facts", () => {
         title: "Analista de Sistemas Sênior",
         startDate: "2021-03",
         endDate: null,
+        notDone: [],
       },
     ]);
     expect(relocked.sections[2]).toMatchObject({

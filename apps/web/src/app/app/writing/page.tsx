@@ -9,7 +9,9 @@ export default async function WritingPage() {
 
   return (
     <WorkspacePage
-      title={t.formatMessage({ defaultMessage: "Template, header and style" })}
+      title={t.formatMessage({
+        defaultMessage: "Template, settings and style",
+      })}
       chat={<WritingSettings />}
     />
   );

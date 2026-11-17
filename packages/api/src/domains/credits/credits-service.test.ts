@@ -56,10 +56,9 @@ describe("credits service", () => {
       },
       { source: "welcome", scope: "any", remaining: 200, expiresAt: null },
     ]);
-    // Free, no resume yet: the resume is kept.
-    expect(summary.reserve).toBe(
-      creditCap("generate_document", { positions: 0 })
-    );
+    // Free, no resume yet: the resume is kept. With no profile published,
+    // it is sized for a usual career.
+    expect(summary.reserve).toBe(creditCap("generate_document", {}));
     expect(summary.courtesy).toBeNull();
   });
 

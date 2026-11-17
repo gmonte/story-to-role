@@ -1,4 +1,5 @@
 import { CareerRepository } from "@repo/api/domains/career/career-repository";
+import { ProfileRepository } from "@repo/api/domains/profile/profile-repository";
 import type { TaskType } from "@repo/api/domains/tasks/schemas/task";
 import type { DbClient } from "@repo/api/tools/db-client";
 
@@ -7,15 +8,18 @@ import { currentPlan } from "./credit-plan";
 import { creditCap } from "./credit-pricing";
 import { CreditsRepository } from "./credits-repository";
 
-/** The user's profile and its approved positions, which size a resume. */
+/**
+ * The user's career profile and how many positions their published profile
+ * has, which size a resume. Undefined until one is published: the estimate
+ * then assumes a usual career.
+ */
 async function careerSize(db: DbClient, userId: string) {
-  const career = new CareerRepository(db);
-  const profile = await career.findProfileByUserId(userId);
-  const positions = profile
-    ? (await career.listPositions(profile.id)).filter(
-        (position) => position.status === "approved"
-      ).length
-    : 0;
+  const profile = await new CareerRepository(db).findProfileByUserId(userId);
+  const profiles = new ProfileRepository(db);
+  const document = await profiles.findDocument(userId, "profile");
+  const positions = document?.publishedVersionId
+    ? await profiles.countExperiences(document.publishedVersionId)
+    : undefined;
   return { profile, positions };
 }
 

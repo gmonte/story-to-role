@@ -65,6 +65,8 @@ export const versionViewSchema = z.object({
   sent: z.object({ snapshotId: z.uuid(), sentAt: z.date() }).nullable(),
   content: documentContentSchema,
   pages: z.number(),
+  // The page limit of the settings the document was written with.
+  maxPages: z.number().int(),
   pdf: z.object({
     // Rendered from the official snapshot; `pages` is then measured.
     ready: z.boolean(),
@@ -73,6 +75,13 @@ export const versionViewSchema = z.object({
     fileName: z.string(),
   }),
   atsCheck: atsCheckSchema.nullable(),
+  // After its latest generation from the profile (resume spec, "Generation
+  // rules"): up to five lines saying what the document emphasizes and
+  // leaves in the background, or, for an adjustment, what changed from the
+  // version it started from.
+  emphasis: z
+    .object({ lines: z.array(z.string()), adjusted: z.boolean() })
+    .nullable(),
   trace: z.array(evidenceTraceSchema),
   instructionTrace: z.array(
     z.object({ instructionId: z.uuid(), text: z.string() })
@@ -130,6 +139,8 @@ export const generationViewSchema = z.object({
   reviewDepth: reviewDepthSchema,
   writingLevel: writingLevelSchema,
   tone: toneSchema,
+  // An adjustment of an existing version (the method's prompt 04b).
+  adjusted: z.boolean(),
   progress: taskProgressSchema.nullable(),
   createdAt: z.date(),
 });

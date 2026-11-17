@@ -1,5 +1,6 @@
 import type { AiClient } from "@repo/api/domains/ai/ai-client";
 import { CareerRepository } from "@repo/api/domains/career/career-repository";
+import { loadProfileSource } from "@repo/api/domains/documents/generation/load-profile-source";
 import { yearMonthSchema } from "@repo/api/domains/career/schemas/career";
 import type { UserCipher } from "@repo/api/domains/encryption/user-cipher";
 import { findQuote } from "@repo/api/utils/text/verify-quote";
@@ -51,21 +52,24 @@ export async function runSplitInstructions(deps: {
     cipher,
     openingId: instructions.openingId,
   });
-  const positions = (await career.listPositions(profile.id))
-    .filter((position) => position.status === "approved")
-    .map((position) => ({
-      id: position.id,
-      employer: cipher.decrypt(position.encryptedEmployer),
-      title: cipher.decrypt(position.encryptedTitle),
-      startDate: position.startDate,
-      endDate: position.endDate,
-    }));
-  const credentials = (await career.listCredentials(profile.id))
-    .filter((credential) => credential.approvedAt)
-    .map((credential) => ({
-      id: credential.id,
-      title: cipher.decrypt(credential.encryptedTitle),
-    }));
+  // The positions and credentials a point may be about: those of the
+  // published profile, by the ids generation knows them by.
+  const source = await loadProfileSource({
+    db,
+    cipher,
+    profileId: profile.id,
+  });
+  const positions = (source?.positions ?? []).map((position) => ({
+    id: position.id,
+    employer: position.employer,
+    title: position.title,
+    startDate: position.startDate,
+    endDate: position.endDate,
+  }));
+  const credentials = (source?.credentials ?? []).map((credential) => ({
+    id: credential.id,
+    title: credential.title,
+  }));
 
   const { object } = await deps.ai.generateObject({
     purpose: "instruction_split",

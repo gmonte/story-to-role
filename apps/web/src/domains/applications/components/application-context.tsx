@@ -4,12 +4,11 @@ import { useTranslation } from "@repo/intl/use-translation";
 
 import { useApplicationInstructions } from "../hooks/use-application-instructions";
 import { ConfirmedInstructions } from "./instructions-review";
-import { ActiveOverrides } from "./sensitive-overrides";
 
 /**
  * The side panel's Context block (workspace spec): what the AI uses for
- * this application besides the profile: the instructions, the
- * locked-fact overrides and the sensitive items treated their own way.
+ * this application besides the profile: the instructions and the
+ * locked-fact overrides.
  */
 export function ApplicationContext({ openingId }: { openingId: string }) {
   const t = useTranslation();
@@ -25,7 +24,6 @@ export function ApplicationContext({ openingId }: { openingId: string }) {
         openingId={openingId}
         instructions={instructions.data}
       />
-      <ActiveOverrides openingId={openingId} />
       {!instructions.data.points.some((point) => point.status === "kept") &&
         !instructions.data.overrides.some((row) => row.confirmed) && (
           <p className="text-muted-foreground text-xs">

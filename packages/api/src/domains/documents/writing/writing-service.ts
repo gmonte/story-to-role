@@ -7,11 +7,8 @@ import { TasksService } from "@repo/api/domains/tasks/tasks-service";
 import type { DbClient } from "@repo/api/tools/db-client";
 
 import { DocumentsRepository } from "../documents-repository";
-import type {
-  ResumeHeaderFields,
-  StyleProfile,
-  TemplateSection,
-} from "../schemas/template";
+import type { GenerationSettings } from "../schemas/generation-settings";
+import type { StyleProfile, TemplateSection } from "../schemas/template";
 import { loadWritingSetup, type WritingSetup } from "./load-writing-setup";
 
 const notFound = () => new TRPCError({ code: "NOT_FOUND" });
@@ -42,24 +39,28 @@ export class WritingService {
     );
   }
 
-  /** Saves the template's sections and the header in one go. */
-  async updateTemplate(input: {
-    userId: string;
-    sections: TemplateSection[];
-    header: ResumeHeaderFields;
-  }) {
+  /** Saves the template's sections. */
+  async updateTemplate(input: { userId: string; sections: TemplateSection[] }) {
     const profile = await this.requireProfile(input.userId);
     const kinds = new Set(input.sections.map((section) => section.kind));
     if (kinds.size !== input.sections.length) {
       throw new TRPCError({ code: "BAD_REQUEST" });
     }
-    await this.db.transaction(async (tx) => {
-      const cipher = await getUserCipher(tx, input.userId);
-      await new DocumentsRepository(tx).upsertTemplate({
-        profileId: profile.id,
-        sections: input.sections,
-        encryptedHeader: cipher.encrypt(JSON.stringify(input.header)),
-      });
+    await new DocumentsRepository(this.db).upsertTemplate({
+      profileId: profile.id,
+      sections: input.sections,
+    });
+  }
+
+  /** The defaults every generation form starts from. */
+  async updateGenerationSettings(input: {
+    userId: string;
+    settings: GenerationSettings;
+  }) {
+    const profile = await this.requireProfile(input.userId);
+    await new DocumentsRepository(this.db).saveGenerationSettings({
+      profileId: profile.id,
+      generationSettings: input.settings,
     });
   }
 

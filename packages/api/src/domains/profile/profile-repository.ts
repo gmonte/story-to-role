@@ -2,6 +2,7 @@ import {
   and,
   asc,
   cosineDistance,
+  countDistinct,
   desc,
   eq,
   inArray,
@@ -311,6 +312,17 @@ export class ProfileRepository {
       )
       .orderBy(cosineDistance(profilePassagesTable.embedding, input.embedding))
       .limit(input.limit);
+  }
+
+  /** How many experiences a published version has passages of. */
+  async countExperiences(versionId: string) {
+    const [row] = await this.tx
+      .select({
+        experiences: countDistinct(profilePassagesTable.experience),
+      })
+      .from(profilePassagesTable)
+      .where(eq(profilePassagesTable.versionId, versionId));
+    return row?.experiences ?? 0;
   }
 
   /** Passages by id, among the user's own published versions. */

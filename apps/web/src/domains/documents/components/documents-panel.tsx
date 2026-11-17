@@ -26,8 +26,8 @@ import { OutdatedNotice, SyncProposal } from "./language-sync";
 
 /**
  * The side panel's Documents block (workspace spec): the resume with a row
- * per version, the generation in progress, the ATS check and the length
- * warning of the version open in the editor.
+ * per version, the generation in progress, and what the version open in
+ * the editor emphasizes, its ATS check and its length warning.
  */
 export function DocumentsPanel({
   openingId,
@@ -177,7 +177,11 @@ export function DocumentsPanel({
 export function GenerationProgress({
   generation,
 }: {
-  generation: { kind: GenerationKind; progress: TaskProgress | null };
+  generation: {
+    kind: GenerationKind;
+    adjusted: boolean;
+    progress: TaskProgress | null;
+  };
 }) {
   const t = useTranslation();
   const { progress } = generation;
@@ -195,61 +199,94 @@ export function GenerationProgress({
   // Step 1 drafts and the last step saves; the ones between are rounds.
   const rounds = progress ? progress.totalSteps - 2 : 0;
   const round = progress?.label === "review_round" ? progress.step - 1 : 0;
+  const steps = [
+    {
+      key: "drafting",
+      label: t.formatMessage({
+        defaultMessage: "Drafting from your published profile",
+      }),
+    },
+    {
+      key: "review_round",
+      label:
+        rounds > 0
+          ? t.formatMessage(
+              {
+                defaultMessage:
+                  "Reviewing and tightening (round {round} of {total})",
+              },
+              { round: Math.max(round, 1), total: rounds }
+            )
+          : t.formatMessage({ defaultMessage: "Reviewing and tightening" }),
+    },
+    {
+      key: "saving",
+      label: t.formatMessage({
+        defaultMessage: "Checking facts and saving the version",
+      }),
+    },
+  ];
   return (
     <AiAtWork
-      title={t.formatMessage({ defaultMessage: "Writing your resume" })}
+      title={
+        generation.adjusted
+          ? t.formatMessage({ defaultMessage: "Adjusting your resume" })
+          : t.formatMessage({ defaultMessage: "Writing your resume" })
+      }
       current={progress?.label ?? "drafting"}
-      steps={[
-        {
-          key: "drafting",
-          label: t.formatMessage({
-            defaultMessage: "Drafting from your approved evidence",
-          }),
-        },
-        {
-          key: "review_round",
-          label:
-            rounds > 0
-              ? t.formatMessage(
-                  {
-                    defaultMessage:
-                      "Reviewing and tightening (round {round} of {total})",
-                  },
-                  { round: Math.max(round, 1), total: rounds }
-                )
-              : t.formatMessage({ defaultMessage: "Reviewing and tightening" }),
-        },
-        {
-          key: "saving",
-          label: t.formatMessage({
-            defaultMessage: "Checking facts and saving the version",
-          }),
-        },
-      ]}
+      // An adjustment runs no review round: it drafts, then saves.
+      steps={steps.filter(
+        (step) => step.key !== "review_round" || !progress || rounds > 0
+      )}
     />
   );
 }
 
+/**
+ * What comes with a version: what its latest generation emphasized (or,
+ * for an adjustment, changed), the length warning and the ATS check.
+ */
 export function VersionChecks({ version }: { version: VersionView }) {
   const t = useTranslation();
   const ats = version.atsCheck;
+  const emphasis = version.emphasis?.lines.length ? version.emphasis : null;
 
   return (
     <div className="flex flex-col gap-2">
-      {version.pages > 2 && (
+      {version.pages > version.maxPages && (
         <p className="rounded-lg border border-amber-500/40 bg-amber-500/10 p-2.5 text-xs">
           {t.formatMessage(
             {
               defaultMessage:
-                "{measured, select, yes {{pages} pages in the PDF} other {About {pages} pages}}: over the two-page limit. {position, select, none {Turn off an optional section.} other {Trim the bullets of {position}, your oldest position, or turn off an optional section.}}",
+                "{measured, select, yes {{pages} pages in the PDF} other {About {pages} pages}}: over the page limit this document was written with ({limit}). {position, select, none {Turn off an optional section.} other {Trim the bullets of {position}, your oldest position, or turn off an optional section.}}",
             },
             {
+              limit: version.maxPages,
               measured: version.pdf.ready ? "yes" : "no",
               pages: t.formatNumber(version.pages),
               position: oldestWithBullets(version) ?? "none",
             }
           )}
         </p>
+      )}
+      {emphasis && (
+        <div className="bg-background flex flex-col gap-1.5 rounded-lg border p-2.5 text-xs">
+          <p className="text-sm font-medium">
+            {emphasis.adjusted
+              ? t.formatMessage({
+                  defaultMessage:
+                    "What changed from the version it started from",
+                })
+              : t.formatMessage({
+                  defaultMessage: "What this version emphasizes",
+                })}
+          </p>
+          <ul className="text-muted-foreground flex list-disc flex-col gap-1 pl-4">
+            {emphasis.lines.map((line, index) => (
+              <li key={index}>{line}</li>
+            ))}
+          </ul>
+        </div>
       )}
       {ats && (
         <div className="bg-background flex flex-col gap-2 rounded-lg border p-2.5 text-xs">

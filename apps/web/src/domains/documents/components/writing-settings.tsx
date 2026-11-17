@@ -4,9 +4,10 @@ import { useState } from "react";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Loader2 } from "lucide-react";
+import Link from "next/link";
 
+import type { GenerationSettings } from "@repo/api/domains/documents/schemas/generation-settings";
 import type {
-  ResumeHeaderFields,
   StyleProfile,
   TemplateSection,
 } from "@repo/api/domains/documents/schemas/template";
@@ -23,6 +24,7 @@ import { useCredits } from "~/domains/credits/hooks/use-credits";
 import { useTRPC } from "~/tools/trpc/client";
 
 import { useDocumentLabels } from "../hooks/use-document-labels";
+import { GenerationSettingsFields } from "./generation-settings-fields";
 
 const list = (value: string) =>
   value
@@ -32,7 +34,8 @@ const list = (value: string) =>
 
 /**
  * The global template (sections and their code-checked conditions), the
- * header printed on every document, and the style profile.
+ * generation settings every document starts from, and the style profile.
+ * The header printed on every document comes from the published profile.
  */
 export function WritingSettings() {
   const t = useTranslation();
@@ -53,7 +56,10 @@ export function WritingSettings() {
       <div className="mx-auto flex w-full max-w-3xl flex-col gap-10 p-6">
         <TemplateForm
           sections={setup.data.templateSections}
-          header={setup.data.header}
+          onSaved={refresh}
+        />
+        <GenerationSettingsForm
+          settings={setup.data.generationSettings}
           onSaved={refresh}
         />
         <StyleForm
@@ -76,18 +82,15 @@ export function WritingSettings() {
 
 function TemplateForm({
   sections: initialSections,
-  header: initialHeader,
   onSaved,
 }: {
   sections: TemplateSection[];
-  header: ResumeHeaderFields;
   onSaved: () => Promise<void>;
 }) {
   const t = useTranslation();
   const labels = useDocumentLabels();
   const trpc = useTRPC();
   const [sections, setSections] = useState(initialSections);
-  const [header, setHeader] = useState(initialHeader);
   const save = useMutation(
     trpc.writing.updateTemplate.mutationOptions({
       onSuccess: async () => {
@@ -104,47 +107,24 @@ function TemplateForm({
       )
     );
 
-  const headerFields: Array<{ key: keyof ResumeHeaderFields; label: string }> =
-    [
-      { key: "name", label: t.formatMessage({ defaultMessage: "Name" }) },
-      { key: "email", label: t.formatMessage({ defaultMessage: "Email" }) },
-      { key: "phone", label: t.formatMessage({ defaultMessage: "Phone" }) },
-      {
-        key: "linkedin",
-        label: t.formatMessage({ defaultMessage: "LinkedIn" }),
-      },
-      { key: "github", label: t.formatMessage({ defaultMessage: "GitHub" }) },
-      { key: "city", label: t.formatMessage({ defaultMessage: "City" }) },
-    ];
-
   return (
     <div className="flex flex-col gap-8">
-      <section className="flex flex-col gap-3">
-        <div>
-          <h2 className="font-display text-xl font-semibold">
-            {t.formatMessage({ defaultMessage: "Header" })}
-          </h2>
-          <p className="text-muted-foreground text-sm">
-            {t.formatMessage({
-              defaultMessage:
-                "Printed at the top of every resume and cover letter. The name here is the one on your documents.",
-            })}
-          </p>
-        </div>
-        <div className="grid gap-3 sm:grid-cols-2">
-          {headerFields.map((field) => (
-            <div key={field.key} className="grid gap-1.5">
-              <Label htmlFor={`header-${field.key}`}>{field.label}</Label>
-              <Input
-                id={`header-${field.key}`}
-                value={header[field.key]}
-                onChange={(event) =>
-                  setHeader({ ...header, [field.key]: event.target.value })
-                }
-              />
-            </div>
-          ))}
-        </div>
+      <section className="flex flex-col gap-1">
+        <h2 className="font-display text-xl font-semibold">
+          {t.formatMessage({ defaultMessage: "Header" })}
+        </h2>
+        <p className="text-muted-foreground text-sm">
+          {t.formatMessage({
+            defaultMessage:
+              "The name and contact details at the top of every resume and cover letter come from the Professional identity and Contact sections of your published profile.",
+          })}
+        </p>
+        <Link
+          href="/app/career"
+          className="self-start text-sm underline underline-offset-4"
+        >
+          {t.formatMessage({ defaultMessage: "Go to My career" })}
+        </Link>
       </section>
 
       <section className="flex flex-col gap-3">
@@ -155,7 +135,7 @@ function TemplateForm({
           <p className="text-muted-foreground text-sm">
             {t.formatMessage({
               defaultMessage:
-                "Optional sections start off so resumes fit in two pages. Conditions are checked as written: leave them empty to always include the section.",
+                "Optional sections start off so resumes stay within the length your generation settings allow. Conditions are checked as written: leave them empty to always include the section.",
             })}
           </p>
         </div>
@@ -219,11 +199,67 @@ function TemplateForm({
       <Button
         className="self-start"
         disabled={save.isPending}
-        onClick={() => save.mutate({ sections, header })}
+        onClick={() => save.mutate({ sections })}
       >
         {t.formatMessage({ defaultMessage: "Save template" })}
       </Button>
     </div>
+  );
+}
+
+/** The defaults every generation form starts from. */
+function GenerationSettingsForm({
+  settings: saved,
+  onSaved,
+}: {
+  settings: GenerationSettings;
+  onSaved: () => Promise<void>;
+}) {
+  const t = useTranslation();
+  const trpc = useTRPC();
+  const [settings, setSettings] = useState(saved);
+  const save = useMutation(
+    trpc.writing.updateGenerationSettings.mutationOptions({
+      onSuccess: async () => {
+        await onSaved();
+        toast.success(
+          t.formatMessage({ defaultMessage: "Generation settings saved." })
+        );
+      },
+      onError: (error) => toast.error(error.message),
+    })
+  );
+
+  return (
+    <section className="flex flex-col gap-3">
+      <div>
+        <h2 className="font-display text-xl font-semibold">
+          {t.formatMessage({ defaultMessage: "Generation settings" })}
+        </h2>
+        <p className="text-muted-foreground text-sm">
+          {t.formatMessage({
+            defaultMessage:
+              "How much of each experience a document shows and how long it may be. Every document starts from these, and you can change them for one document when you generate it.",
+          })}
+        </p>
+      </div>
+      <div className="max-w-md">
+        <GenerationSettingsFields
+          value={settings}
+          onChange={setSettings}
+          letter
+        />
+      </div>
+      <Button
+        className="self-start"
+        disabled={
+          save.isPending || settings.veryOldYears <= settings.recentYears
+        }
+        onClick={() => save.mutate({ settings })}
+      >
+        {t.formatMessage({ defaultMessage: "Save generation settings" })}
+      </Button>
+    </section>
   );
 }
 
@@ -268,7 +304,7 @@ function StyleForm({
         <p className="text-muted-foreground text-sm">
           {t.formatMessage({
             defaultMessage:
-              "Paste up to three samples of your own writing (an old cover letter, a post, a resume you like). With none, your interview answers serve as the sample. Only how you write is kept, never sentences or facts.",
+              "Paste up to three samples of your own writing (an old cover letter, a post, a resume you like). Only how you write is kept, never sentences or facts.",
           })}
         </p>
       </div>

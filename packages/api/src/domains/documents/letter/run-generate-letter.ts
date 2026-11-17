@@ -12,7 +12,7 @@ import type { DbClient } from "@repo/api/tools/db-client";
 import type { Storage } from "@repo/api/tools/storage/storage";
 
 import { DocumentsRepository } from "../documents-repository";
-import { generationSettings } from "../generation/generation-settings";
+import { reviewLoopSettings } from "../generation/review-loop-settings";
 import { loadCareerContext } from "../generation/load-career-context";
 import { resumeLines, resumeText } from "../generation/resume-checks";
 import { outputLanguageNames } from "../generation/resume-prompts";
@@ -62,6 +62,8 @@ type LetterMaterial = {
   data: Record<string, unknown>;
   header: CoverLetterContent["header"];
   motivationSkipped: boolean;
+  // The profile version its facts were read from.
+  profileVersionId: string | null;
 };
 
 /** Everything a letter may use, each approved by the user, as data. */
@@ -74,6 +76,9 @@ export async function loadLetterMaterial(input: {
   openingId: string;
   language: OutputLanguage;
   resume: ResumeContent | null;
+  // The profile version the letter's resume was written from: the lines
+  // that resume cites are that version's.
+  profileVersionId?: string | null;
 }): Promise<LetterMaterial> {
   const { db, cipher, filter } = input;
   const context = await loadCareerContext({
@@ -81,6 +86,7 @@ export async function loadLetterMaterial(input: {
     cipher,
     profileId: input.profileId,
     filter,
+    profileVersionId: input.profileVersionId,
     openingId: input.openingId,
     language: input.language,
   });
@@ -109,13 +115,7 @@ export async function loadLetterMaterial(input: {
   const wanted = new Set([...(story?.evidenceIds ?? []), ...fromResume]);
   const evidence = context.evidence
     .filter((row) => wanted.has(row.id))
-    // A file fact carries its own words, to keep and to back its figures.
-    .map((row) => ({
-      id: row.id,
-      text: row.sourceWording
-        ? `${row.text} (original wording: ${row.sourceWording})`
-        : row.text,
-    }));
+    .map((row) => ({ id: row.id, text: row.text }));
   const companyFacts = (
     await new ResearchRepository(db).listFacts(input.openingId)
   )
@@ -164,6 +164,7 @@ export async function loadLetterMaterial(input: {
     sources: { evidence, companyFacts, motivationPoints, careerGoals },
     header,
     motivationSkipped: interview?.status !== "finished",
+    profileVersionId: context.profileVersionId,
     data: {
       opening: {
         title: decryptOptional(opening?.encryptedTitle),
@@ -234,6 +235,7 @@ export async function runGenerateLetter(deps: {
       openingId: application.openingId,
       language: generation.language,
       resume: resumeSnapshot && decryptResume(cipher, resumeSnapshot),
+      profileVersionId: resumeSnapshot?.profileVersionId,
     });
     const role = generation.writingLevel === "maximum" ? "maximum" : "writing";
     const system = [
@@ -246,7 +248,7 @@ export async function runGenerateLetter(deps: {
       const { object } = await ai.generateObject({
         purpose: "cover_letter",
         role,
-        maxTokens: generationSettings.draftMaxTokens,
+        maxTokens: reviewLoopSettings.draftMaxTokens,
         schema: letterDraftSchema,
         system: extra ? `${system}\n\n${extra}` : system,
         messages: [{ role: "user", content: JSON.stringify(material.data) }],
@@ -312,6 +314,8 @@ export async function runGenerateLetter(deps: {
         author: "ai",
         encryptedContent: cipher.encrypt(JSON.stringify(content)),
         generationId: generation.id,
+        // Its resume's profile version, or the one published now.
+        profileVersionId: material.profileVersionId,
         resumeVersionId: generation.resumeVersionId,
         resumeSnapshotId: generation.resumeSnapshotId,
         motivationSkipped: material.motivationSkipped,

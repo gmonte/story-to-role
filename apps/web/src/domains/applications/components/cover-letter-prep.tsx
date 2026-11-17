@@ -4,6 +4,7 @@ import { useState } from "react";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Send } from "lucide-react";
+import { useRouter } from "next/navigation";
 
 import type { MotivationView } from "@repo/api/domains/applications/schemas/motivation";
 import { useTranslation } from "@repo/intl/use-translation";
@@ -19,6 +20,11 @@ import type { Tone } from "@repo/api/domains/openings/schemas/opening";
 import { AiAtWork } from "~/domains/workspace/components/ai-at-work";
 import { VoiceInputButton } from "~/domains/career/components/voice-input-button";
 import { CoverLetterEditor } from "~/domains/documents/components/cover-letter-editor";
+import {
+  chosenStory,
+  LetterStoryPicker,
+  useLetterStories,
+} from "~/domains/documents/components/letter-story-picker";
 import { GenerateLetterDialog } from "~/domains/documents/components/generate-letter-dialog";
 import { useOpeningDocuments } from "~/domains/documents/hooks/use-opening-documents";
 import { useTimeline } from "~/domains/career/hooks/use-career-queries";
@@ -37,7 +43,7 @@ function useRefreshMotivation() {
 /**
  * Before a cover letter (resume spec, "Cover letter inputs"): a short
  * motivation interview whose points stay here or, approved one by one,
- * become career goals.
+ * become suggestions for your profile.
  */
 export function CoverLetterPrep({
   openingId,
@@ -181,6 +187,8 @@ function MotivationStart({
   const trpc = useTRPC();
   const refresh = useRefreshMotivation();
   const onError = (error: { message: string }) => toast.error(error.message);
+  const stories = useLetterStories(openingId);
+  const [pickedStory, setPickedStory] = useState<string | null>(null);
   const start = useMutation(
     trpc.motivation.start.mutationOptions({ onSuccess: refresh, onError })
   );
@@ -188,8 +196,6 @@ function MotivationStart({
     trpc.motivation.skip.mutationOptions({ onSuccess: refresh, onError })
   );
 
-  // Profile_truth replaces this in P8 (docs/plan.md): the story the letter
-  // tells will come from the profile.
   return (
     <section className="flex flex-col gap-3">
       {failed && (
@@ -206,10 +212,29 @@ function MotivationStart({
             "Three to five short questions about why you want this opening, by voice or text.",
         })}
       </p>
+      {stories.data && stories.data.length > 0 && (
+        <div className="grid gap-1.5">
+          <p className="text-sm font-medium">
+            {t.formatMessage({
+              defaultMessage: "The story the letter will tell",
+            })}
+          </p>
+          <LetterStoryPicker
+            stories={stories.data}
+            value={pickedStory}
+            onChange={setPickedStory}
+          />
+        </div>
+      )}
       <div className="flex gap-2">
         <Button
           disabled={start.isPending}
-          onClick={() => start.mutate({ openingId })}
+          onClick={() =>
+            start.mutate({
+              openingId,
+              storyLineId: chosenStory(stories.data, pickedStory) ?? undefined,
+            })
+          }
         >
           {t.formatMessage({
             defaultMessage: "Start the motivation interview",
@@ -349,6 +374,7 @@ function PointsReview({
 }) {
   const t = useTranslation();
   const trpc = useTRPC();
+  const router = useRouter();
   const refresh = useRefreshMotivation();
   const drafts = motivation.points.filter((point) => point.status === "draft");
   const [saved, setSaved] = useState(
@@ -356,7 +382,28 @@ function PointsReview({
   );
   const onError = (error: { message: string }) => toast.error(error.message);
   const confirm = useMutation(
-    trpc.motivation.confirm.mutationOptions({ onSuccess: refresh, onError })
+    trpc.motivation.confirm.mutationOptions({
+      onSuccess: async (result) => {
+        await refresh();
+        if (result.sent.length === 0) return;
+        toast.success(
+          t.formatMessage(
+            {
+              defaultMessage:
+                "{count, plural, =0 {No suggestion} one {# suggestion waits} other {# suggestions wait}} for you in My career.",
+            },
+            { count: result.sent.length }
+          ),
+          {
+            action: {
+              label: t.formatMessage({ defaultMessage: "Open My career" }),
+              onClick: () => router.push("/app/career"),
+            },
+          }
+        );
+      },
+      onError,
+    })
   );
   const start = useMutation(
     trpc.motivation.start.mutationOptions({ onSuccess: refresh, onError })
@@ -389,10 +436,11 @@ function PointsReview({
                 {point.kind === "goal"
                   ? t.formatMessage({
                       defaultMessage:
-                        "Save as a career goal, so later letters ask less",
+                        "Suggest it for the career direction in your profile",
                     })
                   : t.formatMessage({
-                      defaultMessage: "Add this detail to the story",
+                      defaultMessage:
+                        "Suggest this detail for the story’s experience in your profile",
                     })}
               </label>
             ) : (
@@ -400,9 +448,13 @@ function PointsReview({
                 {point.status === "promoted"
                   ? point.kind === "goal"
                     ? t.formatMessage({
-                        defaultMessage: "Saved as a career goal",
+                        defaultMessage:
+                          "Suggested for the career direction in your profile",
                       })
-                    : t.formatMessage({ defaultMessage: "Added to the story" })
+                    : t.formatMessage({
+                        defaultMessage:
+                          "Suggested for the story’s experience in your profile",
+                      })
                   : t.formatMessage({ defaultMessage: "For this application" })}
               </span>
             )}

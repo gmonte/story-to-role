@@ -7,9 +7,18 @@ import { ExternalLink } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
+import type { OpeningDetail } from "@repo/api/domains/openings/schemas/opening-view";
 import { useTranslation } from "@repo/intl/use-translation";
 import { Badge } from "@repo/web/components/ui/badge";
 import { Button } from "@repo/web/components/ui/button";
+import { Label } from "@repo/web/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@repo/web/components/ui/select";
 import { toast } from "@repo/web/components/ui/sonner";
 import { Tabs, TabsList, TabsTrigger } from "@repo/web/components/ui/tabs";
 import { Textarea } from "@repo/web/components/ui/textarea";
@@ -296,6 +305,8 @@ export function OpeningView({ openingId }: { openingId: string }) {
                     fitCheckItemId={item.id}
                     question={item.gapQuestion ?? ""}
                     answer={item.gapAnswer}
+                    lacks={item.gapLack}
+                    positions={data.fitCheck?.positions ?? []}
                   />
                 ))}
               </section>
@@ -332,25 +343,57 @@ export function OpeningView({ openingId }: { openingId: string }) {
   );
 }
 
+const notTiedToPosition = "none";
+
 function GapQuestion({
   fitCheckItemId,
   question,
   answer,
+  lacks,
+  positions,
 }: {
   fitCheckItemId: string;
   question: string;
   answer: string | null;
+  /** The user confirmed they lack it: a suggestion went to their profile. */
+  lacks: boolean;
+  positions: NonNullable<OpeningDetail["fitCheck"]>["positions"];
 }) {
   const t = useTranslation();
   const trpc = useTRPC();
+  const router = useRouter();
   const refresh = useRefreshOpenings();
   const [draft, setDraft] = useState(answer ?? "");
+  const [asking, setAsking] = useState(false);
+  const [positionId, setPositionId] = useState(notTiedToPosition);
   const save = useMutation(
     trpc.openings.answerGapQuestion.mutationOptions({
-      onSuccess: async () => {
+      onSuccess: async (result, input) => {
         await refresh();
+        setAsking(false);
+        if (!input.lacks) {
+          toast.success(
+            t.formatMessage({
+              defaultMessage: "Answer saved for this opening.",
+            })
+          );
+          return;
+        }
         toast.success(
-          t.formatMessage({ defaultMessage: "Answer saved for this opening." })
+          result.profileSuggestionId
+            ? t.formatMessage({
+                defaultMessage:
+                  "Noted. A suggestion waits for you in My career.",
+              })
+            : t.formatMessage({ defaultMessage: "Noted for this opening." }),
+          result.profileSuggestionId
+            ? {
+                action: {
+                  label: t.formatMessage({ defaultMessage: "Open My career" }),
+                  onClick: () => router.push("/app/career"),
+                },
+              }
+            : undefined
         );
       },
       onError: (error) => toast.error(error.message),
@@ -360,23 +403,92 @@ function GapQuestion({
   return (
     <div className="flex flex-col gap-2 rounded-lg border p-3">
       <p className="text-sm">{question}</p>
-      <Textarea
-        rows={2}
-        value={draft}
-        onChange={(event) => setDraft(event.target.value)}
-        placeholder={t.formatMessage({
-          defaultMessage: "Your answer, or “I don't have it”",
-        })}
-      />
-      <Button
-        size="sm"
-        variant="outline"
-        className="self-start"
-        disabled={!draft.trim() || save.isPending || draft.trim() === answer}
-        onClick={() => save.mutate({ fitCheckItemId, answer: draft.trim() })}
-      >
-        {t.formatMessage({ defaultMessage: "Save answer" })}
-      </Button>
+      {lacks ? (
+        <p className="text-muted-foreground text-xs">
+          {t.formatMessage({
+            defaultMessage:
+              "You said you don't have it. A suggestion for your profile's known gaps was sent to My career.",
+          })}
+        </p>
+      ) : (
+        <>
+          <Textarea
+            rows={2}
+            value={draft}
+            onChange={(event) => setDraft(event.target.value)}
+            placeholder={t.formatMessage({
+              defaultMessage: "Your answer, or tell us you don't have it",
+            })}
+          />
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={
+                !draft.trim() || save.isPending || draft.trim() === answer
+              }
+              onClick={() =>
+                save.mutate({ fitCheckItemId, answer: draft.trim() })
+              }
+            >
+              {t.formatMessage({ defaultMessage: "Save answer" })}
+            </Button>
+            <Button
+              size="sm"
+              variant="ghost"
+              disabled={save.isPending}
+              onClick={() => setAsking(!asking)}
+            >
+              {t.formatMessage({ defaultMessage: "I don't have it" })}
+            </Button>
+          </div>
+          {asking && (
+            <div className="grid gap-1.5 rounded-md border p-2.5">
+              <Label>
+                {t.formatMessage({ defaultMessage: "At which position?" })}
+              </Label>
+              <Select value={positionId} onValueChange={setPositionId}>
+                <SelectTrigger className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={notTiedToPosition}>
+                    {t.formatMessage({
+                      defaultMessage: "Not tied to a position",
+                    })}
+                  </SelectItem>
+                  {positions.map((position) => (
+                    <SelectItem
+                      key={position.positionId}
+                      value={position.positionId}
+                    >
+                      {t.formatMessage(
+                        { defaultMessage: "{title} at {employer}" },
+                        { title: position.title, employer: position.employer }
+                      )}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Button
+                size="sm"
+                className="self-start"
+                disabled={save.isPending}
+                onClick={() =>
+                  save.mutate({
+                    fitCheckItemId,
+                    lacks: true,
+                    positionId:
+                      positionId === notTiedToPosition ? undefined : positionId,
+                  })
+                }
+              >
+                {t.formatMessage({ defaultMessage: "Confirm I don't have it" })}
+              </Button>
+            </div>
+          )}
+        </>
+      )}
     </div>
   );
 }

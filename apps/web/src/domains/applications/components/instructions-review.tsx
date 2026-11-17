@@ -3,7 +3,8 @@
 import { useState } from "react";
 
 import { useMutation } from "@tanstack/react-query";
-import { X } from "lucide-react";
+import { Check, X } from "lucide-react";
+import { useRouter } from "next/navigation";
 
 import type {
   ApplicationInstructions,
@@ -173,7 +174,17 @@ export function ConfirmedInstructions({
           key={point.id}
           className="bg-background flex items-start justify-between gap-2 rounded-md border p-2 text-xs"
         >
-          <span>{point.text}</span>
+          <span className="flex flex-col gap-1">
+            {point.text}
+            {point.sentToProfile && (
+              <span className="text-muted-foreground flex items-center gap-1">
+                <Check className="size-3" />
+                {t.formatMessage({
+                  defaultMessage: "Sent to my profile",
+                })}
+              </span>
+            )}
+          </span>
           {point.status === "kept" && (
             <Button
               size="icon"
@@ -225,29 +236,64 @@ function DraftReview({
 }) {
   const t = useTranslation();
   const trpc = useTRPC();
+  const router = useRouter();
   const labels = useInstructionLabels();
   const refresh = useRefreshInstructions();
   const [confirmed, setConfirmed] = useState<string[]>([]);
+  // What looks like a new career fact comes chosen; the user decides.
+  const [sent, setSent] = useState<string[]>(() =>
+    drafts.filter((point) => point.suggestedPromotion).map((point) => point.id)
+  );
   const confirm = useMutation(
     trpc.instructions.confirm.mutationOptions({
-      onSuccess: refresh,
+      onSuccess: async (result) => {
+        await refresh();
+        if (result.sent.length === 0) return;
+        toast.success(
+          t.formatMessage(
+            {
+              defaultMessage:
+                "{count, plural, =0 {No suggestion} one {# suggestion waits} other {# suggestions wait}} for you in My career.",
+            },
+            { count: result.sent.length }
+          ),
+          {
+            action: {
+              label: t.formatMessage({ defaultMessage: "Open My career" }),
+              onClick: () => router.push("/app/career"),
+            },
+          }
+        );
+      },
       onError: (error) => toast.error(error.message),
     })
   );
 
-  // Profile_truth replaces this in P8 (docs/plan.md): "send to my profile"
-  // will turn a point into a profile suggestion.
   return (
     <div className="grid gap-2 rounded-md border p-2.5">
       <p className="text-muted-foreground text-xs">
         {t.formatMessage({
-          defaultMessage: "These points apply to this application only.",
+          defaultMessage:
+            "These points apply to this application. Choose which ones also go to your profile, as suggestions you review there.",
         })}
       </p>
       <ul className="grid gap-2">
         {drafts.map((point) => (
-          <li key={point.id} className="text-sm">
+          <li key={point.id} className="grid gap-1 text-sm">
             {point.text}
+            <label className="text-muted-foreground flex items-center gap-2 text-xs">
+              <Checkbox
+                checked={sent.includes(point.id)}
+                onCheckedChange={(checked) =>
+                  setSent(
+                    checked
+                      ? [...sent, point.id]
+                      : sent.filter((id) => id !== point.id)
+                  )
+                }
+              />
+              {t.formatMessage({ defaultMessage: "Also send to my profile" })}
+            </label>
           </li>
         ))}
       </ul>
@@ -278,6 +324,7 @@ function DraftReview({
           confirm.mutate({
             openingId,
             confirmedLockedFactOverrideIds: confirmed,
+            sentToProfileInstructionPointIds: sent,
           })
         }
       >

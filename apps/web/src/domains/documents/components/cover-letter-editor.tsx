@@ -32,6 +32,7 @@ import { useRefreshDocuments } from "../hooks/use-opening-documents";
 import { DownloadPdfDialog } from "./download-pdf-dialog";
 import { GenerateLetterDialog } from "./generate-letter-dialog";
 import { SyncProposal } from "./language-sync";
+import { CoverageReviewBlock } from "./coverage-review";
 import { EditableText, originTone } from "./editing";
 import { ProfilePassage } from "./resume-editor";
 import { VersionHistorySheet } from "./version-history-sheet";
@@ -196,6 +197,7 @@ export function CoverLetterEditor({
         </div>
       )}
       <SyncProposal document={document} versions={document.versions} />
+      <CoverageReviewBlock version={version} />
       {version.pages > 1 && (
         <p className="rounded-lg border border-amber-500/40 bg-amber-500/10 p-2.5 text-xs">
           {t.formatMessage(
@@ -309,10 +311,13 @@ function SourcedParagraph({
           ...(sources?.motivationPoints ?? []).filter((row) =>
             origin.motivationPointIds.includes(row.id)
           ),
-          ...(sources?.careerGoals ?? []).filter((row) =>
-            origin.careerGoalIds.includes(row.id)
-          ),
         ]
+      : [];
+  const instructions =
+    origin.kind === "letter"
+      ? version.instructionTrace.filter((row) =>
+          origin.instructionIds.includes(row.instructionId)
+        )
       : [];
 
   return (
@@ -342,6 +347,21 @@ function SourcedParagraph({
                   { fact: row.text }
                 )}
               </span>
+            ))}
+            {instructions.map((row) => (
+              <div key={row.instructionId} className="flex flex-col gap-0.5">
+                <span>
+                  {t.formatMessage(
+                    { defaultMessage: "“{quote}”" },
+                    { quote: row.text }
+                  )}
+                </span>
+                <span className="opacity-70">
+                  {t.formatMessage({
+                    defaultMessage: "From this application's instructions",
+                  })}
+                </span>
+              </div>
             ))}
             {words.map((row) => (
               <span key={row.id}>

@@ -203,7 +203,11 @@ type Judged = ReturnType<typeof parseJudgmentPrompt>[number];
 /** Plays the classification calls of a fit check. */
 function fitScript(
   judge: (terms: Judged[], system: string) => unknown,
-  extracted: object = extraction
+  extracted: object = extraction,
+  // The numbered preferences the opening breaks, from their own call.
+  conflicts: (
+    rules: string[]
+  ) => Array<{ rule: number; explanation: string }> = () => []
 ) {
   return {
     object: (request: { system: string }) => {
@@ -212,6 +216,14 @@ function fitScript(
       if (request.system.startsWith("Read the job posting")) return extracted;
       if (request.system.startsWith("Screen"))
         return judge(parseJudgmentPrompt(request.system), request.system);
+      if (request.system.startsWith("Check a job opening"))
+        return {
+          conflicts: conflicts(
+            [...request.system.matchAll(/^\d+\. \[\w+\] (.*)$/gm)].map(
+              (match) => match[1]
+            )
+          ),
+        };
       return { questions: [] };
     },
   };
@@ -237,7 +249,6 @@ const allMet = (terms: Judged[]) => ({
     passage_ids: term.passages.slice(0, 1).map((passage) => passage.id),
     explanation: "Shown in the profile.",
   })),
-  preference_conflicts: [],
 });
 
 describe("openings and fit check", () => {
@@ -328,7 +339,6 @@ describe("openings and fit check", () => {
           passage_ids: [crypto.randomUUID()],
           explanation: "Claimed",
         })),
-        preference_conflicts: [],
       }))
     );
 
@@ -401,23 +411,54 @@ describe("openings and fit check", () => {
       },
     ]);
 
-    // A conflict the judge found counts only when it quotes the user's own
-    // preferences.
+    // The other preferences are checked one by one, each by its number:
+    // the rule shown is the user's own line, and a number that names no
+    // line is dropped.
     const broken = await ctx.add();
+    let shown: string[] = [];
     await ctx.analyze(
       broken,
-      fitScript((terms) => ({
-        ...allMet(terms),
-        preference_conflicts: [
-          { rule: "Minimum: R$ 20.000 CLT", explanation: "Pays R$ 9.000." },
-          { rule: "Never works on Mondays", explanation: "Invented." },
-        ],
-      }))
+      fitScript(allMet, extraction, (rules) => {
+        shown = rules;
+        return [
+          {
+            rule: rules.indexOf("Minimum: R$ 20.000 CLT") + 1,
+            explanation: "Pays R$ 9.000.",
+          },
+          { rule: 99, explanation: "Invented." },
+        ];
+      })
     );
+    // Excluded companies are compared by code, never listed.
+    expect(shown).toEqual([
+      "I accept: remote",
+      "Brazil",
+      "Minimum: R$ 20.000 CLT",
+      "Betting",
+      "Contact only through a messaging app.",
+    ]);
     const second = (await ctx.detail(broken)).fitCheck!;
     expect(second.band).toBe("low");
     expect(second.preferenceConflicts).toEqual([
       { rule: "Minimum: R$ 20.000 CLT", explanation: "Pays R$ 9.000." },
+    ]);
+  });
+
+  it("finds an excluded sector the posting names, whatever the judge says", async () => {
+    const ctx = await setup();
+    await ctx.publishDocument(preferences, "preferences");
+    const openingId = await ctx.add(
+      posting.replace("developer platform", "sports BETTING platform")
+    );
+    await ctx.analyze(openingId, fitScript(allMet));
+    const { fitCheck } = await ctx.detail(openingId);
+    expect(fitCheck!.band).toBe("low");
+    expect(fitCheck!.preferenceConflicts).toEqual([
+      {
+        rule: "Betting",
+        explanation:
+          "The posting names this sector, excluded in your job preferences.",
+      },
     ]);
   });
 
@@ -497,7 +538,6 @@ describe("openings and fit check", () => {
         passage_ids: [],
         explanation: "No",
       })),
-      preference_conflicts: [],
     }));
     await ctx.analyze(openingId, {
       object: (request: { system: string }) =>
@@ -520,6 +560,11 @@ describe("openings and fit check", () => {
     expect(terraform.gapQuestion).toBe(
       "Do you have experience with Terraform?"
     );
+    // Nothing is asked where the user already answered: what the profile
+    // says is lacking (Spark, studied) and what the preferences settle.
+    const asked = detail.fitCheck!.items.filter((item) => item.gapQuestion);
+    expect(asked.map((item) => item.term)).not.toContain("Spark");
+    expect(asked.map((item) => item.category)).not.toContain("work_model");
 
     await ctx.openings.answerGapQuestion({
       userId: ctx.user.id,

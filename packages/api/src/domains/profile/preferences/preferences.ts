@@ -210,6 +210,23 @@ export function extractPreferences(blocks: ProfileBlock[]): PreferencesExtract {
 }
 
 /**
+ * The preferences an opening can break, each as the user wrote it, for
+ * screening to check one by one. Excluded companies are left out: code
+ * compares their names.
+ */
+export function preferenceRules(blocks: ProfileBlock[]) {
+  const { sections } = readPreferenceSections(blocks);
+  return sections.flatMap((section) =>
+    !section.key || section.key === "excludedCompanies"
+      ? []
+      : items(blocks, section)
+          // A label with nothing after it says nothing.
+          .filter((line) => !/:\s*$/.test(line))
+          .map((text) => ({ section: section.key!, text }))
+  );
+}
+
+/**
  * The deterministic check of the preferences: its sections present and in
  * order (format, which blocks publishing, since screening reads them by
  * name) and a work model it can read (content).

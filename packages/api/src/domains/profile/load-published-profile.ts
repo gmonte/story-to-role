@@ -1,7 +1,7 @@
 import type { UserCipher } from "@repo/api/domains/encryption/user-cipher";
 import type { DbClient } from "@repo/api/tools/db-client";
 
-import { extractPreferences } from "./preferences/preferences";
+import { extractPreferences, preferenceRules } from "./preferences/preferences";
 import { ProfileRepository } from "./profile-repository";
 import { parseBlocks } from "./truth/blocks";
 import type { ProfileExtract, ProfilePassage } from "./truth/extract";
@@ -69,5 +69,10 @@ export async function loadPublishedPreferences(input: {
     : undefined;
   if (!version) return null;
   const markdown = input.cipher.decrypt(version.encryptedMarkdown);
-  return { markdown, extract: extractPreferences(parseBlocks(markdown)) };
+  const blocks = parseBlocks(markdown);
+  return {
+    markdown,
+    extract: extractPreferences(blocks),
+    rules: preferenceRules(blocks),
+  };
 }

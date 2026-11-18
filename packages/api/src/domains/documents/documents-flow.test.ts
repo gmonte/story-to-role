@@ -564,8 +564,9 @@ describe("resume generation and snapshots", () => {
       generationId
     );
     expect(rounds.map((r) => r.rating)).toEqual([5, 9]);
-    // Strategist, one editor, two reviews, the coverage review.
-    expect(fake.generateObject).toHaveBeenCalledTimes(5);
+    // Strategist, one editor, two reviews, the keyword spelling repair, the
+    // coverage review.
+    expect(fake.generateObject).toHaveBeenCalledTimes(6);
   });
 
   it("skips review rounds when the first draft already reaches the target", async () => {
@@ -578,9 +579,9 @@ describe("resume generation and snapshots", () => {
       drafts: [ctx.draft([line])],
       ratings: [9],
     });
-    // Strategist, one review and the coverage review; no editor round was
-    // paid for.
-    expect(fake.generateObject).toHaveBeenCalledTimes(3);
+    // Strategist, one review, the keyword spelling repair and the coverage
+    // review; no editor round was paid for.
+    expect(fake.generateObject).toHaveBeenCalledTimes(4);
   });
 
   it("prints the profile's facts, leaves out what it must not use and locks credentials", async () => {
@@ -3069,10 +3070,11 @@ describe("resume generation and snapshots", () => {
       ratings: [6],
       today,
     });
-    // The adjuster, then the coverage review; no review round.
+    // The adjuster, the keyword spelling repair, then the coverage review;
+    // no review round.
     expect(
       fake.generateObject.mock.calls.map(([call]) => call.system.slice(0, 10))
-    ).toEqual(["You adjust", "You audit "]);
+    ).toEqual(["You adjust", "You fix li", "You audit "]);
     expect(fake.generateObject.mock.calls[0][0].system).toContain(
       `bullet [${deployLine.id}] Cut deploy time by 40% with Kubernetes.`
     );

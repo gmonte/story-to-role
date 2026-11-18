@@ -48,7 +48,7 @@ export function communicationRuleBlock(rules: {
 }
 
 // A line carrying a number or a name code can't vouch for is left alone.
-const editableLine = (id: string) =>
+export const editableLine = (id: string) =>
   id !== "title_line" && !id.startsWith("label:") && !id.startsWith("context:");
 
 /** The written lines still carrying an original of the public names. */
@@ -63,7 +63,7 @@ export function linesWithPublicNames(
 }
 
 /** Replaces the text of the lines with the given ids, wherever they are. */
-function withLineTexts<T>(value: T, texts: Map<string, string>): T {
+export function withLineTexts<T>(value: T, texts: Map<string, string>): T {
   if (Array.isArray(value)) {
     return value.map((item: unknown) => withLineTexts(item, texts)) as T;
   }

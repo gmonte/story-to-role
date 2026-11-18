@@ -62,7 +62,11 @@ import {
   startProfileChatSession,
 } from "../actions/profile-agent-actions";
 import { useAnswerWatchdog } from "../hooks/use-answer-watchdog";
-import { isClearCommand, matchingCommands } from "../utils/chat-command";
+import {
+  decideClearKey,
+  isClearCommand,
+  matchingCommands,
+} from "../utils/chat-command";
 import { topmostNewSuggestion } from "../utils/topmost-new-suggestion";
 import { maxQuoteCharacters, useProfileEditor } from "./profile-editor-context";
 
@@ -139,6 +143,8 @@ function Conversation({
   } = useProfileEditor();
   const [text, setText] = useState("");
   const [confirmingNew, setConfirmingNew] = useState(false);
+  // /clear was sent once: a second Enter confirms, any other key cancels.
+  const [clearArmed, setClearArmed] = useState(false);
   const [startingNew, setStartingNew] = useState(false);
   const [turnDone, setTurnDone] = useState(0);
   // The suggestions there were when the turn began.
@@ -309,8 +315,7 @@ function Conversation({
   async function send(words: string) {
     // The command starts a new conversation; the agent never sees it.
     if (isClearCommand(words)) {
-      setText("");
-      setConfirmingNew(true);
+      setClearArmed(true);
       return;
     }
     // An attachment alone is a question: how to resolve it.
@@ -387,7 +392,7 @@ function Conversation({
     last?.role === "assistant" &&
     last.parts.at(-1)?.type === "text";
 
-  const commands = matchingCommands(text);
+  const commands = clearArmed ? [] : matchingCommands(text);
 
   return (
     <div className="flex h-full min-h-0 flex-col">
@@ -624,8 +629,8 @@ function Conversation({
                 <button
                   type="button"
                   onClick={() => {
-                    setText("");
-                    setConfirmingNew(true);
+                    setText(command);
+                    input.current?.focus();
                   }}
                   className="hover:bg-muted flex w-full items-baseline gap-2 px-2.5 py-1.5 text-left"
                 >
@@ -640,6 +645,14 @@ function Conversation({
             ))}
           </ul>
         )}
+        {clearArmed && (
+          <p className="text-muted-foreground mb-1.5 text-xs">
+            {t.formatMessage({
+              defaultMessage:
+                "Press Enter again to delete this conversation. Any other key cancels.",
+            })}
+          </p>
+        )}
         <div className="bg-background flex flex-col rounded-xl border shadow-sm">
           <Textarea
             ref={input}
@@ -649,9 +662,30 @@ function Conversation({
             maxLength={
               agentSettings.maxMessageCharacters - maxQuoteCharacters - 100
             }
-            onChange={(event) => setText(event.target.value)}
+            onChange={(event) => {
+              setClearArmed(false);
+              setText(event.target.value);
+            }}
+            onBlur={() => {
+              if (!clearArmed) return;
+              setClearArmed(false);
+              setText("");
+            }}
             onKeyDown={(event) => {
-              if (event.key === "Enter" && !event.shiftKey) onSubmit(event);
+              const decision = decideClearKey(
+                clearArmed && isClearCommand(text),
+                event.key,
+                event.shiftKey
+              );
+              if (decision === "confirm") {
+                event.preventDefault();
+                setClearArmed(false);
+                void startNew();
+              } else if (decision === "cancel") {
+                // The key is not swallowed: it types into the emptied box.
+                setClearArmed(false);
+                setText("");
+              } else if (decision === "send") onSubmit(event);
             }}
             placeholder={
               attachment

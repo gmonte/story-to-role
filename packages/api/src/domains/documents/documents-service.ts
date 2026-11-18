@@ -671,14 +671,18 @@ export class DocumentsService {
       const cipher = await getUserCipher(tx, input.userId);
       const contexts = new FrozenContexts(tx, cipher, profile.id);
       const openingId = await contexts.openingOf(document.applicationId);
-      const load = (
-        profileVersionId: string | null,
-        language: typeof version.language | undefined = version.language
-      ) => contexts.load({ profileVersionId, openingId, language });
+      // `untranslated`: the version as the profile wrote it, in its own
+      // language (no dictionaries applied).
+      const load = (profileVersionId: string | null, untranslated = false) =>
+        contexts.load({
+          profileVersionId,
+          openingId,
+          language: untranslated ? undefined : version.language,
+        });
       const from = await load(latest.profileVersionId);
       // The same version untranslated: a field a document printed before
       // translations existed still reads as the profile wrote it.
-      const fromSource = await load(latest.profileVersionId, undefined);
+      const fromSource = await load(latest.profileVersionId, true);
       const to = await load(published.id);
       const retraced = retraceContent(decryptDocument(cipher, latest), {
         from,

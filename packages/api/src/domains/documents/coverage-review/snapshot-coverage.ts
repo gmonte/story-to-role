@@ -57,7 +57,8 @@ export class FrozenContexts {
   load(input: {
     profileVersionId: string | null;
     openingId: string | null;
-    language: OutputLanguage;
+    // Absent: the profile's fields as written, no translation applied.
+    language?: OutputLanguage;
   }): Promise<CareerContext> {
     const key = [input.profileVersionId, input.openingId, input.language].join(
       ":"

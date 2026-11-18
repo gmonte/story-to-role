@@ -221,4 +221,43 @@ describe("the profile document", () => {
     expect(again.markdown).toBe(without);
     expect(again.revision).toBe(3);
   });
+
+  it("ignores and restores a finding, per owner, without touching the draft", async () => {
+    const ctx = await setup();
+    const other = await createTestUser("grace@example.com");
+    await ctx.profile.saveDraft({
+      userId: ctx.user.id,
+      markdown: wellFormed("Nome profissional: Ada"),
+      baseRevision: 0,
+    });
+    const key = "0123456789abcdef";
+    await expect(
+      ctx.profile.setFindingDismissed({
+        userId: other.id,
+        findingKey: key,
+        dismissed: true,
+      })
+    ).rejects.toMatchObject({ code: "NOT_FOUND" });
+
+    await ctx.profile.setFindingDismissed({
+      userId: ctx.user.id,
+      findingKey: key,
+      dismissed: true,
+    });
+    await ctx.profile.setFindingDismissed({
+      userId: ctx.user.id,
+      findingKey: key,
+      dismissed: true,
+    });
+    const ignored = await ctx.draft();
+    expect(ignored.dismissedFindings).toEqual([key]);
+    expect(ignored.revision).toBe(1);
+
+    await ctx.profile.setFindingDismissed({
+      userId: ctx.user.id,
+      findingKey: key,
+      dismissed: false,
+    });
+    expect((await ctx.draft()).dismissedFindings).toEqual([]);
+  });
 });

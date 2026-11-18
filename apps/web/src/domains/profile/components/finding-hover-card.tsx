@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import type { Editor } from "@tiptap/core";
-import { Sparkles, Wand2 } from "lucide-react";
+import { EyeOff, Sparkles, Wand2 } from "lucide-react";
 
 import { useTranslation } from "@repo/intl/use-translation";
 import type { ProfileFinding } from "@repo/api/domains/profile/truth/lint";
@@ -17,6 +17,8 @@ export type FindingCardInfo = {
   finding?: ProfileFinding;
   /** Applies the fix; absent when the finding isn't fixable. */
   fix?: () => void;
+  /** Ignores the finding; absent for format findings, which can't be. */
+  ignore?: () => void;
   /** Starts a talk with the agent; absent where there is no agent. */
   talk?: () => void;
 };
@@ -125,7 +127,7 @@ export function FindingHoverCard({
       }}
     >
       <p>{info.message}</p>
-      {(info.fix ?? info.talk ?? info.finding) && (
+      {(info.fix ?? info.talk ?? info.finding ?? info.ignore) && (
         <div className="flex flex-wrap items-center gap-1">
           {info.finding && (
             <FindingQuickActions
@@ -160,6 +162,20 @@ export function FindingHoverCard({
             >
               <Sparkles className="size-3" />
               {t.formatMessage({ defaultMessage: "Talk to the agent" })}
+            </Button>
+          )}
+          {info.ignore && (
+            <Button
+              size="sm"
+              variant="ghost"
+              className="text-muted-foreground h-6 px-2 text-xs"
+              onClick={() => {
+                info.ignore?.();
+                close();
+              }}
+            >
+              <EyeOff className="size-3" />
+              {t.formatMessage({ defaultMessage: "Ignore" })}
             </Button>
           )}
         </div>

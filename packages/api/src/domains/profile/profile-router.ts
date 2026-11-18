@@ -26,6 +26,9 @@ const revisionSchema = z.number().int().min(0);
 // Which of the user's two documents: the profile unless said otherwise.
 const kindSchema = profileDocumentKindSchema.default("profile");
 
+const findingKeySchema = z.string().regex(/^[0-9a-f]{16}$/);
+const dismissedSchema = z.object({ dismissedFindings: z.array(z.string()) });
+
 const savedDraftSchema = z.object({
   revision: z.number().int(),
   updatedAt: z.date(),
@@ -71,6 +74,44 @@ export const profileRouter = createTRPCRouter({
     .output(savedDraftSchema)
     .mutation(({ ctx, input }) =>
       new ProfileService(db).saveDraft({ userId: ctx.userId, ...input })
+    ),
+
+  dismissFinding: userProcedure
+    .meta(
+      openApiMeta(
+        "profile",
+        "POST",
+        "/profile/findings/by-key/{findingKey}/dismiss",
+        "Ignores a content finding of the draft"
+      )
+    )
+    .input(z.object({ findingKey: findingKeySchema, kind: kindSchema }))
+    .output(dismissedSchema)
+    .mutation(({ ctx, input }) =>
+      new ProfileService(db).setFindingDismissed({
+        userId: ctx.userId,
+        dismissed: true,
+        ...input,
+      })
+    ),
+
+  restoreFinding: userProcedure
+    .meta(
+      openApiMeta(
+        "profile",
+        "DELETE",
+        "/profile/findings/by-key/{findingKey}/dismiss",
+        "Brings back an ignored content finding"
+      )
+    )
+    .input(z.object({ findingKey: findingKeySchema, kind: kindSchema }))
+    .output(dismissedSchema)
+    .mutation(({ ctx, input }) =>
+      new ProfileService(db).setFindingDismissed({
+        userId: ctx.userId,
+        dismissed: false,
+        ...input,
+      })
     ),
 
   publish: userProcedure

@@ -118,6 +118,7 @@ export function ProfileDocument() {
     blocks,
     structure,
     fix,
+    ignoreFinding,
   } = useProfileEditor();
   const [selection, setSelection] = useState<{
     text: string;
@@ -459,6 +460,10 @@ export function ProfileDocument() {
             message,
             finding,
             fix: finding.fixable ? () => fix(finding) : undefined,
+            ignore:
+              finding.kind === "content"
+                ? () => ignoreFinding(finding)
+                : undefined,
             talk:
               line === null
                 ? undefined

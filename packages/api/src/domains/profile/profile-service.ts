@@ -63,6 +63,9 @@ function versionSummary(version: ProfileVersionSummary): ProfileVersionSummary {
   };
 }
 
+// A bound, not a limit anyone meets: the oldest keys fall away first.
+const maxDismissedFindings = 500;
+
 /** A stale tab saving over a newer draft (another tab, a restore). */
 const staleDraft = () =>
   new TRPCError({
@@ -96,6 +99,7 @@ export class ProfileService {
         updatedAt: null,
         publishedVersion: null,
         changedSincePublished: true,
+        dismissedFindings: [],
       };
     }
     const cipher = await getUserCipher(this.db, input.userId);
@@ -115,7 +119,40 @@ export class ProfileService {
       publishedVersion: published ? versionSummary(published) : null,
       changedSincePublished:
         !published || cipher.decrypt(published.encryptedMarkdown) !== markdown,
+      dismissedFindings: current.dismissedFindings,
     };
+  }
+
+  /**
+   * Ignores (or brings back) a content finding of the draft by its key. The
+   * key is the finding's own (`findingKey`), so it is only ever a hash; a
+   * format finding has none stored, since the editor never offers it.
+   */
+  async setFindingDismissed(input: {
+    userId: string;
+    findingKey: string;
+    dismissed: boolean;
+    kind?: ProfileDocumentKind;
+  }) {
+    const kind = input.kind ?? profileKind;
+    return this.db.transaction(async (tx) => {
+      const repository = new ProfileRepository(tx);
+      const document = await repository.findDocumentForUpdate(
+        input.userId,
+        kind
+      );
+      if (!document) throw new TRPCError({ code: "NOT_FOUND" });
+      const others = document.dismissedFindings.filter(
+        (key) => key !== input.findingKey
+      );
+      const next = input.dismissed
+        ? [...others, input.findingKey].slice(-maxDismissedFindings)
+        : others;
+      await repository.updateDocument(document.id, {
+        dismissedFindings: next,
+      });
+      return { dismissedFindings: next };
+    });
   }
 
   /**

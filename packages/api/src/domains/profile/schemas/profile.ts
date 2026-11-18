@@ -38,6 +38,8 @@ export const profileDraftSchema = z.object({
   publishedVersion: profileVersionSummarySchema.nullable(),
   // Whether the draft differs from the published version.
   changedSincePublished: z.boolean(),
+  // Keys of the content findings the user ignored (`findingKey`).
+  dismissedFindings: z.array(z.string()),
 });
 export type ProfileDraft = z.infer<typeof profileDraftSchema>;
 

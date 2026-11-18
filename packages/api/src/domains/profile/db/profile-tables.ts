@@ -41,6 +41,9 @@ export const profileDocumentsTable = createTable(
     // When the draft got the empty “occasional experience” level line (once,
     // so a user who deletes it does not get it back); null until then.
     occasionalLevelAddedAt: d.timestamp({ withTimezone: true }),
+    // Keys of the content findings the user chose to ignore (see
+    // `findingKey`); editing the finding's line brings it back.
+    dismissedFindings: d.jsonb().$type<string[]>().notNull().default([]),
   }),
   (t) => [unique("profile_documents_user_kind_unique").on(t.userId, t.kind)]
 );

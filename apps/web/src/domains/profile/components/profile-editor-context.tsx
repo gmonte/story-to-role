@@ -33,6 +33,10 @@ import {
   type ProfileEntryKind,
 } from "@repo/api/domains/profile/truth/insert";
 import {
+  findingKey,
+  withoutDismissed,
+} from "@repo/api/domains/profile/truth/finding-key";
+import {
   lintProfile,
   type ProfileFinding,
 } from "@repo/api/domains/profile/truth/lint";
@@ -88,7 +92,12 @@ type ProfileEditorState = {
   editor: Editor | null;
   blocks: ProfileBlock[];
   structure: ProfileStructure;
+  // The findings that count: the ignored content ones are left out.
   findings: ProfileFinding[];
+  /** Content findings the user ignored, kept apart so they can be restored. */
+  ignored: ProfileFinding[];
+  ignoreFinding: (finding: ProfileFinding) => void;
+  restoreFinding: (finding: ProfileFinding) => void;
   saveStatus: SaveStatus;
   draft: ProfileDraft;
   markdown: () => string;
@@ -267,7 +276,39 @@ export function ProfileEditorProvider({
   });
 
   const structure = useMemo(() => readStructure(blocks), [blocks]);
-  const findings = useMemo(() => lintProfile(blocks), [blocks]);
+  // Optimistic: the keys change here first, then the server records them.
+  const [dismissed, setDismissed] = useState(draft.dismissedFindings);
+  const { findings, ignored } = useMemo(() => {
+    const all = lintProfile(blocks);
+    const kept = withoutDismissed(all, blocks, dismissed);
+    return {
+      findings: kept,
+      ignored: all.filter((finding) => !kept.includes(finding)),
+    };
+  }, [blocks, dismissed]);
+  const { mutate: dismissOnServer } = useMutation(
+    trpc.profile.dismissFinding.mutationOptions()
+  );
+  const { mutate: restoreOnServer } = useMutation(
+    trpc.profile.restoreFinding.mutationOptions()
+  );
+  const setIgnored = (finding: ProfileFinding, ignore: boolean) => {
+    if (finding.kind === "format") return;
+    const key = findingKey(finding, blocks);
+    setDismissed((keys) =>
+      ignore
+        ? [...keys.filter((existing) => existing !== key), key]
+        : keys.filter((existing) => existing !== key)
+    );
+    const revert = () =>
+      setDismissed((keys) =>
+        ignore ? keys.filter((existing) => existing !== key) : [...keys, key]
+      );
+    (ignore ? dismissOnServer : restoreOnServer)(
+      { findingKey: key, kind: "profile" },
+      { onError: revert }
+    );
+  };
   const validation = useLatestValidation();
   const reviewFindings = useMemo(
     () => locateReviewFindings(validation.data?.report, blocks),
@@ -605,6 +646,9 @@ export function ProfileEditorProvider({
     blocks,
     structure,
     findings,
+    ignored,
+    ignoreFinding: (finding) => setIgnored(finding, true),
+    restoreFinding: (finding) => setIgnored(finding, false),
     saveStatus: autosave.status,
     draft,
     markdown: () => serializeBlocks(currentBlocks()),

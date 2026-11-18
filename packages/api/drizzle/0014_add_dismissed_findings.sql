@@ -1,0 +1,1 @@
+ALTER TABLE "profile_documents" ADD COLUMN IF NOT EXISTS "dismissedFindings" jsonb DEFAULT '[]'::jsonb NOT NULL;

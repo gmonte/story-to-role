@@ -258,7 +258,7 @@ describe("the coverage review's code checks", () => {
         ...bullets(3),
         { id: "x", text: "Cut deploy time by 40% with Kubernetes." },
       ]),
-      entry(P2, bullets(2)),
+      entry(P2, bullets(3)),
     ]);
     expect(check(content)).toMatchObject([
       {
@@ -269,7 +269,7 @@ describe("the coverage review's code checks", () => {
       {
         code: "bulletCount",
         positionId: P2,
-        params: { count: 2, limit: 1, age: "older" },
+        params: { count: 3, limit: 2, age: "older" },
       },
     ]);
   });

@@ -796,8 +796,8 @@ describe("generation settings", () => {
         ...defaultGenerationSettings,
         ...changes,
       }).success;
-    expect(parsed({ recentYears: 14 })).toBe(true);
-    expect(parsed({ recentYears: 15 })).toBe(false);
+    expect(parsed({ recentYears: 9 })).toBe(true);
+    expect(parsed({ recentYears: 10 })).toBe(false);
     expect(parsed({ veryOldYears: 5 })).toBe(false);
     expect(parsed({ recentYears: 10, veryOldYears: 11 })).toBe(true);
   });
@@ -808,11 +808,11 @@ describe("generation settings", () => {
     expect(age(null)).toBe("recent");
     expect(age("2021-01")).toBe("recent");
     expect(age("2020-12")).toBe("older");
-    expect(age("2011-02")).toBe("older");
-    expect(age("2011-01")).toBe("very_old");
+    expect(age("2016-02")).toBe("older");
+    expect(age("2016-01")).toBe("very_old");
   });
 
-  it("keeps 3 bullets of a recent experience and 1 of an older one, the first ones", () => {
+  it("keeps 3 bullets of a recent experience and 2 of an older one, the first ones", () => {
     const { content, dropped } = assemble({
       context: career,
       draft: written(null),
@@ -820,7 +820,7 @@ describe("generation settings", () => {
     });
     expect(linesByEmployer(content)).toEqual({
       Globex: ["Globex bullet a.", "Globex bullet b.", "Globex bullet c."],
-      Acme: ["Acme bullet a."],
+      Acme: ["Acme bullet a.", "Acme bullet b."],
     });
     // The very old one named no requirement of this document.
     expect(dropped).toContainEqual({

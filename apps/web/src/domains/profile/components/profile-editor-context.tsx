@@ -273,10 +273,15 @@ export function ProfileEditorProvider({
   // The widgets in the text call the latest handlers.
   const suggestionHandlers = useRef<{
     accept: (profileSuggestionId: string) => void;
+    both: (profileSuggestionId: string) => void;
     reject: (profileSuggestionId: string) => void;
   } | null>(null);
   const suggestionLabels = {
     accept: t.formatMessage({ defaultMessage: "Accept" }),
+    both: t.formatMessage({
+      defaultMessage: "Keep both",
+      description: "Keeps the old lines and adds the suggested ones after them",
+    }),
     reject: t.formatMessage({ defaultMessage: "Reject" }),
     removal: t.formatMessage({ defaultMessage: "Remove the lines above" }),
   };
@@ -339,6 +344,8 @@ export function ProfileEditorProvider({
           suggestionWidget(suggestion, suggestionLabels, {
             accept: (profileSuggestionId) =>
               suggestionHandlers.current?.accept(profileSuggestionId),
+            both: (profileSuggestionId) =>
+              suggestionHandlers.current?.both(profileSuggestionId),
             reject: (profileSuggestionId) =>
               suggestionHandlers.current?.reject(profileSuggestionId),
           }),
@@ -483,7 +490,11 @@ export function ProfileEditorProvider({
    * Applies the given suggestions (all of them by default) to the text as
    * one undo step; those whose lines are gone stay waiting.
    */
-  const acceptSuggestions = (profileSuggestionIds?: string[]) => {
+  const acceptSuggestions = (
+    profileSuggestionIds?: string[],
+    // Keep the lines a suggestion replaces, adding its lines after them.
+    { keepBoth = false }: { keepBoth?: boolean } = {}
+  ) => {
     if (!editor) return;
     let next = currentBlocks();
     const applied: string[] = [];
@@ -494,7 +505,15 @@ export function ProfileEditorProvider({
       ) {
         continue;
       }
-      const changed = applyChange(next, suggestion);
+      const changed = applyChange(
+        next,
+        keepBoth && suggestion.find.trim()
+          ? {
+              ...suggestion,
+              replace: [suggestion.find, suggestion.replace].join("\n"),
+            }
+          : suggestion
+      );
       if (!changed) continue;
       next = changed;
       applied.push(suggestion.id);
@@ -533,6 +552,8 @@ export function ProfileEditorProvider({
 
   suggestionHandlers.current = {
     accept: (profileSuggestionId) => acceptSuggestions([profileSuggestionId]),
+    both: (profileSuggestionId) =>
+      acceptSuggestions([profileSuggestionId], { keepBoth: true }),
     reject: (profileSuggestionId) => rejectSuggestions([profileSuggestionId]),
   };
 

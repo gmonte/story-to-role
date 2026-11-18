@@ -176,6 +176,7 @@
   "A88ZAE": "Próximo passo: {step}",
   "A9SCv/": "Uma história a partir do seu perfil publicado, da sua motivação e dos fatos da empresa que você selecionou. Fica mais precisa com um currículo.",
   "AG9pHp": "Encerrar agora",
+  "AI/Dru": "Manter os dois",
   "AIHGyF": "Renova em {date}.",
   "AOOlc8": "Pular",
   "ATT86j": "Agora sua própria chave paga a IA: cerca de {amount} este mês (uma estimativa). Os créditos ficam como reserva.",
@@ -674,6 +675,7 @@
   "lMIPTi": "A história que a carta vai contar",
   "lOV0YZ": "Abrir a página da vaga",
   "lRFguV": "{status} ({count, number})",
+  "lT6R8g": "Parte {part} de {parts} do arquivo.",
   "la/kSX": "Salve o perfil antes de restaurar uma versão.",
   "leoqES": "Não foi possível enviar esta linha para o seu perfil.",
   "lgUzJe": "Escrevendo sugestões para o que falta no perfil",
@@ -849,6 +851,5 @@
   "zpzWtp": "Anthropic · certificado",
   "ztskFm": "Esta versão mudou depois que a proposta foi feita. Sincronize novamente.",
   "zy/eg8": "Taxa de resposta por versão de currículo",
-  "zyRm34": "Marcar como enviada",
-  "lT6R8g": "Parte {part} de {parts} do arquivo."
+  "zyRm34": "Marcar como enviada"
 }

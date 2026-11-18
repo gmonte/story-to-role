@@ -3,6 +3,8 @@ import { parseFragment } from "@repo/api/domains/profile/truth/suggestions";
 
 export type SuggestionWidgetLabels = {
   accept: string;
+  // Keep the old lines and add the new ones after them.
+  both: string;
   reject: string;
   removal: string;
 };
@@ -28,6 +30,7 @@ export function suggestionWidget(
   labels: SuggestionWidgetLabels,
   handlers: {
     accept: (profileSuggestionId: string) => void;
+    both: (profileSuggestionId: string) => void;
     reject: (profileSuggestionId: string) => void;
   }
 ) {
@@ -68,6 +71,14 @@ export function suggestionWidget(
     button(labels.accept, "profile-suggestion-accept", () =>
       handlers.accept(suggestion.id)
     ),
+    // Only a suggestion that replaces lines with new ones can keep both.
+    ...(suggestion.find.trim() && suggestion.replace.trim()
+      ? [
+          button(labels.both, "profile-suggestion-reject", () =>
+            handlers.both(suggestion.id)
+          ),
+        ]
+      : []),
     button(labels.reject, "profile-suggestion-reject", () =>
       handlers.reject(suggestion.id)
     )

@@ -89,8 +89,7 @@ export function DocumentChangesBar() {
                 <span className="min-w-0 flex-1">
                   <span className="text-muted-foreground block">
                     {t.formatMessage({
-                      defaultMessage:
-                        "No longer fits the text (its lines changed):",
+                      defaultMessage: "Can't be applied anymore",
                     })}
                   </span>
                   <span className="line-clamp-2 whitespace-pre-wrap">

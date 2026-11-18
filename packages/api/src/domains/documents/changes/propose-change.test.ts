@@ -199,6 +199,7 @@ async function setup() {
       reason?: string;
       requestedBy?: string;
       request?: { said: string[]; latest: string };
+      sameTurn?: boolean;
     } = {}
   ) =>
     proposeChange({
@@ -220,6 +221,9 @@ async function setup() {
         id: row.id,
         ...readChangeContent(cipher, row),
       })),
+      sameTurnIds: options.sameTurn
+        ? new Set((await listPending()).map((row) => row.id))
+        : undefined,
     });
   const changes = new ChangesService(db);
   const latest = async () =>
@@ -365,6 +369,159 @@ describe("proposed changes", () => {
       second.ok && second.change.id,
       addedAgain.ok && addedAgain.change.id,
     ]);
+  });
+
+  it("merges a swap proposed as two changes in one turn into one reorder", async () => {
+    const ctx = await setup();
+    const first =
+      "Was responsible for cutting deploy time by 40% with Kubernetes.";
+    const second = "Mentored two interns.";
+    const a = await ctx.propose({
+      part: ctx.experience,
+      find: first,
+      replace: second,
+    });
+    const b = await ctx.propose(
+      { part: ctx.experience, find: second, replace: first },
+      { sameTurn: true }
+    );
+    if (!a.ok || !b.ok) throw new Error("not proposed");
+    expect(b.supersededIds).toEqual([a.change.id]);
+    expect(b.change.find).toBe(`${first}\n${second}`);
+    expect(b.change.replace).toBe(`${second}\n${first}`);
+    expect((await ctx.listPending()).map((row) => row.id)).toEqual([
+      b.change.id,
+    ]);
+    const result = await ctx.changes.acceptChanges({
+      userId: ctx.user.id,
+      versionId: ctx.version.id,
+      baseSnapshotId: ctx.snapshot.id,
+    });
+    expect(result.accepted).toEqual([b.change.id]);
+    const content = await ctx.latest();
+    const lines =
+      content.kind === "resume" &&
+      content.sections[2].kind === "experience" &&
+      content.sections[2].entries[0].lines;
+    expect(lines && lines.map((line) => line.text)).toEqual([second, first]);
+  });
+
+  it("keeps two adjacent changes apart when they don't just reorder, or aren't of the same turn", async () => {
+    const ctx = await setup();
+    const first =
+      "Was responsible for cutting deploy time by 40% with Kubernetes.";
+    const a = await ctx.propose({
+      part: ctx.experience,
+      find: first,
+      replace: "Cut deploy time by 40% with Kubernetes.",
+    });
+    const b = await ctx.propose(
+      {
+        part: ctx.experience,
+        find: "Mentored two interns.",
+        replace: "Mentored two interns to independence.",
+      },
+      { sameTurn: true }
+    );
+    expect(b.ok && b.supersededIds).toEqual([]);
+    expect(a.ok && (await ctx.listPending()).length).toBe(2);
+  });
+
+  it("lists a change whose lines are gone as stale, and rejects it", async () => {
+    const ctx = await setup();
+    const first =
+      "Was responsible for cutting deploy time by 40% with Kubernetes.";
+    const second = "Mentored two interns.";
+    const a = await ctx.propose({
+      part: ctx.experience,
+      find: first,
+      replace: second,
+    });
+    const b = await ctx.propose({
+      part: ctx.experience,
+      find: second,
+      replace: first,
+    });
+    const c = await ctx.propose({
+      part: "summary",
+      find: "Engineer who cut deploy time by 40%.",
+      replace: "Platform engineer who cut deploy time by 40%.",
+    });
+    if (!a.ok || !b.ok || !c.ok) throw new Error("not proposed");
+    const listed = async () =>
+      (
+        await ctx.changes.listChanges({
+          userId: ctx.user.id,
+          versionId: ctx.version.id,
+        })
+      ).map((change) => [change.id, change.stale]);
+    expect(await listed()).toEqual([
+      [a.change.id, false],
+      [b.change.id, false],
+      [c.change.id, false],
+    ]);
+    // Accepting the second leaves the first without its line, found twice.
+    const result = await ctx.changes.acceptChanges({
+      userId: ctx.user.id,
+      versionId: ctx.version.id,
+      baseSnapshotId: ctx.snapshot.id,
+      documentChangeIds: [b.change.id],
+    });
+    expect(result.accepted).toEqual([b.change.id]);
+    // Never dropped: the first stays listed, stale.
+    expect(await listed()).toEqual([
+      [a.change.id, true],
+      [c.change.id, false],
+    ]);
+    await ctx.changes.rejectChanges({
+      userId: ctx.user.id,
+      versionId: ctx.version.id,
+      documentChangeIds: [a.change.id],
+    });
+    expect(await listed()).toEqual([[c.change.id, false]]);
+  });
+
+  it("locates a waiting change again where its lines moved", async () => {
+    const ctx = await setup();
+    const first =
+      "Was responsible for cutting deploy time by 40% with Kubernetes.";
+    const second = "Mentored two interns.";
+    const reorder = await ctx.propose({
+      part: ctx.experience,
+      find: `${first}\n${second}`,
+      replace: `${second}\n${first}`,
+    });
+    const edit = await ctx.propose({
+      part: ctx.experience,
+      find: second,
+      replace: "Mentored two interns to independence.",
+    });
+    if (!reorder.ok || !edit.ok) throw new Error("not proposed");
+    // They overlap, so the edit took the reorder's place: accept it,
+    // then a new reorder still finds the lines wherever they are.
+    await ctx.changes.acceptChanges({
+      userId: ctx.user.id,
+      versionId: ctx.version.id,
+      baseSnapshotId: ctx.snapshot.id,
+    });
+    const [other] = await ctx.changes
+      .listChanges({
+        userId: ctx.user.id,
+        versionId: ctx.version.id,
+      })
+      .then((rows) => rows);
+    expect(other).toBeUndefined();
+    const content = await ctx.latest();
+    if (content.kind !== "resume") throw new Error("not a resume");
+    const moved = await ctx.propose(
+      {
+        part: ctx.experience,
+        find: "Mentored two interns to independence.",
+        replace: "Mentored two interns to independence at Globex.",
+      },
+      { base: content }
+    );
+    expect(moved.ok).toBe(true);
   });
 
   it("refuses what doesn't apply, changes nothing, touches a locked fact or breaks a fixed part", async () => {

@@ -18,7 +18,7 @@ import {
   coverageFindingKey,
   reviewNoteKey,
 } from "@repo/api/domains/documents/coverage-review/finding-key";
-import type { DocumentChange } from "@repo/api/domains/documents/schemas/document-change";
+import type { ListedDocumentChange } from "@repo/api/domains/documents/schemas/document-change";
 import type {
   CoverageView,
   VersionView,
@@ -70,7 +70,7 @@ const infoIcon =
 export type DocumentFinding = CoverageView["findings"][number];
 
 /** A change the agent proposed, with the blocks it replaces now (null when stale). */
-export type LocatedChange = DocumentChange & {
+export type LocatedChange = ListedDocumentChange & {
   range: { start: number; end: number } | null;
 };
 
@@ -519,7 +519,7 @@ export function DocumentEditorProvider({
   const forgetChanges = (ids: string[]) =>
     queryClient.setQueryData(
       changesKey,
-      (current: DocumentChange[] | undefined) =>
+      (current: ListedDocumentChange[] | undefined) =>
         current?.filter((change) => !ids.includes(change.id))
     );
   const refreshChanges = useCallback(
@@ -560,6 +560,8 @@ export function DocumentEditorProvider({
         documentChangeIds: ids,
       });
       forgetChanges(result.accepted);
+      // The others are located again: one whose lines moved is now stale.
+      void refreshChanges();
       if (!result.accepted.length) {
         toast.error(
           t.formatMessage({

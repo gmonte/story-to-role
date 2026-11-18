@@ -40,3 +40,13 @@ export const documentChangeSchema = documentChangeContentSchema.extend({
   createdAt: z.date(),
 });
 export type DocumentChange = z.infer<typeof documentChangeSchema>;
+
+/**
+ * A change as the editor lists it: `stale` when its lines are gone from
+ * the document (edited away, or moved by another accepted change), so it
+ * can only be rejected.
+ */
+export const listedDocumentChangeSchema = documentChangeSchema.extend({
+  stale: z.boolean(),
+});
+export type ListedDocumentChange = z.infer<typeof listedDocumentChangeSchema>;

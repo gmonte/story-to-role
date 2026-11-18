@@ -6,9 +6,9 @@ import type { DbClient } from "@repo/api/tools/db-client";
 import { DocumentsRepository } from "../documents-repository";
 import { resumeLinkOf } from "../letter/letter-resume";
 import { requireUserVersion } from "../require-version";
-import type { DocumentChange } from "../schemas/document-change";
+import type { ListedDocumentChange } from "../schemas/document-change";
 import { decryptDocument } from "../snapshot-content";
-import { applyDocumentChange } from "./document-change";
+import { applyDocumentChange, locateDocumentChange } from "./document-change";
 import { readChangeContent } from "./propose-change";
 
 /**
@@ -23,22 +23,31 @@ export class ChangesService {
   async listChanges(input: {
     userId: string;
     versionId: string;
-  }): Promise<DocumentChange[]> {
+  }): Promise<ListedDocumentChange[]> {
     const { version } = await requireUserVersion(
       this.db,
       input.userId,
       input.versionId
     );
     const cipher = await getUserCipher(this.db, input.userId);
-    return (
-      await new DocumentsRepository(this.db).listPendingChanges(version.id)
-    ).map((row) => ({
-      id: row.id,
-      versionId: row.versionId,
-      origin: row.origin,
-      createdAt: row.createdAt,
-      ...readChangeContent(cipher, row),
-    }));
+    const repository = new DocumentsRepository(this.db);
+    const latest = await repository.latestSnapshot(version.id);
+    const content = latest ? decryptDocument(cipher, latest) : null;
+    return (await repository.listPendingChanges(version.id)).map((row) => {
+      const change = readChangeContent(cipher, row);
+      return {
+        id: row.id,
+        versionId: row.versionId,
+        origin: row.origin,
+        createdAt: row.createdAt,
+        ...change,
+        // Never hidden: a change whose lines are gone stays listed.
+        stale:
+          !content ||
+          content.kind === "linkedin" ||
+          !locateDocumentChange(content, change),
+      };
+    });
   }
 
   /**

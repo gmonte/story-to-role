@@ -132,6 +132,9 @@ function Conversation({
   // The changes waiting in the text, to say which suggestion was answered.
   const waiting = useQuery(trpc.documents.changes.queryOptions({ versionId }));
   const waitingIds = new Set((waiting.data ?? []).map((change) => change.id));
+  const staleIds = new Set(
+    (waiting.data ?? []).filter((change) => change.stale).map((c) => c.id)
+  );
   // The changes there were when the turn began: the first new one is
   // shown once the turn ends.
   const knownIds = useRef<Set<string>>(new Set());
@@ -278,7 +281,8 @@ function Conversation({
                   if (call?.type !== "tool-propose_change" || !proposed) {
                     return null;
                   }
-                  const stillWaiting = waitingIds.has(proposed);
+                  const stale = staleIds.has(proposed);
+                  const stillWaiting = waitingIds.has(proposed) && !stale;
                   return (
                     <button
                       key={index}
@@ -290,14 +294,19 @@ function Conversation({
                       <Sparkles className="text-primary mt-0.5 size-3.5 shrink-0" />
                       <span>
                         <span className="block font-medium">
-                          {stillWaiting
+                          {stale
                             ? t.formatMessage({
                                 defaultMessage:
-                                  "Suggestion waiting in the text",
+                                  "No longer applies — the text changed",
                               })
-                            : t.formatMessage({
-                                defaultMessage: "Suggestion answered",
-                              })}
+                            : stillWaiting
+                              ? t.formatMessage({
+                                  defaultMessage:
+                                    "Suggestion waiting in the text",
+                                })
+                              : t.formatMessage({
+                                  defaultMessage: "Suggestion answered",
+                                })}
                         </span>
                         <span className="text-muted-foreground">
                           {call.input?.reason}

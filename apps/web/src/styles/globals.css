@@ -180,14 +180,3 @@
   cursor: default;
   caret-color: transparent;
 }
-.profile-editor .profile-link {
-  color: #2563eb;
-  text-decoration: underline dotted;
-  text-underline-offset: 3px;
-}
-.dark .profile-editor .profile-link {
-  color: #60a5fa;
-}
-.profile-editor .profile-link:hover {
-  text-decoration-style: solid;
-}

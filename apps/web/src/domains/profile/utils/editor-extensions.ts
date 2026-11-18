@@ -255,7 +255,8 @@ export const ProfileLinks = Extension.create({
               for (const link of findLinks(node.textContent)) {
                 decorations.push(
                   Decoration.inline(pos + 1 + link.from, pos + 1 + link.to, {
-                    class: "profile-link",
+                    // Styled like the app's link Button (shadcn).
+                    class: "text-primary underline underline-offset-4",
                     "data-href": link.href,
                   })
                 );

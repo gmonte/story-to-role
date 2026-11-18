@@ -185,6 +185,35 @@ export function normalizeChange(
   };
 }
 
+/**
+ * An addition as one change per top-level item (each with its sub-items):
+ * three certifications are three suggestions to accept or reject on their
+ * own. A new experience (its `###` heading and the lines under it) stays
+ * one. A replacement (non-empty `find`) is returned as it is.
+ */
+export function splitAddition(change: ProfileChange): ProfileChange[] {
+  if (change.find.trim()) return [change];
+  const written = parseFragment(change.replace);
+  if (written.length < 2) return [change];
+  if (written[0].type === "heading" && written[0].level === 3) return [change];
+  const base = Math.min(
+    ...written.flatMap((block) => (block.type === "item" ? [block.depth] : []))
+  );
+  const groups: ProfileBlock[][] = [];
+  for (const block of written) {
+    const continues =
+      block.type === "item" && block.depth > base && groups.length > 0;
+    if (continues) groups[groups.length - 1].push(block);
+    else groups.push([block]);
+  }
+  if (groups.length < 2) return [change];
+  return groups.map((group) => ({
+    part: change.part,
+    find: "",
+    replace: group.map(blockToLine).join("\n"),
+  }));
+}
+
 /** The document with the change applied, or null when it is stale. */
 export function applyChange(
   blocks: ProfileBlock[],

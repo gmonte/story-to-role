@@ -61,14 +61,23 @@ export function SourceImportStatus({ document }: { document: SourceDocument }) {
         current={document.importProgress?.label ?? "reading"}
         steps={importSteps.map((key) => ({ key, label: stepLabels[key] }))}
         detail={
-          document.importProgress?.counts?.found !== undefined &&
-          t.formatMessage(
-            {
-              defaultMessage:
-                "{count, plural, =0 {Nothing new found} one {# thing the profile may lack} other {# things the profile may lack}}.",
-            },
-            { count: document.importProgress.counts.found }
-          )
+          document.importProgress?.label === "comparing" &&
+          (document.importProgress.counts?.parts ?? 0) > 1
+            ? t.formatMessage(
+                { defaultMessage: "Part {part} of {parts} of the file." },
+                {
+                  part: document.importProgress.counts?.part ?? 1,
+                  parts: document.importProgress.counts?.parts ?? 1,
+                }
+              )
+            : document.importProgress?.counts?.found !== undefined &&
+              t.formatMessage(
+                {
+                  defaultMessage:
+                    "{count, plural, =0 {Nothing new found} one {# thing the profile may lack} other {# things the profile may lack}}.",
+                },
+                { count: document.importProgress.counts.found }
+              )
         }
         note={t.formatMessage({
           defaultMessage: "You can keep editing; this continues by itself.",

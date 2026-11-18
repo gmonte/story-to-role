@@ -43,6 +43,7 @@ export const exportPaths: Record<string, string> = {
   documents: "documents/documents",
   document_versions: "documents/versions",
   document_snapshots: "documents/snapshots",
+  document_changes: "documents/suggested-changes",
   generations: "documents/generations",
   review_rounds: "documents/review-rounds",
   coverage_reviews: "documents/coverage-reviews",

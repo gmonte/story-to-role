@@ -21,6 +21,7 @@ import type { DbClient } from "@repo/api/tools/db-client";
 
 import {
   coverageReviewsTable,
+  documentChangesTable,
   documentSnapshotsTable,
   documentsTable,
   documentVersionsTable,
@@ -311,6 +312,70 @@ export class DocumentsRepository {
       .orderBy(desc(generationsTable.createdAt))
       .limit(1);
     return row ?? null;
+  }
+
+  async insertChange(change: Insert<typeof documentChangesTable>) {
+    const [row] = await this.tx
+      .insert(documentChangesTable)
+      .values(change)
+      .returning();
+    return row;
+  }
+
+  /** The changes waiting for the user in a version, oldest first. */
+  listPendingChanges(versionId: string) {
+    return this.tx
+      .select()
+      .from(documentChangesTable)
+      .where(
+        and(
+          eq(documentChangesTable.versionId, versionId),
+          eq(documentChangesTable.status, "pending")
+        )
+      )
+      .orderBy(asc(documentChangesTable.createdAt));
+  }
+
+  /** The last changes the user rejected in a version, newest first. */
+  listRejectedChanges(versionId: string, limit: number) {
+    return this.tx
+      .select()
+      .from(documentChangesTable)
+      .where(
+        and(
+          eq(documentChangesTable.versionId, versionId),
+          eq(documentChangesTable.status, "rejected")
+        )
+      )
+      .orderBy(desc(documentChangesTable.resolvedAt))
+      .limit(limit);
+  }
+
+  /**
+   * Ends pending changes of a version (accepted or rejected by the user,
+   * or superseded by a newer one): the given ones, or all of them.
+   * Returns the ids that changed.
+   */
+  async resolveChanges(input: {
+    versionId: string;
+    resolution: "accepted" | "rejected" | "superseded";
+    documentChangeIds?: string[];
+  }) {
+    if (input.documentChangeIds?.length === 0) return [];
+    const resolved = await this.tx
+      .update(documentChangesTable)
+      .set({ status: input.resolution, resolvedAt: new Date() })
+      .where(
+        and(
+          eq(documentChangesTable.versionId, input.versionId),
+          eq(documentChangesTable.status, "pending"),
+          input.documentChangeIds
+            ? inArray(documentChangesTable.id, input.documentChangeIds)
+            : undefined
+        )
+      )
+      .returning({ id: documentChangesTable.id });
+    return resolved.map((row) => row.id);
   }
 
   /**

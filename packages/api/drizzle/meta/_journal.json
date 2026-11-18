@@ -127,6 +127,13 @@
       "when": 1794996067567,
       "tag": "0017_drop_profile_chats",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1794998671459,
+      "tag": "0018_add_document_changes",
+      "breakpoints": true
     }
   ]
 }

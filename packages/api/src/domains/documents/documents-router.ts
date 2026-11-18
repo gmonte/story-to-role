@@ -11,6 +11,7 @@ import {
 } from "@repo/api/tools/trpc";
 
 import { generationSettingsFields } from "./schemas/generation-settings";
+import { ChangesService } from "./changes/changes-service";
 import { DocumentsService } from "./documents-service";
 import { PdfService } from "./rendering/pdf-service";
 import {
@@ -22,6 +23,7 @@ import {
   openingDocumentsSchema,
   snapshotSummarySchema,
 } from "./schemas/document-view";
+import { documentChangeSchema } from "./schemas/document-change";
 import { documentContentSchema } from "./schemas/document-content";
 import { resumeSectionKindSchema } from "./schemas/resume-content";
 
@@ -133,6 +135,68 @@ export const documentsRouter = createTRPCRouter({
         dismissed: false,
         ...input,
       })
+    ),
+
+  changes: userProcedure
+    .meta(
+      openApiMeta(
+        "documents",
+        "GET",
+        "/document-versions/by-id/{versionId}/changes",
+        "Lists the changes the document agent proposed, waiting for the user"
+      )
+    )
+    .input(z.object({ versionId: z.uuid() }))
+    .output(z.array(documentChangeSchema))
+    .query(({ ctx, input }) =>
+      new ChangesService(db).listChanges({ userId: ctx.userId, ...input })
+    ),
+
+  acceptChanges: userProcedure
+    .meta(
+      openApiMeta(
+        "documents",
+        "POST",
+        "/document-versions/by-id/{versionId}/changes/accept",
+        "Accepts proposed changes (the given ones, or all), each as a snapshot"
+      )
+    )
+    .input(
+      z.object({
+        versionId: z.uuid(),
+        baseSnapshotId: z.uuid(),
+        documentChangeIds: z.array(z.uuid()).max(200).optional(),
+      })
+    )
+    .output(
+      z.object({
+        accepted: z.array(z.uuid()),
+        skipped: z.array(z.uuid()),
+        snapshotId: z.uuid(),
+      })
+    )
+    .mutation(({ ctx, input }) =>
+      new ChangesService(db).acceptChanges({ userId: ctx.userId, ...input })
+    ),
+
+  rejectChanges: userProcedure
+    .meta(
+      openApiMeta(
+        "documents",
+        "POST",
+        "/document-versions/by-id/{versionId}/changes/reject",
+        "Rejects proposed changes: the given ones, or all pending"
+      )
+    )
+    .input(
+      z.object({
+        versionId: z.uuid(),
+        documentChangeIds: z.array(z.uuid()).max(200).optional(),
+      })
+    )
+    .output(z.object({ rejected: z.array(z.uuid()) }))
+    .mutation(({ ctx, input }) =>
+      new ChangesService(db).rejectChanges({ userId: ctx.userId, ...input })
     ),
 
   undo: userProcedure

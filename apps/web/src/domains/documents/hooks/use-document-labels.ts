@@ -56,6 +56,8 @@ export function useDocumentLabels() {
           return t.formatMessage({ defaultMessage: "Restored" });
         case "copied":
           return t.formatMessage({ defaultMessage: "Copied" });
+        case "suggested":
+          return t.formatMessage({ defaultMessage: "Suggested" });
       }
     },
     section(kind: ResumeSectionKind) {

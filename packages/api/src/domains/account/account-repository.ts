@@ -165,6 +165,11 @@ export class AccountRepository {
         t.documentSnapshotsTable.versionId,
         versions
       ),
+      document_changes: await below(
+        t.documentChangesTable,
+        t.documentChangesTable.versionId,
+        versions
+      ),
       generations,
       review_rounds: await below(
         t.reviewRoundsTable,

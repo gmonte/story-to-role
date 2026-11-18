@@ -10,6 +10,10 @@ import { createTable } from "@repo/api/utils/db/create-table";
 
 import type { GenerationSettings } from "../schemas/generation-settings";
 import type {
+  DocumentChangeOrigin,
+  DocumentChangeStatus,
+} from "../schemas/document-change";
+import type {
   DocumentKind,
   GenerationKind,
   GenerationStatus,
@@ -125,6 +129,34 @@ export const documentSnapshotsTable = createTable(
       t.versionId,
       t.sequence
     ),
+  ]
+);
+
+/**
+ * A change a document agent proposed to a version (ADR 0009): pending
+ * until the user accepts or rejects it in the text. Its content is a
+ * DocumentChangeContent as JSON, encrypted like the snapshots. It was
+ * made against one snapshot; its lines are found again by their text.
+ */
+export const documentChangesTable = createTable(
+  "document_changes",
+  (d) => ({
+    id: d.uuid().defaultRandom().primaryKey(),
+    createdAt: createdAt(d),
+    versionId: d
+      .uuid()
+      .notNull()
+      .references(() => documentVersionsTable.id, { onDelete: "cascade" }),
+    snapshotId: d
+      .uuid()
+      .references(() => documentSnapshotsTable.id, { onDelete: "set null" }),
+    origin: d.text().$type<DocumentChangeOrigin>().notNull(),
+    status: d.text().$type<DocumentChangeStatus>().notNull().default("pending"),
+    encryptedContent: d.text().notNull(),
+    resolvedAt: d.timestamp({ withTimezone: true }),
+  }),
+  (t) => [
+    index("document_changes_version_status_idx").on(t.versionId, t.status),
   ]
 );
 

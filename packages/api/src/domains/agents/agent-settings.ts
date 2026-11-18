@@ -1,4 +1,4 @@
-/** The profile agent's limits (ADR 0007, AI platform spec), in one place. */
+/** The agents' limits (ADR 0007, ADR 0009, AI platform spec), in one place. */
 export const agentSettings = {
   // The Trigger.dev session's retention deadline; its messages in our tables
   // are purged on the same clock.

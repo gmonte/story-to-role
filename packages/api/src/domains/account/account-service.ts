@@ -5,7 +5,7 @@ import { BillingService } from "@repo/api/domains/billing/billing-service";
 import { TasksRepository } from "@repo/api/domains/tasks/tasks-repository";
 import type { DbClient } from "@repo/api/tools/db-client";
 import { getStorage, type Storage } from "@repo/api/tools/storage/storage";
-import { AgentChatRepository } from "@repo/api/domains/profile/agent/agent-chat-repository";
+import { AgentChatRepository } from "@repo/api/domains/agents/agent-chat-repository";
 import { triggerClient } from "@repo/api/tools/trigger/trigger-client";
 import { logger } from "@repo/common/tools/logger";
 
@@ -97,7 +97,8 @@ export class AccountService {
         logger.warn(logTags, "Could not cancel a run", { runId, error });
       });
     }
-    // The agent's sessions on Trigger.dev close with the account (ADR 0007).
+    // The agents' sessions on Trigger.dev close with the account (ADR 0007,
+    // ADR 0009): the profile agent's and the document agents'.
     for (const chatId of await new AgentChatRepository(this.db).listChatIds(
       userId
     )) {

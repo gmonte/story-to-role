@@ -15,6 +15,7 @@ describe("agent message", () => {
       part: "experience:beta",
       attachment: { kind: "review", text: "Falta o resultado.\nDiga quanto." },
       text: "Como resolvo?",
+      version: null,
     });
   });
 
@@ -28,6 +29,29 @@ describe("agent message", () => {
       part: null,
       attachment: { kind: "finding", text: "Sem verbo." },
       text: "",
+      version: null,
+    });
+  });
+
+  it("carries the document version the message was written on", () => {
+    const version = "1b4e28ba-2fa1-11d2-883f-0016d3cca427";
+    const withQuote = composeAgentMessage(
+      "Linha um",
+      "E isso?",
+      null,
+      null,
+      version
+    );
+    expect(splitAgentMessage(withQuote)).toMatchObject({
+      quote: "Linha um",
+      text: "E isso?",
+      version,
+    });
+    const alone = composeAgentMessage(null, "Oi", null, null, version);
+    expect(splitAgentMessage(alone)).toMatchObject({
+      quote: null,
+      text: "Oi",
+      version,
     });
   });
 

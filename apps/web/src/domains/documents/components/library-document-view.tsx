@@ -10,6 +10,8 @@ import { WorkspaceBody } from "~/domains/workspace/components/workspace-body";
 import { useLibraryDocument } from "../hooks/use-library";
 import { useSelectedVersion } from "../hooks/use-selected-version";
 import { AdaptVersionDialog } from "./adapt-version-dialog";
+import { DocumentAgent } from "./document-agent";
+import { DocumentAgentProvider } from "./document-agent-context";
 import {
   DocumentSidePanel,
   useVersionRowLabel,
@@ -24,11 +26,13 @@ import { ResumeWorkspace } from "./resume-workspace";
 /** A library document's screen: the workspace and its side panel. */
 export function LibraryDocumentBody({ documentId }: { documentId: string }) {
   return (
-    <WorkspaceBody
-      layoutId="library-document"
-      chat={<LibraryDocumentView documentId={documentId} />}
-      panel={<LibraryDocumentPanel documentId={documentId} />}
-    />
+    <DocumentAgentProvider>
+      <WorkspaceBody
+        layoutId="library-document"
+        chat={<LibraryDocumentView documentId={documentId} />}
+        panel={<LibraryDocumentPanel documentId={documentId} />}
+      />
+    </DocumentAgentProvider>
   );
 }
 
@@ -116,6 +120,13 @@ export function LibraryDocumentPanel({ documentId }: { documentId: string }) {
   return (
     <DocumentSidePanel
       version={selected}
+      agent={
+        <DocumentAgent
+          documentId={documentId}
+          kind={document.data.kind}
+          version={selected}
+        />
+      }
       versions={
         <VersionsBlock
           document={document.data}

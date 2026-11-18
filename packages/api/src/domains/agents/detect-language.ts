@@ -1,4 +1,4 @@
-import type { ProfileLanguage } from "../truth/sections";
+import type { ProfileLanguage } from "@repo/api/domains/profile/truth/sections";
 
 // Short words each language uses all the time and the other doesn't.
 const markers: Record<ProfileLanguage, Set<string>> = {

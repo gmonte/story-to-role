@@ -1,4 +1,5 @@
 const partLine = /^\[part: (.+)\]$/;
+const versionLine = /^\[version: ([0-9a-f-]{36})\]$/;
 const attachmentHead = /^~ \[(finding|review)\] ?(.*)$/;
 
 // The most of a finding's or review's text a message carries.
@@ -13,14 +14,19 @@ export type AgentAttachment = { kind: "finding" | "review"; text: string };
  * name the part of the profile the passage is in ("> [part: key]"): the
  * same line can exist in several experiences. A finding or review being
  * discussed follows the quote as lines starting "~ ", the first naming its
- * kind ("~ [finding] …"); the person's own words come after.
+ * kind ("~ [finding] …"); the person's own words come after. A message to
+ * a document agent opens with the version the person is on
+ * ("[version: id]"), before the quote: a document has one conversation,
+ * whatever its versions.
  */
 export function composeAgentMessage(
   quote: string | null,
   text: string,
   part?: string | null,
-  attachment?: AgentAttachment | null
+  attachment?: AgentAttachment | null,
+  version?: string | null
 ) {
+  const scope = version ? `[version: ${version}]\n` : "";
   const lines = (quote ?? "")
     .split("\n")
     .map((line) => line.trim())
@@ -30,7 +36,7 @@ export function composeAgentMessage(
     .split("\n")
     .map((line) => line.trim())
     .filter(Boolean);
-  if (!lines.length && !attached.length) return text.trim();
+  if (!lines.length && !attached.length) return `${scope}${text.trim()}`;
   const quoted = lines.length
     ? [...(part ? [`[part: ${part}]`] : []), ...lines]
         .map((line) => `> ${line}`)
@@ -42,7 +48,7 @@ export function composeAgentMessage(
           .map((line, index) => (index ? `~ ${line}` : line))
           .join("\n")
       : "";
-  return `${[quoted, about].filter(Boolean).join("\n")}\n\n${text.trim()}`;
+  return `${scope}${[quoted, about].filter(Boolean).join("\n")}\n\n${text.trim()}`;
 }
 
 export function splitAgentMessage(message: string): {
@@ -50,8 +56,12 @@ export function splitAgentMessage(message: string): {
   part: string | null;
   attachment: AgentAttachment | null;
   text: string;
+  // The document version the message was written on, if it says.
+  version: string | null;
 } {
   const lines = message.split("\n");
+  const version = versionLine.exec(lines[0] ?? "")?.[1] ?? null;
+  if (version) lines.shift();
   const quote: string[] = [];
   while (lines[0]?.startsWith(">")) {
     quote.push(lines.shift()!.replace(/^>\s?/, ""));
@@ -74,5 +84,6 @@ export function splitAgentMessage(message: string): {
     part,
     attachment,
     text: lines.join("\n").trim(),
+    version,
   };
 }

@@ -55,7 +55,7 @@ export class AccountRepository {
       this.rowsWhere(table, table.profileId, profileIds);
 
     const profileDocuments = await byUser(t.profileDocumentsTable);
-    const profileChats = await byUser(t.profileChatsTable);
+    const agentChats = await byUser(t.agentChatsTable);
     const profileVersions = await this.rowsWhere(
       t.profileVersionsTable,
       t.profileVersionsTable.documentId,
@@ -104,11 +104,11 @@ export class AccountRepository {
         t.profileSuggestionsTable.documentId,
         idsOf(profileDocuments)
       ),
-      profile_chats: profileChats,
-      profile_chat_messages: await this.rowsWhere(
-        t.profileChatMessagesTable,
-        t.profileChatMessagesTable.chatId,
-        idsOf(profileChats)
+      agent_chats: agentChats,
+      agent_chat_messages: await this.rowsWhere(
+        t.agentChatMessagesTable,
+        t.agentChatMessagesTable.chatId,
+        idsOf(agentChats)
       ),
       profile_extracts: await this.rowsWhere(
         t.profileExtractsTable,

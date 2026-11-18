@@ -96,6 +96,7 @@ export function creditCap(type: TaskType, hints: CapHints = {}): number {
       return base * level * (hints.thorough ? 2 : 1);
     }
     case "profile_agent_turn":
+    case "document_agent_turn":
       // The topic gate plus the agent's reply: about 2, capped at 3.
       return 3;
     case "validate_profile":

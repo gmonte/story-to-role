@@ -42,6 +42,7 @@ import { cn } from "@repo/web/lib/utils";
 import { useTRPC } from "~/tools/trpc/client";
 
 import { useDocumentLabels } from "../hooks/use-document-labels";
+import { useDocumentAgent } from "./document-agent-context";
 import { useRefreshDocuments } from "../hooks/use-opening-documents";
 import { hasFindings, hasWarnings } from "../utils/version-checks";
 import { AdaptVersionDialog } from "./adapt-version-dialog";
@@ -53,21 +54,42 @@ import { WarningsDialog } from "./warnings-dialog";
 
 /**
  * The right panel of the document workspace (resume spec, "Document
- * workspace"): the PDF preview of the selected version's latest snapshot,
- * and the versions with their change history and actions.
+ * workspace"): the document's agent, the PDF preview of the selected
+ * version's latest snapshot, and the versions with their change history
+ * and actions. Asking to talk about a passage brings the agent forward.
  */
 export function DocumentSidePanel({
   version,
   versions,
+  agent,
 }: {
   version: VersionView;
   /** The Versions tab: the list, what creates versions, the checks. */
   versions: ReactNode;
+  /** The Agent tab, first when given. */
+  agent?: ReactNode;
 }) {
   const t = useTranslation();
+  const [tab, setTab] = useState(agent ? "agent" : "preview");
+  // A new topic (a passage, a finding) opens the agent, once per request.
+  const topic = useDocumentAgent()?.topic;
+  const [seenTopic, setSeenTopic] = useState(topic?.id);
+  if (agent && topic && topic.id !== seenTopic) {
+    setSeenTopic(topic.id);
+    setTab("agent");
+  }
   return (
-    <Tabs defaultValue="preview" className="gap-3">
+    <Tabs
+      value={tab}
+      onValueChange={setTab}
+      className={cn("gap-3", tab === "agent" && "h-full min-h-0 flex-col")}
+    >
       <TabsList className="w-full">
+        {agent && (
+          <TabsTrigger value="agent" className="flex-1">
+            {t.formatMessage({ defaultMessage: "Agent" })}
+          </TabsTrigger>
+        )}
         <TabsTrigger value="preview" className="flex-1">
           {t.formatMessage({ defaultMessage: "Preview" })}
         </TabsTrigger>
@@ -75,6 +97,16 @@ export function DocumentSidePanel({
           {t.formatMessage({ defaultMessage: "Versions" })}
         </TabsTrigger>
       </TabsList>
+      {agent && (
+        // Kept mounted: the conversation survives a look at the preview.
+        <TabsContent
+          value="agent"
+          forceMount
+          className="bg-background -mx-4 flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border data-[state=inactive]:hidden"
+        >
+          {agent}
+        </TabsContent>
+      )}
       <TabsContent value="preview">
         <PdfPreview key={version.id} version={version} />
       </TabsContent>

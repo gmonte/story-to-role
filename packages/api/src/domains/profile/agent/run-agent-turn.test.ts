@@ -5,6 +5,9 @@ import { MockLanguageModelV3 } from "ai/test";
 import { eq } from "drizzle-orm";
 import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { AgentChatRepository } from "@repo/api/domains/agents/agent-chat-repository";
+import { AgentChatService } from "@repo/api/domains/agents/agent-chat-service";
+import { composeAgentMessage } from "@repo/api/domains/agents/agent-message";
 import { CareerService } from "@repo/api/domains/career/career-service";
 import { creditCap } from "@repo/api/domains/credits/credit-pricing";
 import { creditEntriesTable } from "@repo/api/domains/credits/db/credits-tables";
@@ -23,9 +26,6 @@ import { getUserCipher } from "@repo/api/domains/encryption/user-cipher";
 
 import { ProfileRepository } from "../profile-repository";
 import { ProfileService } from "../profile-service";
-import { AgentChatRepository } from "./agent-chat-repository";
-import { AgentChatService } from "./agent-chat-service";
-import { composeAgentMessage } from "./agent-message";
 import { runAgentTurn } from "./run-agent-turn";
 
 vi.mock("@repo/common/env/web.env", () => ({

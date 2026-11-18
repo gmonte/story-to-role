@@ -15,7 +15,7 @@ import {
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEditor, type Editor } from "@tiptap/react";
 
-import type { AgentAttachment } from "@repo/api/domains/profile/agent/agent-message";
+import type { AgentAttachment } from "@repo/api/domains/agents/agent-message";
 import { useTranslation } from "@repo/intl/use-translation";
 import {
   parseBlocks,

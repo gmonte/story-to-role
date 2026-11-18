@@ -72,7 +72,7 @@ export function PublishDialog({
       label: t.formatMessage(
         {
           defaultMessage:
-            "{count, plural, one {# quality review note} other {# quality review notes}}",
+            "{count, plural, =0 {No quality review notes} one {# quality review note} other {# quality review notes}}",
         },
         { count: reviewFindings.length }
       ),
@@ -82,7 +82,7 @@ export function PublishDialog({
       label: t.formatMessage(
         {
           defaultMessage:
-            "{count, plural, one {# suggestion waiting for your answer} other {# suggestions waiting for your answer}}",
+            "{count, plural, =0 {No suggestions waiting} one {# suggestion waiting for your answer} other {# suggestions waiting for your answer}}",
         },
         { count: waitingSuggestions.length }
       ),
@@ -91,7 +91,8 @@ export function PublishDialog({
       count: contentFindings.length,
       label: t.formatMessage(
         {
-          defaultMessage: "{count, plural, one {# finding} other {# findings}}",
+          defaultMessage:
+            "{count, plural, =0 {No findings} one {# finding} other {# findings}}",
         },
         { count: contentFindings.length }
       ),

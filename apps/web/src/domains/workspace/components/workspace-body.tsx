@@ -109,7 +109,9 @@ export function WorkspaceBody({
 
   return (
     <div ref={container} className="flex min-h-0 flex-1">
-      <main className="flex min-w-0 flex-1 flex-col">{chat}</main>
+      {/* The main column keeps room to work: the columns beside it give way
+          (down to their minimum) when the screen is too narrow for all. */}
+      <main className="flex min-w-[40rem] flex-1 flex-col">{chat}</main>
       {panel && (
         <Divider onPointerDown={(event) => startDrag(event, "panel")} />
       )}
@@ -117,11 +119,11 @@ export function WorkspaceBody({
         // A panel that renders nothing (My career before the privacy notice)
         // leaves no empty column behind.
         <aside
-          style={{ width: panelWidth }}
+          style={{ width: panelWidth, minWidth: minPanel }}
           className={
             flushPanel
-              ? "bg-muted/30 hidden max-w-[50vw] shrink-0 overflow-hidden empty:hidden lg:block"
-              : "bg-muted/30 hidden max-w-[50vw] shrink-0 overflow-y-auto p-4 empty:hidden lg:block"
+              ? "bg-muted/30 hidden max-w-[50vw] overflow-hidden empty:hidden lg:block"
+              : "bg-muted/30 hidden max-w-[50vw] overflow-y-auto p-4 empty:hidden lg:block"
           }
         >
           {panel}
@@ -132,8 +134,8 @@ export function WorkspaceBody({
       )}
       {previewOpen && (
         <aside
-          style={{ width }}
-          className="bg-background hidden max-w-[60vw] shrink-0 border-l empty:hidden lg:block"
+          style={{ width, minWidth: minPreview }}
+          className="bg-background hidden max-w-[60vw] empty:hidden lg:block"
         >
           {preview}
         </aside>

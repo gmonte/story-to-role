@@ -185,7 +185,7 @@ function lengthRules(settings: GenerationSettings) {
     keep: "A very old position is written like an older one.",
   }[settings.veryOld];
   return [
-    `- At most ${settings.resumeMaxPages} A4 page(s). A summary of 3 to 4 lines. Up to ${settings.bulletsRecent} bullet(s) for a recent position, up to ${settings.bulletsOlder} for an older one; put first the bullets that answer the opening, since code keeps the first ones.`,
+    `- A summary of 3 to 4 lines. Exactly ${settings.bulletsRecent} bullet(s) for each recent position and exactly ${settings.bulletsOlder} for each older one, fewer only when its profile lines don't hold that many distinct facts; put first the bullets that answer the opening. Don't drop bullets to save space: the resume must fit ${settings.resumeMaxPages} A4 page(s), and code makes it fit by removing the oldest positions, never by thinning the recent ones.`,
     `- ${veryOld} For every other position \`relevance\` is null.`,
   ];
 }

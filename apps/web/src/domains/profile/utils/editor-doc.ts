@@ -82,7 +82,11 @@ export function blockPositions(doc: ProseMirrorNode) {
 
 /** The document's `#` title and the template's `##` sections can't be edited. */
 export function isLockedHeading(level: number, text: string) {
-  return level === 1 || (level === 2 && sectionKeyOf(text) !== null);
+  if (level === 1) return true;
+  if (level !== 2) return false;
+  const key = sectionKeyOf(text);
+  // Addenda is no longer read: the user may delete it once it's emptied.
+  return key !== null && key !== "addenda";
 }
 
 /** The ordered recognised headings (level and text) of a list of blocks. */

@@ -458,6 +458,7 @@ export function ProfileDocument() {
           const line = finding.line;
           return {
             message,
+            finding,
             fix: finding.fixable ? () => fix(finding) : undefined,
             talk:
               line === null

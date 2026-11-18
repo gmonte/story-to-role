@@ -6,10 +6,15 @@ import type { Editor } from "@tiptap/core";
 import { Sparkles, Wand2 } from "lucide-react";
 
 import { useTranslation } from "@repo/intl/use-translation";
+import type { ProfileFinding } from "@repo/api/domains/profile/truth/lint";
 import { Button } from "@repo/web/components/ui/button";
+
+import { FindingQuickActions } from "./finding-quick-actions";
 
 export type FindingCardInfo = {
   message: string;
+  /** The linter's finding, for its quick actions; absent on review notes. */
+  finding?: ProfileFinding;
   /** Applies the fix; absent when the finding isn't fixable. */
   fix?: () => void;
   /** Starts a talk with the agent; absent where there is no agent. */
@@ -120,8 +125,11 @@ export function FindingHoverCard({
       }}
     >
       <p>{info.message}</p>
-      {(info.fix ?? info.talk) && (
-        <div className="flex items-center gap-1">
+      {(info.fix ?? info.talk ?? info.finding) && (
+        <div className="flex flex-wrap items-center gap-1">
+          {info.finding && (
+            <FindingQuickActions finding={info.finding} onApplied={close} />
+          )}
           {info.fix && (
             <Button
               size="sm"

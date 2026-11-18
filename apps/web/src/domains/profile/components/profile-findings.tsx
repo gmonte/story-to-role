@@ -9,6 +9,7 @@ import type { ProfileFinding } from "@repo/api/domains/profile/truth/lint";
 import { Button } from "@repo/web/components/ui/button";
 import { cn } from "@repo/web/lib/utils";
 
+import { FindingQuickActions } from "./finding-quick-actions";
 import { useProfileLabels } from "../hooks/use-profile-labels";
 import { useProfileEditor } from "./profile-editor-context";
 
@@ -54,7 +55,7 @@ export function ProfileFindings() {
       key={`${finding.code}-${finding.line}-${finding.from}-${index}`}
       className="group"
     >
-      <div className="flex items-start gap-1">
+      <div className="flex flex-wrap items-start gap-1">
         <button
           type="button"
           onClick={() =>
@@ -88,6 +89,7 @@ export function ProfileFindings() {
             <MessageSquare className="size-3.5" />
           </button>
         )}
+        <FindingQuickActions finding={finding} />
         {finding.fixable && (
           <Button
             size="sm"

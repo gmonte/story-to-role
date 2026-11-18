@@ -23,6 +23,10 @@ import {
 } from "@repo/api/domains/profile/truth/blocks";
 import { fixFormat, fixFinding } from "@repo/api/domains/profile/truth/fix";
 import {
+  quickActionsFor,
+  type QuickAction,
+} from "@repo/api/domains/profile/truth/quick-fix";
+import {
   insertEntry,
   setCompetencyLevel,
   type ProfileEntry,
@@ -94,6 +98,10 @@ type ProfileEditorState = {
   // Set by the document: opens its dialog to write an entry of that kind.
   entryOpenerRef: RefObject<((kind: ProfileEntryKind) => void) | null>;
   fix: (finding: ProfileFinding) => void;
+  /** The one-click edits a finding offers, none when it has no such edit. */
+  quickActions: (finding: ProfileFinding) => QuickAction[];
+  /** Applies one of them as a single undo step and goes to its line. */
+  applyQuickAction: (action: QuickAction) => void;
   fixWholeFormat: () => void;
   goToLine: (line: number, range?: { from: number; to: number }) => void;
   // The last validation's findings, where their passages are now.
@@ -615,6 +623,20 @@ export function ProfileEditorProvider({
           candidate.from === finding.from
       );
       if (match) applyBlocks(editor, fixFinding(fresh, match));
+    },
+    quickActions: (finding) =>
+      quickActionsFor(finding, blocks, structure.language),
+    applyQuickAction: (action) => {
+      if (!editor) return;
+      // The action was computed from the last lint; typing since makes it stale.
+      if (JSON.stringify(currentBlocks()) !== JSON.stringify(blocks)) return;
+      applyBlocks(editor, action.blocks);
+      requestAnimationFrame(() => {
+        goToLine(action.line);
+        // A label waiting for its value gets the space after the colon.
+        if (action.blocks[action.line]?.text.endsWith(":"))
+          editor.commands.insertContent(" ");
+      });
     },
     suggestions,
     acceptSuggestions,

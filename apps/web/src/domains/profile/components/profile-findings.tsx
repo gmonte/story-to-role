@@ -41,6 +41,8 @@ export function ProfileFindings() {
     ignored,
     ignoreFinding,
     restoreFinding,
+    ignoredReviewFindings,
+    restoreReviewFinding,
   } = useProfileEditor();
   const [showAll, setShowAll] = useState(false);
   const [open, setOpen] = useState(true);
@@ -50,7 +52,8 @@ export function ProfileFindings() {
   const content = findings.filter((f) => f.kind === "content");
   const anyFixable = findings.some((f) => f.fixable);
   // The ignored ones wait here, apart from the list and its count.
-  const ignoredGroup = ignored.length > 0 && (
+  const ignoredCount = ignored.length + ignoredReviewFindings.length;
+  const ignoredGroup = ignoredCount > 0 && (
     <div className="mt-2">
       <button
         type="button"
@@ -64,7 +67,7 @@ export function ProfileFindings() {
         )}
         {t.formatMessage(
           { defaultMessage: "Ignored ({count, number})" },
-          { count: ignored.length }
+          { count: ignoredCount }
         )}
       </button>
       {showIgnored && (
@@ -82,6 +85,24 @@ export function ProfileFindings() {
                 variant="ghost"
                 className="h-6 px-1.5 text-xs"
                 onClick={() => restoreFinding(finding)}
+              >
+                {t.formatMessage({ defaultMessage: "Restore" })}
+              </Button>
+            </li>
+          ))}
+          {ignoredReviewFindings.map((note, index) => (
+            <li
+              key={`review-${note.quote}-${index}`}
+              className="flex items-start gap-1"
+            >
+              <span className="text-muted-foreground flex-1 px-2 py-1 text-xs line-through">
+                {note.message}
+              </span>
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-6 px-1.5 text-xs"
+                onClick={() => restoreReviewFinding(note)}
               >
                 {t.formatMessage({ defaultMessage: "Restore" })}
               </Button>

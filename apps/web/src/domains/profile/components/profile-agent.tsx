@@ -121,6 +121,7 @@ function Conversation({
     clearAgentQuote,
     clearAgentAttachment,
     refreshSuggestions,
+    refreshDismissed,
     suggestions,
     goToLine,
     scrollToLine,
@@ -161,10 +162,12 @@ function Conversation({
     onData: (part) => {
       // A suggestion was just proposed: it shows in the text at once.
       if (part.type === "data-suggestion") void refreshSuggestions();
+      if (part.type === "data-review-resolved") void refreshDismissed();
     },
     onFinish: () => {
       // Once the turn's suggestions are loaded, show the first new one.
       void refreshSuggestions().then(() => setTurnDone((n) => n + 1));
+      void refreshDismissed();
       void queryClient.invalidateQueries({ queryKey: trpc.credits.pathKey() });
     },
   });

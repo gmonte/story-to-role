@@ -119,6 +119,7 @@ export function ProfileDocument() {
     structure,
     fix,
     ignoreFinding,
+    ignoreReviewFinding,
   } = useProfileEditor();
   const [selection, setSelection] = useState<{
     text: string;
@@ -444,6 +445,7 @@ export function ProfileDocument() {
             if (!finding) return null;
             return {
               message: finding.message,
+              ignore: () => ignoreReviewFinding(finding),
               talk: () =>
                 talkAbout({
                   quote: blocks[finding.line]?.text ?? "",

@@ -104,6 +104,12 @@ export const profileAgent = chat.agent({
             data: {},
             transient: true,
           }),
+        reportReviewResolved: () =>
+          chat.response.write({
+            type: "data-review-resolved",
+            data: {},
+            transient: true,
+          }),
       },
       { chatId, messages, signal }
     );

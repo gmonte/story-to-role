@@ -19,7 +19,9 @@ import {
 } from "@repo/api/test/pglite";
 import type { MisuseGuard } from "@repo/api/tools/misuse-guard";
 import type { RateLimiter } from "@repo/api/tools/rate-limit";
+import { getUserCipher } from "@repo/api/domains/encryption/user-cipher";
 
+import { ProfileRepository } from "../profile-repository";
 import { ProfileService } from "../profile-service";
 import { AgentChatService } from "./agent-chat-service";
 import { composeAgentMessage } from "./agent-message";
@@ -158,6 +160,29 @@ async function setup({ credits }: { credits?: number } = {}) {
     recordBlocked,
   };
   const reported: string[] = [];
+  const reviewResolved = vi.fn();
+  // A completed validation with these findings, as the task leaves it.
+  const seedReport = async (
+    findings: Array<{
+      kind: "noImpact" | "unknown";
+      quote: string;
+      message: string;
+    }>
+  ) => {
+    const repository = new ProfileRepository(db);
+    const document = await repository.findDocument(user.id, "profile");
+    const cipher = await getUserCipher(db, user.id);
+    await repository.insertValidation({
+      documentId: document.id,
+      draftRevision: document.draftRevision,
+      status: "completed",
+      completedAt: new Date(),
+      encryptedReport: cipher.encrypt(
+        JSON.stringify({ findings, competencies: [], reviewed: [] })
+      ),
+    });
+    return { document, cipher };
+  };
   gate = fakeProviderPackage({ object: () => ({ verdict: "on_topic" }) });
 
   async function say(
@@ -174,6 +199,7 @@ async function setup({ credits }: { credits?: number } = {}) {
         streamText,
         model: () => model,
         reportSuggestion: (id) => reported.push(id),
+        reportReviewResolved: reviewResolved,
       },
       { chatId, messages: [...earlier, { role: "user", content: text }] }
     );
@@ -183,7 +209,17 @@ async function setup({ credits }: { credits?: number } = {}) {
     return { text: reply, turn };
   }
 
-  return { db, user, chatId, profiles, recordBlocked, reported, say };
+  return {
+    db,
+    user,
+    chatId,
+    profiles,
+    recordBlocked,
+    reported,
+    reviewResolved,
+    seedReport,
+    say,
+  };
 }
 
 const systemOf = (prompt: unknown) =>
@@ -420,6 +456,32 @@ describe("the profile agent", () => {
     );
     await ctx.say("Uns 40%, pelo que eu lembro.", second.model);
     expect(await ctx.profiles.listSuggestions(ctx.user.id)).toHaveLength(1);
+  });
+
+  it("lists the open review notes and ignores one through its tool", async () => {
+    const ctx = await setup();
+    const { document, cipher } = await ctx.seedReport([
+      { kind: "noImpact", quote: "Dev backend.", message: "O que mudou?" },
+      { kind: "unknown", quote: "Python", message: "Qual o time?" },
+    ]);
+    expect(document).toBeTruthy();
+    expect(cipher).toBeTruthy();
+    const { model, prompts } = agentModel(
+      [[{ name: "resolve_review_note", input: { note: 2, reason: "r" } }]],
+      "Ignorei a nota."
+    );
+    await ctx.say("Já respondi isso no perfil.", model);
+    const system = systemOf(prompts[0]);
+    expect(system).toContain("O que mudou?");
+    expect(system).toContain("Qual o time?");
+    expect(system).toContain("resolve_review_note");
+    expect(ctx.reviewResolved).toHaveBeenCalledTimes(1);
+    const notes = await ctx.profiles.unresolvedReviewNotes(ctx.user.id);
+    expect(notes.map((note) => note.message)).toEqual(["O que mudou?"]);
+    // The next turn no longer lists the ignored one.
+    const next = agentModel([], "Ok.");
+    await ctx.say("Oi", next.model);
+    expect(systemOf(next.prompts[0])).not.toContain("Qual o time?");
   });
 
   it("replaces a waiting suggestion with a newer one on the same lines", async () => {

@@ -22,6 +22,7 @@ import type { RateLimiter } from "@repo/api/tools/rate-limit";
 import { findQuote } from "@repo/api/utils/text/verify-quote";
 
 import { ProfileRepository } from "../profile-repository";
+import { ProfileService } from "../profile-service";
 import {
   proposeSuggestion,
   readSuggestionContent,
@@ -58,6 +59,8 @@ export type AgentTurnDeps = {
   model?: (modelId: string) => LanguageModel;
   // A suggestion was just proposed: the page shows it in the text at once.
   reportSuggestion: (profileSuggestionId: string) => void;
+  // A review note was just resolved: the page refreshes the draft's keys.
+  reportReviewResolved?: () => void;
 };
 
 // How many rejected suggestions the agent is reminded of.
@@ -238,6 +241,8 @@ export async function runAgentTurn(
       )
     ).map((row) => readSuggestionContent(cipher, row));
 
+    const profileService = new ProfileService(db);
+    const reviewNotes = await profileService.unresolvedReviewNotes(userId);
     const parts = listParts(blocks);
     const extract = extractProfile(blocks);
     const sources = userWords(input.messages);
@@ -317,6 +322,30 @@ export async function runAgentTurn(
           return result;
         },
       }),
+      resolve_review_note: tool({
+        description:
+          "Ignore (dismiss) one open quality-review note, by its number in the list: only when the profile already answers it somewhere, or the person said it doesn't apply. The note leaves the list and the underline; the profile is not changed.",
+        inputSchema: z.object({
+          note: z
+            .number()
+            .int()
+            .describe("The note's number, as in the open notes list"),
+          reason: z
+            .string()
+            .describe("Where the profile answers it, or why it doesn't apply"),
+        }),
+        execute: async ({ note }) => {
+          const found = reviewNotes[note - 1];
+          if (!found) return { error: "No such note; use a number listed." };
+          await profileService.setFindingDismissed({
+            userId,
+            findingKey: found.key,
+            dismissed: true,
+          });
+          deps.reportReviewResolved?.();
+          return { resolved: true };
+        },
+      }),
     };
 
     return {
@@ -331,6 +360,7 @@ export async function runAgentTurn(
           quote: quotedPassage(blocks, parts, input.messages),
           pending,
           rejected,
+          reviewNotes,
         }),
         messages: startingWithUser(
           withoutReasoning(

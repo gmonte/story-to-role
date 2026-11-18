@@ -12,6 +12,7 @@ import {
   lintPreferences,
   preferencesTemplate,
 } from "./preferences/preferences";
+import { reviewNoteKey } from "./truth/finding-key";
 import { ProfileRepository } from "./profile-repository";
 import type {
   ProfileDocumentKind,
@@ -487,6 +488,28 @@ export class ProfileService {
           )
         : null,
     };
+  }
+
+  /**
+   * The quality-review notes of the last completed validation that the
+   * user hasn't resolved, each with its key (`reviewNoteKey`).
+   */
+  async unresolvedReviewNotes(userId: string) {
+    const repository = new ProfileRepository(this.db);
+    const document = await repository.findDocument(userId, profileKind);
+    const validation = document
+      ? await repository.latestValidation(document.id)
+      : undefined;
+    if (!document || validation?.status !== "completed") return [];
+    if (!validation.encryptedReport) return [];
+    const cipher = await getUserCipher(this.db, userId);
+    const report = validationReportSchema.parse(
+      JSON.parse(cipher.decrypt(validation.encryptedReport))
+    );
+    const resolved = new Set(document.dismissedFindings);
+    return report.findings
+      .map((finding) => ({ ...finding, key: reviewNoteKey(finding) }))
+      .filter((note) => !resolved.has(note.key));
   }
 
   async listVersions(userId: string, kind = profileKind) {

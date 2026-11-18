@@ -26,12 +26,14 @@ export type AgentPromptInput = {
   } | null;
   pending: SuggestionContent[];
   rejected: SuggestionContent[];
+  // The quality-review notes not yet resolved, numbered from 1 in order.
+  reviewNotes: Array<{ message: string; quote: string }>;
 };
 
 const list = (items: string[]) =>
   items.length ? items.map((item) => `- ${item}`).join("\n") : "(none)";
 
-const tagNames = "passage|part|index|gaps|rules|waiting|rejected";
+const tagNames = "passage|part|index|gaps|rules|waiting|rejected|notes";
 
 /**
  * The person's text between tags, as data: a tag of ours written inside it
@@ -72,6 +74,7 @@ export function buildAgentPrompt(input: AgentPromptInput) {
     "",
     "## A finding or a review being discussed",
     "- A user message may open with lines starting “~ ”: “~ [finding] …” is a finding of the profile's linter, “~ [review] …” a note of the quality review, and the person is asking about it (their own words, if any, follow). Treat it as the topic, not as something they wrote: say what it means in a sentence, then propose how to resolve it (ask what you need first, if you must). With no words of their own, propose the resolution right away.",
+    "- The quality review's open notes are listed below, numbered. Call resolve_review_note with a note's number when the profile already answers it somewhere (any section; read the part with read_part first if you haven't seen it) or when the person says it doesn't apply, and say in your answer that you ignored (dismissed) the note, and why. Never resolve a note the profile doesn't answer: propose the change that answers it instead. Ignoring a note changes nothing in the profile and the person can restore it.",
     "",
     "## How the profile changes",
     "- You change nothing yourself. Propose each change with suggest_change: the person sees it in the text as a tracked change and accepts or rejects it. Then say in one sentence what you proposed and that it waits for them in the text. Never say a change was made.",
@@ -119,6 +122,21 @@ export function buildAgentPrompt(input: AgentPromptInput) {
         )
       )
     ),
+    ...(input.reviewNotes.length
+      ? [
+          "",
+          "## Open quality-review notes (number | note | passage it points at)",
+          data(
+            "notes",
+            input.reviewNotes
+              .map(
+                (note, index) =>
+                  `${index + 1} | ${oneLine(note.message)} | ${oneLine(note.quote)}`
+              )
+              .join("\n")
+          ),
+        ]
+      : []),
     ...(input.rejected.length
       ? [
           "",

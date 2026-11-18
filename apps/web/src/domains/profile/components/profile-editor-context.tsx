@@ -35,6 +35,7 @@ import {
 } from "@repo/api/domains/profile/truth/insert";
 import {
   findingKey,
+  reviewNoteKey,
   withoutDismissed,
 } from "@repo/api/domains/profile/truth/finding-key";
 import {
@@ -124,6 +125,11 @@ type ProfileEditorState = {
   goToLine: (line: number, range?: { from: number; to: number }) => void;
   // The last validation's findings, where their passages are now.
   reviewFindings: LocatedReviewFinding[];
+  /** Review notes the user ignored, kept apart so they can be restored. */
+  ignoredReviewFindings: LocatedReviewFinding[];
+  ignoreReviewFinding: (note: LocatedReviewFinding) => void;
+  restoreReviewFinding: (note: LocatedReviewFinding) => void;
+  refreshDismissed: () => Promise<void>;
   applyCompetencyLevel: (name: string, level: CompetencyLevel) => void;
   // The suggestions waiting, with the lines each would replace now (null
   // when its lines were edited away).
@@ -311,7 +317,9 @@ export function ProfileEditorProvider({
   );
   const setIgnored = (finding: ProfileFinding, ignore: boolean) => {
     if (finding.kind === "format") return;
-    const key = findingKey(finding, blocks);
+    setKeyIgnored(findingKey(finding, blocks), ignore);
+  };
+  const setKeyIgnored = (key: string, ignore: boolean) => {
     setDismissed((keys) =>
       ignore
         ? [...keys.filter((existing) => existing !== key), key]
@@ -327,10 +335,27 @@ export function ProfileEditorProvider({
     );
   };
   const validation = useLatestValidation();
-  const reviewFindings = useMemo(
-    () => locateReviewFindings(validation.data?.report, blocks),
-    [validation.data, blocks]
-  );
+  // Review notes are ignored by their own key, in the same list.
+  const { reviewFindings, ignoredReviewFindings } = useMemo(() => {
+    const all = locateReviewFindings(validation.data?.report, blocks);
+    const hidden = new Set(dismissed);
+    return {
+      reviewFindings: all.filter((note) => !hidden.has(reviewNoteKey(note))),
+      ignoredReviewFindings: all.filter((note) =>
+        hidden.has(reviewNoteKey(note))
+      ),
+    };
+  }, [validation.data, blocks, dismissed]);
+  const setReviewIgnored = (note: LocatedReviewFinding, ignore: boolean) =>
+    setKeyIgnored(reviewNoteKey(note), ignore);
+  // The agent ignored a note: the draft's keys are read again.
+  const refreshDismissed = async () => {
+    const fresh = await queryClient.fetchQuery({
+      ...trpc.profile.draft.queryOptions({ kind: "profile" }),
+      staleTime: 0,
+    });
+    setDismissed(fresh.dismissedFindings);
+  };
 
   const suggestionsQuery = useQuery(trpc.profile.suggestions.queryOptions({}));
   const suggestions = useMemo<LocatedSuggestion[]>(
@@ -767,6 +792,10 @@ export function ProfileEditorProvider({
     clearAgentAttachment: () =>
       setAgentTopic((topic) => topic && { ...topic, attachment: null }),
     reviewFindings,
+    ignoredReviewFindings,
+    ignoreReviewFinding: (note) => setReviewIgnored(note, true),
+    restoreReviewFinding: (note) => setReviewIgnored(note, false),
+    refreshDismissed,
     applyCompetencyLevel: (name, level) => {
       if (!editor) return;
       applyBlocks(editor, setCompetencyLevel(currentBlocks(), name, level));

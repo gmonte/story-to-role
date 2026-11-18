@@ -78,6 +78,15 @@ export function findingKey(finding: ProfileFinding, blocks: ProfileBlock[]) {
   ).slice(0, 16);
 }
 
+/**
+ * The key a resolved review note is stored under (with the ignored
+ * findings): its message and its quote. A new validation writes new notes,
+ * so the keys of notes that no longer exist are harmless.
+ */
+export function reviewNoteKey(note: { message: string; quote: string }) {
+  return sha256Hex(`review | ${note.message} | ${note.quote}`).slice(0, 16);
+}
+
 /** Findings the user hasn't ignored; format findings can't be ignored. */
 export function withoutDismissed(
   findings: ProfileFinding[],

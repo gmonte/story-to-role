@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 
-import { Check, MessageSquare, X } from "lucide-react";
+import { Check, EyeOff, MessageSquare, X } from "lucide-react";
 
 import { useTranslation } from "@repo/intl/use-translation";
 import { extractProfile } from "@repo/api/domains/profile/truth/extract";
@@ -22,8 +22,14 @@ const labelSeparator = ": ";
 export function ProfileReview() {
   const t = useTranslation();
   const { reviewKinds, levelLabels } = useProfileLabels();
-  const { reviewFindings, goToLine, blocks, applyCompetencyLevel, talkAbout } =
-    useProfileEditor();
+  const {
+    reviewFindings,
+    ignoreReviewFinding,
+    goToLine,
+    blocks,
+    applyCompetencyLevel,
+    talkAbout,
+  } = useProfileEditor();
   const validation = useLatestValidation();
   const [rejected, setRejected] = useState<string[]>([]);
   const report = validation.data?.report;
@@ -73,20 +79,34 @@ export function ProfileReview() {
               </span>
               <span className="text-muted-foreground">{finding.message}</span>
             </button>
-            <button
-              type="button"
-              className="text-primary flex items-center gap-1 px-2 pb-1 text-xs hover:underline"
-              onClick={() =>
-                talkAbout({
-                  quote: finding.quote,
-                  line: finding.line,
-                  attachment: { kind: "review", text: finding.message },
-                })
-              }
-            >
-              <MessageSquare className="size-3" />
-              {t.formatMessage({ defaultMessage: "Talk about this" })}
-            </button>
+            <div className="flex items-center gap-1">
+              <button
+                type="button"
+                className="text-primary flex items-center gap-1 px-2 pb-1 text-xs hover:underline"
+                onClick={() =>
+                  talkAbout({
+                    quote: finding.quote,
+                    line: finding.line,
+                    attachment: { kind: "review", text: finding.message },
+                  })
+                }
+              >
+                <MessageSquare className="size-3" />
+                {t.formatMessage({ defaultMessage: "Talk about this" })}
+              </button>
+              <Button
+                size="sm"
+                variant="ghost"
+                className="text-muted-foreground h-6 px-2 text-xs"
+                title={t.formatMessage({
+                  defaultMessage: "This finding doesn't apply: stop showing it",
+                })}
+                onClick={() => ignoreReviewFinding(finding)}
+              >
+                <EyeOff className="size-3" />
+                {t.formatMessage({ defaultMessage: "Ignore" })}
+              </Button>
+            </div>
           </li>
         ))}
       </ul>

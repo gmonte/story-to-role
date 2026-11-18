@@ -178,7 +178,7 @@ export function ResumeDocument({
         {header.city && <Text style={styles.contacts}>{header.city}</Text>}
         {content.sections.map((section) => (
           <View key={section.kind} style={styles.section}>
-            <Text style={styles.sectionTitle} minPresenceAhead={30}>
+            <Text style={styles.sectionTitle} minPresenceAhead={60}>
               {sectionTitles[language][section.kind]}
             </Text>
             <SectionBody section={section} language={language} />

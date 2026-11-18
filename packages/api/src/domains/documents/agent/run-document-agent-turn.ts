@@ -135,6 +135,7 @@ export async function runDocumentAgentTurn(
     // What waits for the user, this turn's suggestions included: a newer
     // one on the same lines takes the older one's place.
     let waiting = [...context.pending];
+    const turnChangeIds = new Set<string>();
     let proposing: Promise<unknown> = Promise.resolve();
     const tools = {
       read_part: tool({
@@ -219,6 +220,7 @@ export async function runDocumentAgentTurn(
                   .join("\n"),
               },
               pending: waiting,
+              sameTurnIds: turnChangeIds,
             });
             if (!proposed.ok) return { error: refusalText(proposed.refusal) };
             waiting = [
@@ -227,6 +229,7 @@ export async function runDocumentAgentTurn(
               ),
               proposed.change,
             ];
+            turnChangeIds.add(proposed.change.id);
             deps.reportChange?.(proposed.change.id);
             return {
               proposed: true,

@@ -27,6 +27,66 @@ import {
 } from "./document-change";
 import { userRequested, type UserRequest } from "./requested-change";
 
+const sameLines = (a: string[], b: string[]) =>
+  a.length === b.length &&
+  [...a].sort().join("\n") === [...b].sort().join("\n");
+
+/**
+ * Moving or swapping lines is one change. When the new change and a
+ * change of the same turn waiting in the same part touch adjacent lines
+ * and, together, only put those lines in another order, the two become
+ * one change over all the lines, in the new order (the older one is then
+ * superseded, as it overlaps). Otherwise null: the two stay apart.
+ */
+function mergeReorder(
+  content: ChangeableContent,
+  change: ProposedChange,
+  input: {
+    pending?: Array<DocumentChangeContent & { id: string }>;
+    sameTurnIds?: ReadonlySet<string>;
+  }
+): ProposedChange | null {
+  const mine = locateDocumentChange(content, change);
+  if (!mine || mine.end === mine.start || !input.sameTurnIds?.size) return null;
+  for (const other of input.pending ?? []) {
+    if (other.part !== change.part || !input.sameTurnIds.has(other.id))
+      continue;
+    const theirs = locateDocumentChange(content, other);
+    if (!theirs || theirs.end === theirs.start) continue;
+    const [first, second] =
+      theirs.end === mine.start
+        ? [
+            { range: theirs, replace: other.replace },
+            { range: mine, replace: change.replace },
+          ]
+        : mine.end === theirs.start
+          ? [
+              { range: mine, replace: change.replace },
+              { range: theirs, replace: other.replace },
+            ]
+          : [];
+    if (!first || !second) continue;
+    const lines = mine.part.lines
+      .slice(first.range.start, second.range.end)
+      .map((line) => line.text);
+    const written = [
+      ...splitChangeLines(first.replace),
+      ...splitChangeLines(second.replace),
+    ];
+    if (!sameLines(lines, written)) continue;
+    const merged = {
+      part: change.part,
+      find: lines.join("\n"),
+      replace: written.join("\n"),
+    };
+    if (merged.find === merged.replace || changeViolation(content, merged)) {
+      continue;
+    }
+    return merged;
+  }
+  return null;
+}
+
 export function readChangeContent(
   cipher: UserCipher,
   row: { encryptedContent: string }
@@ -124,6 +184,9 @@ export async function proposeChange(input: {
   // The changes already waiting: two can't rewrite the same lines, so the
   // new one takes the place of those it overlaps.
   pending?: Array<DocumentChangeContent & { id: string }>;
+  // The ids of the waiting changes proposed in this same turn: one that
+  // reorders adjacent lines with the new one is merged into it.
+  sameTurnIds?: ReadonlySet<string>;
 }): Promise<
   | {
       ok: true;
@@ -149,9 +212,12 @@ export async function proposeChange(input: {
   ) {
     return refuse({ kind: "empty" });
   }
-  const change = normalizeDocumentChange(input.content, proposed);
-  if (!change) return refuse({ kind: "notFound" });
-  if (change.find === change.replace) return refuse({ kind: "unchanged" });
+  const normalized = normalizeDocumentChange(input.content, proposed);
+  if (!normalized) return refuse({ kind: "notFound" });
+  const change = mergeReorder(input.content, normalized, input) ?? normalized;
+  if (normalized.find === normalized.replace) {
+    return refuse({ kind: "unchanged" });
+  }
   const violation = changeViolation(input.content, change);
   if (violation) return refuse({ kind: violation });
   if (

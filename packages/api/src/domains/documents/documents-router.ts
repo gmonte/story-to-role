@@ -23,7 +23,7 @@ import {
   openingDocumentsSchema,
   snapshotSummarySchema,
 } from "./schemas/document-view";
-import { documentChangeSchema } from "./schemas/document-change";
+import { listedDocumentChangeSchema } from "./schemas/document-change";
 import { documentContentSchema } from "./schemas/document-content";
 import { resumeSectionKindSchema } from "./schemas/resume-content";
 
@@ -147,7 +147,7 @@ export const documentsRouter = createTRPCRouter({
       )
     )
     .input(z.object({ versionId: z.uuid() }))
-    .output(z.array(documentChangeSchema))
+    .output(z.array(listedDocumentChangeSchema))
     .query(({ ctx, input }) =>
       new ChangesService(db).listChanges({ userId: ctx.userId, ...input })
     ),

@@ -85,20 +85,49 @@ export function isLockedHeading(level: number, text: string) {
   return level === 1 || (level === 2 && sectionKeyOf(text) !== null);
 }
 
-/** The ordered recognised headings (level and text) of a list of blocks. */
+/**
+ * The indexes of the locked headings: the title and the first heading of
+ * each recognised section. A repeated heading is an ordinary line, which
+ * the user can delete (the linter flags it).
+ */
+export function lockedHeadingIndexes(blocks: ProfileBlock[]) {
+  const locked = new Set<number>();
+  const seen = new Set<string>();
+  blocks.forEach((block, index) => {
+    if (block.type !== "heading" || !isLockedHeading(block.level, block.text)) {
+      return;
+    }
+    if (block.level === 2) {
+      const key = sectionKeyOf(block.text)!;
+      if (seen.has(key)) return;
+      seen.add(key);
+    }
+    locked.add(index);
+  });
+  return locked;
+}
+
+/** The ordered locked headings (level and text) of a list of blocks. */
 export function lockedHeadingsOf(blocks: ProfileBlock[]) {
-  return blocks.flatMap((block) =>
-    block.type === "heading" && isLockedHeading(block.level, block.text)
+  const locked = lockedHeadingIndexes(blocks);
+  return blocks.flatMap((block, index) =>
+    block.type === "heading" && locked.has(index)
       ? [`${block.level}:${block.text}`]
       : []
   );
+}
+
+/** Where each locked top-level node of the document starts. */
+export function lockedNodeOffsets(doc: ProseMirrorNode) {
+  const locked = lockedHeadingIndexes(docToBlocks(doc));
+  return blockPositions(doc).filter((_, index) => locked.has(index));
 }
 
 export function lockedHeadings(doc: ProseMirrorNode) {
   return lockedHeadingsOf(docToBlocks(doc));
 }
 
-/** Whether two documents have the same recognised headings, in order. */
+/** Whether two documents have the same locked headings, in order. */
 export function sameLockedHeadings(a: ProseMirrorNode, b: ProseMirrorNode) {
   const first = lockedHeadings(a);
   const second = lockedHeadings(b);

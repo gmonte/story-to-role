@@ -3,6 +3,7 @@ import { experienceKeys, projectKeys } from "./chunks";
 import {
   normalizeLabel,
   profileSectionKeys,
+  sectionKeyOf,
   type ProfileSectionKey,
 } from "./sections";
 import {
@@ -208,6 +209,28 @@ export function locateChange(
 }
 
 /**
+ * An addition's lines without a `##` heading of a recognised section the
+ * document has (or the addition creates): the lines go into that section,
+ * never under a second heading of it. The addition's own part counts as
+ * present, since its heading is made when the part is missing.
+ */
+export function withoutDuplicateHeadings(
+  blocks: ProfileBlock[],
+  part: string,
+  added: ProfileBlock[]
+) {
+  const present = new Set<string>(
+    readStructure(blocks).sections.flatMap((s) => (s.key ? [s.key] : []))
+  );
+  if (profileSectionKeys.some((key) => key === part)) present.add(part);
+  return added.filter((block) => {
+    if (block.type !== "heading" || block.level !== 2) return true;
+    const key = sectionKeyOf(block.text);
+    return !(key && present.has(key));
+  });
+}
+
+/**
  * The change as the document writes it, or null when it doesn't apply: its
  * lines copied from the document, and its replacement shaped like what it
  * replaces. A model often drops the list marker or the indentation, so a
@@ -223,7 +246,14 @@ export function normalizeChange(
   const replacing = range.end > range.start;
   const model = replacing ? blocks[range.start] : blocks[range.start - 1];
   const base = replacing && model?.type === "item" ? model.depth : 0;
-  const proposed = parseFragment(change.replace);
+  const proposed = change.find.trim()
+    ? parseFragment(change.replace)
+    : withoutDuplicateHeadings(
+        blocks,
+        change.part,
+        parseFragment(change.replace)
+      );
+  if (!proposed.length && change.replace.trim()) return null;
   const shallowest = Math.min(
     ...proposed.flatMap((block) => (block.type === "item" ? [block.depth] : []))
   );
@@ -288,7 +318,13 @@ export function applyChange(
   return [
     ...blocks.slice(0, range.start),
     ...(created?.heading ?? []),
-    ...parseFragment(change.replace),
+    ...(change.find.trim()
+      ? parseFragment(change.replace)
+      : withoutDuplicateHeadings(
+          blocks,
+          change.part,
+          parseFragment(change.replace)
+        )),
     ...blocks.slice(range.end),
   ];
 }

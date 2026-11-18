@@ -25,6 +25,7 @@ import {
   blocksToDoc,
   docToBlocks,
   isLockedNode,
+  lockedNodeOffsets,
   sameLockedHeadings,
 } from "./editor-doc";
 
@@ -224,15 +225,14 @@ export const ProfileLockedHeadings = Extension.create({
         props: {
           decorations: (state) => {
             const decorations: Decoration[] = [];
-            state.doc.forEach((node, offset) => {
-              if (isLockedNode(node)) {
-                decorations.push(
-                  Decoration.node(offset, offset + node.nodeSize, {
-                    class: "profile-locked-heading",
-                  })
-                );
-              }
-            });
+            for (const offset of lockedNodeOffsets(state.doc)) {
+              const node = state.doc.nodeAt(offset)!;
+              decorations.push(
+                Decoration.node(offset, offset + node.nodeSize, {
+                  class: "profile-locked-heading",
+                })
+              );
+            }
             return DecorationSet.create(state.doc, decorations);
           },
         },

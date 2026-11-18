@@ -88,7 +88,9 @@ describe("the insert menu", () => {
     expect(markdown).toContain("- Domino: Python, SQL\n");
     expect(
       insert(markdown, { kind: "rule", rule: "neverClaim", text: "liderança" })
-    ).toContain("- Nunca afirmar: liderança\n");
+    ).toContain(
+      "- Nunca afirmar: números que não estejam marcados como [medido]; competências apenas estudadas como experiência profissional, liderança\n"
+    );
   });
 
   it("creates a missing section where it belongs", () => {

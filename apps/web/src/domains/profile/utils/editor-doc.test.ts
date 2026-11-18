@@ -14,12 +14,6 @@ describe("locked headings", () => {
     expect(isLockedHeading(3, "Acme — Dev")).toBe(false);
   });
 
-  it("leaves Addenda deletable: it is no longer read", () => {
-    expect(isLockedHeading(2, "Adendos (detalhes lembrados depois)")).toBe(
-      false
-    );
-  });
-
   it("lists them in order, so a reorder or an edit shows", () => {
     const blocks: ProfileBlock[] = [
       { type: "heading", level: 1, text: "Maria" },

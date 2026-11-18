@@ -48,8 +48,10 @@ import { useTRPC } from "~/tools/trpc/client";
 import {
   loadProfileChat,
   mintProfileChatToken,
+  recoverProfileChatRun,
   startProfileChatSession,
 } from "../actions/profile-agent-actions";
+import { useAnswerWatchdog } from "../hooks/use-answer-watchdog";
 import { maxQuoteCharacters, useProfileEditor } from "./profile-editor-context";
 
 type ChatSession = { publicAccessToken: string; lastEventId?: string };
@@ -133,7 +135,15 @@ function Conversation({
     // A session under way: reconnect to it instead of starting one.
     sessions: session ? { [chatId]: session } : undefined,
   });
-  const { messages, sendMessage, setMessages, status, error, stop } = useChat({
+  const {
+    messages,
+    sendMessage,
+    regenerate,
+    setMessages,
+    status,
+    error,
+    stop,
+  } = useChat({
     id: chatId,
     messages: initialMessages,
     transport,
@@ -208,13 +218,24 @@ function Conversation({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [topicId]);
 
-  // An answer that never starts (its run waiting for a worker, say) gives
-  // up after a minute instead of thinking forever.
+  // An answer that never starts (the run holding the session died, say):
+  // the run is cancelled and the same message goes again, once; if that is
+  // not answered either, the user is asked instead of looping.
+  const resend = async () => {
+    await recoverProfileChatRun({ chatId });
+    await stop();
+    // Same message, same id: the agent doesn't take it twice.
+    await regenerate();
+  };
+  const watchdog = useAnswerWatchdog({
+    status,
+    timeoutMs: agentSettings.answerStartTimeoutMs,
+    recover: resend,
+  });
+  const failed = watchdog.phase === "failed";
   useEffect(() => {
-    if (status !== "submitted") return;
-    const timer = setTimeout(() => void stop(), 60_000);
-    return () => clearTimeout(timer);
-  }, [status, stop]);
+    if (failed) void stop();
+  }, [failed, stop]);
 
   useEffect(() => {
     bottom.current?.scrollIntoView({ block: "end" });
@@ -222,6 +243,7 @@ function Conversation({
 
   async function send(words: string) {
     if (!words.trim() || busy) return;
+    watchdog.reset();
     // The agent reads the saved draft: what was just typed goes first.
     if ((await saveNow()) === null) {
       toast.error(
@@ -369,11 +391,36 @@ function Conversation({
             >
               <Sparkles className="text-primary size-4 motion-safe:animate-pulse" />
               <span className="from-foreground via-muted-foreground to-foreground motion-safe:animate-shimmer bg-linear-to-r bg-[length:200%_100%] bg-clip-text text-transparent">
-                {activity}
+                {watchdog.phase === "recovering"
+                  ? t.formatMessage({
+                      defaultMessage: "Reconnecting to the agent…",
+                    })
+                  : activity}
               </span>
             </li>
           )}
-          {error && (
+          {failed && (
+            <li
+              role="alert"
+              className="text-destructive flex flex-col items-start gap-2 self-start text-sm"
+            >
+              {t.formatMessage({
+                defaultMessage:
+                  "The agent didn't answer. Check your connection and try again.",
+              })}
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => {
+                  watchdog.reset();
+                  void resend().catch(() => watchdog.fail());
+                }}
+              >
+                {t.formatMessage({ defaultMessage: "Try again" })}
+              </Button>
+            </li>
+          )}
+          {error && !failed && (
             // The agent's own message is English-only; this one is the
             // user's language.
             <li className="text-destructive self-start text-sm">

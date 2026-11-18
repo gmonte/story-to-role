@@ -16,6 +16,9 @@ export const agentSettings = {
   // Per model call, thinking included: the model thinks before it answers,
   // and a tight limit spent on thinking left turns with no answer at all.
   maxOutputTokens: 8000,
+  // An answer that hasn't started streaming after this long means the run
+  // holding the session is likely dead: the page recovers once, then asks.
+  answerStartTimeoutMs: 30_000,
 };
 
 export const dayMs = 86_400_000;

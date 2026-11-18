@@ -1,6 +1,6 @@
 "use server";
 
-import { auth } from "@trigger.dev/sdk";
+import { auth, runs } from "@trigger.dev/sdk";
 import { chat } from "@trigger.dev/sdk/ai";
 
 import { AgentChatService } from "@repo/api/domains/profile/agent/agent-chat-service";
@@ -77,4 +77,26 @@ export async function mintProfileChatToken(chatId: string) {
     scopes: { read: { sessions: chatId }, write: { sessions: chatId } },
     expirationTime: "1h",
   });
+}
+
+/**
+ * Cancels the run that holds the conversation's session when it is still
+ * live but not answering (its worker died, say): the next message then
+ * starts a new run on the same session. Only for the conversation's owner.
+ */
+export async function recoverProfileChatRun({ chatId }: { chatId: string }) {
+  await new AgentChatService(db).requireOwn({
+    userId: await requireUser(),
+    chatId,
+  });
+  const live = await runs.list({
+    tag: `chat:${chatId}`,
+    status: ["EXECUTING", "WAITING", "QUEUED", "DEQUEUED"],
+  });
+  let cancelled = 0;
+  for await (const run of live) {
+    await runs.cancel(run.id);
+    cancelled += 1;
+  }
+  return { cancelled };
 }

@@ -32,7 +32,7 @@ The profile follows the method's template. Section names are recognized in Engli
 | Competencies | Four lists: master, use often, occasional experience (professional use, only now and then), studied without professional experience |
 | Languages | `Language — real level` |
 | Known gaps | What the user does not have or has not done, stated plainly |
-| Communication rules | "Never include" (names, clients, codenames, figures, personal data) and "never claim" |
+| Communication rules | "Never include", "never claim" and an optional "Public names" line (`- Public names: Projeto Fênix → plataforma de pagamentos; Banco X → banco de varejo`: `→`, `->` or `=>`, entries split on `;`). The rules govern only the public documents (resume, cover letter, LinkedIn text and their adjustments), never the profile itself, which accepts everything. A "never include" item is a literal term (a name, client, codename or figure: it has an uppercase letter or a digit, or is written in quotes) that code filters out of prompts and outputs of public documents, or a category (any other item, such as "dados bancários"), an instruction handed to the writer that code never matches as words. Items split on commas and semicolons only |
 
 **Addenda.** The method's optional last section (details remembered later) is not part of the template and not read: a detail goes in its proper section. A document that has it (an older profile, an import) still parses; the linter flags each item under it ("Move this to its section"), and nothing deletes the section automatically.
 
@@ -58,10 +58,12 @@ My career is the editor: the document's index on the left (its sections and posi
 
 ### The linter
 
-A deterministic check, plain code, runs on every edit in the browser and again on the server when the draft is saved. Each finding is underlined in the text, with a message and, where it applies, "Fix format" or "Talk about this".
+A deterministic check, plain code, runs on every edit in the browser and again on the server when the draft is saved. **Ignore.** A content finding that doesn't apply (a competency that isn't one, overlapping dates of parallel jobs) can be ignored from its hover card or the findings list: it leaves the list, the count and the underlines, and waits under a collapsed "Ignored (n)" group with "Restore". It is stored on the draft by a key (the first 16 hex characters of the SHA-256 of the finding's code, its line's text and its params), so editing the line brings the finding back. Format findings block publishing and can't be ignored. The agent only ever gets non-ignored findings.
+
+Each finding is underlined in the text, with a message and, where it applies, "Fix format" or "Talk about this".
 
 - **Format:** required sections present and in order; each experience title parseable (company, title, dates); dates as `YYYY-MM` (a year alone is accepted for when a course was completed or a certification issued); education and certification lines in their format, certifications with a status; competencies under one of the three levels.
-- **Content rules:** a figure without a mark in an experience's results; a mark written another way than the canonical one; an experience without "what I did not do"; overlapping or out-of-order dates; an expired certification without its date; a tool named in an experience but missing from Competencies, a competency listed with no experience behind it and not under "studied", or a "studied" competency an experience uses; a "never include" term appearing in the text; an item under Addenda, which is not read.
+- **Content rules:** a figure without a mark in an experience's results; a mark written another way than the canonical one; an experience without "what I did not do"; overlapping or out-of-order dates; an expired certification without its date; a tool named in an experience but missing from Competencies, a competency listed with no experience behind it and not under "studied", or a "studied" competency an experience uses; a public names entry missing its original or its public form (never blocks publishing); an item under Addenda, which is not read.
 
 **Fix format**, on demand per finding or for the whole document, rewrites what code can fix with certainty: an experience title into `### Company — Title (YYYY-MM to YYYY-MM)` when its parts are recognizable ("Jan/2021 - present" becomes "2021-01 to present"), dates into `YYYY-MM`, marks written another way (`[Medido]`, `(medido)`, `[measured]`) into the canonical one, missing required sections inserted with their hints, sections reordered, a certification's missing status added as a blank to fill. Its changes go to the draft and can be undone; what it can't fix stays marked.
 

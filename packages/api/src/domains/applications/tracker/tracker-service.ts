@@ -245,6 +245,7 @@ export class TrackerService {
     versionIds: string[];
     appliedAt?: Date;
     now?: Date;
+    acknowledgeWarnings?: boolean;
   }) {
     const now = input.now ?? new Date();
     const appliedAt = input.appliedAt ?? now;
@@ -289,6 +290,7 @@ export class TrackerService {
           version,
           snapshot,
           contexts,
+          acknowledgeWarnings: input.acknowledgeWarnings,
         });
       }
       const changed = await this.changeStatus(tx, {

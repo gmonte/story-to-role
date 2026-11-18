@@ -123,13 +123,13 @@ export function useProfileLabels() {
           defaultMessage:
             "Say which work models you accept: remote, hybrid, on site.",
         });
-      case "neverInclude":
+      case "publicNameFormat":
         return t.formatMessage(
           {
             defaultMessage:
-              "“{term}” is under “never include” in your communication rules.",
+              "“{entry}” needs both sides: original name → public form.",
           },
-          { term: params.term }
+          { entry: params.entry }
         );
     }
   }

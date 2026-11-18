@@ -8,6 +8,7 @@ import { mentions } from "@repo/api/domains/profile/truth/lint";
 import { foldAccents } from "@repo/api/utils/text/fold-accents";
 
 import { matchPurpose, type Purpose } from "../generation/assemble-resume";
+import { communicationRuleBlock } from "../generation/public-names";
 import type { CareerContext } from "../generation/load-career-context";
 import { type WrittenLine, writtenLines } from "../generation/resume-checks";
 import type { OpeningBrief } from "../generation/resume-prompts";
@@ -415,7 +416,7 @@ export function coverageReviewPrompt(input: {
     `- strong: each requirement the ${document} proves, with the ${document} line (line_id) and the profile line (evidence_id) that proves it. One per requirement, named as written.`,
     "- partial: requirements touched only indirectly, each with a short explanation.",
     `- gaps: requirements the ${document} does NOT prove, listed by name. Never invent one.`,
-    `- inconsistencies: any fact, date or figure in a ${document} line that doesn't match the profile lines (line_id and what differs). None is the usual answer.`,
+    `- inconsistencies: any fact, date or figure in a ${document} line that doesn't match the profile lines (line_id and what differs). Also a line that reveals what the communication rules below say never to include (any of its categories), or that writes a name by its original instead of its public form. None is the usual answer.`,
     `- suggestions: never suggest covering a gap or adding anything. Only: reorder (kind “reorder”: bring a line that answers a requirement forward), or, when a ${document} line states a true fact the profile omits (a line resting on the user's instructions or written by them), updating the profile with it (kind “profile”, with that line_id).`,
     `- Write explanations and suggestions in ${languageName}. Where the profile has no passage, say so; code adds the final statement.`,
     "",
@@ -454,6 +455,13 @@ export function coverageReviewPrompt(input: {
             (row) =>
               `- instruction ${row.id}${positionOf(row.positionId)}: ${row.text}`
           ),
+        ]
+      : []),
+    ...(communicationRuleBlock(context.rules).length
+      ? [
+          "",
+          "Communication rules (they govern this document, never the profile):",
+          ...communicationRuleBlock(context.rules).slice(1),
         ]
       : []),
   ].join("\n");

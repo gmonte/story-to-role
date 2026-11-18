@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 
+import { isWarningFinding } from "./warning-codes";
 import type { CareerContext } from "../generation/load-career-context";
 import { withheld } from "../generation/profile-source";
 import { defaultGenerationSettings } from "../schemas/generation-settings";
@@ -97,7 +98,11 @@ const context: CareerContext = {
     { id: I1, positionId: P1, credentialId: null, text: "Led a team of 5." },
   ],
   evidenceOfPassage: new Map(),
-  rules: { neverInclude: ["Hooli"], neverClaim: ["fluent English"] },
+  rules: {
+    neverInclude: ["Hooli"],
+    neverClaim: ["fluent English"],
+    publicNames: [],
+  },
   studied: ["Rust"],
   gaps: [],
   careerDirection: [],
@@ -146,11 +151,12 @@ const resume = (
 
 const check = (
   content: ResumeContent,
-  purposes: Array<{ text: string }> = []
+  purposes: Array<{ text: string }> = [],
+  withContext: typeof context = context
 ) =>
   checkDocument({
     content,
-    context,
+    context: withContext,
     settings: defaultGenerationSettings,
     today,
     purposes: purposes.map((purpose) => ({ ...purpose, evidenceIds: null })),
@@ -430,6 +436,36 @@ describe("the coverage review's code checks", () => {
       { code: "neverClaim", lineId: "e", params: { term: "fluent English" } },
       { code: "studied", lineId: "r", params: { name: "Rust" } },
     ]);
+  });
+
+  it("warns about an original name the public names dictionary covers, and never flags a category", () => {
+    const named = {
+      ...context,
+      rules: {
+        neverInclude: ["dados bancários"],
+        neverClaim: [],
+        publicNames: [
+          { original: "Projeto Fênix", public: "a payments platform" },
+        ],
+      },
+    };
+    const content = resume([
+      entry(P1, [
+        {
+          id: "f",
+          text: "Built the projeto fenix backend with dados bancários.",
+        },
+      ]),
+    ]);
+    const findings = check(content, [], named);
+    expect(findings).toMatchObject([
+      {
+        code: "publicName",
+        lineId: "f",
+        params: { term: "Projeto Fênix", publicName: "a payments platform" },
+      },
+    ]);
+    expect(isWarningFinding(findings[0])).toBe(true);
   });
 
   it("finds a known name claimed where the position says it was not done", () => {

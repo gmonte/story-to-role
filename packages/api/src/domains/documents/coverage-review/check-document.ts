@@ -1,3 +1,4 @@
+import { neverIncludeTerms } from "@repo/api/domains/profile/rules/never-include-terms";
 import { mentions } from "@repo/api/domains/profile/truth/lint";
 import { findMarks } from "@repo/api/domains/profile/truth/marks";
 import { ungivenFigures } from "@repo/api/domains/profile/truth/suggestions";
@@ -33,6 +34,10 @@ export const coverageFindingCodes = [
   "figure",
   // A line names a term of the communication rules.
   "neverInclude",
+  // A line still names something by its real name, though the profile's
+  // public names say how to write it. Only a warning: the document can leave
+  // once the user confirms.
+  "publicName",
   "neverClaim",
   // A line claims something its position says the person did not do.
   "notDone",
@@ -262,9 +267,19 @@ export function checkDocument(input: {
         })
       );
     }
-    for (const term of context.rules.neverInclude) {
+    for (const term of neverIncludeTerms(context.rules.neverInclude)) {
       if (mentions(line.text, term)) {
         findings.push(lineFinding(line, "neverInclude", { term }));
+      }
+    }
+    for (const name of context.rules.publicNames) {
+      if (mentions(line.text, name.original)) {
+        findings.push(
+          lineFinding(line, "publicName", {
+            term: name.original,
+            publicName: name.public,
+          })
+        );
       }
     }
     for (const term of context.rules.neverClaim) {

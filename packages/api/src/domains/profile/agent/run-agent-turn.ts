@@ -207,6 +207,7 @@ export async function runAgentTurn(
       db,
       userId,
       taskId: task.id,
+      applyCommunicationRules: false,
     });
     const modelId = anthropicModels.writing;
     const turn: OpenTurn = { taskId: task.id, userId, funding, model: modelId };

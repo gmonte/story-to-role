@@ -138,7 +138,7 @@ const context: CareerContext = {
     },
   ],
   evidenceOfPassage: new Map(),
-  rules: { neverInclude: [], neverClaim: [] },
+  rules: { neverInclude: [], neverClaim: [], publicNames: [] },
   studied: [],
   gaps: [],
   careerDirection: [],
@@ -345,7 +345,11 @@ describe("assembling a resume", () => {
     const lacking: CareerContext = {
       ...context,
       studied: ["Rust"],
-      rules: { neverInclude: [], neverClaim: ["people management"] },
+      rules: {
+        neverInclude: [],
+        neverClaim: ["people management"],
+        publicNames: [],
+      },
     };
     const texts = [
       "Wrote services in Rust.",

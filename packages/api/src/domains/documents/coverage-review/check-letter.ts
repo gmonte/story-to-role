@@ -1,3 +1,4 @@
+import { neverIncludeTerms } from "@repo/api/domains/profile/rules/never-include-terms";
 import { mentions } from "@repo/api/domains/profile/truth/lint";
 import { findMarks } from "@repo/api/domains/profile/truth/marks";
 import { ungivenFigures } from "@repo/api/domains/profile/truth/suggestions";
@@ -47,7 +48,7 @@ export function letterViolations(
     code: CoverageFindingCode;
     params: Record<string, string>;
   }> = [];
-  for (const term of context.rules.neverInclude) {
+  for (const term of neverIncludeTerms(context.rules.neverInclude)) {
     if (mentions(text, term)) {
       violations.push({ code: "neverInclude", params: { term } });
     }
@@ -191,6 +192,17 @@ export function checkLetter(input: {
       origin.instructionIds
     )) {
       findings.push(finding(violation.code, violation.params));
+    }
+    // Warned about, never refused at assembly: the repair call comes first.
+    for (const name of context.rules.publicNames) {
+      if (mentions(line.text, name.original)) {
+        findings.push(
+          finding("publicName", {
+            term: name.original,
+            publicName: name.public,
+          })
+        );
+      }
     }
   }
   return findings;

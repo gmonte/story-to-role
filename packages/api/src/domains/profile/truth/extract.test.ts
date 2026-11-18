@@ -55,6 +55,7 @@ const profile = `# Perfil
 
 - Nunca incluir: Projeto Fênix, dados do cliente Alfa
 - Nunca afirmar: liderança de pessoas
+- Nomes públicos: Projeto Fênix → plataforma de pagamentos; Banco X -> banco de varejo
 `;
 
 describe("the published profile's extract", () => {
@@ -89,6 +90,10 @@ describe("the published profile's extract", () => {
     expect(extract.rules).toEqual({
       neverInclude: ["Projeto Fênix", "dados do cliente Alfa"],
       neverClaim: ["liderança de pessoas"],
+      publicNames: [
+        { original: "Projeto Fênix", public: "plataforma de pagamentos" },
+        { original: "Banco X", public: "banco de varejo" },
+      ],
     });
     const passages = profilePassages(parseBlocks(profile));
     for (const figure of extract.figures) {

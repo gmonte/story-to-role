@@ -18,6 +18,10 @@ import {
   experienceAge,
   generationSettingsSchema,
 } from "../schemas/generation-settings";
+import {
+  communicationRuleLines,
+  repairPublicNames,
+} from "../generation/public-names";
 import { outputLanguageNames } from "../generation/resume-prompts";
 import {
   findForbiddenLines,
@@ -307,6 +311,7 @@ async function adaptVersion(input: {
   const material = [
     `Target language: ${outputLanguageNames[generation.language]}.`,
     adaptationRules,
+    ...communicationRuleLines(filter),
     "- title_equivalents: for each position listed under “Titles to propose”, the usual equivalent of its title in the target language (or the same title when it already reads naturally there).",
     "",
     "The resume to adapt (JSON):",
@@ -366,7 +371,7 @@ async function adaptVersion(input: {
   }
   // A line carrying a forbidden term keeps its source wording, which passed.
   const forbidden = new Set(findForbiddenLines(result.content, filter));
-  const content =
+  const adaptedContent =
     forbidden.size > 0
       ? adaptContent({
           source,
@@ -389,6 +394,17 @@ async function adaptVersion(input: {
           titles,
         }).content
       : result.content;
+
+  // A line that brought back a real name its source didn't have is rewritten
+  // once with the public form; if it still does, the code checks warn.
+  const repaired = await repairPublicNames({
+    ai: input.ai,
+    filter,
+    content: adaptedContent,
+    role: "writing",
+    language: outputLanguageNames[generation.language],
+  });
+  const content = repaired.content;
 
   const proposed = new Map(
     draft.title_equivalents.map((row) => [row.position_id, row.title.trim()])
@@ -436,6 +452,7 @@ async function adaptChanges(input: {
       system: [
         `Carry these changed lines of a resume into its version in ${outputLanguageNames[input.language]}. Each item has the new wording in the source language and, when it has one, the target's current wording, whose style you keep.`,
         adaptationRules,
+        ...communicationRuleLines(input.filter),
         "",
         JSON.stringify(
           worded.map((change) => ({
@@ -454,7 +471,8 @@ async function adaptChanges(input: {
         change?.after &&
         text &&
         keepsFigures(change.after, text) &&
-        input.filter.findForbiddenTerms(text).length === 0
+        input.filter.findForbiddenTerms(text).length === 0 &&
+        input.filter.mentionedPublicNames(text).length === 0
       ) {
         adapted.set(item.id, text);
       }

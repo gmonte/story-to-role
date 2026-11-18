@@ -3,12 +3,27 @@ import type { UserCipher } from "@repo/api/domains/encryption/user-cipher";
 import { loadPublishedProfile } from "@repo/api/domains/profile/load-published-profile";
 import type { DbClient } from "@repo/api/tools/db-client";
 
+import {
+  neverIncludeCategories,
+  neverIncludeTerms,
+} from "./never-include-terms";
+import type { PublicName } from "./public-names";
 import { createNeverIncludeFilter } from "./never-include-filter";
 
 /** The filter of a profile's communication rules: what must never appear. */
-export function communicationRulesFilter(rules: { neverInclude: string[] }) {
+export function communicationRulesFilter(rules: {
+  neverInclude: string[];
+  publicNames?: PublicName[];
+}) {
   return createNeverIncludeFilter(
-    rules.neverInclude.map((original) => ({ original, choice: "exclude" }))
+    neverIncludeTerms(rules.neverInclude).map((original) => ({
+      original,
+      choice: "exclude" as const,
+    })),
+    {
+      categories: neverIncludeCategories(rules.neverInclude),
+      publicNames: rules.publicNames,
+    }
   );
 }
 

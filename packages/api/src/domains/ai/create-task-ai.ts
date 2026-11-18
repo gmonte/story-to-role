@@ -17,18 +17,24 @@ export async function createTaskAi(input: {
   db: DbClient;
   userId: string;
   taskId: string;
+  /**
+   * The communication rules govern public documents only: the profile's own
+   * tasks (agent, import, validation) pass false and see everything.
+   */
+  applyCommunicationRules?: boolean;
 }) {
   const cipher = await getUserCipher(input.db, input.userId);
   const profile = await new CareerRepository(input.db).findProfileByUserId(
     input.userId
   );
-  const neverIncludeFilter = profile
-    ? await loadNeverIncludeFilter({
-        db: input.db,
-        cipher,
-        profileId: profile.id,
-      })
-    : undefined;
+  const neverIncludeFilter =
+    profile && input.applyCommunicationRules !== false
+      ? await loadNeverIncludeFilter({
+          db: input.db,
+          cipher,
+          profileId: profile.id,
+        })
+      : undefined;
   const task = await new TasksRepository(input.db).findOwner(input.taskId);
   const { funding, providerPackage, languageModel } = await resolveAiFunding({
     db: input.db,

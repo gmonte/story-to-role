@@ -47,7 +47,6 @@
   "1IKcNb": "Terminar com créditos: {credits, number} créditos guardados aguardam seu OK",
   "1TTuH1": "Configurações de geração salvas.",
   "1a/38p": "Candidatura enviada fora do StoryToRole",
-  "1fQ3hD": "“{term}” está em “nunca incluir” nas suas regras de comunicação.",
   "1fX82p": "A Anthropic recusou esta chave. Confira e tente de novo.",
   "1mxO5W": "“{text}” cita {name}, que o seu perfil diz que você não fez neste cargo.",
   "1nJY2/": "Sua resposta",
@@ -855,5 +854,17 @@
   "zy/eg8": "Taxa de resposta por versão de currículo",
   "zyRm34": "Marcar como enviada",
   "BTi2L9": "O agente não respondeu. Verifique sua conexão e tente de novo.",
-  "cqwjZm": "Reconectando ao agente…"
+  "cqwjZm": "Reconectando ao agente…",
+  "0qaVnS": "Um nome real ainda está no texto",
+  "FN/v9a": "Copiar mesmo assim",
+  "LPm0L2": "Ignorados ({count, number})",
+  "Po6Shb": "“{text}” ainda usa “{term}”, que o seu perfil escreve como “{publicName}” nos documentos públicos. Você pode gerar o arquivo mesmo assim.",
+  "j0GAMX": "A revisão de cobertura encontrou um nome que o seu perfil escreve de outra forma nos documentos públicos. Você pode corrigir antes ou seguir mesmo assim.",
+  "jdDm37": "Marcar como enviada mesmo assim",
+  "l7cNqr": "Este apontamento não se aplica: parar de mostrá-lo",
+  "orvpWh": "Voltar",
+  "paBpxN": "Ignorar",
+  "peZvE0": "Gerar PDF mesmo assim",
+  "s+J8a4": "“{entry}” precisa dos dois lados: nome original → forma pública.",
+  "zz6ObK": "Restaurar"
 }

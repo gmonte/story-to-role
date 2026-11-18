@@ -1,3 +1,9 @@
+import { splitNeverIncludeItems } from "../rules/never-include-terms";
+import {
+  parsePublicNames,
+  publicNamesLabels,
+  type PublicName,
+} from "../rules/public-names";
 import type { ProfileBlock } from "./blocks";
 import { splitNames } from "./lint";
 import { findMarks, type FigureMark } from "./marks";
@@ -31,7 +37,11 @@ export type ProfileExtract = {
   competencies: Array<{ name: string; level: CompetencyLevel }>;
   languages: string[];
   gaps: string[];
-  rules: { neverInclude: string[]; neverClaim: string[] };
+  rules: {
+    neverInclude: string[];
+    neverClaim: string[];
+    publicNames: PublicName[];
+  };
   // Each marked figure, with the passage it is in (its ordinal among the
   // version's passages, null when the line isn't one).
   figures: Array<{
@@ -133,18 +143,23 @@ export function extractProfile(blocks: ProfileBlock[]): ProfileExtract {
     }
   }
 
-  const rules = { neverInclude: [] as string[], neverClaim: [] as string[] };
+  const rules = {
+    neverInclude: [] as string[],
+    neverClaim: [] as string[],
+    publicNames: [] as PublicName[],
+  };
   for (const line of itemsOf(blocks, sectionOf(structure, "rules"))) {
     const labelled = splitLabel(line);
     if (!labelled) continue;
     const label = normalizeLabel(labelled.label);
-    const names = splitNames(labelled.value, 0, { anyLength: true }).map(
-      (n) => n.name
-    );
     if (label === "nunca incluir" || label === "never include") {
-      rules.neverInclude.push(...names);
+      rules.neverInclude.push(...splitNeverIncludeItems(labelled.value));
+    } else if (publicNamesLabels.includes(label)) {
+      rules.publicNames.push(...parsePublicNames(labelled.value).entries);
     } else if (label === "nunca afirmar" || label === "never claim") {
-      rules.neverClaim.push(...names);
+      rules.neverClaim.push(
+        ...splitNames(labelled.value, 0, { anyLength: true }).map((n) => n.name)
+      );
     }
   }
 

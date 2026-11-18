@@ -233,7 +233,12 @@ export const documentsRouter = createTRPCRouter({
         "Renders the version's official snapshot as a PDF, unless it is ready"
       )
     )
-    .input(z.object({ versionId: z.uuid() }))
+    .input(
+      z.object({
+        versionId: z.uuid(),
+        acknowledgeWarnings: z.boolean().optional(),
+      })
+    )
     .output(z.object({ ready: z.boolean() }))
     .mutation(({ ctx, input }) =>
       new PdfService(db).request({ userId: ctx.userId, ...input })
@@ -249,7 +254,12 @@ export const documentsRouter = createTRPCRouter({
         "Renders whatever the application's ZIP still lacks"
       )
     )
-    .input(z.object({ openingId: z.uuid() }))
+    .input(
+      z.object({
+        openingId: z.uuid(),
+        acknowledgeWarnings: z.boolean().optional(),
+      })
+    )
     .output(z.object({ ready: z.boolean() }))
     .mutation(({ ctx, input }) =>
       new PdfService(db).prepareApplication({ userId: ctx.userId, ...input })

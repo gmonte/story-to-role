@@ -86,3 +86,26 @@ describe("never-include filter", () => {
     expect(units.findForbiddenTerms("Saved 21.5M at AcmeCorp")).toEqual([]);
   });
 });
+
+describe("public names", () => {
+  const named = createNeverIncludeFilter([], {
+    publicNames: [
+      { original: "Projeto Fênix", public: "plataforma de pagamentos" },
+      { original: "Banco X", public: "banco de varejo" },
+    ],
+  });
+
+  it("finds an original in an output, ignoring case and accents, without rewriting prompts", () => {
+    expect(
+      named
+        .mentionedPublicNames("Liderei o projeto fenix no Banco Xavier.")
+        .map((name) => name.original)
+    ).toEqual(["Projeto Fênix"]);
+    expect(
+      named
+        .mentionedPublicNames("Liderei o Projeto Fenix no banco x.")
+        .map((name) => name.original)
+    ).toEqual(["Projeto Fênix", "Banco X"]);
+    expect(named.apply("Projeto Fênix")).toBe("Projeto Fênix");
+  });
+});

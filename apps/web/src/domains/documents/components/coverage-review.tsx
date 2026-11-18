@@ -142,6 +142,14 @@ function useFindingText(finding: Finding, version: VersionView) {
         },
         { text, term: str("term") }
       );
+    case "publicName":
+      return t.formatMessage(
+        {
+          defaultMessage:
+            "“{text}” still uses “{term}”, which your profile writes as “{publicName}” in public documents. You can generate the file anyway.",
+        },
+        { text, term: str("term"), publicName: str("publicName") }
+      );
     case "neverClaim":
       return t.formatMessage(
         {

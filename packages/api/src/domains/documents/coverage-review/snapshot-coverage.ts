@@ -24,6 +24,7 @@ import { decryptDocument } from "../snapshot-content";
 import { linkedinAsResume } from "../linkedin/linkedin-resume";
 import { checkDocument } from "./check-document";
 import { checkLetter } from "./check-letter";
+import { isWarningFinding } from "./warning-codes";
 
 type Snapshot = NonNullable<
   Awaited<ReturnType<DocumentsRepository["findSnapshot"]>>
@@ -227,6 +228,9 @@ export async function snapshotCoverage(input: {
   return { context, findings };
 }
 
+/** The message of the refusal the user can confirm past. */
+export const warningsToConfirm = "WARNINGS_TO_CONFIRM";
+
 /**
  * A resume whose official snapshot has code findings never leaves the
  * platform (resume spec, "Coverage review": a failure blocks the document
@@ -241,6 +245,9 @@ export async function assertSendable(input: {
   snapshot: Pick<Snapshot, "id" | "encryptedContent" | "profileVersionId">;
   // Shared by the caller when it checks several documents at once.
   contexts?: FrozenContexts;
+  // The user confirmed leaving with warnings (a real name a public name
+  // should have replaced); other findings still block.
+  acknowledgeWarnings?: boolean;
 }) {
   const { findings } = await snapshotCoverage({
     ...input,
@@ -248,10 +255,16 @@ export async function assertSendable(input: {
       input.contexts ??
       new FrozenContexts(input.db, input.cipher, input.profileId),
   });
-  if (findings.length > 0) {
+  if (findings.some((finding) => !isWarningFinding(finding))) {
     throw new TRPCError({
       code: "PRECONDITION_FAILED",
       message: "The document has coverage findings to fix before it can leave.",
+    });
+  }
+  if (findings.length > 0 && !input.acknowledgeWarnings) {
+    throw new TRPCError({
+      code: "PRECONDITION_FAILED",
+      message: warningsToConfirm,
     });
   }
 }

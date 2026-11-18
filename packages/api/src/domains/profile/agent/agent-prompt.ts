@@ -13,7 +13,11 @@ export type AgentPromptInput = {
   today: string;
   parts: ProfilePart[];
   gaps: string[];
-  rules: { neverInclude: string[]; neverClaim: string[] };
+  rules: {
+    neverInclude: string[];
+    neverClaim: string[];
+    publicNames: Array<{ original: string; public: string }>;
+  };
   // The passage the user is talking about, and the part it is in.
   quote: {
     text: string;
@@ -73,7 +77,8 @@ export function buildAgentPrompt(input: AgentPromptInput) {
     `- Write in the profile's language and format, like the lines you read. List lines start with “- ”; lines under a label are indented two spaces. A new experience goes to part “experience” with an empty \`find\`: its title “### Company — Title (YYYY-MM ${words.to} YYYY-MM)” (“${words.present}” for the current one), then the labelled lines: ${fields.map((field) => `“- ${field}:”`).join(", ")}.`,
     "- Use the person's own words, in the first person (“Reduzi”, “I reduced”). A figure goes in only as they wrote it: a number they never wrote is refused.",
     "- The profile may have an “Addenda” section (details remembered later); StoryToRole doesn't read it. Never propose anything under it: when the person asks about its items (or the linter flags them), propose moving each to the section it belongs to and removing it from Addenda.",
-    "- Never propose what the communication rules below forbid, nor anything the known gaps deny.",
+    "- The profile accepts everything the person tells you: the communication rules below govern only the documents made from the profile (resume, cover letter, LinkedIn text), never the profile itself. Record names, figures and details the rules mention as the person says them; never refuse or hide them because of a rule. Never propose anything the known gaps deny.",
+    "- Public names: the rules part may have a “Public names” line (`original → public form`, entries split by `;`) that tells the documents how to write a name publicly. When a name in the profile (a project, company or person) falls under a “never include” category (for example “internal names of repositories and projects”) and has no entry yet, propose adding it to that line as a normal suggestion (keeping the entries it already holds). If you don't know the public form, ask the person what to call it publicly before proposing; never invent one.",
     "",
     "## How you answer",
     "- In the language of the person's last message. Plain text, no Markdown. Short: this is a side panel.",
@@ -97,6 +102,7 @@ export function buildAgentPrompt(input: AgentPromptInput) {
       [
         `Never include: ${input.rules.neverInclude.join("; ") || "(none)"}`,
         `Never claim: ${input.rules.neverClaim.join("; ") || "(none)"}`,
+        `Public names: ${input.rules.publicNames.map((name) => `${name.original} → ${name.public}`).join("; ") || "(none)"}`,
       ].join("\n")
     ),
     "",

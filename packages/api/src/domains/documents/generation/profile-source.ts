@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 
+import type { PublicName } from "@repo/api/domains/profile/rules/public-names";
 import type { CredentialKind } from "@repo/api/domains/career/schemas/career";
 import type { EvidenceKind } from "@repo/api/domains/applications/schemas/instructions";
 import type { PublishedProfile } from "@repo/api/domains/profile/load-published-profile";
@@ -101,7 +102,11 @@ export type ProfileSource = {
   skills: Array<{ id: string; name: string; evidenceIds: string[] }>;
   // Each fit check passage's lines here, since a passage may hold several.
   evidenceOfPassage: Map<string, string[]>;
-  rules: { neverInclude: string[]; neverClaim: string[] };
+  rules: {
+    neverInclude: string[];
+    neverClaim: string[];
+    publicNames: PublicName[];
+  };
   // What the profile says the person lacks: never claimed in a document.
   studied: string[];
   gaps: string[];

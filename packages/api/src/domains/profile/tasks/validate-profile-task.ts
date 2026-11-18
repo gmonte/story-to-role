@@ -16,7 +16,12 @@ export const validateProfileTask = task({
       async ({ userId, subjectId, reportProgress }) => {
         if (!subjectId) throw new Error(`Task ${taskId} has no validation`);
         try {
-          const { ai, cipher } = await createTaskAi({ db, userId, taskId });
+          const { ai, cipher } = await createTaskAi({
+            db,
+            userId,
+            taskId,
+            applyCommunicationRules: false,
+          });
           await runValidateProfile({
             db,
             ai,

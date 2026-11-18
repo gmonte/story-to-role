@@ -1,6 +1,7 @@
 "use client";
 
-import { Plus } from "lucide-react";
+import { Plus, Trash2 } from "lucide-react";
+import { useRouter } from "next/navigation";
 
 import { useTranslation } from "@repo/intl/use-translation";
 import { Button } from "@repo/web/components/ui/button";
@@ -10,6 +11,7 @@ import { WorkspaceBody } from "~/domains/workspace/components/workspace-body";
 import { useLibraryDocument } from "../hooks/use-library";
 import { useSelectedVersion } from "../hooks/use-selected-version";
 import { AdaptVersionDialog } from "./adapt-version-dialog";
+import { DeleteDocumentDialog } from "./delete-document-dialog";
 import { DocumentAgent } from "./document-agent";
 import { DocumentAgentProvider } from "./document-agent-context";
 import {
@@ -88,6 +90,7 @@ export function LibraryDocumentView({ documentId }: { documentId: string }) {
 export function LibraryDocumentPanel({ documentId }: { documentId: string }) {
   const t = useTranslation();
   const rowLabel = useVersionRowLabel();
+  const router = useRouter();
   const document = useLibraryDocument(documentId);
   const versions = document.data?.versions ?? [];
   const { selected, select } = useSelectedVersion(versions);
@@ -104,6 +107,22 @@ export function LibraryDocumentPanel({ documentId }: { documentId: string }) {
     return null;
   }
 
+  const deleteDocument = (
+    <DeleteDocumentDialog
+      documentId={documentId}
+      onDeleted={() => router.push("/app/library")}
+      trigger={
+        <Button
+          size="sm"
+          variant="ghost"
+          title={t.formatMessage({ defaultMessage: "Delete document" })}
+        >
+          <Trash2 />
+        </Button>
+      }
+    />
+  );
+
   // LinkedIn text: a new version is a generation in another language; the
   // coverage review sits beside the text, in the editor.
   if (document.data.kind === "linkedin") {
@@ -113,15 +132,18 @@ export function LibraryDocumentPanel({ documentId }: { documentId: string }) {
           <h3 className="text-sm font-medium">
             {t.formatMessage({ defaultMessage: "Versions" })}
           </h3>
-          <LinkedinDialog
-            defaultTone={document.data.generation?.tone}
-            trigger={
-              <Button size="sm" variant="ghost">
-                <Plus />
-                {t.formatMessage({ defaultMessage: "New version" })}
-              </Button>
-            }
-          />
+          <div className="flex items-center gap-1">
+            <LinkedinDialog
+              defaultTone={document.data.generation?.tone}
+              trigger={
+                <Button size="sm" variant="ghost">
+                  <Plus />
+                  {t.formatMessage({ defaultMessage: "New version" })}
+                </Button>
+              }
+            />
+            {deleteDocument}
+          </div>
         </div>
       </section>
     );
@@ -145,15 +167,18 @@ export function LibraryDocumentPanel({ documentId }: { documentId: string }) {
           select={select}
           label={rowLabel(document.data.kind)}
           newVersion={
-            <AdaptVersionDialog
-              versions={versions}
-              trigger={
-                <Button size="sm" variant="ghost">
-                  <Plus />
-                  {t.formatMessage({ defaultMessage: "New version" })}
-                </Button>
-              }
-            />
+            <div className="flex items-center gap-1">
+              <AdaptVersionDialog
+                versions={versions}
+                trigger={
+                  <Button size="sm" variant="ghost">
+                    <Plus />
+                    {t.formatMessage({ defaultMessage: "New version" })}
+                  </Button>
+                }
+              />
+              {deleteDocument}
+            </div>
           }
           generateAgain={(version, trigger) => (
             <LibraryResumeDialog

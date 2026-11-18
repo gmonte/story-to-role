@@ -3,7 +3,7 @@ import { z } from "zod";
 import { toneSchema } from "@repo/api/domains/openings/schemas/opening";
 import { realtimeSubscriptionSchema } from "@repo/api/domains/tasks/schemas/task";
 import { db } from "@repo/api/tools/db";
-import { openApiMeta } from "@repo/api/tools/openapi";
+import { ok, okSchema, openApiMeta } from "@repo/api/tools/openapi";
 import {
   createTRPCRouter,
   rateLimited,
@@ -52,6 +52,25 @@ export const libraryRouter = createTRPCRouter({
     .query(({ ctx, input }) =>
       new DocumentsService(db).libraryDocument({ userId: ctx.userId, ...input })
     ),
+
+  deleteDocument: userProcedure
+    .meta(
+      openApiMeta(
+        "library",
+        "DELETE",
+        "/library/documents/by-id/{documentId}",
+        "Deletes a library document with its versions, history and PDFs"
+      )
+    )
+    .input(z.object({ documentId: z.uuid() }))
+    .output(okSchema)
+    .mutation(async ({ ctx, input }) => {
+      await new DocumentsService(db).deleteDocument({
+        userId: ctx.userId,
+        ...input,
+      });
+      return ok;
+    }),
 
   generateResume: userProcedure
     .use(rateLimited("taskStart"))

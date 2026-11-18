@@ -1,12 +1,13 @@
 "use client";
 
-import { Briefcase, FileText, Plus } from "lucide-react";
+import { Briefcase, FileText, Plus, Trash2 } from "lucide-react";
 import Link from "next/link";
 
 import { useTranslation } from "@repo/intl/use-translation";
 import { Badge } from "@repo/web/components/ui/badge";
 import { Button } from "@repo/web/components/ui/button";
 
+import { DeleteDocumentDialog } from "./delete-document-dialog";
 import { useDocumentLabels } from "../hooks/use-document-labels";
 import { useLibrary } from "../hooks/use-library";
 import { LinkedinDialog } from "./linkedin-dialog";
@@ -70,10 +71,13 @@ export function LibraryView() {
       )}
       <ul className="grid gap-2">
         {documents.map((document) => (
-          <li key={document.id}>
+          <li
+            key={document.id}
+            className="bg-background hover:border-primary flex items-center gap-1 rounded-lg border pr-2"
+          >
             <Link
               href={`/app/library/${document.id}`}
-              className="bg-background hover:border-primary flex items-center justify-between rounded-lg border p-3"
+              className="flex flex-1 items-center justify-between p-3"
             >
               <span className="flex items-center gap-2 text-sm font-medium">
                 {document.kind === "linkedin" ? (
@@ -93,6 +97,18 @@ export function LibraryView() {
                 ))}
               </span>
             </Link>
+            <DeleteDocumentDialog
+              documentId={document.id}
+              trigger={
+                <Button
+                  size="icon"
+                  variant="ghost"
+                  title={t.formatMessage({ defaultMessage: "Delete document" })}
+                >
+                  <Trash2 />
+                </Button>
+              }
+            />
           </li>
         ))}
       </ul>

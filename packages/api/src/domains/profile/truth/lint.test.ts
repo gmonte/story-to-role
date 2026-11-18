@@ -320,4 +320,34 @@ describe("projects in the linter", () => {
       lintProfile(parseBlocks(before)).filter((f) => f.code === "sectionOrder")
     ).toHaveLength(1);
   });
+
+  it("flags a repeated section heading, and its Fix merges it into the first", () => {
+    const markdown = withProject(
+      "App (2024-01 a atual)",
+      "lançado [sem número]."
+    ).replace(
+      "## Formação",
+      "## Projetos\n\n### Beta (2023-01 a 2023-06)\n\n- Tecnologias: Go\n\n## Formação"
+    );
+    const blocks = parseBlocks(markdown);
+    const found = lintProfile(blocks).filter(
+      (f) => f.code === "duplicateSection"
+    );
+    expect(found).toHaveLength(1);
+    expect(found[0].fixable).toBe(true);
+    expect(lintProfile(blocks).some((f) => f.code === "sectionOrder")).toBe(
+      false
+    );
+    const fixed = serializeBlocks(fixFinding(blocks, found[0]));
+    expect(fixed.match(/^## Projetos$/gm)).toHaveLength(1);
+    expect(fixed.indexOf("### Beta")).toBeGreaterThan(fixed.indexOf("### App"));
+    expect(fixed.indexOf("### Beta")).toBeLessThan(
+      fixed.indexOf("## Formação")
+    );
+    expect(
+      lintProfile(parseBlocks(fixed)).filter(
+        (f) => f.code === "duplicateSection"
+      )
+    ).toEqual([]);
+  });
 });

@@ -27,6 +27,8 @@ export type FindingKind = "format" | "content";
 export const findingCodes = {
   missingSection: "format",
   sectionOrder: "format",
+  // A second heading of a section the document already has.
+  duplicateSection: "format",
   experienceTitle: "format",
   // A project's heading not in `### Name (YYYY-MM to YYYY-MM)`.
   projectTitle: "format",
@@ -69,6 +71,7 @@ export type ProfileFinding = {
 const fixableCodes = new Set<FindingCode>([
   "missingSection",
   "sectionOrder",
+  "duplicateSection",
   "dateFormat",
   "certificationStatus",
   "markFormat",
@@ -187,7 +190,23 @@ const separator = /\s+—\s+/;
 
 function lintSections(structure: ProfileStructure, blocks: ProfileBlock[]) {
   const findings: ProfileFinding[] = [];
-  const present = structure.sections.filter((s) => s.key);
+  const all = structure.sections.filter((s) => s.key);
+  const firsts = new Set<string>();
+  const present = all.filter((section) => {
+    if (!firsts.has(section.key!)) {
+      firsts.add(section.key!);
+      return true;
+    }
+    findings.push(
+      finding(
+        "duplicateSection",
+        section.heading,
+        whole(blocks[section.heading]),
+        { params: { section: section.key as string } }
+      )
+    );
+    return false;
+  });
   for (const key of profileSectionKeys) {
     // Projects is optional: the Add menu creates it when wanted.
     if (key === "addenda" || key === "projects") continue;

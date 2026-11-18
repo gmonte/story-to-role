@@ -50,6 +50,26 @@ function reorderSections(blocks: ProfileBlock[]) {
   return [...head, ...ranked.flatMap((chunk) => chunk.blocks)];
 }
 
+/**
+ * Merges a repeated section's lines into the first section of its key and
+ * drops the repeated heading.
+ */
+export function mergeDuplicateSection(blocks: ProfileBlock[], line: number) {
+  const sections = readStructure(blocks).sections;
+  const duplicate = sections.find((section) => section.heading === line);
+  const first = sections.find(
+    (section) => section.key === duplicate?.key && section.heading < line
+  );
+  if (!duplicate || !first) return blocks;
+  const moved = blocks.slice(duplicate.heading + 1, duplicate.end);
+  return [
+    ...blocks.slice(0, first.end),
+    ...moved,
+    ...blocks.slice(first.end, duplicate.heading),
+    ...blocks.slice(duplicate.end),
+  ];
+}
+
 /** Inserts a missing section, with its template lines, where it belongs. */
 function insertSection(blocks: ProfileBlock[], key: ProfileSectionKey) {
   const structure = readStructure(blocks);
@@ -82,6 +102,10 @@ export function fixFinding(
       );
     case "sectionOrder":
       return reorderSections(blocks);
+    case "duplicateSection":
+      return finding.line === null
+        ? blocks
+        : mergeDuplicateSection(blocks, finding.line);
     case "experienceTitle": {
       const loose = block && readLooseTitle(block.text);
       return loose && finding.line !== null

@@ -36,6 +36,14 @@ export function useProfileLabels() {
           { defaultMessage: "“{section}” is out of the template's order." },
           { section }
         );
+      case "duplicateSection":
+        return t.formatMessage(
+          {
+            defaultMessage:
+              "There are two “{section}” sections. Merge them into one.",
+          },
+          { section }
+        );
       case "experienceTitle":
         return t.formatMessage({
           defaultMessage:

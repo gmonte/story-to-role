@@ -71,6 +71,23 @@ export function sectionOf(structure: ProfileStructure, key: ProfileSectionKey) {
   return structure.sections.find((section) => section.key === key);
 }
 
+/**
+ * Whether a section has nothing under its heading but grey hints (quote
+ * lines) and empty labels ("- Results:"): such a section is never used to
+ * build documents or reviews, whatever its heading says.
+ */
+export function isEmptySection(
+  blocks: ProfileBlock[],
+  section: { heading: number; end: number }
+) {
+  return blocks.slice(section.heading + 1, section.end).every((block) => {
+    if (block.type === "quote") return true;
+    if (block.type === "heading") return false;
+    const labelled = splitLabel(block.text);
+    return !block.text.trim() || (!!labelled && !labelled.value);
+  });
+}
+
 /** The text after the first colon of a labelled line, and the label. */
 export function splitLabel(text: string) {
   const colon = text.indexOf(":");

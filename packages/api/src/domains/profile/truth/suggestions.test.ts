@@ -280,3 +280,44 @@ describe("figures the user never gave", () => {
     ).toEqual(["2020"]);
   });
 });
+
+describe("an addition never makes a second heading of a section", () => {
+  const move = {
+    part: "projects",
+    find: "",
+    replace: "## Projetos\n\n### StoryToRole (2024-01 a atual)\n\n- Lançado.",
+  };
+  const withProjects = profile.replace(
+    "## Lacunas conhecidas",
+    "## Projetos\n\n### App (2023-01 a 2023-06)\n\n- Feito.\n\n## Lacunas conhecidas"
+  );
+  const headings = (markdown: string) =>
+    markdown.match(/^## Projetos$/gm)?.length ?? 0;
+
+  it("creates the section once when it is missing", () => {
+    const next = apply(move)!;
+    expect(headings(next)).toBe(1);
+    expect(next).toContain("### StoryToRole");
+  });
+
+  it("goes into the section when it exists", () => {
+    const existing = parseBlocks(withProjects);
+    const normalized = normalizeChange(existing, move)!;
+    const next = serializeBlocks(applyChange(existing, normalized)!);
+    expect(headings(next)).toBe(1);
+    expect(next).toContain("### StoryToRole");
+  });
+
+  it("two waiting additions create it once between them", () => {
+    const other = {
+      ...move,
+      replace: "### Outro (2022-01 a 2022-12)\n\n- Ok.",
+    };
+    let next = blocks();
+    for (const change of [move, other]) {
+      const normalized = normalizeChange(next, change)!;
+      next = applyChange(next, normalized)!;
+    }
+    expect(headings(serializeBlocks(next))).toBe(1);
+  });
+});

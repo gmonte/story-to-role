@@ -1,5 +1,9 @@
 import { blockToLine, type ProfileBlock } from "./blocks";
-import { readStructure, type ProfileStructure } from "./structure";
+import {
+  isEmptySection,
+  readStructure,
+  type ProfileStructure,
+} from "./structure";
 
 /**
  * A part of the profile reviewed on its own: a section, or one experience
@@ -58,6 +62,7 @@ export function profileChunks(blocks: ProfileBlock[]): ProfileChunk[] {
   const structure = readStructure(blocks);
   const chunks: ProfileChunk[] = [];
   for (const section of structure.sections) {
+    if (isEmptySection(blocks, section)) continue;
     const heading = blocks[section.heading];
     const sectionKey = section.key ?? `other:${heading.text}`;
     // Experiences and projects are reviewed one by one.
@@ -122,8 +127,16 @@ export function changedChunks(
 
 /** The document's index: section and position titles, for context. */
 export function profileIndex(blocks: ProfileBlock[]) {
+  const empty = new Set(
+    readStructure(blocks)
+      .sections.filter((section) => isEmptySection(blocks, section))
+      .map((section) => section.heading)
+  );
   return blocks
-    .filter((block) => block.type === "heading" && block.level >= 2)
+    .filter(
+      (block, index) =>
+        block.type === "heading" && block.level >= 2 && !empty.has(index)
+    )
     .map((block) => blockToLine(block))
     .join("\n");
 }

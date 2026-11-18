@@ -114,14 +114,21 @@ function SectionBody({
     case "experience":
       return section.entries.map((entry) => (
         <View key={entry.positionId} style={styles.entry}>
-          <View style={styles.entryHeader} wrap={false}>
-            <Text style={styles.bold}>{entry.employer}</Text>
-            <Text style={styles.period}>
-              {formatPeriod(entry.startDate, entry.endDate, language)}
-            </Text>
+          {/* The company, title and first bullet stay together: a heading
+              alone at the foot of a page moves to the next one. */}
+          <View wrap={false}>
+            <View style={styles.entryHeader}>
+              <Text style={styles.bold}>{entry.employer}</Text>
+              <Text style={styles.period}>
+                {formatPeriod(entry.startDate, entry.endDate, language)}
+              </Text>
+            </View>
+            <Text style={styles.italic}>{positionTitleLine(entry)}</Text>
+            {entry.lines.slice(0, 1).map((line) => (
+              <Bullet key={line.id} text={line.text} />
+            ))}
           </View>
-          <Text style={styles.italic}>{positionTitleLine(entry)}</Text>
-          {entry.lines.map((line) => (
+          {entry.lines.slice(1).map((line) => (
             <Bullet key={line.id} text={line.text} />
           ))}
         </View>
@@ -129,8 +136,13 @@ function SectionBody({
     case "projects":
       return section.entries.map((entry) => (
         <View key={entry.projectId} style={styles.entry}>
-          <Text style={styles.bold}>{entry.name}</Text>
-          {entry.lines.map((line) => (
+          <View wrap={false}>
+            <Text style={styles.bold}>{entry.name}</Text>
+            {entry.lines.slice(0, 1).map((line) => (
+              <Bullet key={line.id} text={line.text} />
+            ))}
+          </View>
+          {entry.lines.slice(1).map((line) => (
             <Bullet key={line.id} text={line.text} />
           ))}
         </View>

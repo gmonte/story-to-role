@@ -44,6 +44,7 @@ import {
   profileExtensions,
   setDecorations,
   type EditorDecorationSpec,
+  editorScrollMargins,
 } from "../utils/editor-extensions";
 import { DocumentSwitch } from "./document-switch";
 import { FindingHoverCard } from "./finding-hover-card";
@@ -98,6 +99,7 @@ function Editor({ draft }: { draft: ProfileDraft }) {
         class: "profile-editor focus:outline-none",
         spellcheck: "true",
       },
+      ...editorScrollMargins,
     },
     onUpdate: ({ editor: current, transaction }) => {
       if (!transaction.docChanged) return;

@@ -367,3 +367,13 @@ export function focusNodeEnd(editor: Editor, nodeStart: number) {
   );
   editor.view.focus();
 }
+
+/**
+ * Room the editor keeps around what it scrolls to: the sticky toolbar
+ * covers the top of the scroll area, so a line scrolled to never hides
+ * under it.
+ */
+export const editorScrollMargins = {
+  scrollMargin: { top: 128, bottom: 48, left: 0, right: 0 },
+  scrollThreshold: { top: 128, bottom: 48, left: 0, right: 0 },
+};

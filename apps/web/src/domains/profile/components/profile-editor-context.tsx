@@ -78,6 +78,7 @@ import {
   profileExtensions,
   setDecorations,
   type EditorDecorationSpec,
+  editorScrollMargins,
 } from "../utils/editor-extensions";
 import { suggestionWidget } from "../utils/suggestion-widget";
 import { lineDiff } from "../utils/word-diff";
@@ -270,6 +271,7 @@ export function ProfileEditorProvider({
         class: "profile-editor focus:outline-none",
         spellcheck: "true",
       },
+      ...editorScrollMargins,
     },
     onUpdate: ({ editor: current, transaction }) => {
       if (!transaction.docChanged) return;

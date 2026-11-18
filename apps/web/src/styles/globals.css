@@ -2,6 +2,9 @@
 
 /* The profile editor (domains/profile): flat blocks styled as the method's
    Markdown reads, findings underlined, hints in grey. */
+.profile-editor > * {
+  scroll-margin-top: 8rem;
+}
 .profile-editor {
   font-size: 15px;
   line-height: 1.75rem;

@@ -19,6 +19,7 @@ import type {
   OpeningWarning,
   Tone,
 } from "../schemas/opening";
+import type { GapLinks } from "../schemas/opening-view";
 
 /**
  * A target the user may apply to. Text is encrypted with the user's key; the
@@ -153,6 +154,12 @@ export const fitCheckItemsTable = createTable(
     encryptedGapQuestion: d.text(),
     // The user's answer: it becomes an application instruction (slice 4).
     encryptedGapAnswer: d.text(),
+    // Where the answer happened (ids, not career content): positions,
+    // projects, or a general story.
+    // The verdict rests on the user's answer for this opening, not on a
+    // profile passage.
+    citesAnswer: d.boolean().notNull().default(false),
+    gapLinks: d.jsonb().$type<GapLinks>(),
     answeredAt: d.timestamp({ withTimezone: true }),
     // The user confirmed they really lack it: it was suggested for "what I
     // did not do" or the known gaps (resume spec, "Gap questions").

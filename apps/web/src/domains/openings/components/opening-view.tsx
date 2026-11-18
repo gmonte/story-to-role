@@ -7,7 +7,10 @@ import { ExternalLink } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
-import type { OpeningDetail } from "@repo/api/domains/openings/schemas/opening-view";
+import type {
+  FitCheckItemView,
+  OpeningDetail,
+} from "@repo/api/domains/openings/schemas/opening-view";
 import { useTranslation } from "@repo/intl/use-translation";
 import { Badge } from "@repo/web/components/ui/badge";
 import { Button } from "@repo/web/components/ui/button";
@@ -301,6 +304,7 @@ export function OpeningView({ openingId }: { openingId: string }) {
                 question={item.gapQuestion ?? ""}
                 answer={item.gapAnswer}
                 lacks={item.gapLack}
+                links={item.gapLinks}
                 positions={data.fitCheck?.positions ?? []}
                 projects={data.fitCheck?.projects ?? []}
               />
@@ -342,6 +346,7 @@ function GapQuestion({
   question,
   answer,
   lacks,
+  links,
   positions,
   projects,
 }: {
@@ -350,6 +355,7 @@ function GapQuestion({
   answer: string | null;
   /** The user confirmed they lack it: a suggestion went to their profile. */
   lacks: boolean;
+  links: FitCheckItemView["gapLinks"];
   positions: NonNullable<OpeningDetail["fitCheck"]>["positions"];
   projects: NonNullable<OpeningDetail["fitCheck"]>["projects"];
 }) {
@@ -358,15 +364,19 @@ function GapQuestion({
   const refresh = useRefreshOpenings();
   const [draft, setDraft] = useState(answer ?? "");
   // “I have it” asks where; “I don't have it” asks nothing more.
-  const [mode, setMode] = useState<"have" | "lack">("have");
+  const [mode, setMode] = useState<"have" | "lack">(lacks ? "lack" : "have");
   // The user changed their mind after confirming they lack it.
   const [reopened, setReopened] = useState(false);
   // A checkbox wrapped in its label toggled twice per click (the label
   // clicks it again): each gets an id its label points at instead.
   const gapId = useId();
-  const [positionIds, setPositionIds] = useState<string[]>([]);
-  const [projectIds, setProjectIds] = useState<string[]>([]);
-  const [notTied, setNotTied] = useState(false);
+  const [positionIds, setPositionIds] = useState<string[]>(
+    links?.positionIds ?? []
+  );
+  const [projectIds, setProjectIds] = useState<string[]>(
+    links?.projectIds ?? []
+  );
+  const [notTied, setNotTied] = useState(links?.notTied ?? false);
   const [sent, setSent] = useState(false);
   const toggle = (list: string[], id: string) =>
     list.includes(id) ? list.filter((value) => value !== id) : [...list, id];
@@ -541,7 +551,7 @@ function GapQuestion({
               >
                 {t.formatMessage({ defaultMessage: "Save answer" })}
               </Button>
-              {(sent || answer) && (
+              {(sent || (answer && tied)) && (
                 <p className="text-muted-foreground flex flex-wrap gap-x-1 text-xs">
                   <span>
                     {t.formatMessage({

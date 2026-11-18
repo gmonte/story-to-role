@@ -715,7 +715,8 @@ describe("openings and fit check", () => {
   }
 
   it("ties an “I have it” answer to each position or project it names, as suggestions, never as a change", async () => {
-    const { ctx, fitCheck, item, suggestions, draft } = await gapSetup();
+    const { ctx, openingId, fitCheck, item, suggestions, draft } =
+      await gapSetup();
     const before = await draft();
     expect(fitCheck.positions.map((p) => p.employer).sort()).toEqual([
       "Acme",
@@ -753,6 +754,29 @@ describe("openings and fit check", () => {
       `- Responsibilities:\n  - ${answer}`
     );
     expect(waiting.every((row) => row.origin === "application")).toBe(true);
+    // The links are stored with the answer and come back in the view.
+    const links = {
+      positionIds: fitCheck.positions.map((p) => p.positionId),
+      projectIds: [fitCheck.projects[0].projectId],
+      notTied: false,
+    };
+    const viewed = async () =>
+      (await ctx.detail(openingId)).fitCheck!.items.find(
+        (row) => row.term === "Terraform"
+      )!;
+    expect((await viewed()).gapLinks).toEqual(links);
+    // Answering again with another selection replaces them.
+    await ctx.openings.answerGapQuestion({
+      userId: ctx.user.id,
+      fitCheckItemId: item("Terraform").id,
+      answer,
+      notTied: true,
+    });
+    expect((await viewed()).gapLinks).toEqual({
+      positionIds: [],
+      projectIds: [],
+      notTied: true,
+    });
     // The answer stays with the opening, and the profile is untouched.
     expect(await draft()).toBe(before);
   });
@@ -787,6 +811,56 @@ describe("openings and fit check", () => {
         notTied: true,
       })
     ).rejects.toMatchObject({ code: "BAD_REQUEST" });
+  });
+
+  it("a re-run counts “I have it” answers as evidence for this opening and keeps “I don't have it” a gap", async () => {
+    const { ctx, openingId, item } = await gapSetup();
+    await ctx.openings.answerGapQuestion({
+      userId: ctx.user.id,
+      fitCheckItemId: item("Terraform").id,
+      answer: "I wrote our Terraform modules.",
+      notTied: true,
+    });
+    await ctx.openings.answerGapQuestion({
+      userId: ctx.user.id,
+      fitCheckItemId: item("Kubernetes").id,
+      lacks: true,
+    });
+    await ctx.openings.reanalyze({ userId: ctx.user.id, openingId });
+    // The judge says met on the answer everywhere, Kubernetes included
+    // (code keeps the confirmed gap).
+    let shown = "";
+    await ctx.analyze(
+      openingId,
+      fitScript((terms, system) => {
+        shown = system;
+        return {
+          items: terms.map((term) => ({
+            term_id: term.termId,
+            verdict: "met",
+            passage_ids: [],
+            answer_used: true,
+            explanation: "Backed by the answer.",
+          })),
+        };
+      })
+    );
+    expect(shown).toContain(
+      "the user's answer for this opening: I wrote our Terraform modules."
+    );
+    const after = (await ctx.detail(openingId)).fitCheck!;
+    const terraform = after.items.find((row) => row.term === "Terraform")!;
+    expect(terraform).toMatchObject({
+      verdict: "met",
+      citesAnswer: true,
+      gapAnswer: "I wrote our Terraform modules.",
+    });
+    expect(terraform.passages).toEqual([]);
+    expect(after.items.find((row) => row.term === "Kubernetes")).toMatchObject({
+      verdict: "gap",
+      citesAnswer: false,
+      gapLack: true,
+    });
   });
 
   it("suggests an “I don't have it” under Known gaps, with no position line", async () => {

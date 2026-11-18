@@ -319,6 +319,17 @@ function FitCheckItem({ item }: { item: FitCheckItemView }) {
       {item.explanation && (
         <p className="text-muted-foreground text-xs">{item.explanation}</p>
       )}
+      {/* The user's own answer, when the verdict rests on it. */}
+      {item.citesAnswer && item.gapAnswer && (
+        <p className="bg-muted/50 rounded px-2 py-1 text-xs whitespace-pre-wrap">
+          <span className="text-muted-foreground block text-[11px]">
+            {t.formatMessage({
+              defaultMessage: "Your answer for this opening",
+            })}
+          </span>
+          {item.gapAnswer}
+        </p>
+      )}
       {/* The profile passages behind the verdict. */}
       {item.passages.map((passage) => (
         <p

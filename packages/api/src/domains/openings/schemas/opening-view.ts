@@ -31,6 +31,13 @@ export const openingSummarySchema = z.object({
 });
 export type OpeningSummary = z.infer<typeof openingSummarySchema>;
 
+export const gapLinksSchema = z.object({
+  positionIds: z.array(z.uuid()),
+  projectIds: z.array(z.uuid()),
+  notTied: z.boolean(),
+});
+export type GapLinks = z.infer<typeof gapLinksSchema>;
+
 export const fitCheckItemViewSchema = z.object({
   id: z.uuid(),
   term: z.string(),
@@ -46,6 +53,10 @@ export const fitCheckItemViewSchema = z.object({
   gapAnswer: z.string().nullable(),
   // The user confirmed they really lack it: suggested to their profile.
   gapLack: z.boolean(),
+  // Where the answer happened, as last saved (null when not answered).
+  gapLinks: gapLinksSchema.nullable(),
+  // The verdict rests on the user's answer for this opening.
+  citesAnswer: z.boolean(),
 });
 export type FitCheckItemView = z.infer<typeof fitCheckItemViewSchema>;
 

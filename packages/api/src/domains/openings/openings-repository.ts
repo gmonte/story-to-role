@@ -10,6 +10,7 @@ import {
   openingsTable,
 } from "./db/openings-tables";
 import type { OpeningStatus } from "./schemas/opening";
+import type { GapLinks } from "./schemas/opening-view";
 
 type Insert<T extends { $inferInsert: unknown }> = T["$inferInsert"];
 
@@ -186,6 +187,7 @@ export class OpeningsRepository {
   async answerFitCheckItem(input: {
     fitCheckItemId: string;
     encryptedGapAnswer?: string;
+    gapLinks?: GapLinks;
     lackConfirmedAt?: Date | null;
   }) {
     await this.tx
@@ -194,6 +196,7 @@ export class OpeningsRepository {
         ...(input.encryptedGapAnswer
           ? { encryptedGapAnswer: input.encryptedGapAnswer }
           : {}),
+        ...(input.gapLinks ? { gapLinks: input.gapLinks } : {}),
         ...(input.lackConfirmedAt !== undefined
           ? { lackConfirmedAt: input.lackConfirmedAt }
           : {}),

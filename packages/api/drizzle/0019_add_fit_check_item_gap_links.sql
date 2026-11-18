@@ -1,0 +1,1 @@
+ALTER TABLE "fit_check_items" ADD COLUMN IF NOT EXISTS "gapLinks" jsonb;

@@ -88,6 +88,9 @@ export const maxQuoteCharacters = 1500;
 // Lint runs after the user pauses this long, not on every keystroke.
 const lintDelayMs = 150;
 
+// A scroll the editor didn't ask for waits out typing this recent.
+const typingQuietMs = 2000;
+
 type ProfileEditorState = {
   editor: Editor | null;
   blocks: ProfileBlock[];
@@ -125,7 +128,10 @@ type ProfileEditorState = {
   suggestions: LocatedSuggestion[];
   acceptSuggestions: (profileSuggestionIds?: string[]) => void;
   rejectSuggestions: (profileSuggestionIds?: string[]) => void;
-  refreshSuggestions: () => void;
+  refreshSuggestions: () => Promise<void>;
+  // Smoothly scrolls a line into view without moving the cursor or focus;
+  // skipped while the user is typing in the editor.
+  scrollToLine: (line: number) => void;
   // What the agent's composer is about: a passage, and words to start from.
   agentTopic: AgentTopic | null;
   // `line` is where the passage starts, which tells its part.
@@ -253,6 +259,7 @@ export function ProfileEditorProvider({
   const autosave = useDraftAutosave(draft);
   const [blocks, setBlocks] = useState(() => parseBlocks(draft.markdown));
   const lintTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const lastEditAt = useRef(0);
 
   const editor = useEditor({
     extensions: profileExtensions(),
@@ -266,6 +273,7 @@ export function ProfileEditorProvider({
     },
     onUpdate: ({ editor: current, transaction }) => {
       if (!transaction.docChanged) return;
+      lastEditAt.current = Date.now();
       clearTimeout(lintTimer.current);
       lintTimer.current = setTimeout(() => {
         const next = docToBlocks(current.state.doc);
@@ -535,6 +543,21 @@ export function ProfileEditorProvider({
     [editor]
   );
 
+  const scrollToLine = useCallback(
+    (line: number) => {
+      if (!editor || editor.isDestroyed) return;
+      // Not under the cursor of someone who is typing.
+      if (Date.now() - lastEditAt.current < typingQuietMs) return;
+      const start = blockPositions(editor.state.doc)[line];
+      if (start === undefined) return;
+      const node = editor.view.nodeDOM(start);
+      if (node instanceof HTMLElement) {
+        node.scrollIntoView({ behavior: "smooth", block: "center" });
+      }
+    },
+    [editor]
+  );
+
   /** Saves what is in the editor now, resolving to the saved revision. */
   const saveNow = async () => {
     if (editor) {
@@ -554,14 +577,14 @@ export function ProfileEditorProvider({
     );
 
   const refreshSuggestions = () =>
-    void queryClient.invalidateQueries({
+    queryClient.invalidateQueries({
       queryKey: trpc.profile.suggestions.queryKey({}),
     });
 
   // The answer didn't reach the server: the list shows what it still holds
   // (a change already in the text no longer fits, and can be rejected).
   const suggestionsNotRecorded = () => {
-    refreshSuggestions();
+    void refreshSuggestions();
     toast.error(
       t.formatMessage({
         defaultMessage:
@@ -715,6 +738,7 @@ export function ProfileEditorProvider({
     acceptSuggestions,
     rejectSuggestions,
     refreshSuggestions,
+    scrollToLine,
     agentTopic,
     talkAbout: ({ quote, line, text }) =>
       setAgentTopic({

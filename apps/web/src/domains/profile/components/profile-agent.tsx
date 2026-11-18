@@ -52,6 +52,7 @@ import {
   startProfileChatSession,
 } from "../actions/profile-agent-actions";
 import { useAnswerWatchdog } from "../hooks/use-answer-watchdog";
+import { topmostNewSuggestion } from "../utils/topmost-new-suggestion";
 import { maxQuoteCharacters, useProfileEditor } from "./profile-editor-context";
 
 type ChatSession = { publicAccessToken: string; lastEventId?: string };
@@ -121,8 +122,14 @@ function Conversation({
     refreshSuggestions,
     suggestions,
     goToLine,
+    scrollToLine,
   } = useProfileEditor();
   const [text, setText] = useState("");
+  const [turnDone, setTurnDone] = useState(0);
+  // The suggestions there were when the turn began.
+  const knownIds = useRef<Set<string>>(new Set());
+  const latestSuggestions = useRef(suggestions);
+  latestSuggestions.current = suggestions;
   const bottom = useRef<HTMLDivElement>(null);
   const input = useRef<HTMLTextAreaElement>(null);
   const quote = agentTopic?.quote ?? null;
@@ -150,14 +157,31 @@ function Conversation({
     resume: initialMessages.length > 0,
     onData: (part) => {
       // A suggestion was just proposed: it shows in the text at once.
-      if (part.type === "data-suggestion") refreshSuggestions();
+      if (part.type === "data-suggestion") void refreshSuggestions();
     },
     onFinish: () => {
-      refreshSuggestions();
+      // Once the turn's suggestions are loaded, show the first new one.
+      void refreshSuggestions().then(() => setTurnDone((n) => n + 1));
       void queryClient.invalidateQueries({ queryKey: trpc.credits.pathKey() });
     },
   });
   const busy = status === "submitted" || status === "streaming";
+  useEffect(() => {
+    if (busy) {
+      knownIds.current = new Set(latestSuggestions.current.map((s) => s.id));
+    }
+    // Only the start of a turn takes the snapshot.
+  }, [busy]);
+  useEffect(() => {
+    if (!turnDone) return;
+    const first = topmostNewSuggestion(
+      knownIds.current,
+      latestSuggestions.current
+    );
+    if (first) scrollToLine(first.range!.start);
+    // Once per finished turn.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [turnDone]);
   const { sendAction } = useChatActions({ sendMessage });
 
   // Files attached here are sources like any other: each is read into

@@ -13,7 +13,7 @@ export const bulletFormatRule = [
   "1. Action: what the person did, with a strong action verb in the past tense and the first person implicit (never “I”, never “Responsible for”).",
   "2. Impact/result: what changed because of it. A figure only when the profile line shows it as measured; otherwise a qualitative result the profile states. Never an invented or unmarked figure. When the profile states no result, say what the work enabled, still inventing nothing.",
   "3. How / with what: the means and keywords, such as methods, architecture and technologies the profile states, preferring the opening's keywords where true of the person, spelled as the opening spells them.",
-  "A bullet is never a bare list of technologies and fits about two to three lines of a PDF (roughly 330 characters).",
+  "A bullet is never a bare list of technologies and fits about two to three lines of a PDF (roughly 400 characters).",
   "The three blocks may also flow in one sentence, or the how may be a separate sentence after the result, or the action may carry its purpose before the result (action, result, then “using/with …”), and the how may name methods and practices, not only technologies.",
   "The examples below show the SHAPE only: never copy their facts, numbers or technologies into a document.",
   "- Example: “Redesigned the application architecture following Clean Architecture and Domain-Driven Design (DDD), optimizing the main section responsible for extracting relevant emails and carbon emissions data. Reduced the average processing time from 15 minutes to just 3 minutes by utilizing Node.js, TypeScript, and various AWS services such as AWS DynamoDB, AWS Cognito, AWS API Gateway, and AWS SQS.”",
@@ -36,7 +36,7 @@ export const bulletFormatRule = [
 export type BulletShapeProblem = "techList" | "tooLong" | "opening";
 
 /** About three lines of a PDF. */
-export const bulletMaxLength = 330;
+export const bulletMaxLength = 400;
 
 const nonVerbOpeners: Record<OutputLanguage, string[]> = {
   "en-US": [

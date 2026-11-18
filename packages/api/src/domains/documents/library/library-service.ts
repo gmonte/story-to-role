@@ -119,7 +119,9 @@ export class LibraryService {
       const existing = input.versionId
         ? await requireUserVersion(tx, input.userId, input.versionId)
         : null;
+      // Only a library resume: a LinkedIn text has its own generation.
       if (existing?.document.applicationId) throw notFound();
+      if (existing && existing.document.kind !== "resume") throw notFound();
       const focus = input.focus?.trim();
       if (!existing && !focus) throw new TRPCError({ code: "BAD_REQUEST" });
       const cipher = await getUserCipher(tx, input.userId);

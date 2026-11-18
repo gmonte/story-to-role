@@ -1,3 +1,4 @@
+import { sql } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 
 import { CareerRepository } from "@repo/api/domains/career/career-repository";
@@ -81,6 +82,11 @@ export class LinkedinService {
     const generation = await this.db.transaction(async (tx) => {
       const repository = new DocumentsRepository(tx);
       const cipher = await getUserCipher(tx, input.userId);
+      // One LinkedIn document per user: two first requests at once wait for
+      // each other instead of creating two.
+      await tx.execute(
+        sql`select pg_advisory_xact_lock(hashtext(${`linkedin:${profile.id}`}))`
+      );
       const existing = (await repository.listLibraryDocuments(profile.id)).find(
         (document) => document.kind === "linkedin"
       );

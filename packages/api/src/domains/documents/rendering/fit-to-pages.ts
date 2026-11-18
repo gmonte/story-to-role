@@ -2,7 +2,7 @@ import { trimToPages } from "../generation/resume-checks";
 import type { OutputLanguage } from "../schemas/document";
 import type { ExperienceAge } from "../schemas/generation-settings";
 import type { ResumeContent } from "../schemas/resume-content";
-import { renderResumePdf } from "./resume-pdf";
+import { renderResumeFitted } from "./resume-pdf";
 
 /**
  * Makes a resume fit its page limit in the real PDF (resume spec,
@@ -22,9 +22,11 @@ export async function fitToPages(input: {
   let content = trimToPages(input.content, maxPages, ages);
   let target = maxPages;
   for (;;) {
-    const rendered = await renderResumePdf({
+    // Density first: tighter spacing before any line is cut.
+    const rendered = await renderResumeFitted({
       content,
       language: input.language,
+      maxPages,
     });
     if (rendered.pages <= maxPages) return { content, ...rendered };
     // Aim the estimate lower until it shortens something more.

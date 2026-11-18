@@ -35,6 +35,7 @@ import {
   maxDocumentQuoteCharacters,
   useDocumentAgent,
 } from "./document-agent-context";
+import { withoutLineIds } from "../utils/line-ids";
 
 /**
  * The document agent (ADR 0009), beside the document: the user talks about
@@ -42,6 +43,7 @@ import {
  * agent answers with the frozen profile version in view. One conversation
  * per document, whatever the version open.
  */
+
 export function DocumentAgent({
   documentId,
   kind,
@@ -227,7 +229,7 @@ function Conversation({
                 {message.parts.map((part, index) =>
                   part.type === "text" && part.text ? (
                     <p key={index} className="text-sm whitespace-pre-wrap">
-                      {part.text}
+                      {withoutLineIds(part.text)}
                     </p>
                   ) : null
                 )}

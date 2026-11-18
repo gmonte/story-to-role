@@ -75,15 +75,8 @@ async function setup() {
     expiresAt: new Date(Date.now() + 86_400_000),
   });
 
-  // Some of everything: a position, an imported file, an application with
-  // an event, an own key.
-  await career.insertPosition({
-    profileId: profile.id,
-    encryptedEmployer: cipher.encrypt("Initech"),
-    encryptedTitle: cipher.encrypt("Platform Engineer"),
-    status: "approved",
-    origin: "manual",
-  });
+  // Some of everything: an imported file, an application with an event, an
+  // own key.
   const storageKey = `users/${user.id}/documents/1`;
   await storage.put(
     storageKey,
@@ -147,11 +140,8 @@ describe("account", () => {
     );
     const read = (name: string) => JSON.parse(strFromU8(zip[name])) as unknown;
 
-    expect(read("career/positions.json")).toEqual([
-      expect.objectContaining({
-        employer: "Initech",
-        title: "Platform Engineer",
-      }),
+    expect(read("career/profile.json")).toEqual([
+      expect.objectContaining({ interviewLanguage: "en-US" }),
     ]);
     expect(read("applications/events.json")).toContainEqual(
       expect.objectContaining({ text: "HR interview went well" })
@@ -194,7 +184,6 @@ describe("account", () => {
       "users",
       "user_data_keys",
       "career_profiles",
-      "positions",
       "openings",
       "applications",
       "application_events",

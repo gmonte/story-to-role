@@ -61,7 +61,6 @@ export class AccountRepository {
       t.profileVersionsTable.documentId,
       idsOf(profileDocuments)
     );
-    const positions = await byProfile(t.positionsTable);
     const openings = await byProfile(t.openingsTable);
     const fitChecks = await this.rowsWhere(
       t.fitChecksTable,
@@ -122,10 +121,6 @@ export class AccountRepository {
         idsOf(profileVersions)
       ),
       source_documents: await byProfile(t.sourceDocumentsTable),
-      positions,
-      credentials: await byProfile(t.credentialsTable),
-      sensitive_items: await byProfile(t.sensitiveItemsTable),
-      career_goals: await byProfile(t.careerGoalsTable),
       openings,
       opening_terms: await below(
         t.openingTermsTable,
@@ -154,7 +149,6 @@ export class AccountRepository {
       application_instructions: await byProfile(t.applicationInstructionsTable),
       instruction_points: await byProfile(t.instructionPointsTable),
       locked_fact_overrides: await byProfile(t.lockedFactOverridesTable),
-      application_overrides: await byProfile(t.applicationOverridesTable),
       company_research: await byProfile(t.companyResearchTable),
       company_facts: await byProfile(t.companyFactsTable),
       motivation_interviews: motivationInterviews,

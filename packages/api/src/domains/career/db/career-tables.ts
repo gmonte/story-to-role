@@ -6,10 +6,6 @@ import { createTable } from "@repo/api/utils/db/create-table";
 
 import type {
   InterviewLanguage,
-  CredentialKind,
-  CredentialStatus,
-  PositionOrigin,
-  PositionStatus,
   SourceDocumentKind,
   SourceImportRejection,
   SourceImportStatus,
@@ -70,63 +66,4 @@ export const sourceDocumentsTable = createTable(
     importSummarySaidAt: d.timestamp({ withTimezone: true }),
   }),
   (t) => [index("source_documents_profile_id_idx").on(t.profileId)]
-);
-
-/**
- * A role at one employer. Employer, title and dates are locked facts once
- * approved; removal is soft so the position can come back.
- */
-export const positionsTable = createTable(
-  "positions",
-  (d) => ({
-    id: d.uuid().defaultRandom().primaryKey(),
-    ...timestamps(d),
-    profileId: d
-      .uuid()
-      .notNull()
-      .references(() => careerProfilesTable.id, { onDelete: "cascade" }),
-    encryptedEmployer: d.text().notNull(),
-    encryptedTitle: d.text().notNull(),
-    encryptedLocation: d.text(),
-    // YYYY-MM; a null end date means the user still holds the position.
-    startDate: d.text(),
-    endDate: d.text(),
-    status: d.text().$type<PositionStatus>().notNull().default("pending"),
-    origin: d.text().$type<PositionOrigin>().notNull(),
-    sourceDocumentIds: d
-      .uuid()
-      .array()
-      .notNull()
-      .default(sql`'{}'::uuid[]`),
-    approvedAt: d.timestamp({ withTimezone: true }),
-    removedAt: d.timestamp({ withTimezone: true }),
-  }),
-  (t) => [index("positions_profile_id_idx").on(t.profileId)]
-);
-
-/** Education, certifications, languages…: short locked facts. */
-export const credentialsTable = createTable(
-  "credentials",
-  (d) => ({
-    id: d.uuid().defaultRandom().primaryKey(),
-    ...timestamps(d),
-    profileId: d
-      .uuid()
-      .notNull()
-      .references(() => careerProfilesTable.id, { onDelete: "cascade" }),
-    kind: d.text().$type<CredentialKind>().notNull(),
-    encryptedInstitution: d.text(),
-    encryptedTitle: d.text().notNull(),
-    level: d.text(),
-    startDate: d.text(),
-    endDate: d.text(),
-    status: d.text().$type<CredentialStatus>().notNull().default("completed"),
-    sourceDocumentIds: d
-      .uuid()
-      .array()
-      .notNull()
-      .default(sql`'{}'::uuid[]`),
-    approvedAt: d.timestamp({ withTimezone: true }),
-  }),
-  (t) => [index("credentials_profile_id_idx").on(t.profileId)]
 );

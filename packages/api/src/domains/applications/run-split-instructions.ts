@@ -9,7 +9,6 @@ import type { DbClient } from "@repo/api/tools/db-client";
 import { InstructionsRepository } from "./instructions-repository";
 import { loadPendingGapAnswers } from "./load-gap-answers";
 import {
-  type FlaggedSensitiveItem,
   instructionSplitSchema,
   positionFieldOf,
 } from "./schemas/instructions";
@@ -83,7 +82,6 @@ export async function runSplitInstructions(deps: {
       "- looks_like_career_fact: true for a new fact about the user's career (“I led the Kubernetes migration in 2021”); false for an adjustment for this opening (“emphasize people management”) or a statement that they lack something.",
       "- position_id or credential_id: where the fact belongs, from the lists below, or null when unclear.",
       "- evidence_kind: achievement, responsibility, metric, tool or award, for a career fact; null otherwise.",
-      "- sensitive_items: client names, internal codenames, explicit figures (money, percentages, headcounts) and people's names in the point, copied exactly.",
       "- locked_fact_change: when the point asks for a different employer, title or start or end date of one of the positions below in this application, give the position, the field and the new value (dates as YYYY-MM). Otherwise null.",
       "",
       "Positions:",
@@ -123,7 +121,7 @@ export async function runSplitInstructions(deps: {
 
   const positionIds = new Set(positions.map((position) => position.id));
   const credentialIds = new Set(credentials.map((row) => row.id));
-  const classify = (point: SplitPoint | null, text: string) => {
+  const classify = (point: SplitPoint | null) => {
     const positionId =
       point?.position_id && positionIds.has(point.position_id)
         ? point.position_id
@@ -134,29 +132,12 @@ export async function runSplitInstructions(deps: {
       credentialIds.has(point.credential_id)
         ? point.credential_id
         : null;
-    const sensitiveItems: FlaggedSensitiveItem[] = (
-      point?.sensitive_items ?? []
-    ).flatMap((item) => {
-      const original = findQuote(text, item.original);
-      return original
-        ? [
-            {
-              kind: item.kind,
-              original,
-              suggestedGeneralization: item.suggested_generalization,
-            },
-          ]
-        : [];
-    });
     return {
       suggestedPromotion:
         !!point?.looks_like_career_fact && !!(positionId ?? credentialId),
       positionId,
       credentialId,
       evidenceKind: point?.evidence_kind ?? null,
-      encryptedSensitiveItems: sensitiveItems.length
-        ? cipher.encrypt(JSON.stringify(sensitiveItems))
-        : null,
     };
   };
 
@@ -187,7 +168,7 @@ export async function runSplitInstructions(deps: {
       fitCheckItemId: row.fitCheckItemId,
       sequence: firstSequence + index,
       encryptedText: cipher.encrypt(row.text),
-      ...classify(row.point, row.text),
+      ...classify(row.point),
     }))
   );
 

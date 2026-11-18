@@ -12,7 +12,6 @@ import {
 
 import { CareerRepository } from "./career-repository";
 import { CareerService } from "./career-service";
-import { positionsTable } from "./db/career-tables";
 
 vi.mock("@repo/common/env/web.env", () => ({
   env: { ENCRYPTION_MASTER_KEY: `v1:${randomBytes(32).toString("base64")}` },
@@ -38,22 +37,6 @@ describe("career profile", () => {
 
   afterAll(async () => {
     await closeTestDatabase();
-  });
-
-  it("stores employers and titles encrypted", async () => {
-    const ctx = await setup();
-    await ctx.career.addPosition({
-      userId: ctx.user.id,
-      position: {
-        employer: "Banco X",
-        title: "Data Lead",
-        startDate: "2021-02",
-      },
-    });
-
-    const [row] = await ctx.db.select().from(positionsTable);
-    expect(row.encryptedEmployer).not.toContain("Banco");
-    expect(row.encryptedTitle).not.toContain("Data Lead");
   });
 
   it("shows the profile and its sources, with decrypted file names", async () => {

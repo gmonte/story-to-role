@@ -1,9 +1,15 @@
 import { z } from "zod";
 
-import {
-  evidenceKindSchema,
-  sensitiveItemKindSchema,
-} from "@repo/api/domains/evidence/schemas/evidence";
+/** What kind of career fact an instruction point states. */
+export const evidenceKinds = [
+  "achievement",
+  "responsibility",
+  "metric",
+  "tool",
+  "award",
+] as const;
+export const evidenceKindSchema = z.enum(evidenceKinds);
+export type EvidenceKind = z.infer<typeof evidenceKindSchema>;
 
 /**
  * A point of the application instructions (resume spec, "Application
@@ -48,17 +54,10 @@ export const positionFieldOf = {
   end_date: "endDate",
 } as const satisfies Record<LockedField, string>;
 
-export const flaggedSensitiveItemSchema = z.object({
-  kind: sensitiveItemKindSchema,
-  original: z.string(),
-  suggestedGeneralization: z.string().nullable(),
-});
-export type FlaggedSensitiveItem = z.infer<typeof flaggedSensitiveItemSchema>;
-
 /**
  * What the classification model returns: each point in the user's own
- * words, whether it looks like a new career fact, where it would belong,
- * the sensitive items it names and any change to a locked fact.
+ * words, whether it looks like a new career fact, where it would belong
+ * and any change to a locked fact.
  */
 export const instructionSplitSchema = z.object({
   points: z.array(
@@ -70,13 +69,6 @@ export const instructionSplitSchema = z.object({
       position_id: z.string().nullable(),
       credential_id: z.string().nullable(),
       evidence_kind: evidenceKindSchema.nullable(),
-      sensitive_items: z.array(
-        z.object({
-          kind: sensitiveItemKindSchema,
-          original: z.string(),
-          suggested_generalization: z.string().nullable(),
-        })
-      ),
       locked_fact_change: z
         .object({
           position_id: z.string(),
@@ -100,7 +92,6 @@ export const instructionPointViewSchema = z.object({
   evidenceKind: evidenceKindSchema.nullable(),
   // Sent to the profile as a suggestion (it stays in this application too).
   sentToProfile: z.boolean(),
-  sensitiveItems: z.array(flaggedSensitiveItemSchema),
 });
 export type InstructionPointView = z.infer<typeof instructionPointViewSchema>;
 

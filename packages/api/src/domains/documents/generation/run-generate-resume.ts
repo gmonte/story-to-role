@@ -7,7 +7,7 @@ import {
 import type { AiClient } from "@repo/api/domains/ai/ai-client";
 import { CareerRepository } from "@repo/api/domains/career/career-repository";
 import type { UserCipher } from "@repo/api/domains/encryption/user-cipher";
-import { loadSensitiveFilter } from "@repo/api/domains/evidence/sensitive/load-sensitive-filter";
+import { loadNeverIncludeFilter } from "@repo/api/domains/profile/rules/load-never-include-filter";
 import { OpeningsRepository } from "@repo/api/domains/openings/openings-repository";
 import type { TaskProgress } from "@repo/api/domains/tasks/schemas/task";
 import type { DbClient } from "@repo/api/tools/db-client";
@@ -185,7 +185,7 @@ export async function runGenerateResume(deps: {
       .parse(generation.settings ?? defaultGenerationSettings);
     const today = deps.today ?? new Date().toISOString().slice(0, 7);
     // The frozen version's own rules, whatever was published since.
-    const filter = await loadSensitiveFilter({
+    const filter = await loadNeverIncludeFilter({
       db,
       cipher,
       profileId: generation.profileId,

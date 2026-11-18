@@ -85,6 +85,13 @@
       "when": 1794957342662,
       "tag": "0011_add_tracker_method_fields",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1794961616687,
+      "tag": "0012_remove_leftover_career_tables",
+      "breakpoints": true
     }
   ]
 }

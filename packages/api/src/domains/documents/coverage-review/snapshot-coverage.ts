@@ -1,7 +1,7 @@
 import { TRPCError } from "@trpc/server";
 
 import type { UserCipher } from "@repo/api/domains/encryption/user-cipher";
-import { loadSensitiveFilter } from "@repo/api/domains/evidence/sensitive/load-sensitive-filter";
+import { loadNeverIncludeFilter } from "@repo/api/domains/profile/rules/load-never-include-filter";
 import type { DbClient } from "@repo/api/tools/db-client";
 
 import { DocumentsRepository } from "../documents-repository";
@@ -64,7 +64,7 @@ export class FrozenContexts {
     let context = this.contexts.get(key);
     if (!context) {
       context = (async () => {
-        const filter = await loadSensitiveFilter({
+        const filter = await loadNeverIncludeFilter({
           db: this.db,
           cipher: this.cipher,
           profileId: this.profileId,

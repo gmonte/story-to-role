@@ -12,8 +12,7 @@ import { CareerService } from "@repo/api/domains/career/career-service";
 import { creditCap } from "@repo/api/domains/credits/credit-pricing";
 import { creditReserve } from "@repo/api/domains/credits/credit-reserve";
 import { getUserCipher } from "@repo/api/domains/encryption/user-cipher";
-import { sensitiveItemsTable } from "@repo/api/domains/evidence/db/evidence-tables";
-import { loadSensitiveFilter } from "@repo/api/domains/evidence/sensitive/load-sensitive-filter";
+import { loadNeverIncludeFilter } from "@repo/api/domains/profile/rules/load-never-include-filter";
 import { OpeningsRepository } from "@repo/api/domains/openings/openings-repository";
 import { ProfileService } from "@repo/api/domains/profile/profile-service";
 import type * as SuggestLineModule from "@repo/api/domains/profile/suggestions/suggest-line";
@@ -208,7 +207,11 @@ async function setup({
       db,
       cipher,
       profileId: profile.id,
-      filter: await loadSensitiveFilter({ db, cipher, profileId: profile.id }),
+      filter: await loadNeverIncludeFilter({
+        db,
+        cipher,
+        profileId: profile.id,
+      }),
     });
   const context = await readCareer();
   // Ids are derived from the profile: nothing here is a table row's.
@@ -356,7 +359,7 @@ async function setup({
   async function runScripted(generationId: string, script: Script) {
     const drafts = [...script.drafts];
     const ratings = [...script.ratings];
-    const filter = await loadSensitiveFilter({
+    const filter = await loadNeverIncludeFilter({
       db,
       cipher,
       profileId: profile.id,
@@ -380,7 +383,7 @@ async function setup({
         userId: user.id,
         funding: "credits",
         providerPackage: fake.providerPackage,
-        sensitiveFilter: filter,
+        neverIncludeFilter: filter,
       }),
       cipher,
       userId: user.id,
@@ -1187,7 +1190,6 @@ describe("resume generation and snapshots", () => {
       position_id: null,
       credential_id: null,
       evidence_kind: null,
-      sensitive_items: [],
       locked_fact_change: null,
     };
     const fake = fakeProviderPackage({
@@ -1382,7 +1384,6 @@ describe("resume generation and snapshots", () => {
       position_id: null,
       credential_id: null,
       evidence_kind: null,
-      sensitive_items: [],
       locked_fact_change: null,
     };
     const fake = fakeProviderPackage({
@@ -1394,19 +1395,6 @@ describe("resume generation and snapshots", () => {
             looks_like_career_fact: true,
             position_id: ctx.positionId,
             evidence_kind: "achievement",
-            sensitive_items: [
-              {
-                kind: "client",
-                original: "Initrode",
-                suggested_generalization: "a logistics company",
-              },
-              // Not in the point: never flagged.
-              {
-                kind: "person",
-                original: "Bob",
-                suggested_generalization: null,
-              },
-            ],
           },
           { ...point, text: "Emphasize people management" },
           // Rephrased, not the user's words: dropped.
@@ -1437,7 +1425,7 @@ describe("resume generation and snapshots", () => {
         userId: ctx.user.id,
         funding: "credits",
         providerPackage: fake.providerPackage,
-        sensitiveFilter: await loadSensitiveFilter({
+        neverIncludeFilter: await loadNeverIncludeFilter({
           db: ctx.db,
           cipher: ctx.cipher,
           profileId: ctx.profile.id,
@@ -1454,28 +1442,17 @@ describe("resume generation and snapshots", () => {
     });
     expect(review.pendingGapAnswers).toBe(0);
     expect(
-      review.points.map((row) => [
-        row.text,
-        row.source,
-        row.suggestedPromotion,
-        row.sensitiveItems.map((item) => item.original),
-      ])
+      review.points.map((row) => [row.text, row.source, row.suggestedPromotion])
     ).toEqual([
-      [
-        "I led the Kubernetes migration in 2021 at Initrode",
-        "written",
-        true,
-        ["Initrode"],
-      ],
-      ["Emphasize people management", "written", false, []],
+      ["I led the Kubernetes migration in 2021 at Initrode", "written", true],
+      ["Emphasize people management", "written", false],
       [
         "In this application my title at Globex is Engineering Manager",
         "written",
         false,
-        [],
       ],
       // A target that is not one of the user's positions is no suggestion.
-      ["I built a CLI in Go at Globex", "gap_answer", false, []],
+      ["I built a CLI in Go at Globex", "gap_answer", false],
     ]);
     expect(review.overrides).toMatchObject([
       {
@@ -1512,8 +1489,6 @@ describe("resume generation and snapshots", () => {
       openingId: ctx.opening.id,
       instructionPointId: emphasis.id,
     });
-    // Nothing reached the career's sensitive items.
-    expect(await ctx.db.select().from(sensitiveItemsTable)).toEqual([]);
 
     const after = await instructions.get({
       userId: ctx.user.id,
@@ -1595,7 +1570,6 @@ describe("resume generation and snapshots", () => {
       position_id: null,
       credential_id: null,
       evidence_kind: null,
-      sensitive_items: [],
     };
     const fake = fakeProviderPackage({
       object: () => ({
@@ -1747,7 +1721,7 @@ describe("resume generation and snapshots", () => {
 
     const tasks = new TasksService(ctx.db, ctx.trigger);
     const adaptation = new AdaptationService(ctx.db, tasks);
-    const filter = await loadSensitiveFilter({
+    const filter = await loadNeverIncludeFilter({
       db: ctx.db,
       cipher: ctx.cipher,
       profileId: ctx.profile.id,
@@ -1766,7 +1740,7 @@ describe("resume generation and snapshots", () => {
           userId: ctx.user.id,
           funding: "credits",
           providerPackage: fake.providerPackage,
-          sensitiveFilter: filter,
+          neverIncludeFilter: filter,
         }),
         cipher: ctx.cipher,
         filter,
@@ -2301,7 +2275,7 @@ describe("resume generation and snapshots", () => {
     );
     const runLetter = async (generationId: string, drafts: LetterDraft[]) => {
       const queue = [...drafts];
-      const filter = await loadSensitiveFilter({
+      const filter = await loadNeverIncludeFilter({
         db: ctx.db,
         cipher: ctx.cipher,
         profileId: ctx.profile.id,
@@ -2324,7 +2298,7 @@ describe("resume generation and snapshots", () => {
           userId: ctx.user.id,
           funding: "credits",
           providerPackage: fake.providerPackage,
-          sensitiveFilter: filter,
+          neverIncludeFilter: filter,
         }),
         cipher: ctx.cipher,
         userId: ctx.user.id,
@@ -2985,7 +2959,7 @@ describe("resume generation and snapshots", () => {
       versionId: version.id,
       language: "pt-BR",
     });
-    const filter = await loadSensitiveFilter({
+    const filter = await loadNeverIncludeFilter({
       db: ctx.db,
       cipher: ctx.cipher,
       profileId: ctx.profile.id,
@@ -3012,7 +2986,7 @@ describe("resume generation and snapshots", () => {
         userId: ctx.user.id,
         funding: "credits",
         providerPackage: fake.providerPackage,
-        sensitiveFilter: filter,
+        neverIncludeFilter: filter,
       }),
       cipher: ctx.cipher,
       filter,
@@ -3123,7 +3097,7 @@ describe("resume generation and snapshots", () => {
         closing: "Sincerely,",
       },
     ];
-    const filter = await loadSensitiveFilter({
+    const filter = await loadNeverIncludeFilter({
       db: ctx.db,
       cipher: ctx.cipher,
       profileId: ctx.profile.id,
@@ -3153,7 +3127,7 @@ describe("resume generation and snapshots", () => {
         userId: ctx.user.id,
         funding: "credits",
         providerPackage: fake.providerPackage,
-        sensitiveFilter: filter,
+        neverIncludeFilter: filter,
       }),
       cipher: ctx.cipher,
       userId: ctx.user.id,
@@ -3309,7 +3283,7 @@ describe("resume generation and snapshots", () => {
     const people = cite("I led 8 engineers and mentored 4 juniors.", {
       instruction_ids: [led.id, mentored.id],
     });
-    const filter = await loadSensitiveFilter({
+    const filter = await loadNeverIncludeFilter({
       db: ctx.db,
       cipher: ctx.cipher,
       profileId: ctx.profile.id,
@@ -3340,7 +3314,7 @@ describe("resume generation and snapshots", () => {
         userId: ctx.user.id,
         funding: "credits",
         providerPackage: fake.providerPackage,
-        sensitiveFilter: filter,
+        neverIncludeFilter: filter,
       }),
       cipher: ctx.cipher,
       userId: ctx.user.id,
@@ -3446,7 +3420,7 @@ describe("resume generation and snapshots", () => {
       motivation_point_ids: [],
       instruction_ids: [],
     });
-    const filter = await loadSensitiveFilter({
+    const filter = await loadNeverIncludeFilter({
       db: ctx.db,
       cipher: ctx.cipher,
       profileId: ctx.profile.id,
@@ -3470,7 +3444,7 @@ describe("resume generation and snapshots", () => {
         userId: ctx.user.id,
         funding: "credits",
         providerPackage: fake.providerPackage,
-        sensitiveFilter: filter,
+        neverIncludeFilter: filter,
       }),
       cipher: ctx.cipher,
       userId: ctx.user.id,
@@ -3854,7 +3828,7 @@ describe("resume generation and snapshots", () => {
       db: ctx.db,
       cipher: ctx.cipher,
       profileId: ctx.profile.id,
-      filter: await loadSensitiveFilter({
+      filter: await loadNeverIncludeFilter({
         db: ctx.db,
         cipher: ctx.cipher,
         profileId: ctx.profile.id,
@@ -3940,7 +3914,7 @@ describe("resume generation and snapshots", () => {
         confirmedAt: new Date(),
       }))
     );
-    const filter = await loadSensitiveFilter({
+    const filter = await loadNeverIncludeFilter({
       db: ctx.db,
       cipher: ctx.cipher,
       profileId: ctx.profile.id,

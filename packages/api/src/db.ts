@@ -7,7 +7,6 @@ export * from "./domains/credits/db/credits-tables";
 export * from "./domains/billing/db/billing-tables";
 export * from "./domains/career/db/career-tables";
 export * from "./domains/profile/db/profile-tables";
-export * from "./domains/evidence/db/evidence-tables";
 export * from "./domains/openings/db/openings-tables";
 export * from "./domains/applications/db/applications-tables";
 export * from "./domains/applications/db/tracker-tables";

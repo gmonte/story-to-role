@@ -3,11 +3,11 @@ import type { UserCipher } from "@repo/api/domains/encryption/user-cipher";
 import { loadPublishedProfile } from "@repo/api/domains/profile/load-published-profile";
 import type { DbClient } from "@repo/api/tools/db-client";
 
-import { createSensitiveFilter } from "./sensitive-filter";
+import { createNeverIncludeFilter } from "./never-include-filter";
 
 /** The filter of a profile's communication rules: what must never appear. */
 export function communicationRulesFilter(rules: { neverInclude: string[] }) {
-  return createSensitiveFilter(
+  return createNeverIncludeFilter(
     rules.neverInclude.map((original) => ({ original, choice: "exclude" }))
   );
 }
@@ -19,7 +19,7 @@ export function communicationRulesFilter(rules: { neverInclude: string[] }) {
  * carrying one of those terms is rejected. A given version's rules for a
  * document that froze it; nothing to filter until a profile is published.
  */
-export async function loadSensitiveFilter(input: {
+export async function loadNeverIncludeFilter(input: {
   db: DbClient;
   cipher: UserCipher;
   profileId: string;

@@ -1,7 +1,6 @@
 import type { inferRouterInputs, inferRouterOutputs } from "@trpc/server";
 
 import { createTRPCRouter } from "./tools/trpc";
-import { overridesRouter } from "./domains/applications/overrides/overrides-router";
 import { trackerRouter } from "./domains/applications/tracker/tracker-router";
 import { instructionsRouter } from "./domains/applications/instructions-router";
 import { motivationRouter } from "./domains/applications/motivation/motivation-router";
@@ -36,7 +35,6 @@ export const appRouter = createTRPCRouter({
   library: libraryRouter,
   motivation: motivationRouter,
   openings: openingsRouter,
-  overrides: overridesRouter,
   profile: profileRouter,
   research: researchRouter,
   tasks: tasksRouter,

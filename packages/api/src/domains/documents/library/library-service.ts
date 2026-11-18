@@ -7,7 +7,7 @@ import type { Tone } from "@repo/api/domains/openings/schemas/opening";
 import type { RealtimeSubscription } from "@repo/api/domains/tasks/schemas/task";
 import { TasksService } from "@repo/api/domains/tasks/tasks-service";
 import type { DbClient } from "@repo/api/tools/db-client";
-import { loadSensitiveFilter } from "@repo/api/domains/evidence/sensitive/load-sensitive-filter";
+import { loadNeverIncludeFilter } from "@repo/api/domains/profile/rules/load-never-include-filter";
 
 import { DocumentsRepository } from "../documents-repository";
 import { failGeneration } from "../documents-service";
@@ -292,7 +292,7 @@ export class LibraryService {
       const cipher = await getUserCipher(tx, input.userId);
       // The copy is of that text, so of the profile version it was
       // written from: its locked facts are read from there.
-      const filter = await loadSensitiveFilter({
+      const filter = await loadNeverIncludeFilter({
         db: tx,
         cipher,
         profileId: profile.id,

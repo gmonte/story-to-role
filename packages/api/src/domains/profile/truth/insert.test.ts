@@ -89,7 +89,7 @@ describe("the insert menu", () => {
     expect(
       insert(markdown, { kind: "rule", rule: "neverClaim", text: "liderança" })
     ).toContain(
-      "- Nunca afirmar: números que não estejam marcados como [medido]; competências apenas estudadas como experiência profissional, liderança\n"
+      "- Nunca afirmar: números que não estejam marcados como [medido] ou [estimado], liderança\n"
     );
   });
 

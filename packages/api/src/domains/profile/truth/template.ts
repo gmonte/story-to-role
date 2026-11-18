@@ -44,8 +44,8 @@ const sectionItems: Record<
       "Site ou portfólio:",
     ],
     rules: [
-      "Nunca incluir: documentos de identidade, dados bancários, dados pessoais fora da seção Contato, informações confidenciais de empregadores; nomes de pessoas (colegas, gestores, clientes); motivos de saída, demissões e opiniões sobre ex-empregadores; valores de salário, hora e faturamento; detalhes de vulnerabilidades de segurança; nomes internos de repositórios e projetos.",
-      "Nunca afirmar: números que não estejam marcados como [medido]; competências apenas estudadas como experiência profissional.",
+      "Nunca incluir: documentos de identidade, dados bancários, dados pessoais fora da seção Contato, informações confidenciais de empregadores; nomes de pessoas; motivos de saída, demissões e opiniões sobre ex-empregadores; valores de salário e faturamento; detalhes de vulnerabilidades; nomes internos de repositórios e projetos.",
+      "Nunca afirmar: números que não estejam marcados como [medido] ou [estimado].",
     ],
   },
   "en-US": {
@@ -62,8 +62,8 @@ const sectionItems: Record<
       "Website or portfolio:",
     ],
     rules: [
-      "Never include: identity documents, bank details, personal data outside the Contact section, employers' confidential information; names of people (colleagues, managers, clients); reasons for leaving, layoffs and opinions about former employers; salary, hourly rate and revenue figures; details of security vulnerabilities; internal names of repositories and projects.",
-      "Never claim: figures not marked [measured]; competencies only studied as professional experience.",
+      "Never include: identity documents, bank details, personal data outside the Contact section, employers' confidential information; names of people; reasons for leaving, layoffs and opinions about former employers; salary and revenue figures; vulnerability details; internal names of repositories and projects.",
+      "Never claim: figures not marked [measured] or [estimated].",
     ],
   },
 };

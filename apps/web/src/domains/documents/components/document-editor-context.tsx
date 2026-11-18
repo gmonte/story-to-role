@@ -63,6 +63,9 @@ import {
 import { useDocumentAgent } from "./document-agent-context";
 import { originMarker } from "./editing";
 
+const infoIcon =
+  '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>';
+
 export type DocumentFinding = CoverageView["findings"][number];
 
 /** A change the agent proposed, with the blocks it replaces now (null when stale). */
@@ -674,9 +677,10 @@ export function DocumentEditorProvider({
         element: () => {
           const marker = document.createElement("span");
           marker.className = cn(
-            "text-muted-foreground/60 hover:text-foreground focus-visible:text-foreground ml-1 cursor-help text-sm font-bold select-none focus-visible:outline-none"
+            "text-muted-foreground/60 hover:text-foreground focus-visible:text-foreground ml-1 inline-flex size-3.5 cursor-help align-[-2px] select-none focus-visible:outline-none"
           );
-          marker.textContent = "“";
+          // lucide's Info icon, as markup: the widget is plain DOM.
+          marker.innerHTML = infoIcon;
           marker.tabIndex = 0;
           marker.contentEditable = "false";
           marker.dataset.traceMarker = block.lineId;

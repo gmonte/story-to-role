@@ -40,12 +40,14 @@ import {
   lockedFactViolations,
   resumeText,
   trimToPages,
+  withoutEmptyEntries,
 } from "./resume-checks";
 
 const P1 = "00000000-0000-4000-8000-000000000001";
 const P2 = "00000000-0000-4000-8000-000000000002";
 const P3 = "00000000-0000-4000-8000-000000000003";
 const P4 = "00000000-0000-4000-8000-000000000004";
+const P5 = "00000000-0000-4000-8000-000000000005";
 const E1 = "00000000-0000-4000-8000-0000000000e1";
 const E2 = "00000000-0000-4000-8000-0000000000e2";
 const E3 = "00000000-0000-4000-8000-0000000000e3";
@@ -1382,16 +1384,17 @@ describe("trimming to the page limit", () => {
       },
       // The very old experience that entered for relevance leaves whole.
       { bullets: { Globex: 4, Acme: 2, Hooli: 2 }, sentences: five, skills },
-      // Then the bullets of older experiences, oldest first.
+      // Then the bullets of older experiences, oldest first; an experience
+      // leaves whole with its last bullet, never as a bare title.
       { bullets: { Globex: 4, Acme: 2, Hooli: 1 }, sentences: five, skills },
-      { bullets: { Globex: 4, Acme: 2, Hooli: 0 }, sentences: five, skills },
-      { bullets: { Globex: 4, Acme: 1, Hooli: 0 }, sentences: five, skills },
-      { bullets: { Globex: 4, Acme: 0, Hooli: 0 }, sentences: five, skills },
+      { bullets: { Globex: 4, Acme: 2 }, sentences: five, skills },
+      { bullets: { Globex: 4, Acme: 1 }, sentences: five, skills },
+      { bullets: { Globex: 4 }, sentences: five, skills },
       // Then the summary, down to three sentences.
-      { bullets: { Globex: 4, Acme: 0, Hooli: 0 }, sentences: all, skills },
+      { bullets: { Globex: 4 }, sentences: all, skills },
       // Then the competencies listed last, down to three.
       {
-        bullets: { Globex: 4, Acme: 0, Hooli: 0 },
+        bullets: { Globex: 4 },
         sentences: all,
         skills: ["Kubernetes, Terraform", "Go"],
       },
@@ -1407,6 +1410,31 @@ describe("trimming to the page limit", () => {
 
   it("cuts nothing from a resume that fits", () => {
     expect(trimToPages(content, estimatePages(content), ages)).toBe(content);
+  });
+
+  it("drops an experience the writer left without bullets, even when the resume fits", () => {
+    const withEmpty: ResumeContent = {
+      ...content,
+      sections: content.sections.map((section) =>
+        section.kind === "experience"
+          ? {
+              ...section,
+              entries: [
+                ...section.entries,
+                entry(P5, "Umbrella", "2016-01", 0),
+              ],
+            }
+          : section
+      ),
+    };
+    const fitted = trimToPages(withEmpty, estimatePages(withEmpty) + 1, ages);
+    expect(experienceOf(fitted).map((row) => row.employer)).toEqual([
+      "Globex",
+      "Acme",
+      "Hooli",
+      "Initech",
+    ]);
+    expect(withoutEmptyEntries(content)).toBe(content);
   });
 
   it("shortens the summary by whole sentences", () => {

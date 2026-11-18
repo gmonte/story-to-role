@@ -261,15 +261,41 @@ export function estimatePages(content: ResumeContent) {
 }
 
 /**
+ * The resume without experience entries that have no bullets: a resume
+ * never shows an experience as a bare title, whatever left it empty. The
+ * same object when nothing is dropped.
+ */
+export function withoutEmptyEntries(content: ResumeContent): ResumeContent {
+  const empty = content.sections.some(
+    (section) =>
+      section.kind === "experience" &&
+      section.entries.some((entry) => entry.lines.length === 0)
+  );
+  if (!empty) return content;
+  return {
+    ...content,
+    sections: content.sections.map((section) =>
+      section.kind === "experience"
+        ? {
+            ...section,
+            entries: section.entries.filter((entry) => entry.lines.length > 0),
+          }
+        : section
+    ),
+  };
+}
+
+/**
  * Shortens a resume until the estimate fits, in the order the generation
  * settings give (resume spec, "Generation settings"): the bullet of a very
  * old experience that entered for relevance (it leaves with it); the
- * bullets of older experiences, oldest first; the summary down to three
- * sentences; the competencies least related to the opening, which the
- * writer lists last. The bullets of recent experiences are never cut: a
- * resume that still doesn't fit is returned as it is, for the user to be
- * warned. Nothing is rewritten, so every line kept still rests on the
- * profile.
+ * bullets of older experiences, oldest first, each experience leaving whole
+ * with its last bullet (never a title with nothing under it); the summary
+ * down to three sentences; the competencies least related to the opening,
+ * which the writer lists last. The bullets of recent experiences are never
+ * cut: a resume that still doesn't fit is returned as it is, for the user
+ * to be warned. Nothing is rewritten, so every line kept still rests on
+ * the profile.
  */
 export function trimToPages(
   content: ResumeContent,
@@ -277,7 +303,7 @@ export function trimToPages(
   // Each position's age to this document; one not listed is recent.
   ages: Map<string, ExperienceAge>
 ) {
-  let current = content;
+  let current = withoutEmptyEntries(content);
   while (estimatePages(current) > pages) {
     const next = shortenOnce(current, ages);
     if (!next) return current;
@@ -328,14 +354,18 @@ function shortenOnce(
     (entry) => ages.get(entry.positionId) === "older" && entry.lines.length > 0
   );
   if (older) {
+    // Its last bullet takes the experience with it: oldest first, so a
+    // resume that must lose experiences loses the oldest.
     return mapSection("experience", (section) =>
       section.kind === "experience"
         ? {
             ...section,
-            entries: section.entries.map((entry) =>
-              entry === older
-                ? { ...entry, lines: entry.lines.slice(0, -1) }
-                : entry
+            entries: section.entries.flatMap((entry) =>
+              entry !== older
+                ? [entry]
+                : entry.lines.length > 1
+                  ? [{ ...entry, lines: entry.lines.slice(0, -1) }]
+                  : []
             ),
           }
         : section

@@ -4189,9 +4189,32 @@ describe("resume generation and snapshots", () => {
       text: "Led a team of 5 engineers.",
       evidence_ids: [ctx.evidence[1].id],
     };
-    // Every position is recent enough to this month to be printed.
+    // Every position is recent enough to this month to be printed, and
+    // each gets a bullet: an experience without one is never printed.
+    const base = ctx.draft([line]);
+    const bulletFor = (positionId: string) => {
+      const row = ctx.context.evidence.find(
+        (candidate) => candidate.positionId === positionId
+      )!;
+      return {
+        position_id: positionId,
+        context: null,
+        relevance: null,
+        bullets: [
+          { text: row.text.replace(/^[^:]*:\s*/, ""), evidence_ids: [row.id] },
+        ],
+      };
+    };
     await ctx.generate("quick", {
-      drafts: [ctx.draft([line])],
+      drafts: [
+        {
+          ...base,
+          experience: [
+            ...base.experience,
+            ...ctx.context.positions.slice(1).map((row) => bulletFor(row.id)),
+          ],
+        },
+      ],
       ratings: [9],
       today: "2026-01",
     });

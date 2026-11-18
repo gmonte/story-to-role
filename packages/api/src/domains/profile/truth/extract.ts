@@ -4,6 +4,11 @@ import {
   type PublicName,
   publicNameValues,
 } from "../rules/public-names";
+import {
+  parseTranslations,
+  type ProfileTranslations,
+  translationValues,
+} from "../rules/translations";
 import type { ProfileBlock } from "./blocks";
 import { splitNames } from "./lint";
 import { findMarks, type FigureMark } from "./marks";
@@ -51,6 +56,8 @@ export type ProfileExtract = {
     neverInclude: string[];
     neverClaim: string[];
     publicNames: PublicName[];
+    // The translations dictionary, by target language (profile spec).
+    translations: ProfileTranslations;
   };
   // Each marked figure, with the passage it is in (its ordinal among the
   // version's passages, null when the line isn't one).
@@ -179,12 +186,23 @@ export function extractProfile(blocks: ProfileBlock[]): ProfileExtract {
     neverInclude: [] as string[],
     neverClaim: [] as string[],
     publicNames: [] as PublicName[],
+    translations: {} as ProfileTranslations,
   };
   const rulesSection = sectionOf(structure, "rules");
   for (const { value } of rulesSection
     ? publicNameValues(blocks, rulesSection)
     : []) {
     rules.publicNames.push(...parsePublicNames(value).entries);
+  }
+  for (const { language, value } of rulesSection
+    ? translationValues(blocks, rulesSection)
+    : []) {
+    const entries = parseTranslations(value).entries;
+    if (!entries.length) continue;
+    rules.translations[language] = [
+      ...(rules.translations[language] ?? []),
+      ...entries,
+    ];
   }
   for (const line of itemsOf(blocks, rulesSection)) {
     const labelled = splitLabel(line);

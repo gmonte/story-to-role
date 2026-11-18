@@ -8,6 +8,8 @@ import {
   type CompetencyLevel,
   type ProfileLanguage,
   type ProfileSectionKey,
+  translationLanguageOf,
+  translationLineLabels,
 } from "./sections";
 import { publicNamesLabels } from "../rules/public-names";
 import { splitNames } from "./lint";
@@ -43,7 +45,17 @@ export type ProfileEntry =
   | { kind: "gap"; text: string }
   | { kind: "rule"; rule: "neverInclude" | "neverClaim"; text: string }
   // An entry of the public names dictionary: the real name, its public form.
-  | { kind: "rule"; rule: "publicName"; original: string; public: string };
+  | { kind: "rule"; rule: "publicName"; original: string; public: string }
+  // An entry of the translations dictionary for one target language: a
+  // code-printed field as the profile writes it, and how documents in that
+  // language write it.
+  | {
+      kind: "rule";
+      rule: "translation";
+      language: ProfileLanguage;
+      original: string;
+      translation: string;
+    };
 
 export type ProfileEntryKind = ProfileEntry["kind"];
 
@@ -197,18 +209,29 @@ export function insertEntry(
     };
   }
 
-  if (entry.kind === "rule" && entry.rule === "publicName") {
-    const pair = `${entry.original.trim()} → ${entry.public.trim()}`;
+  if (
+    entry.kind === "rule" &&
+    (entry.rule === "publicName" || entry.rule === "translation")
+  ) {
+    // A dictionary line (public names, or the translations into one
+    // language): the entry joins the line's own `;` list or its sub-items.
+    const pair =
+      entry.rule === "publicName"
+        ? `${entry.original.trim()} → ${entry.public.trim()}`
+        : `${entry.original.trim()} → ${entry.translation.trim()}`;
+    const isLine = (label: string) =>
+      entry.rule === "publicName"
+        ? publicNamesLabels.includes(normalizeLabel(label))
+        : translationLanguageOf(label) === entry.language;
+    const lineLabel =
+      entry.rule === "publicName"
+        ? words[language].publicName
+        : translationLineLabels[language][entry.language];
     for (let line = section.start; line < section.end; line++) {
       const block = blocks[line];
       if (block.type !== "item" || block.depth) continue;
       const labelled = splitLabel(block.text);
-      if (
-        !labelled ||
-        !publicNamesLabels.includes(normalizeLabel(labelled.label))
-      ) {
-        continue;
-      }
+      if (!labelled || !isLine(labelled.label)) continue;
       // Written on the line itself: one more “; ” entry.
       const value = labelled.value.trim().replace(/[.;]$/, "");
       if (value) {
@@ -235,7 +258,7 @@ export function insertEntry(
     const at = section.end;
     return {
       blocks: insertAt(blocks, at, [
-        { type: "item", depth: 0, text: `${words[language].publicName}:` },
+        { type: "item", depth: 0, text: `${lineLabel}:` },
         { type: "item", depth: 1, text: pair },
       ]),
       line: at + 1,

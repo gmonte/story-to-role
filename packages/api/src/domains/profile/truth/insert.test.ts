@@ -195,4 +195,50 @@ describe("the insert menu", () => {
       "- Nomes públicos: Banco X → banco; Chief → chat de IA"
     );
   });
+
+  it("adds a translation to its language's line, creating the line in the profile's language", () => {
+    const base = `# Perfil\n\n## Regras de comunicação\n\n- Nunca afirmar: liderança`;
+    const created = insert(base, {
+      kind: "rule",
+      rule: "translation",
+      language: "en-US",
+      original: "Meta IT (agora Insi)",
+      translation: "Meta IT (now Insi)",
+    });
+    expect(created).toContain(
+      "- Em inglês:\n  - Meta IT (agora Insi) → Meta IT (now Insi)"
+    );
+    const listed = insert(created, {
+      kind: "rule",
+      rule: "translation",
+      language: "en-US",
+      original: "Belo Horizonte, MG, Brasil",
+      translation: "Belo Horizonte, MG, Brazil",
+    });
+    expect(listed).toContain(
+      "  - Meta IT (agora Insi) → Meta IT (now Insi)\n  - Belo Horizonte, MG, Brasil → Belo Horizonte, MG, Brazil"
+    );
+    // Another language gets its own line.
+    const other = insert(listed, {
+      kind: "rule",
+      rule: "translation",
+      language: "pt-BR",
+      original: "x",
+      translation: "y",
+    });
+    expect(other).toContain("- Em português:\n  - x → y");
+    const english = insert(
+      `# Profile\n\n## Communication rules\n\n- Never claim: leadership`,
+      {
+        kind: "rule",
+        rule: "translation",
+        language: "pt-BR",
+        original: "Globex (now Initech)",
+        translation: "Globex (agora Initech)",
+      }
+    );
+    expect(english).toContain(
+      "- In Portuguese:\n  - Globex (now Initech) → Globex (agora Initech)"
+    );
+  });
 });

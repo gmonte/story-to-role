@@ -92,6 +92,14 @@ export type SaveStatus = "saved" | "pending" | "saving" | "error";
  */
 export type ProfileAction =
   | { kind: "add"; run: () => void; pending: boolean }
+  // "Add translation" of a "not translated" finding: the field as printed,
+  // and the wording the user gives for the document's language.
+  | {
+      kind: "translate";
+      original: string;
+      run: (translation: string) => void;
+      pending: boolean;
+    }
   | { kind: "sent"; status: "pending" | "accepted" };
 
 type DocumentEditorState = {
@@ -659,8 +667,49 @@ export function DocumentEditorProvider({
     })
   );
   const { mutate: sendLine, isPending: sending } = addToProfile;
+  // "Add translation": the entry becomes a suggestion on the profile's
+  // translations line for this language.
+  const addTranslation = useMutation(
+    trpc.documents.addTranslationToProfile.mutationOptions({
+      onSuccess: () => {
+        toast.success(
+          t.formatMessage({
+            defaultMessage:
+              "Sent to your profile: accept it in My career, then publish and use the new version here.",
+          })
+        );
+        void refresh();
+      },
+      onError: () =>
+        toast.error(
+          t.formatMessage({
+            defaultMessage:
+              "This translation couldn't be sent to your profile.",
+          })
+        ),
+    })
+  );
+  const { mutate: sendTranslation, isPending: sendingTranslation } =
+    addTranslation;
   const profileActionFor = useCallback(
     (finding: DocumentFinding): ProfileAction | null => {
+      if (finding.code === "untranslated") {
+        const sent = version.sentTranslations.find(
+          (row) => row.original === finding.text
+        );
+        if (sent) return { kind: "sent", status: sent.status };
+        return {
+          kind: "translate",
+          original: finding.text,
+          pending: sendingTranslation,
+          run: (translation) =>
+            sendTranslation({
+              versionId: version.id,
+              original: finding.text,
+              translation,
+            }),
+        };
+      }
       const lineId = finding.lineId;
       if (finding.code !== "notInProfile" || !lineId) return null;
       const sent = version.sentToProfile.find((row) => row.lineId === lineId);
@@ -671,7 +720,15 @@ export function DocumentEditorProvider({
         run: () => sendLine({ versionId: version.id, lineId }),
       };
     },
-    [sendLine, sending, version.id, version.sentToProfile]
+    [
+      sendLine,
+      sending,
+      sendTranslation,
+      sendingTranslation,
+      version.id,
+      version.sentToProfile,
+      version.sentTranslations,
+    ]
   );
 
   // What is drawn over the text: the origin markers, the findings'

@@ -12,6 +12,8 @@ import {
   normalizeLabel,
   type ExperienceField,
   type ProfileLanguage,
+  translationLanguageOf,
+  translationLineLabels,
 } from "../truth/sections";
 import { readStructure, sectionOf, splitLabel } from "../truth/structure";
 import type { ProfileSuggestionOrigin } from "../schemas/profile";
@@ -25,7 +27,10 @@ export type SuggestionTarget =
   // The end of a section (its known gaps, its competencies).
   | { kind: "section"; section: "gaps" | "competencies" }
   // The career direction line of Professional identity.
-  | { kind: "careerDirection" };
+  | { kind: "careerDirection" }
+  // The translations dictionary line for one language, under
+  // Communication rules; the text is an entry (`original → translation`).
+  | { kind: "translation"; language: ProfileLanguage };
 
 const careerDirectionLabels: Record<ProfileLanguage, string> = {
   "pt-BR": "Direção de carreira (o que busco)",
@@ -114,6 +119,70 @@ export async function suggestLine(input: {
       const section = sectionOf(structure, target.section);
       if (!section) return null;
       return { part: target.section, find: "", replace: blockToLine(added(0)) };
+    }
+    if (target.kind === "translation") {
+      const section = sectionOf(structure, "rules");
+      if (!section) return null;
+      let label = -1;
+      for (let line = section.start; line < section.end; line++) {
+        const block = blocks[line];
+        const labelled =
+          block.type === "item" && block.depth === 0
+            ? splitLabel(block.text)
+            : null;
+        if (
+          labelled &&
+          translationLanguageOf(labelled.label) === target.language
+        ) {
+          label = line;
+          break;
+        }
+      }
+      if (label < 0) {
+        return {
+          part: "rules",
+          find: "",
+          replace: [
+            blockToLine({
+              type: "item",
+              depth: 0,
+              text: `${translationLineLabels[language][target.language]}:`,
+            }),
+            blockToLine(added(1)),
+          ].join("\n"),
+        };
+      }
+      // Entries written on the line itself: one more, after a “; ”.
+      const labelled = splitLabel(blocks[label].text);
+      if (labelled?.value.trim()) {
+        const line = blocks[label];
+        const value = labelled.value.trim().replace(/[.;]$/, "");
+        return {
+          part: "rules",
+          find: blockToLine(line),
+          replace: blockToLine({
+            ...line,
+            text: `${line.text.slice(0, line.text.indexOf(":") + 1)} ${value}; ${text}`,
+          }),
+        };
+      }
+      // Listed under it: one more sub-item, after the others.
+      let last = label;
+      while (
+        last + 1 < section.end &&
+        blocks[last + 1].type === "item" &&
+        depthOf(blocks[last + 1]) > 0
+      ) {
+        last++;
+      }
+      const anchor = blocks[last];
+      return {
+        part: "rules",
+        find: blockToLine(anchor),
+        replace: [anchor, added(last === label ? 1 : depthOf(anchor))]
+          .map(blockToLine)
+          .join("\n"),
+      };
     }
     const section = sectionOf(structure, "identity");
     if (!section) return null;

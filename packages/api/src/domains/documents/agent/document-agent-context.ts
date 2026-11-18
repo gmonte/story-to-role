@@ -86,6 +86,10 @@ export type DocumentAgentContext = {
       }
     | { kind: "focus"; focus: string | null };
   rules: CareerContext["rules"];
+  // The language the profile is written in, and its translations
+  // dictionary for the document's language (empty in the profile's own).
+  profileLanguage: CareerContext["profileLanguage"];
+  translations: CareerContext["translations"];
   gaps: string[];
   // The code checks that still count (the ignored warnings are left out).
   findings: Array<{ text: string; lineText: string | null }>;
@@ -431,6 +435,8 @@ export async function loadDocumentAgentContext(input: {
         }
       : { kind: "focus", focus },
     rules: career.rules,
+    profileLanguage: career.profileLanguage,
+    translations: career.translations,
     gaps: career.gaps,
     findings,
     review,

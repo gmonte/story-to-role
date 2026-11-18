@@ -50,6 +50,7 @@ const sectionItems: Record<
       "Nunca incluir: documentos de identidade, dados bancários, dados pessoais fora da seção Contato, informações confidenciais de empregadores; nomes de pessoas; motivos de saída, demissões e opiniões sobre ex-empregadores; valores de salário e faturamento; detalhes de vulnerabilidades; nomes internos de repositórios e projetos.",
       "Nunca afirmar: números que não estejam marcados como [medido] ou [estimado].",
       "Nomes públicos:",
+      "Em inglês:",
     ],
   },
   "en-US": {
@@ -69,6 +70,7 @@ const sectionItems: Record<
       "Never include: identity documents, bank details, personal data outside the Contact section, employers' confidential information; names of people; reasons for leaving, layoffs and opinions about former employers; salary and revenue figures; vulnerability details; internal names of repositories and projects.",
       "Never claim: figures not marked [measured] or [estimated].",
       "Public names:",
+      "In Portuguese:",
     ],
   },
 };

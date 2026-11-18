@@ -28,6 +28,44 @@ export const languageNames: Record<ProfileLanguage, string> = {
   "en-US": "English",
 };
 
+/**
+ * The translations lines of Communication rules (profile spec): under the
+ * rules, one optional line per target language, written in the profile's
+ * language (“Em inglês:” in a Portuguese profile, “In Portuguese:” in an
+ * English one), whose entries (`original → translation`) tell documents in
+ * that language how to write a code-printed field.
+ */
+export const translationLineLabels: Record<
+  ProfileLanguage,
+  Record<ProfileLanguage, string>
+> = {
+  "pt-BR": { "en-US": "Em inglês", "pt-BR": "Em português" },
+  "en-US": { "en-US": "In English", "pt-BR": "In Portuguese" },
+};
+
+const translationAliases: Record<ProfileLanguage, string[]> = {
+  "en-US": ["em ingles", "in english", "ingles", "english", "en-us", "en"],
+  "pt-BR": [
+    "em portugues",
+    "em portugues do brasil",
+    "in portuguese",
+    "in brazilian portuguese",
+    "portugues",
+    "portuguese",
+    "pt-br",
+    "pt",
+  ],
+};
+
+/** The target language a translations line's label names, if any. */
+export function translationLanguageOf(label: string): ProfileLanguage | null {
+  const normalized = normalizeLabel(label);
+  for (const language of Object.keys(translationAliases) as ProfileLanguage[]) {
+    if (translationAliases[language].includes(normalized)) return language;
+  }
+  return null;
+}
+
 const aliases: Record<ProfileSectionKey, string[]> = {
   identity: ["identidade profissional", "professional identity", "identity"],
   contact: ["contato", "contact"],

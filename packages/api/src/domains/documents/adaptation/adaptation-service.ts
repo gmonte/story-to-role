@@ -1,6 +1,7 @@
 import { TRPCError } from "@trpc/server";
 
 import { getUserCipher } from "@repo/api/domains/encryption/user-cipher";
+import { suggestLine } from "@repo/api/domains/profile/suggestions/suggest-line";
 import type { RealtimeSubscription } from "@repo/api/domains/tasks/schemas/task";
 import { TasksService } from "@repo/api/domains/tasks/tasks-service";
 import type { DbClient } from "@repo/api/tools/db-client";
@@ -8,6 +9,8 @@ import type { DbClient } from "@repo/api/tools/db-client";
 import { DocumentsRepository } from "../documents-repository";
 import { failGeneration } from "../documents-service";
 import { requireUserVersion } from "../require-version";
+import { loadProfileSource } from "../generation/load-profile-source";
+import { outputLanguageNames } from "../generation/resume-prompts";
 import { decryptDocument, decryptResume } from "../snapshot-content";
 import type { OutputLanguage } from "../schemas/document";
 import type { ResumeContent } from "../schemas/resume-content";
@@ -302,6 +305,10 @@ export class AdaptationService {
     versionId: string;
     positionId: string;
     title: string;
+    // Also proposes `original title → title` for the profile's translations
+    // dictionary in the version's language (origin `document`), so every
+    // later document in that language prints it (resume spec, "Adaptations").
+    addToProfile?: boolean;
   }) {
     return this.db.transaction(async (tx) => {
       const repository = new DocumentsRepository(tx);
@@ -355,7 +362,32 @@ export class AdaptationService {
         author: "user",
         encryptedContent: cipher.encrypt(JSON.stringify(titled)),
       });
-      return { snapshotId: snapshot.id };
+      let profileSuggestionId: string | null = null;
+      if (input.addToProfile) {
+        const original = (
+          await loadProfileSource({ db: tx, cipher, profileId: profile.id })
+        )?.positions.find(
+          (position) => position.id === input.positionId
+        )?.title;
+        if (original && original !== title) {
+          profileSuggestionId = (
+            await suggestLine({
+              db: tx,
+              cipher,
+              userId: input.userId,
+              careerProfileId: profile.id,
+              target: { kind: "translation", language: version.language },
+              text: `${original} → ${title}`,
+              reason: {
+                "en-US": `Your title at this position in ${outputLanguageNames[version.language]}, as you approved it.`,
+                "pt-BR": `O seu cargo nesta posição em ${version.language === "en-US" ? "inglês" : "português"}, como você aprovou.`,
+              },
+              origin: "document",
+            })
+          ).profileSuggestionId;
+        }
+      }
+      return { snapshotId: snapshot.id, profileSuggestionId };
     });
   }
 }

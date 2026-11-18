@@ -99,6 +99,10 @@ const context: CareerContext = {
     { id: I1, positionId: P1, credentialId: null, text: "Led a team of 5." },
   ],
   evidenceOfPassage: new Map(),
+  profileLanguage: null,
+  translations: [],
+  acceptedEmployers: new Map(),
+  translatedTitles: new Map(),
   rules: {
     neverInclude: ["Hooli"],
     neverClaim: ["fluent English"],
@@ -507,6 +511,124 @@ describe("the coverage review's code checks", () => {
         lineId: "f",
         params: { term: "Projeto Fênix", publicName: "a payments platform" },
       },
+    ]);
+  });
+
+  it("points out a code-printed field left in the profile's language, in both directions", () => {
+    // A Portuguese profile in an English document: the dictionary printed
+    // the employer; the title, the degree and the city were left as written.
+    const portuguese: typeof context = {
+      ...context,
+      profileLanguage: "pt-BR",
+      translations: [
+        { original: "Meta IT (agora Insi)", translation: "Meta IT (now Insi)" },
+      ],
+      positions: [
+        {
+          ...context.positions[0],
+          employer: "Meta IT (now Insi)",
+          title: "Engenheira de Software Sênior",
+        },
+        ...context.positions.slice(1),
+      ],
+      acceptedTitles: new Map(),
+    };
+    const content: ResumeContent = {
+      ...resume([
+        {
+          ...entry(P1, [], { employer: "Meta IT (now Insi)" }),
+          title: "Engenheira de Software Sênior",
+        },
+        entry(P2, []),
+      ]),
+      header: {
+        name: "Ana",
+        titleLine: "",
+        contacts: [],
+        city: "Belo Horizonte, MG, Brasil",
+      },
+    };
+    content.sections.push({
+      kind: "education",
+      entries: [
+        {
+          credentialId: E9,
+          title: "Bacharelado em Sistemas de Informação",
+          institution: "UFMG",
+          level: null,
+          startDate: null,
+          endDate: null,
+          inProgress: false,
+        },
+      ],
+    });
+    const findings = checkDocument({
+      content,
+      context: portuguese,
+      settings: defaultGenerationSettings,
+      today,
+      purposes: [],
+      language: "en-US",
+    }).filter((finding) => finding.code === "untranslated");
+    expect(findings).toEqual([
+      {
+        code: "untranslated",
+        lineId: null,
+        positionId: null,
+        text: "Belo Horizonte, MG, Brasil",
+        params: { field: "city" },
+      },
+      {
+        code: "untranslated",
+        lineId: null,
+        positionId: P1,
+        text: "Engenheira de Software Sênior",
+        params: { field: "title" },
+      },
+      {
+        code: "untranslated",
+        lineId: null,
+        positionId: null,
+        text: "Bacharelado em Sistemas de Informação",
+        params: { field: "credential", credentialId: E9 },
+      },
+    ]);
+    // In the profile's own language nothing is pointed out.
+    expect(
+      checkDocument({
+        content,
+        context: portuguese,
+        settings: defaultGenerationSettings,
+        today,
+        purposes: [],
+        language: "pt-BR",
+      }).filter((finding) => finding.code === "untranslated")
+    ).toEqual([]);
+
+    // An English profile in a Portuguese document.
+    const english: typeof context = {
+      ...context,
+      profileLanguage: "en-US",
+      positions: [
+        { ...context.positions[0], employer: "Globex (now Initech)" },
+        ...context.positions.slice(1),
+      ],
+    };
+    const translatedByUser = checkDocument({
+      content: resume([
+        {
+          ...entry(P1, [], { employer: "Globex (now Initech)" }),
+          title: "Líder Técnica",
+        },
+      ]),
+      context: english,
+      settings: defaultGenerationSettings,
+      today,
+      purposes: [],
+      language: "pt-BR",
+    }).filter((finding) => finding.code === "untranslated");
+    expect(translatedByUser).toMatchObject([
+      { text: "Globex (now Initech)", params: { field: "employer" } },
     ]);
   });
 

@@ -134,9 +134,15 @@ export const adaptationRouter = createTRPCRouter({
         versionId: z.uuid(),
         positionId: z.uuid(),
         title: z.string().trim().min(1).max(200),
+        addToProfile: z.boolean().optional(),
       })
     )
-    .output(z.object({ snapshotId: z.uuid() }))
+    .output(
+      z.object({
+        snapshotId: z.uuid(),
+        profileSuggestionId: z.uuid().nullable(),
+      })
+    )
     .mutation(({ ctx, input }) =>
       new AdaptationService(db).approveTitle({ userId: ctx.userId, ...input })
     ),

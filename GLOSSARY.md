@@ -68,6 +68,10 @@ _Avoid_: Weakness, missing skill
 A line of the profile's Communication rules: something that must never appear ("never include") or never be claimed ("never claim") in what is generated; applied in code.
 _Avoid_: Sensitive item, privacy setting, secret
 
+**Translations dictionary**:
+The optional lines of the profile's Communication rules, one per output language ("Em inglês:" in a Portuguese profile, "In Portuguese:" in an English one), whose entries (`original → translation`) say how a document in that language prints a field code copies from the profile: an employer and its note, a title, a degree and its institution, a certification, the city line. Applied in code, whole field and exact; language names and levels are translated by a built-in dictionary without it. In Portuguese, "dicionário de traduções".
+_Avoid_: Localization table, glossary, machine translation
+
 **Job preferences**:
 The user's separate document with work model, locations, salary range, excluded companies and sectors, and discard rules; read only by screening.
 _Avoid_: Excluded jobs list, filters, settings

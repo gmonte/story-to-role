@@ -1,4 +1,6 @@
 import type { PublicName } from "@repo/api/domains/profile/rules/public-names";
+import type { Translation } from "@repo/api/domains/profile/rules/translations";
+import type { ProfileLanguage } from "@repo/api/domains/profile/truth/sections";
 import { InstructionsRepository } from "@repo/api/domains/applications/instructions-repository";
 import {
   type LockedField,
@@ -14,6 +16,7 @@ import {
 } from "../adaptation/title-equivalents";
 import type { OutputLanguage } from "../schemas/document";
 import type { ResumeHeaderFields } from "../schemas/template";
+import { printedFields } from "../translation/printed-fields";
 import { loadProfileSource } from "./load-profile-source";
 import type {
   SourceCredential,
@@ -59,12 +62,23 @@ export type CareerContext = {
   // when the user has published none.
   profileVersionId: string | null;
   profileVersionNumber: number | null;
+  // The language the profile is written in (null with none published).
+  profileLanguage: ProfileLanguage | null;
+  // The profile's translations dictionary for the document's language:
+  // empty when the document is in the profile's language.
+  translations: Translation[];
   header: ResumeHeaderFields;
   positions: ContextPosition[];
   // The titles code accepts for each position besides the one printed:
-  // the profile's own when an approved equivalent replaced it (a document
-  // written before the approval still prints the original).
+  // the profile's own when an approved equivalent or a dictionary entry
+  // replaced it (a document written before still prints the original).
   acceptedTitles: Map<string, string[]>;
+  // Likewise the employers: the profile's own when a dictionary entry
+  // translated it.
+  acceptedEmployers: Map<string, string[]>;
+  // The titles the dictionary translated, by position: an adaptation into
+  // this language prints them and proposes no equivalent for them.
+  translatedTitles: Map<string, string>;
   evidence: ContextEvidence[];
   credentials: ContextCredential[];
   skills: Array<{ id: string; name: string; evidenceIds: string[] }>;
@@ -163,29 +177,76 @@ export async function loadCareerContext(input: {
       .replace(/^[\s,–—-]+|[\s,–—-]+$/g, "");
   const confidential = confidentialLabels[input.language ?? "en-US"];
   // The public names dictionary applies to what code prints by itself (an
-  // employer or title is a field, no sentence to adjust).
+  // employer or title is a field, no sentence to adjust); so does the
+  // translations dictionary when the document is in another language than
+  // the profile (resume spec, "Output language").
   const publicForm = (value: string) => filter.inPublicForm(value);
+  const printing = printedFields({
+    profileLanguage: source?.language ?? null,
+    language: input.language,
+    translations: source?.translations ?? {},
+  });
   const printed = {
     employer: (value: string) =>
-      forbidden(value) ? confidential : publicForm(value),
+      forbidden(value) ? confidential : printing.field(publicForm(value)),
     title: (value: string) =>
-      forbidden(value) ? without(value) || confidential : publicForm(value),
+      forbidden(value)
+        ? without(value) || confidential
+        : printing.field(publicForm(value)),
   };
-  const positions = (source?.positions ?? []).map((position) => ({
+  // Each position as the profile writes it (in public form) and as printed
+  // here: both pass the locked-fact check.
+  const basePositions = (source?.positions ?? []).map((position) => ({
     ...position,
-    employer: printed.employer(position.employer),
-    title: printed.title(position.title),
+    employer: forbidden(position.employer)
+      ? confidential
+      : publicForm(position.employer),
+    title: forbidden(position.title)
+      ? without(position.title) || confidential
+      : publicForm(position.title),
   }));
-  const positionIds = new Set(positions.map((position) => position.id));
-  // A credential that names something never to include is left out.
-  const credentials = (source?.credentials ?? []).filter(
-    (credential) =>
-      !forbidden(
-        [credential.title, credential.institution, credential.level]
-          .filter(Boolean)
-          .join(" ")
-      )
+  const positions = basePositions.map((position) => ({
+    ...position,
+    employer: printing.field(position.employer),
+    title: printing.field(position.title),
+  }));
+  const translatedTitles = new Map(
+    positions.flatMap((position, index) =>
+      position.title !== basePositions[index].title
+        ? [[position.id, position.title] as const]
+        : []
+    )
   );
+  const positionIds = new Set(positions.map((position) => position.id));
+  // A credential that names something never to include is left out; the
+  // rest print in the document's language where the dictionaries say how.
+  const credentials = (source?.credentials ?? [])
+    .filter(
+      (credential) =>
+        !forbidden(
+          [credential.title, credential.institution, credential.level]
+            .filter(Boolean)
+            .join(" ")
+        )
+    )
+    .map((credential) =>
+      credential.kind === "language"
+        ? {
+            ...credential,
+            title: printing.languageTerm(credential.title),
+            level: printing.nullableLanguageTerm(credential.level),
+          }
+        : {
+            ...credential,
+            title: printing.field(credential.title),
+            institution: printing.nullableField(credential.institution),
+            // A certification's status (“valid”) is printed as its level.
+            level: printing.nullableLanguageTerm(credential.level),
+          }
+    );
+  const header = source?.header
+    ? { ...source.header, city: printing.field(source.header.city) }
+    : emptyHeader;
   const credentialIds = new Set(credentials.map((row) => row.id));
   // A line that names something never to include is left out whole.
   const kept = new Set(
@@ -258,15 +319,38 @@ export async function loadCareerContext(input: {
       .map((row) => row.positionId)
   );
   const acceptedTitles = new Map(
-    positions.flatMap((position) =>
+    positions.flatMap((position, index) =>
       overriddenTitles.has(position.id)
         ? []
         : [
             [
               position.id,
               [
-                ...new Set([position.title, equivalents.get(position.id)]),
+                ...new Set([
+                  position.title,
+                  basePositions[index].title,
+                  equivalents.get(position.id),
+                ]),
               ].filter((title): title is string => !!title),
+            ] as const,
+          ]
+    )
+  );
+  const overriddenEmployers = new Set(
+    overrides
+      .filter((row) => row.field === "employer")
+      .map((row) => row.positionId)
+  );
+  const acceptedEmployers = new Map(
+    positions.flatMap((position, index) =>
+      overriddenEmployers.has(position.id)
+        ? []
+        : [
+            [
+              position.id,
+              [
+                ...new Set([position.employer, basePositions[index].employer]),
+              ] as string[],
             ] as const,
           ]
     )
@@ -275,9 +359,13 @@ export async function loadCareerContext(input: {
   return {
     profileVersionId: source?.profileVersionId ?? null,
     profileVersionNumber: source?.profileVersionNumber ?? null,
-    header: source?.header ?? emptyHeader,
+    profileLanguage: source?.language ?? null,
+    translations: printing.dictionary,
+    header,
     positions: applyLockedFactOverrides(titled, overrides),
     acceptedTitles,
+    acceptedEmployers,
+    translatedTitles,
     evidence,
     credentials,
     skills: source?.skills ?? [],

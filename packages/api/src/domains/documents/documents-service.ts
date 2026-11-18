@@ -33,6 +33,7 @@ import {
 } from "./coverage-review/coverage-review";
 import { tracesToProfile } from "./coverage-review/check-document";
 import { retraceContent } from "./coverage-review/retrace-lines";
+import { reprintFields } from "./translation/reprint-fields";
 import { sendLineToProfile } from "./coverage-review/send-to-profile";
 import {
   FrozenContexts,
@@ -44,6 +45,7 @@ import {
   estimatePages,
   resumeText,
 } from "./generation/resume-checks";
+import { outputLanguageNames } from "./generation/resume-prompts";
 import { decryptDocument } from "./snapshot-content";
 import { proposalDiff } from "./adaptation/three-way-merge";
 import { fileNamer } from "./rendering/file-namer";
@@ -432,6 +434,7 @@ export class DocumentsService {
           writtenLines(content),
           sentSuggestions
         ),
+        sentTranslations: sentTranslations(coverage.findings, sentSuggestions),
         outdated: outdated.get(version.id) ?? [],
         titleProposals: isResume
           ? trace.titleProposalsFor(content, version.language)
@@ -600,6 +603,45 @@ export class DocumentsService {
   }
 
   /**
+   * "Add translation" of a "not translated" finding (resume spec, "Document
+   * workspace"): the field as the profile writes it, with the wording the
+   * user gave for the document's language, becomes a suggestion adding the
+   * entry to the profile's translations dictionary for that language
+   * (origin `document`). It applies once published and used here.
+   */
+  async addTranslationToProfile(input: {
+    userId: string;
+    versionId: string;
+    original: string;
+    translation: string;
+  }) {
+    const { version, profile } = await requireUserVersion(
+      this.db,
+      input.userId,
+      input.versionId
+    );
+    const original = input.original.trim().replace(/\s+/g, " ");
+    const translation = input.translation.trim().replace(/\s+/g, " ");
+    if (!original || !translation || /[;→]/.test(`${original}${translation}`)) {
+      throw new TRPCError({ code: "BAD_REQUEST" });
+    }
+    const cipher = await getUserCipher(this.db, input.userId);
+    return suggestLine({
+      db: this.db,
+      cipher,
+      userId: input.userId,
+      careerProfileId: profile.id,
+      target: { kind: "translation", language: version.language },
+      text: `${original} → ${translation}`,
+      reason: {
+        "en-US": `How your documents in ${outputLanguageNames[version.language]} write “${original}”.`,
+        "pt-BR": `Como os seus documentos em ${languageNamesPt[version.language]} escrevem “${original}”.`,
+      },
+      origin: "document",
+    });
+  }
+
+  /**
    * "Use version N" (resume spec, "Document workspace"): the version moves
    * to the profile version published now. A new snapshot with the same
    * text freezes it, its lines traced again against it (a line that
@@ -633,10 +675,18 @@ export class DocumentsService {
           openingId,
           language: version.language,
         });
-      const content = retraceContent(decryptDocument(cipher, latest), {
-        from: await load(latest.profileVersionId),
-        to: await load(published.id),
+      const from = await load(latest.profileVersionId);
+      const to = await load(published.id);
+      const retraced = retraceContent(decryptDocument(cipher, latest), {
+        from,
+        to,
       });
+      // A translations dictionary entry published since applies to the
+      // fields code printed and the user left as printed.
+      const content =
+        retraced.kind === "resume"
+          ? reprintFields(retraced, to, from)
+          : retraced;
       const snapshot = await repository.insertSnapshot({
         versionId: version.id,
         sequence: latest.sequence + 1,
@@ -1257,6 +1307,37 @@ function sentToProfile(
       : [];
   });
 }
+
+/**
+ * Which "not translated" fields were sent to the profile's dictionary: the
+ * latest suggestion whose lines hold the field as an entry's original.
+ */
+function sentTranslations(
+  findings: CoverageView["findings"],
+  suggestions: SentSuggestion[]
+): VersionView["sentTranslations"] {
+  return findings.flatMap((finding) => {
+    if (finding.code !== "untranslated") return [];
+    const prefix = `${finding.text} →`;
+    const sent = suggestions.findLast((suggestion) =>
+      suggestion.lines.some((line) => line.includes(prefix))
+    );
+    return sent
+      ? [
+          {
+            original: finding.text,
+            profileSuggestionId: sent.id,
+            status: sent.status,
+          },
+        ]
+      : [];
+  });
+}
+
+const languageNamesPt: Record<OutputLanguage, string> = {
+  "en-US": "inglês",
+  "pt-BR": "português",
+};
 
 /** A generation whose task never started: it failed, nothing waits on it. */
 export const failGeneration = (db: DbClient, generationId: string) =>

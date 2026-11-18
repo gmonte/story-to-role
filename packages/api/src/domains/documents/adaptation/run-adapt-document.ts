@@ -13,6 +13,7 @@ import { fitToPages } from "../rendering/fit-to-pages";
 import { storeRenderedPdf } from "../rendering/store-rendered-pdf";
 import { reviewLoopSettings } from "../generation/review-loop-settings";
 import { loadCareerContext } from "../generation/load-career-context";
+import { reprintFields } from "../translation/reprint-fields";
 import {
   defaultGenerationSettings,
   experienceAge,
@@ -44,6 +45,7 @@ import {
 import { keepsFigures } from "./figures";
 import {
   acceptedTitles,
+  approvedTitles,
   loadTitleEquivalents,
   titlesForAdaptation,
 } from "./title-equivalents";
@@ -268,6 +270,10 @@ async function adaptVersion(input: {
     filter,
     profileVersionId: input.profileVersionId,
     openingId: application?.openingId,
+    // Its fields print in the target language: approved titles, and the
+    // profile's translations dictionary for employers, credentials and
+    // the city (resume spec, "Output language").
+    language: generation.language,
   });
   // Reused from another document: its locked facts become this one's.
   const source =
@@ -286,8 +292,10 @@ async function adaptVersion(input: {
   const entries = source.sections.flatMap((section) =>
     section.kind === "experience" ? section.entries : []
   );
+  // A title the dictionary translates needs no proposal.
   const lacking = entries.filter(
     (entry) =>
+      !context.translatedTitles.has(entry.positionId) &&
       !equivalents.some(
         (row) =>
           row.positionId === entry.positionId &&
@@ -355,6 +363,11 @@ async function adaptVersion(input: {
     equivalents,
     originals,
   });
+  for (const [positionId, title] of context.translatedTitles) {
+    if (!approvedTitles(equivalents, generation.language).has(positionId)) {
+      titles.set(positionId, title);
+    }
+  }
   let draft: AdaptationDraft = await ask([]);
   let result = adaptContent({ source, draft, titles });
   if (result.refused.length > 0) {
@@ -422,7 +435,7 @@ async function adaptVersion(input: {
         language: outputLanguageNames[generation.language],
       })
     : null;
-  const content = termed?.content ?? repaired.content;
+  const content = reprintFields(termed?.content ?? repaired.content, context);
 
   const proposed = new Map(
     draft.title_equivalents.map((row) => [row.position_id, row.title.trim()])
@@ -442,7 +455,8 @@ async function adaptVersion(input: {
     lockedFactViolations(
       content,
       context.positions,
-      acceptedTitles(equivalents, generation.language)
+      acceptedTitles(equivalents, generation.language),
+      context.acceptedEmployers
     ).length > 0
   ) {
     throw new Error(`Adaptation ${generation.id} altered a locked fact`);

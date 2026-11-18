@@ -345,6 +345,30 @@ export const documentsRouter = createTRPCRouter({
       })
     ),
 
+  addTranslationToProfile: userProcedure
+    .meta(
+      openApiMeta(
+        "documents",
+        "POST",
+        "/document-versions/by-id/{versionId}/translation-suggestion",
+        "Proposes a translations dictionary entry for a field left in the profile's language"
+      )
+    )
+    .input(
+      z.object({
+        versionId: z.uuid(),
+        original: z.string().trim().min(1).max(300),
+        translation: z.string().trim().min(1).max(300),
+      })
+    )
+    .output(z.object({ profileSuggestionId: z.uuid() }))
+    .mutation(({ ctx, input }) =>
+      new DocumentsService(db).addTranslationToProfile({
+        userId: ctx.userId,
+        ...input,
+      })
+    ),
+
   useProfileVersion: userProcedure
     .meta(
       openApiMeta(

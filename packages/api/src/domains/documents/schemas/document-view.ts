@@ -191,6 +191,15 @@ export const versionViewSchema = z.object({
       status: z.enum(["pending", "accepted"]),
     })
   ),
+  // Which "not translated" fields were sent to the profile's translations
+  // dictionary, waiting in the draft or accepted there.
+  sentTranslations: z.array(
+    z.object({
+      original: z.string(),
+      profileSuggestionId: z.uuid(),
+      status: z.enum(["pending", "accepted"]),
+    })
+  ),
   // Linked versions with changes this one has not received (language sync).
   outdated: z.array(
     z.object({

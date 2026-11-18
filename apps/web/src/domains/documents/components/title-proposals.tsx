@@ -7,6 +7,7 @@ import { useMutation } from "@tanstack/react-query";
 import type { VersionView } from "@repo/api/domains/documents/schemas/document-view";
 import { useTranslation } from "@repo/intl/use-translation";
 import { Button } from "@repo/web/components/ui/button";
+import { Checkbox } from "@repo/web/components/ui/checkbox";
 import { Input } from "@repo/web/components/ui/input";
 import { toast } from "@repo/web/components/ui/sonner";
 
@@ -42,6 +43,7 @@ function TitleProposal({
   const trpc = useTRPC();
   const refresh = useRefreshDocuments();
   const [title, setTitle] = useState(proposal.proposed);
+  const [addToProfile, setAddToProfile] = useState(false);
   const approve = useMutation(
     trpc.adaptation.approveTitle.mutationOptions({
       onSuccess: refresh,
@@ -74,11 +76,21 @@ function TitleProposal({
             versionId: version.id,
             positionId: proposal.positionId,
             title,
+            addToProfile,
           })
         }
       >
         {t.formatMessage({ defaultMessage: "Approve title" })}
       </Button>
+      <label className="flex items-center gap-1.5">
+        <Checkbox
+          checked={addToProfile}
+          onCheckedChange={(checked) => setAddToProfile(checked === true)}
+        />
+        {t.formatMessage({
+          defaultMessage: "Also save it in my profile's translations",
+        })}
+      </label>
     </div>
   );
 }

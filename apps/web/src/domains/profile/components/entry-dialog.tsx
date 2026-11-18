@@ -151,11 +151,19 @@ function EntryForm({
               original: v("original"),
               public: v("public"),
             }
-          : {
-              kind,
-              rule: v("rule") as "neverInclude" | "neverClaim",
-              text: v("text"),
-            };
+          : v("rule") === "translation"
+            ? {
+                kind,
+                rule: "translation",
+                language: (v("language") || "en-US") as "en-US" | "pt-BR",
+                original: v("original"),
+                translation: v("translation"),
+              }
+            : {
+                kind,
+                rule: v("rule") as "neverInclude" | "neverClaim",
+                text: v("text"),
+              };
     }
   }
 
@@ -320,6 +328,9 @@ function EntryForm({
               <SelectItem value="publicName">
                 {t.formatMessage({ defaultMessage: "Public name" })}
               </SelectItem>
+              <SelectItem value="translation">
+                {t.formatMessage({ defaultMessage: "Translation" })}
+              </SelectItem>
             </SelectContent>
           </Select>
         </Field>
@@ -335,6 +346,40 @@ function EntryForm({
               "public",
               t.formatMessage({
                 defaultMessage: "How public documents write it",
+              })
+            )}
+          </>
+        ) : values.rule === "translation" ? (
+          <>
+            <Field label={t.formatMessage({ defaultMessage: "Documents in" })}>
+              <Select
+                value={values.language ?? "en-US"}
+                onValueChange={set("language")}
+              >
+                <SelectTrigger className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="en-US">
+                    {t.formatMessage({ defaultMessage: "English" })}
+                  </SelectItem>
+                  <SelectItem value="pt-BR">
+                    {t.formatMessage({ defaultMessage: "Portuguese" })}
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+            </Field>
+            {text(
+              "original",
+              t.formatMessage({
+                defaultMessage:
+                  "As the profile writes it (employer, degree, certification, city)",
+              })
+            )}
+            {text(
+              "translation",
+              t.formatMessage({
+                defaultMessage: "How documents in that language write it",
               })
             )}
           </>

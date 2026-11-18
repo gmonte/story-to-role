@@ -1,4 +1,5 @@
 import { neverIncludeTerms } from "@repo/api/domains/profile/rules/never-include-terms";
+import { isTranslationOf } from "@repo/api/domains/profile/rules/translations";
 import { mentions } from "@repo/api/domains/profile/truth/lint";
 import { findMarks } from "@repo/api/domains/profile/truth/marks";
 import { ungivenFigures } from "@repo/api/domains/profile/truth/suggestions";
@@ -16,6 +17,7 @@ import {
   type GenerationSettings,
 } from "../schemas/generation-settings";
 import type { LineOrigin, OutputLanguage } from "../schemas/document";
+import { looksWrittenIn } from "../translation/untranslated";
 import { checkBulletShape } from "../writing/bullet-format";
 import type { ExperienceEntry, ResumeContent } from "../schemas/resume-content";
 
@@ -57,8 +59,84 @@ export const coverageFindingCodes = [
   // a way code can tell (a bare list of technologies, too long, or opening
   // with “Responsible for” or a noun). Ignorable, never blocking.
   "bulletShape",
+  // A field code prints (an employer, a title, a degree, the city) left in
+  // the profile's language in a document of another language. "Add
+  // translation" proposes a dictionary entry in the profile's draft.
+  "untranslated",
 ] as const;
 export type CoverageFindingCode = (typeof coverageFindingCodes)[number];
+
+/** What an untranslated finding points at, in its params. */
+export type UntranslatedField =
+  | "employer"
+  | "title"
+  | "city"
+  | "credential"
+  | "institution"
+  | "level";
+
+/**
+ * The code-printed fields of a resume that read as the profile's language
+ * in a document of another (resume spec, "Document workspace"): the
+ * header's city, each entry's employer and title, each credential's name,
+ * institution and level. A field the dictionary already translated, or an
+ * approved title, is never one.
+ */
+export function untranslatedFields(input: {
+  content: ResumeContent;
+  context: Pick<CareerContext, "profileLanguage" | "translations">;
+  language: OutputLanguage | undefined;
+}): CoverageFinding[] {
+  const { content, context, language } = input;
+  if (
+    !language ||
+    !context.profileLanguage ||
+    language === context.profileLanguage
+  ) {
+    return [];
+  }
+  const findings: CoverageFinding[] = [];
+  const check = (
+    text: string | null,
+    field: UntranslatedField,
+    at: { positionId?: string; credentialId?: string }
+  ) => {
+    const value = text?.trim() ?? "";
+    if (!value || isTranslationOf(context.translations, value)) return;
+    if (!looksWrittenIn(value, context.profileLanguage!)) return;
+    findings.push({
+      code: "untranslated",
+      lineId: null,
+      positionId: at.positionId ?? null,
+      text: value,
+      params: {
+        field,
+        ...(at.credentialId ? { credentialId: at.credentialId } : {}),
+      },
+    });
+  };
+  check(content.header.city, "city", {});
+  for (const section of content.sections) {
+    if (section.kind === "experience") {
+      for (const entry of section.entries) {
+        check(entry.employer, "employer", { positionId: entry.positionId });
+        check(entry.title, "title", { positionId: entry.positionId });
+      }
+    } else if (
+      section.kind !== "summary" &&
+      section.kind !== "skills" &&
+      section.kind !== "projects"
+    ) {
+      for (const entry of section.entries) {
+        const at = { credentialId: entry.credentialId };
+        check(entry.title, "credential", at);
+        check(entry.institution, "institution", at);
+        check(entry.level, "level", at);
+      }
+    }
+  }
+  return findings;
+}
 
 export type CoverageFinding = {
   code: CoverageFindingCode;
@@ -186,7 +264,12 @@ export function checkDocument(input: {
   // Locked facts: printed by code, so a difference means tampering (or a
   // position the frozen version doesn't have).
   const violated = new Set(
-    lockedFactViolations(content, context.positions, context.acceptedTitles)
+    lockedFactViolations(
+      content,
+      context.positions,
+      context.acceptedTitles,
+      context.acceptedEmployers
+    )
   );
   for (const entry of entries) {
     if (!violated.has(entry.positionId)) continue;
@@ -344,6 +427,10 @@ export function checkDocument(input: {
       }
     }
   }
+
+  findings.push(
+    ...untranslatedFields({ content, context, language: input.language })
+  );
 
   for (const section of content.sections) {
     if (section.kind !== "experience" && section.kind !== "projects") continue;

@@ -144,6 +144,14 @@ export function useProfileLabels() {
           },
           { entry: params.entry }
         );
+      case "translationFormat":
+        return t.formatMessage(
+          {
+            defaultMessage:
+              "“{entry}” needs both sides: as the profile writes it → translation.",
+          },
+          { entry: params.entry }
+        );
     }
   }
 

@@ -296,16 +296,21 @@ function Conversation({
   // The conversation's messages are deleted; the new chat's id remounts
   // the conversation, so its messages, composer and transport start over.
   async function startNew() {
+    // Optimistic: the conversation empties at once; the new chat's id comes
+    // right after and remounts it.
+    const previous = messages;
     setStartingNew(true);
+    setMessages([]);
+    clearAgentQuote();
+    clearAgentAttachment();
+    setText("");
+    setConfirmingNew(false);
     try {
       await stop();
       const fresh = await startNewProfileChat();
-      clearAgentQuote();
-      clearAgentAttachment();
-      setText("");
-      setConfirmingNew(false);
       queryClient.setQueryData(["profile-chat"], fresh);
     } catch {
+      setMessages(previous);
       toast.error(
         t.formatMessage({
           defaultMessage: "The conversation couldn't be restarted. Try again.",

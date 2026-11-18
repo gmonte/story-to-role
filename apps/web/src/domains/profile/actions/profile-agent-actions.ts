@@ -1,5 +1,6 @@
 "use server";
 
+import { after } from "next/server";
 import { auth, runs, sessions } from "@trigger.dev/sdk";
 import { chat } from "@trigger.dev/sdk/ai";
 
@@ -112,12 +113,16 @@ async function cancelChatRuns(chatId: string) {
  */
 export async function startNewProfileChat() {
   const started = await new AgentChatService(db).startNew(await requireUser());
-  for (const chatId of started.closedChatIds) {
-    await cancelChatRuns(chatId);
-    // The session is closed when it exists; a conversation never talked in
-    // has none.
-    await sessions.close(chatId).catch(() => undefined);
-  }
+  // Ending the old runs and sessions on Trigger.dev doesn't hold up the new
+  // conversation: it runs after the response.
+  after(async () => {
+    for (const chatId of started.closedChatIds) {
+      await cancelChatRuns(chatId).catch(() => undefined);
+      // The session is closed when it exists; a conversation never talked
+      // in has none.
+      await sessions.close(chatId).catch(() => undefined);
+    }
+  });
   return {
     chatId: started.chatId,
     expiresAt: started.expiresAt,

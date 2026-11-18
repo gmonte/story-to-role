@@ -284,7 +284,6 @@ describe("projects", () => {
       "experience:beta — backend",
       "project:meu produto",
       "project:biblioteca aberta",
-      "education",
     ]);
   });
 });

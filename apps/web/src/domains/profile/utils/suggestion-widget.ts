@@ -3,6 +3,8 @@ import { parseFragment } from "@repo/api/domains/profile/truth/suggestions";
 import { buttonVariants } from "@repo/web/components/ui/button";
 import { cn } from "@repo/web/lib/utils";
 
+import { lineDiff } from "./word-diff";
+
 export type SuggestionWidgetLabels = {
   accept: string;
   // Keep the old lines and add the new ones after them.
@@ -48,14 +50,31 @@ export function suggestionWidget(
   root.contentEditable = "false";
 
   const lines = parseFragment(suggestion.replace);
-  for (const block of lines) {
+  const diff = lineDiff(
+    parseFragment(suggestion.find).map((block) => block.text),
+    lines.map((block) => block.text)
+  );
+  for (const [index, block] of lines.entries()) {
     const line = document.createElement("div");
     line.className = `profile-suggestion-new profile-suggestion-${block.type}`;
+    if (!diff.fallback) line.classList.add("profile-suggestion-new-diff");
     if (block.type === "item") {
       line.style.marginLeft = `${block.depth * 1.25}rem`;
-      line.textContent = `• ${block.text}`;
+      line.append("• ");
+    }
+    if (diff.fallback) {
+      line.append(block.text);
     } else {
-      line.textContent = block.text;
+      for (const segment of diff.new[index] ?? []) {
+        if (!segment.changed) {
+          line.append(segment.text);
+          continue;
+        }
+        const added = document.createElement("ins");
+        added.className = "profile-suggestion-added";
+        added.textContent = segment.text;
+        line.append(added);
+      }
     }
     root.append(line);
   }

@@ -48,6 +48,7 @@ import {
   applyChange,
   listParts,
   locateChange,
+  parseFragment,
 } from "@repo/api/domains/profile/truth/suggestions";
 import type {
   ProfileDraft,
@@ -75,6 +76,7 @@ import {
   type EditorDecorationSpec,
 } from "../utils/editor-extensions";
 import { suggestionWidget } from "../utils/suggestion-widget";
+import { lineDiff } from "../utils/word-diff";
 
 // The most of a passage a message quotes.
 export const maxQuoteCharacters = 1500;
@@ -339,15 +341,36 @@ export function ProfileEditorProvider({
     for (const suggestion of suggestions) {
       const { range } = suggestion;
       if (!range) continue;
+      const diff = lineDiff(
+        blocks.slice(range.start, range.end).map((block) => block.text),
+        parseFragment(suggestion.replace).map((block) => block.text)
+      );
       for (let line = range.start; line < range.end; line++) {
         const from = positions[line];
         specs.push({
           kind: "node",
           from,
           to: from + (doc.nodeAt(from)?.nodeSize ?? 0),
-          className: "profile-suggestion-old",
+          className: diff.fallback
+            ? "profile-suggestion-old"
+            : "profile-suggestion-old profile-suggestion-old-diff",
           key: `suggestion-old-${suggestion.id}-${line}`,
         });
+        if (diff.fallback) continue;
+        // Only the removed words are struck; the rest stays readable.
+        let offset = from + 1;
+        for (const segment of diff.old[line - range.start] ?? []) {
+          if (segment.changed) {
+            specs.push({
+              kind: "inline",
+              from: offset,
+              to: offset + segment.text.length,
+              className: "profile-suggestion-removed",
+              key: `suggestion-removed-${suggestion.id}-${offset}`,
+            });
+          }
+          offset += segment.text.length;
+        }
       }
       specs.push({
         kind: "widget",

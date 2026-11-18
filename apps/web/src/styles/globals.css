@@ -99,6 +99,38 @@
     transparent
   );
 }
+/* With a word diff the block only carries a marker and is muted; the
+   removed words are struck. */
+.profile-editor .profile-suggestion-old.profile-suggestion-old-diff {
+  background: transparent;
+  text-decoration: none;
+  border-left: 3px solid
+    color-mix(in oklab, var(--destructive) 60%, transparent);
+  padding-left: 0.5rem;
+  color: var(--muted-foreground);
+}
+.profile-editor .profile-suggestion-removed {
+  background: color-mix(in oklab, var(--destructive) 18%, transparent);
+  color: var(--foreground);
+  text-decoration: line-through;
+  text-decoration-color: color-mix(
+    in oklab,
+    var(--destructive) 70%,
+    transparent
+  );
+  border-radius: 2px;
+}
+.profile-editor .profile-suggestion-added {
+  background: color-mix(in oklab, #10b981 22%, transparent);
+  color: inherit;
+  text-decoration: underline;
+  text-decoration-color: color-mix(in oklab, #10b981 70%, transparent);
+  text-underline-offset: 2px;
+  border-radius: 2px;
+}
+.dark .profile-editor .profile-suggestion-added {
+  background: color-mix(in oklab, #10b981 30%, transparent);
+}
 .profile-editor .profile-suggestion {
   margin: 0.25rem 0 0.5rem;
   padding: 0.5rem 0.75rem;
@@ -112,6 +144,10 @@
 }
 .dark .profile-editor .profile-suggestion-new {
   color: color-mix(in oklab, #6ee7b7 85%, var(--foreground));
+}
+.profile-editor .profile-suggestion-new.profile-suggestion-new-diff,
+.dark .profile-editor .profile-suggestion-new.profile-suggestion-new-diff {
+  color: var(--foreground);
 }
 .profile-editor .profile-suggestion-heading {
   font-weight: 600;

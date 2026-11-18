@@ -240,6 +240,31 @@ Acceptance:
 Acceptance:
 - [x] A line the user types that the profile doesn't back is pointed out, and Add to the profile creates a profile suggestion; after publishing and Use version N, it is no longer pointed out.
 
-## Not in the MVP
+## Opening page
+
+The opening page restructured after a product design review ([docs/design/opening-page-review.md](./design/opening-page-review.md)): one skeleton like My career, the same journey tabs in every state, one primary action per state, a fixed right column (workspace spec, “The opening page”; ADR 0010). Owner decisions: the opening has its own agent; Fit is its own step; the full tracker lives in the Application step.
+
+### O1: Header, journey tabs and a stable right column
+
+- Sticky header with title, state chips, `⋯` menu (Close, Never recommend) and the primary action per state; journey tabs Opening · Fit · Resume · Cover letter · Application always present, with empty states and their actions; the no-tab bug of `?view=resume` without a resume fixed.
+- Right column in a fixed order with tabs Fit · Application (Agent comes in O3): Fit compact and clickable; Application as a summary (status, Mark as applied, next step) with details collapsed; destructive actions in a collapsed section.
+- Renames: Analysis → Fit; one term for the application (Application / Applications); version verbs Generate · Adjust · Use as is, Adapt only for language. Mobile: the right column as a sheet.
+
+### O2: The steps' content
+
+- Fit step: requirement cards with verdict, passages or “your answer for this opening”, and the gap question inside its card (no duplicate list); the description first in the Opening step.
+- Resume step: the document workspace, or three ways in (generate, start from a similar document, adapt), absorbing “Similar documents”.
+- Cover letter step: History → Motivation → Company facts → Letter, absorbing company research and the motivation interview.
+- Application step: the full tracker, sharing components with the Tracker page; coverage review, ATS and emphasis in the document workspace's left column.
+
+### O3: The opening agent
+
+- One agent per opening on `chat.agent` (ADR 0010), the Agent tab of the right column in the Opening, Fit and Application steps; the document agent there in the document steps. Context: the opening, fit check, gap answers, company facts, application state, published profile. Answers gap questions in conversation (recorded as gap answers after the user confirms); never spends credits for the user; profile facts only as suggestions. Charged per message.
+
+### O4: Journey column, preview column, mobile
+
+- Left “Journey” column (checklist + Context) in the steps without a document; the PDF preview as a fourth column; the complete mobile layout (sheet, accordion, read mode with tap to edit).
+
+
 
 Hiring interview prep, job search, scam guidance as a feature, the retrospective, team or recruiter accounts, email reminders, OpenAI package and "Sign in with ChatGPT", languages beyond English and Brazilian Portuguese, final prices.

@@ -40,6 +40,10 @@ _Avoid_: Draft fact, proposal, edit
 The AI the user talks to about a passage of their profile; it interviews per the method and changes the profile only through suggestions.
 _Avoid_: Interviewer, career chat, orchestrator
 
+**Opening agent**:
+The AI the user talks to about one opening — its fit, gap questions, company and next steps — with the published profile in view; it never spends credits for the user and sends profile facts as suggestions.
+_Avoid_: Job chat, opening chat
+
 **Document agent**:
 The AI the user talks to about one generated document (a resume or a cover letter), with the profile version it froze in view; it changes the document only through suggestions, grounded on the profile and on what the user asks.
 _Avoid_: Resume chat, editor assistant

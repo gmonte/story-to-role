@@ -13,6 +13,17 @@ Every interaction between the user and the AI happens in one workspace modelled 
 - **Side panel (right):** for an opening, four blocks are always shown: **Analysis** (the fit check's band, requirements and gaps), **Documents** (resume and cover letter with a tab per version, outdated notices, ATS check and which snapshot was sent), **Context** (what the AI is using in this chat: application instructions, communication-rule overrides, locked-fact overrides) and **Usage** (plan consumption, or estimated cost for bring-your-own-key users). While a task runs, its agents and progress appear there too ("Generating resume: revision 2 of 3"). Job preferences have their own document, in the same editor as the profile.
 - **Documents:** opening a document edits it in the same screen, as the Claude app does with artifacts.
 
+## The opening page
+
+One structure for every state of an opening, like My career's (design review in [docs/design/opening-page-review.md](../design/opening-page-review.md)); it replaces the opening's “side panel blocks” above.
+
+- **Header (sticky):** the opening's title and company, its state chips (band, application status), a `⋯` menu (Close the opening, Never recommend this company) and **one primary action for the state**: Analyze/Check again, Answer N questions, Generate resume, Write the cover letter, Mark as applied, Record a reply.
+- **Journey tabs, always the same and always present:** **Opening → Fit → Resume → Cover letter → Application**. A step with nothing yet shows an empty state with its action; a step never disappears and the layout never jumps between steps.
+- **Left column:** the journey checklist (what's done, what's next) and the Context (application instructions, overrides); in the Resume and Cover letter steps, the document's index, findings, coverage review and ATS check (the document workspace).
+- **Center:** the step's content. Opening: the description, annotated. Fit: each requirement as a card with its verdict, the profile passages or “your answer for this opening” behind it, and its gap question inside the card. Resume: the document workspace; when there is none, three ways in — generate from the profile, start from a similar document, adapt a version. Cover letter: History → Motivation → Company facts → Letter, then the letter in the workspace. Application: the full tracker (status, sent versions, timeline, source, type, notes), shared with the Tracker page.
+- **Right column, fixed tabs in every step:** **Agent · Fit · Application**. The agent is the opening's agent in the Opening/Fit/Application steps and the document's agent in the Resume/Cover letter steps (ADR 0009, ADR 0010); Fit is the compact fit check (clickable to the step); Application is a summary (status, Mark as applied, next step). The PDF preview opens as a fourth column.
+- **Mobile:** the right column becomes a sheet; the left column an accordion; nothing is hidden.
+
 ## Onboarding
 
 Right after sign-up the user chooses how to start:

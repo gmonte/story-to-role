@@ -19,6 +19,9 @@ export const rateLimits = {
   taskStart: Ratelimit.slidingWindow(5, "1 m"),
   // Source files uploaded (the most a user keeps is 5 at once).
   sourceUpload: Ratelimit.slidingWindow(10, "1 m"),
+  // A document's PDF rendered from its latest snapshot (free, cached per
+  // snapshot): the preview asks again after each pause in editing.
+  pdfRender: Ratelimit.slidingWindow(30, "1 m"),
   // Source preview pages rendered on the server (a 20-page PDF is 20).
   pageRender: Ratelimit.slidingWindow(60, "1 m"),
 } as const;

@@ -369,7 +369,7 @@ export const documentsRouter = createTRPCRouter({
     ),
 
   requestPdf: userProcedure
-    .use(rateLimited("taskStart"))
+    .use(rateLimited("pdfRender"))
     .meta(
       openApiMeta(
         "documents",

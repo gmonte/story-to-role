@@ -116,6 +116,8 @@ export function DocumentSidePanel({
   );
 }
 
+const previewRenderDelayMs = 2500;
+
 /**
  * The PDF of the latest snapshot, rendered on demand and shown in place;
  * it refreshes with every saved change. Open findings ask once for
@@ -139,13 +141,17 @@ export function PdfPreview({ version }: { version: VersionView }) {
   const canRender = !warned;
   const { mutate } = request;
 
-  // Each new snapshot is rendered as soon as the preview is open.
+  // A snapshot is rendered once the user pauses: typing makes a snapshot
+  // every few seconds, and rendering each would flood the server.
   useEffect(() => {
     if (!canRender || ready || rendering) return;
-    mutate({
-      versionId: version.id,
-      acknowledgeWarnings: acknowledged || undefined,
-    });
+    const timer = setTimeout(() => {
+      mutate({
+        versionId: version.id,
+        acknowledgeWarnings: acknowledged || undefined,
+      });
+    }, previewRenderDelayMs);
+    return () => clearTimeout(timer);
     // Once per snapshot: the view polls while it renders.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [snapshotId, canRender, ready, rendering]);

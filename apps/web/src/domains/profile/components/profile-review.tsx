@@ -79,10 +79,15 @@ export function ProfileReview() {
               </span>
               <span className="text-muted-foreground">{finding.message}</span>
             </button>
-            <div className="flex items-center gap-1">
-              <button
-                type="button"
-                className="text-primary flex items-center gap-1 px-2 pb-1 text-xs hover:underline"
+            <div className="flex flex-wrap items-center gap-1 px-2 pb-1">
+              <Button
+                size="sm"
+                variant="ghost"
+                className="text-muted-foreground h-6 px-2 text-xs"
+                title={t.formatMessage({ defaultMessage: "Talk about this" })}
+                aria-label={t.formatMessage({
+                  defaultMessage: "Talk about this",
+                })}
                 onClick={() =>
                   talkAbout({
                     quote: finding.quote,
@@ -92,8 +97,7 @@ export function ProfileReview() {
                 }
               >
                 <MessageSquare className="size-3" />
-                {t.formatMessage({ defaultMessage: "Talk about this" })}
-              </button>
+              </Button>
               <Button
                 size="sm"
                 variant="ghost"

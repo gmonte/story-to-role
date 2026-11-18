@@ -31,5 +31,5 @@ export const importSettings = {
   experienceCharactersPerCall: 12_000,
   // The import's credit cap (30) pays for about this many comparisons;
   // what lies beyond is left out and said in the summary.
-  maxComparisons: 6,
+  maxComparisons: 10,
 };

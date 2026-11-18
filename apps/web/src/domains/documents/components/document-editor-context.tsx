@@ -11,7 +11,7 @@ import {
   type ReactNode,
 } from "react";
 
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEditor, type Editor } from "@tiptap/react";
 
 import {
@@ -20,6 +20,7 @@ import {
   reviewNoteKey,
 } from "@repo/api/domains/documents/coverage-review/finding-key";
 import { isWarningFinding } from "@repo/api/domains/documents/coverage-review/warning-codes";
+import type { DocumentChange } from "@repo/api/domains/documents/schemas/document-change";
 import type {
   CoverageView,
   VersionView,
@@ -34,8 +35,15 @@ import {
   type EditorDecorationSpec,
 } from "~/domains/profile/utils/editor-extensions";
 import { useTRPC } from "~/tools/trpc/client";
+import { lineDiff } from "~/domains/profile/utils/word-diff";
 
 import { useRefreshDocuments } from "../hooks/use-opening-documents";
+import {
+  changeWidget,
+  removedWordsClass,
+  replacedBlockClass,
+} from "../utils/change-widget";
+import { locateChangeInBlocks } from "../utils/document-changes";
 import {
   blocksToContent,
   contentToBlocks,
@@ -53,9 +61,15 @@ import {
   resetDocument,
   scrollToBlock,
 } from "../utils/document-editor-extensions";
+import { useDocumentAgent } from "./document-agent-context";
 import { originTone } from "./editing";
 
 export type DocumentFinding = CoverageView["findings"][number];
+
+/** A change the agent proposed, with the blocks it replaces now (null when stale). */
+export type LocatedChange = DocumentChange & {
+  range: { start: number; end: number } | null;
+};
 
 /** A note of the AI review shown in the text: an inconsistency or a suggestion. */
 export type ReviewNote = {
@@ -94,6 +108,10 @@ type DocumentEditorState = {
   goToLine: (lineId: string) => void;
   goToOwner: (ownerId: string) => void;
   addBullet: (ownerId: string) => void;
+  /** The agent's changes waiting in the text (ADR 0009). */
+  changes: LocatedChange[];
+  acceptChanges: (documentChangeIds?: string[]) => void;
+  rejectChanges: (documentChangeIds?: string[]) => void;
 };
 
 const DocumentEditorContext = createContext<DocumentEditorState | null>(null);
@@ -149,7 +167,9 @@ export function DocumentEditorProvider({
 }) {
   const t = useTranslation();
   const trpc = useTRPC();
+  const queryClient = useQueryClient();
   const refresh = useRefreshDocuments();
+  const agent = useDocumentAgent();
   const initial = useMemo(
     () => contentToBlocks(editableContent(version), version.language),
     // The editor starts from the version it was opened with.
@@ -168,6 +188,8 @@ export function DocumentEditorProvider({
   const readTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
   const saveTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
   const inFlight = useRef(false);
+  // The save under way, for an action that must start from what is saved.
+  const flushing = useRef<Promise<void>>(Promise.resolve());
   const { mutateAsync: saveEdit } = useMutation(
     trpc.documents.saveEdit.mutationOptions()
   );
@@ -183,8 +205,10 @@ export function DocumentEditorProvider({
 
   /** Saves until what is saved is the latest text. */
   const flush = useCallback(async () => {
-    if (inFlight.current) return;
+    if (inFlight.current) return flushing.current;
     inFlight.current = true;
+    let done!: () => void;
+    flushing.current = new Promise<void>((resolve) => (done = resolve));
     try {
       for (;;) {
         const pending = latest.current;
@@ -220,6 +244,7 @@ export function DocumentEditorProvider({
       await refresh();
     } finally {
       inFlight.current = false;
+      done();
     }
   }, [refresh, saveEdit, t, version.id]);
 
@@ -368,6 +393,115 @@ export function DocumentEditorProvider({
     [editor]
   );
 
+  // The changes the agent proposed, each located in the text as it is now.
+  const changesQuery = useQuery(
+    trpc.documents.changes.queryOptions({ versionId: version.id })
+  );
+  const changes = useMemo<LocatedChange[]>(
+    () =>
+      (changesQuery.data ?? []).map((change) => ({
+        ...change,
+        range: locateChangeInBlocks(blocks, change),
+      })),
+    [changesQuery.data, blocks]
+  );
+  const latestChanges = useRef(changes);
+  latestChanges.current = changes;
+  const latestBlocks = useRef(blocks);
+  latestBlocks.current = blocks;
+  const changesKey = trpc.documents.changes.queryKey({ versionId: version.id });
+  const forgetChanges = (ids: string[]) =>
+    queryClient.setQueryData(
+      changesKey,
+      (current: DocumentChange[] | undefined) =>
+        current?.filter((change) => !ids.includes(change.id))
+    );
+  const refreshChanges = useCallback(
+    () => queryClient.invalidateQueries({ queryKey: changesKey }),
+    // The key is a new array on every render, built from the version.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [queryClient, version.id]
+  );
+  const { mutateAsync: acceptOnServer } = useMutation(
+    trpc.documents.acceptChanges.mutationOptions()
+  );
+  const { mutate: rejectOnServer } = useMutation(
+    trpc.documents.rejectChanges.mutationOptions()
+  );
+  const changesNotRecorded = () => {
+    void refreshChanges();
+    toast.error(
+      t.formatMessage({
+        defaultMessage:
+          "Your answer to the suggestion couldn't be saved. Try again.",
+      })
+    );
+  };
+  /**
+   * Accepts the given changes (all of them by default): the server writes
+   * a snapshot per change over what is saved, so the text is saved first;
+   * the new official snapshot then replaces the editor's text. Changes
+   * whose lines are gone stay waiting.
+   */
+  const acceptChanges = async (documentChangeIds?: string[]) => {
+    const ids = documentChangeIds ?? changes.map((change) => change.id);
+    if (!ids.length) return;
+    await flush();
+    try {
+      const result = await acceptOnServer({
+        versionId: version.id,
+        baseSnapshotId: base.current.snapshotId,
+        documentChangeIds: ids,
+      });
+      forgetChanges(result.accepted);
+      if (!result.accepted.length) {
+        toast.error(
+          t.formatMessage({
+            defaultMessage:
+              "The text changed since this was suggested, so it can't be applied. Reject it, or ask the agent again.",
+          })
+        );
+      }
+      await refresh();
+    } catch (error) {
+      const code = (error as { data?: { code?: string } }).data?.code;
+      if (code === "CONFLICT") {
+        toast.error(
+          t.formatMessage({
+            defaultMessage:
+              "This version changed elsewhere. Your last edit was not saved.",
+          })
+        );
+        await refresh();
+      } else {
+        changesNotRecorded();
+      }
+    }
+  };
+  const rejectChanges = (documentChangeIds?: string[]) => {
+    const ids = documentChangeIds ?? changes.map((change) => change.id);
+    if (!ids.length) return;
+    forgetChanges(ids);
+    rejectOnServer(
+      { versionId: version.id, documentChangeIds: ids },
+      { onError: changesNotRecorded }
+    );
+  };
+  // The widgets in the text call the latest handlers.
+  const changeHandlers = useRef<{
+    accept: (documentChangeId: string) => void;
+    reject: (documentChangeId: string) => void;
+  } | null>(null);
+  changeHandlers.current = {
+    accept: (documentChangeId) => void acceptChanges([documentChangeId]),
+    reject: (documentChangeId) => rejectChanges([documentChangeId]),
+  };
+  const changeLabels = {
+    accept: t.formatMessage({ defaultMessage: "Accept" }),
+    reject: t.formatMessage({ defaultMessage: "Reject" }),
+    removal: t.formatMessage({ defaultMessage: "Remove the line above" }),
+  };
+
   const fixFor = useCallback(
     (finding: DocumentFinding) => {
       if (finding.code !== "publicName" || !finding.lineId || !editor) {
@@ -467,6 +601,72 @@ export function DocumentEditorProvider({
         });
       }
     });
+    // Each change as a tracked change: the lines it replaces struck
+    // through, and what it writes below them with Accept and Reject.
+    for (const change of changes) {
+      const { range } = change;
+      if (!range) continue;
+      const replaced = blocks
+        .slice(range.start, range.end)
+        .map((block) =>
+          block.type === "skill"
+            ? `${block.label}: ${block.text}`
+            : "text" in block
+              ? block.text
+              : ""
+        );
+      const diff = lineDiff(
+        replaced,
+        change.replace.split("\n").filter((line) => line.trim())
+      );
+      for (let line = range.start; line < range.end; line++) {
+        const node = nodeOf(line);
+        if (!node) continue;
+        specs.push({
+          kind: "node",
+          from: node.from,
+          to: node.to,
+          className: replacedBlockClass(diff.fallback),
+          key: `change-old-${change.id}-${line}`,
+        });
+        if (diff.fallback) continue;
+        // Only the removed words are struck; the rest stays readable. A
+        // skills line's label is printed by the node, not in its text.
+        const block = blocks[line];
+        const skip = block.type === "skill" ? `${block.label}: `.length : 0;
+        let offset = node.from + 1 - skip;
+        for (const segment of diff.old[line - range.start] ?? []) {
+          const from = Math.max(offset, node.from + 1);
+          const to = offset + segment.text.length;
+          if (segment.changed && to > from) {
+            specs.push({
+              kind: "inline",
+              from,
+              to,
+              className: removedWordsClass,
+              key: `change-removed-${change.id}-${offset}`,
+            });
+          }
+          offset += segment.text.length;
+        }
+      }
+      specs.push({
+        kind: "widget",
+        at:
+          range.end < positions.length
+            ? positions[range.end]
+            : doc.content.size,
+        interactive: true,
+        element: () =>
+          changeWidget(change, replaced, changeLabels, {
+            accept: (documentChangeId) =>
+              changeHandlers.current?.accept(documentChangeId),
+            reject: (documentChangeId) =>
+              changeHandlers.current?.reject(documentChangeId),
+          }),
+        key: `change-${change.id}`,
+      });
+    }
     notes.forEach((note, index) => {
       if (!note.lineId) return;
       const at = indexOfLine(note.lineId);
@@ -484,16 +684,51 @@ export function DocumentEditorProvider({
       });
     });
     setDecorations(editor, specs);
+    // The labels are the same strings on every render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     editor,
     blocks,
     findings,
     notes,
+    changes,
     trace,
     lines,
     indexOfLine,
     indexOfOwner,
   ]);
+
+  // What the agent's panel needs about the changes: which wait, a fresh
+  // read of them placed in the text, and a way to show one.
+  useEffect(() => {
+    if (!agent) return;
+    const hooks = agent.changeHooks;
+    hooks.current = {
+      pendingIds: () => latestChanges.current.map((change) => change.id),
+      refresh: async () => {
+        const fresh = await queryClient.fetchQuery({
+          ...trpc.documents.changes.queryOptions({ versionId: version.id }),
+          staleTime: 0,
+        });
+        return fresh.map((change) => ({
+          id: change.id,
+          range: locateChangeInBlocks(latestBlocks.current, change),
+        }));
+      },
+      show: (documentChangeId) => {
+        const found = latestChanges.current.find(
+          (change) => change.id === documentChangeId
+        );
+        if (!found?.range || !editor || editor.isDestroyed) return;
+        const { start, end } = found.range;
+        // An addition sits after the part's last line.
+        scrollToBlock(editor, end > start ? start : Math.max(0, start - 1));
+      },
+    };
+    return () => {
+      hooks.current = null;
+    };
+  }, [agent, editor, queryClient, trpc, version.id]);
 
   const value: DocumentEditorState = {
     editor,
@@ -519,6 +754,9 @@ export function DocumentEditorProvider({
     goToLine: (lineId) => goToBlock(indexOfLine(lineId)),
     goToOwner: (ownerId) => goToBlock(indexOfOwner(ownerId)),
     addBullet: (ownerId) => editor && appendBullet(editor, ownerId),
+    changes,
+    acceptChanges: (documentChangeIds) => void acceptChanges(documentChangeIds),
+    rejectChanges,
   };
 
   return (

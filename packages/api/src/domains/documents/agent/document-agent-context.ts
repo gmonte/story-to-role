@@ -14,6 +14,9 @@ import {
 } from "@repo/api/domains/profile/truth/suggestions";
 import type { DbClient } from "@repo/api/tools/db-client";
 
+import { readChangeContent } from "../changes/propose-change";
+import type { ChangeableContent } from "../changes/document-change";
+import type { DocumentChangeContent } from "../schemas/document-change";
 import { coverageReviewContentSchema } from "../coverage-review/coverage-review";
 import {
   reviewNoteKey,
@@ -41,9 +44,20 @@ export type DocumentAgentContext = {
   versionId: string;
   kind: "resume" | "cover_letter";
   language: OutputLanguage;
+  // The version's latest snapshot: what a change is proposed against.
+  snapshotId: string;
+  content: ChangeableContent;
   // The version's latest snapshot, line by line, each with its id and
-  // where it came from.
+  // where it came from, and each part the agent may change with its key.
   documentText: string;
+  // The frozen profile version's lines by id: what a change may cite.
+  evidence: Array<{ id: string; text: string }>;
+  // The frozen profile version's text: where figures may come from.
+  profileText: string | null;
+  // The changes waiting for the user in this version, and the last ones
+  // they rejected.
+  pending: Array<DocumentChangeContent & { id: string }>;
+  rejected: DocumentChangeContent[];
   // The lines' ids with their text, for the passage the person selected.
   lines: Array<{ id: string; text: string }>;
   // The profile version the document froze: its index, and its blocks for
@@ -144,7 +158,11 @@ function resumeText(content: ResumeContent, sources: Sources) {
     `Header (locked): ${content.header.name} | ${content.header.titleLine}`,
   ];
   for (const section of content.sections) {
-    out.push("", `## ${section.kind}`);
+    const part =
+      section.kind === "summary" || section.kind === "skills"
+        ? ` [part: ${section.kind}]`
+        : "";
+    out.push("", `## ${section.kind}${part}`);
     switch (section.kind) {
       case "summary":
         out.push(tracedLine(section.line, sources));
@@ -162,14 +180,14 @@ function resumeText(content: ResumeContent, sources: Sources) {
       case "experience":
         for (const entry of section.entries) {
           out.push(
-            `### ${entry.employer} — ${entry.title} (${entry.startDate ?? "?"} – ${entry.endDate ?? "present"})${entry.context ? ` (${entry.context})` : ""} [locked facts]`
+            `### ${entry.employer} — ${entry.title} (${entry.startDate ?? "?"} – ${entry.endDate ?? "present"})${entry.context ? ` (${entry.context})` : ""} [locked facts] [part: experience:${entry.positionId}]`
           );
           for (const line of entry.lines) out.push(tracedLine(line, sources));
         }
         break;
       case "projects":
         for (const entry of section.entries) {
-          out.push(`### ${entry.name}`);
+          out.push(`### ${entry.name} [part: projects:${entry.projectId}]`);
           for (const line of entry.lines) out.push(tracedLine(line, sources));
         }
         break;
@@ -189,6 +207,8 @@ function letterText(content: CoverLetterContent, sources: Sources) {
     `Header (locked): ${content.header.name} | ${content.header.titleLine}`,
     "",
     `Greeting (locked): ${content.greeting}`,
+    "",
+    "## paragraphs [part: letter]",
     ...content.paragraphs.flatMap((line) => ["", tracedLine(line, sources)]),
     "",
     `Closing (locked): ${content.closing}`,
@@ -339,6 +359,15 @@ export async function loadDocumentAgentContext(input: {
     };
   }
 
+  // How many rejected changes the agent is reminded of.
+  const rememberedRejections = 5;
+  const pending = (await repository.listPendingChanges(version.id)).map(
+    (row) => ({ id: row.id, ...readChangeContent(cipher, row) })
+  );
+  const rejected = (
+    await repository.listRejectedChanges(version.id, rememberedRejections)
+  ).map((row) => readChangeContent(cipher, row));
+
   const published = await loadPublishedProfile({
     db,
     cipher,
@@ -352,6 +381,12 @@ export async function loadDocumentAgentContext(input: {
     versionId: version.id,
     kind: content.kind,
     language: version.language,
+    snapshotId: latest.id,
+    content,
+    evidence: career.evidence.map((row) => ({ id: row.id, text: row.text })),
+    profileText: published?.markdown ?? null,
+    pending,
+    rejected,
     documentText:
       content.kind === "resume"
         ? resumeText(content, sources)

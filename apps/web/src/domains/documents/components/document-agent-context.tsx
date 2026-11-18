@@ -1,6 +1,13 @@
 "use client";
 
-import { createContext, useContext, useState, type ReactNode } from "react";
+import {
+  createContext,
+  useContext,
+  useRef,
+  useState,
+  type ReactNode,
+  type RefObject,
+} from "react";
 
 import type { AgentAttachment } from "@repo/api/domains/agents/agent-message";
 
@@ -15,8 +22,23 @@ export type DocumentAgentTopic = {
   attachment: AgentAttachment | null;
 };
 
+/**
+ * What the editor lends the agent about the changes it proposed: which
+ * wait now, a fresh read of them with where each sits in the text, and a
+ * way to show one. The editor registers them; the agent's panel is in
+ * another column.
+ */
+export type ChangeHooks = {
+  pendingIds: () => string[];
+  refresh: () => Promise<
+    Array<{ id: string; range: { start: number } | null }>
+  >;
+  show: (documentChangeId: string) => void;
+};
+
 type DocumentAgentState = {
   topic: DocumentAgentTopic | null;
+  changeHooks: RefObject<ChangeHooks | null>;
   talkAbout: (topic: {
     quote?: string | null;
     attachment?: AgentAttachment | null;
@@ -40,10 +62,12 @@ export function useDocumentAgent() {
  */
 export function DocumentAgentProvider({ children }: { children: ReactNode }) {
   const [topic, setTopic] = useState<DocumentAgentTopic | null>(null);
+  const changeHooks = useRef<ChangeHooks | null>(null);
   return (
     <DocumentAgentContext.Provider
       value={{
         topic,
+        changeHooks,
         talkAbout: ({ quote, attachment }) =>
           setTopic({
             id: Date.now(),

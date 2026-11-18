@@ -20,6 +20,8 @@ export const snapshotOriginSchema = z.enum([
   "edited",
   "restored",
   "copied",
+  // A document agent's suggestion the user accepted (ADR 0009).
+  "suggested",
 ]);
 export type SnapshotOrigin = z.infer<typeof snapshotOriginSchema>;
 

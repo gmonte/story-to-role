@@ -6,7 +6,7 @@ import { splitAgentMessage } from "@repo/api/domains/agents/agent-message";
 import { agentSettings } from "@repo/api/domains/agents/agent-settings";
 import {
   guardAgentTurn,
-  type AgentTurnDeps,
+  type AgentTurnDeps as SharedTurnDeps,
   type OpenTurn,
 } from "@repo/api/domains/agents/agent-turn";
 import {
@@ -19,10 +19,36 @@ import { limitQuestions } from "@repo/api/domains/agents/question-limit";
 import { getUserCipher } from "@repo/api/domains/encryption/user-cipher";
 import { partText } from "@repo/api/domains/profile/truth/suggestions";
 
+import { proposeChange, type ChangeRefusal } from "../changes/propose-change";
 import { loadDocumentAgentContext } from "./document-agent-context";
 import { buildDocumentAgentPrompt } from "./document-agent-prompt";
 
-export type { AgentTurnDeps, OpenTurn };
+export type { OpenTurn };
+
+export type AgentTurnDeps = SharedTurnDeps & {
+  // A change was just proposed: the page shows it in the text at once.
+  reportChange?: (documentChangeId: string) => void;
+};
+
+/** Why a change was refused, for the model to do better. */
+function refusalText(refusal: ChangeRefusal) {
+  switch (refusal.kind) {
+    case "empty":
+      return "Nothing to change: give the line to replace, the new line, or both.";
+    case "locked":
+      return "Refused: that is a locked fact (the header, a position's employer, title or dates, a credential, the greeting, the closing, a skills label). It changes only through the profile; tell the person so.";
+    case "noSuchPart":
+      return "No such part: use a part key from the document (“[part: …]”).";
+    case "notFound":
+      return "That line isn't in that part exactly once as written (or what you add is already there). Copy the line's words exactly as the document shows them, without the id; leave `find` empty to add at the end of the part.";
+    case "unchanged":
+      return "The new line is the same as the one it replaces.";
+    case "fixedLines":
+      return "The summary and the skills lines are replaced one for one: give exactly as many lines as you replace, never add or remove one there.";
+    case "ungivenFigures":
+      return `Refused: neither the profile nor the person gave ${refusal.figures.join(", ")}. Write the figure exactly as they did, or ask them for it; never supply a number yourself.`;
+  }
+}
 
 /** The user's messages of the conversation, latest last, as the chat split them. */
 function userMessages(messages: ModelMessage[]) {
@@ -57,8 +83,9 @@ function historyWindow(messages: ModelMessage[], size: number) {
  * guardrails answer from code when they block; otherwise the agent streams
  * its reply with this turn's context: the version the person is on with
  * its traces, the frozen profile version's index (readable part by part),
- * the settings, the purpose, the rules and the findings. It changes
- * nothing: in this slice it answers and discusses.
+ * the settings, the purpose, the rules and the findings. It reads the
+ * profile version and proposes changes through tools; it changes nothing
+ * itself.
  */
 export async function runDocumentAgentTurn(
   deps: AgentTurnDeps,
@@ -102,6 +129,11 @@ export async function runDocumentAgentTurn(
 
   try {
     const blocks = context.profile?.blocks ?? [];
+    const sources = said.map((message) => message.text);
+    // What waits for the user, this turn's suggestions included: a newer
+    // one on the same lines takes the older one's place.
+    let waiting = [...context.pending];
+    let proposing: Promise<unknown> = Promise.resolve();
     const tools = {
       read_part: tool({
         description:
@@ -114,6 +146,83 @@ export async function runDocumentAgentTurn(
           return text === null
             ? { error: "No such part; use a key from the index." }
             : { text };
+        },
+      }),
+      propose_change: tool({
+        description:
+          "Propose one change to the document: one line replaced, added or removed in one part. It is shown in the text as a tracked change the person accepts or rejects; nothing changes until they accept.",
+        inputSchema: z.object({
+          part: z
+            .string()
+            .describe(
+              "The part's key, exactly as in the document (“[part: …]”)"
+            ),
+          find: z
+            .string()
+            .describe(
+              "The line to replace, copied exactly from the document without its id; empty to add at the end of the part"
+            ),
+          replace: z
+            .string()
+            .describe(
+              "The whole new line, in the document's language; empty to remove the line"
+            ),
+          reason: z
+            .string()
+            .describe(
+              "One short sentence shown to the person with the change, in their language"
+            ),
+          profilePassages: z
+            .array(z.string())
+            .optional()
+            .describe(
+              "The profile lines the change rests on, copied exactly from read_part; none for a fact the person gave in this conversation"
+            ),
+        }),
+        execute: ({ part, find, replace, reason, profilePassages }) => {
+          // One at a time: calls of the same step run together, and each
+          // must see what the one before it left waiting.
+          const result = proposing.then(async () => {
+            const proposed = await proposeChange({
+              db,
+              cipher,
+              versionId: context.versionId,
+              snapshotId: context.snapshotId,
+              content: context.content,
+              origin: "document_agent",
+              change: { part, find, replace },
+              reason,
+              profilePassages,
+              evidence: context.evidence,
+              profileText: context.profileText,
+              sources,
+              pending: waiting,
+            });
+            if (!proposed.ok) return { error: refusalText(proposed.refusal) };
+            waiting = [
+              ...waiting.filter(
+                (other) => !proposed.supersededIds.includes(other.id)
+              ),
+              proposed.change,
+            ];
+            deps.reportChange?.(proposed.change.id);
+            return {
+              proposed: true,
+              replacedEarlierSuggestion: proposed.supersededIds.length > 0,
+              // For the page, to open the change in the text.
+              documentChangeId: proposed.change.id,
+              ...(proposed.unmatchedPassages.length
+                ? {
+                    note: `It waits for the person in the text; nothing changed yet. These passages aren't in the profile version as written and weren't recorded: ${proposed.unmatchedPassages.join(" | ")}`,
+                  }
+                : {
+                    note: "It waits for the person in the text; nothing changed yet.",
+                  }),
+            };
+          });
+          // A call that failed doesn't fail the ones after it.
+          proposing = result.catch(() => undefined);
+          return result;
         },
       }),
     };
@@ -134,8 +243,8 @@ export async function runDocumentAgentTurn(
         ),
         tools,
         stopWhen: stepCountIs(agentSettings.maxSteps),
-        // The last step answers in words: a turn spent reading would
-        // otherwise end without a reply to the user.
+        // The last step answers in words: a turn spent reading and
+        // suggesting would otherwise end without a reply to the user.
         prepareStep: ({ stepNumber }) =>
           stepNumber >= agentSettings.maxSteps - 1
             ? { toolChoice: "none" as const }

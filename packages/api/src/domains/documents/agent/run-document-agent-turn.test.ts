@@ -30,6 +30,7 @@ import {
 } from "@repo/api/test/pglite";
 import type { MisuseGuard } from "@repo/api/tools/misuse-guard";
 
+import { readChangeContent } from "../changes/propose-change";
 import { DocumentsRepository } from "../documents-repository";
 import { loadCareerContext } from "../generation/load-career-context";
 import type { CoverLetterContent } from "../schemas/cover-letter-content";
@@ -379,6 +380,7 @@ async function setup({ credits }: { credits?: number } = {}) {
   };
   gate = fakeProviderPackage({ object: () => ({ verdict: "on_topic" }) });
 
+  const reported: string[] = [];
   async function say(
     chatId: string,
     text: string,
@@ -392,6 +394,7 @@ async function setup({ credits }: { credits?: number } = {}) {
         rateLimiter: { allow: async () => true },
         streamText,
         model: () => model,
+        reportChange: (documentChangeId) => reported.push(documentChangeId),
       },
       { chatId, messages: [...earlier, { role: "user", content: text }] }
     );
@@ -409,6 +412,8 @@ async function setup({ credits }: { credits?: number } = {}) {
     insertResume,
     insertLetter,
     say,
+    reported,
+    position,
     chats: new AgentChatService(db),
   };
 }
@@ -544,6 +549,125 @@ describe("the document agent", () => {
     await expect(
       ctx.say(profileChat.chatId, "Hi", agentModel([], "Hi").model)
     ).rejects.toThrow("Unknown document chat");
+  });
+
+  it("proposes changes through a tool, refuses a figure nobody gave, and remembers what waits", async () => {
+    const ctx = await setup();
+    const { document, version } = await ctx.insertResume("library");
+    const { chatId } = await ctx.chats.current(ctx.user.id, {
+      kind: "document",
+      documentId: document.id,
+    });
+    const part = `experience:${ctx.position.id}`;
+    const { model, prompts } = agentModel(
+      [
+        [
+          {
+            name: "propose_change",
+            input: {
+              part,
+              find: "[exp2] Mentored two interns.",
+              replace: "Mentored two interns who now ship on their own.",
+              reason: "More direct.",
+              profilePassages: [
+                "- Responsibilities: Led a team of 5 engineers.",
+              ],
+            },
+          },
+          {
+            name: "propose_change",
+            input: {
+              part,
+              find: "Cut deploy time by 40% with Kubernetes.",
+              replace:
+                "Cut deploy time by 40% and costs by 25% with Kubernetes.",
+              reason: "Adds the saving.",
+            },
+          },
+          {
+            name: "propose_change",
+            input: {
+              part: "header",
+              find: "Platform Engineer | Kubernetes",
+              replace: "Staff Engineer | Kubernetes",
+              reason: "A stronger title.",
+            },
+          },
+        ],
+      ],
+      "One suggestion waits in the text; I can't add the 25% since nobody gave it."
+    );
+    const { text } = await ctx.say(
+      chatId,
+      composeAgentMessage(
+        null,
+        "Make the bullets more direct.",
+        null,
+        null,
+        version.id
+      ),
+      model
+    );
+    expect(text).toContain("One suggestion waits");
+    // The document shows each part's key and the rules to propose.
+    const system = systemOf(prompts[0]);
+    expect(system).toContain(`[part: ${part}]`);
+    expect(system).toContain("propose_change");
+    const results = toolResultsOf(prompts[1]);
+    expect(results).toContain("documentChangeId");
+    expect(results).toContain("neither the profile nor the person gave 25%");
+    expect(results).toContain("locked fact");
+    // The page was told of the one that waits.
+    const [row, ...others] = await new DocumentsRepository(
+      ctx.db
+    ).listPendingChanges(version.id);
+    expect(others).toHaveLength(0);
+    expect(ctx.reported).toEqual([row.id]);
+    expect(readChangeContent(ctx.cipher, row)).toMatchObject({
+      part,
+      find: "Mentored two interns.",
+      replace: "Mentored two interns who now ship on their own.",
+      reason: "More direct.",
+    });
+    expect(readChangeContent(ctx.cipher, row).evidenceIds).toHaveLength(1);
+
+    // The next turn knows what waits; a figure the person gives passes.
+    const next = agentModel(
+      [
+        [
+          {
+            name: "propose_change",
+            input: {
+              part,
+              find: "Cut deploy time by 40% with Kubernetes.",
+              replace:
+                "Cut deploy time by 40% and costs by 25% with Kubernetes.",
+              reason: "Adds the saving you gave.",
+            },
+          },
+        ],
+      ],
+      "Added."
+    );
+    await ctx.say(
+      chatId,
+      composeAgentMessage(
+        null,
+        "Costs went down 25%, you can add it.",
+        null,
+        null,
+        version.id
+      ),
+      next.model,
+      [{ role: "user", content: "Make the bullets more direct." }]
+    );
+    expect(systemOf(next.prompts[0])).toContain(
+      "Mentored two interns who now ship on their own."
+    );
+    expect(toolResultsOf(next.prompts[1])).not.toContain("Refused");
+    expect(
+      await new DocumentsRepository(ctx.db).listPendingChanges(version.id)
+    ).toHaveLength(2);
   });
 
   it("reserves a document agent turn per message and settles it to the usage", async () => {

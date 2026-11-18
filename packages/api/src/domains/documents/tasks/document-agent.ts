@@ -37,6 +37,13 @@ export const documentAgent = chat.agent({
         misuse: redisMisuseGuard,
         rateLimiter: upstashRateLimiter,
         streamText,
+        reportChange: (documentChangeId) =>
+          chat.response.write({
+            type: "data-change",
+            id: documentChangeId,
+            data: {},
+            transient: true,
+          }),
       },
       { chatId, messages, signal }
     );

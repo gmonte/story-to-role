@@ -256,3 +256,42 @@ export function setCompetencyLevel(
   return insertEntry(blocks, { kind: "competency", name: name.trim(), level })
     .blocks;
 }
+
+/**
+ * Adds the empty “occasional experience” line right after the “use often”
+ * line of a profile written before that level existed. Does nothing when
+ * the section has no “use often” line or already has an occasional one.
+ */
+export function addOccasionalLevelLine(input: ProfileBlock[]): ProfileBlock[] {
+  const section = sectionOf(readStructure(input), "competencies");
+  if (!section) return input;
+  let often = -1;
+  for (let line = section.start; line < section.end; line++) {
+    const block = input[line];
+    if (block.type !== "item" || block.depth) continue;
+    const labelled = splitLabel(block.text);
+    const level = labelled ? competencyLevelOf(labelled.label) : null;
+    if (level === "occasional") return input;
+    if (level === "often") often = line;
+  }
+  if (often < 0) return input;
+  const language: ProfileLanguage = input[often].text.startsWith(
+    competencyLabels["en-US"].often
+  )
+    ? "en-US"
+    : "pt-BR";
+  let at = often + 1;
+  while (
+    at < section.end &&
+    input[at].type === "item" &&
+    (input[at] as { depth: number }).depth > 0
+  ) {
+    at++;
+  }
+  const line: ProfileBlock = {
+    type: "item",
+    depth: 0,
+    text: `${competencyLabels[language].occasional}:`,
+  };
+  return [...input.slice(0, at), line, ...input.slice(at)];
+}

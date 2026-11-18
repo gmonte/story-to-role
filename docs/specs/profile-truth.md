@@ -29,7 +29,7 @@ The profile follows the method's template. Section names are recognized in Engli
 | Experience (most recent first) | One subsection per position, titled `### Company — Title (YYYY-MM to YYYY-MM)` (`present` for the current one), with context (sector, team size, product), responsibilities, tools, results (each figure marked), and what the user did **not** do in that position |
 | Education | `Course — Institution — status (completed / in progress until YYYY-MM)` |
 | Certifications | `Name — issuer — date — status (valid / expired in YYYY-MM / renewing)` |
-| Competencies | Three lists: master, use often, studied without professional experience |
+| Competencies | Four lists: master, use often, occasional experience (professional use, only now and then), studied without professional experience |
 | Languages | `Language — real level` |
 | Known gaps | What the user does not have or has not done, stated plainly |
 | Communication rules | "Never include" (names, clients, codenames, figures, personal data) and "never claim" |

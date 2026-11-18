@@ -61,7 +61,7 @@ export function useProfileLabels() {
       case "competencyLevel":
         return t.formatMessage({
           defaultMessage:
-            "Put each competency under a level: master, use often, or studied without professional experience.",
+            "Put each competency under a level: master, use often, occasional experience, or studied without professional experience.",
         });
       case "markFormat":
         return t.formatMessage({
@@ -177,6 +177,7 @@ export function useProfileLabels() {
   const levelLabels: Record<CompetencyLevel, string> = {
     master: t.formatMessage({ defaultMessage: "I master it" }),
     often: t.formatMessage({ defaultMessage: "I use it often" }),
+    occasional: t.formatMessage({ defaultMessage: "Occasional experience" }),
     studied: t.formatMessage({
       defaultMessage: "Studied, without professional experience",
     }),

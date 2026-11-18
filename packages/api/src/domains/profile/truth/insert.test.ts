@@ -116,4 +116,14 @@ describe("the insert menu", () => {
       "## Competências\n\n- Domino: Python, SQL\n- Uso com frequência: Docker\n"
     );
   });
+
+  it("moves a competency to occasional experience", () => {
+    const markdown =
+      "## Competências\n\n- Domino: Python\n- Uso com frequência: SQL, Docker\n";
+    const out = serializeBlocks(
+      setCompetencyLevel(parseBlocks(markdown), "Docker", "occasional")
+    );
+    expect(out).toContain("- Uso com frequência: SQL\n");
+    expect(out).toContain("- Experiência pontual: Docker");
+  });
 });

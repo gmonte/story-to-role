@@ -38,6 +38,9 @@ export const profileDocumentsTable = createTable(
     // Bumped on every save, so a stale tab can't overwrite a newer draft.
     draftRevision: d.integer().notNull().default(0),
     publishedVersionId: d.uuid(),
+    // When the draft got the empty “occasional experience” level line (once,
+    // so a user who deletes it does not get it back); null until then.
+    occasionalLevelAddedAt: d.timestamp({ withTimezone: true }),
   }),
   (t) => [unique("profile_documents_user_kind_unique").on(t.userId, t.kind)]
 );

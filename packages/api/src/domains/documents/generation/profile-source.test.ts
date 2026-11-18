@@ -54,6 +54,7 @@ export const profileMarkdown = `# Perfil
 
 - Domino: Python, SQL
 - Uso com frequência: FastAPI, Django
+- Experiência pontual: PostgreSQL
 - Estudei, sem experiência profissional: Spark
 
 ## Idiomas
@@ -277,6 +278,7 @@ describe("the profile as generation reads it", () => {
       "SQL",
       "FastAPI",
       "Django",
+      "PostgreSQL",
     ]);
     expect(source.rules).toEqual({
       neverInclude: ["Projeto Fênix"],

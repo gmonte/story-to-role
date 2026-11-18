@@ -199,6 +199,19 @@ describe("the profile linter", () => {
     expect(missing?.params).toEqual({ name: "Docker" });
   });
 
+  it("accepts an occasional competency an experience uses", () => {
+    const markdown = valid
+      .replace(
+        "- Uso com frequência: PostgreSQL\n",
+        "- Uso com frequência: PostgreSQL\n- Experiência pontual: Redis\n"
+      )
+      .replace(
+        "- Tecnologias: Python, PostgreSQL\n",
+        "- Tecnologias: Python, PostgreSQL, Redis\n"
+      );
+    expect(codes(lint(markdown))).toEqual(codes(lint(valid)));
+  });
+
   it("marks a studied competency used in an experience", () => {
     const markdown = valid.replace(
       "- Tecnologias: Python\n",

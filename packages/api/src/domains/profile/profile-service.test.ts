@@ -193,4 +193,32 @@ describe("the profile document", () => {
       ctx.profile.getVersion({ userId: other.id, profileVersionId: versionId })
     ).rejects.toMatchObject({ code: "NOT_FOUND" });
   });
+
+  it("adds the occasional level line to an old draft once", async () => {
+    const { profile, draft, user } = await setup();
+    const old = wellFormed("Dev").replace(
+      "## Competências\n",
+      "## Competências\n\n- Domino: Python\n- Uso com frequência: SQL\n- Estudei, sem experiência profissional: Spark\n"
+    );
+    await profile.saveDraft({
+      userId: user.id,
+      markdown: old,
+      baseRevision: 0,
+    });
+    const first = await draft();
+    expect(first.markdown).toContain(
+      "- Uso com frequência: SQL\n- Experiência pontual:\n- Estudei"
+    );
+    expect(first.revision).toBe(2);
+    // The user deletes it: it does not come back.
+    const without = first.markdown.replace("- Experiência pontual:\n", "");
+    await profile.saveDraft({
+      userId: user.id,
+      markdown: without,
+      baseRevision: first.revision,
+    });
+    const again = await draft();
+    expect(again.markdown).toBe(without);
+    expect(again.revision).toBe(3);
+  });
 });

@@ -40,6 +40,7 @@ const profile = `# Perfil
 ## Competências
 
 - Domino: Python, SQL
+- Experiência pontual: Redis
 - Estudei, sem experiência profissional: Spark
 
 ## Idiomas
@@ -82,6 +83,7 @@ describe("the published profile's extract", () => {
     expect(extract.competencies).toEqual([
       { name: "Python", level: "master" },
       { name: "SQL", level: "master" },
+      { name: "Redis", level: "occasional" },
       { name: "Spark", level: "studied" },
     ]);
     expect(extract.rules).toEqual({
@@ -126,6 +128,7 @@ describe("the published profile's extract", () => {
       "Beta — Backend (2022-03 a atual): O que NÃO fiz: não administrei nuvem; não liderei pessoas.":
         "notDone",
       "Domino: Python, SQL": "evidence",
+      "Experiência pontual: Redis": "evidence",
       "Estudei, sem experiência profissional: Spark": "studied",
       "Spark em produção.": "gap",
       "Nunca incluir: Projeto Fênix, dados do cliente Alfa": "rule",

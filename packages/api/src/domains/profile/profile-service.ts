@@ -30,6 +30,7 @@ import {
   type ProfileBlock,
 } from "./truth/blocks";
 import { changedChunks } from "./truth/chunks";
+import { addOccasionalLevelLine } from "./truth/insert";
 import { extractProfile, profilePassages } from "./truth/extract";
 import {
   hasFormatErrors,
@@ -98,18 +99,54 @@ export class ProfileService {
       };
     }
     const cipher = await getUserCipher(this.db, input.userId);
-    const markdown = cipher.decrypt(document.encryptedDraft);
+    let markdown = cipher.decrypt(document.encryptedDraft);
+    let current = document;
+    if (kind === profileKind && !document.occasionalLevelAddedAt) {
+      current = await this.addOccasionalLevel(input.userId, kind, cipher);
+      markdown = cipher.decrypt(current.encryptedDraft);
+    }
     const published = document.publishedVersionId
       ? await repository.findVersion(document.id, document.publishedVersionId)
       : undefined;
     return {
       markdown,
-      revision: document.draftRevision,
-      updatedAt: document.draftUpdatedAt,
+      revision: current.draftRevision,
+      updatedAt: current.draftUpdatedAt,
       publishedVersion: published ? versionSummary(published) : null,
       changedSincePublished:
         !published || cipher.decrypt(published.encryptedMarkdown) !== markdown,
     };
+  }
+
+  /**
+   * Once per draft: adds the empty “occasional experience” line to a draft
+   * written before that level existed (saved like an edit), and records it,
+   * so deleting the line later keeps it deleted. Published versions stay.
+   */
+  private async addOccasionalLevel(
+    userId: string,
+    kind: ProfileDocumentKind,
+    cipher: Awaited<ReturnType<typeof getUserCipher>>
+  ) {
+    return this.db.transaction(async (tx) => {
+      const repository = new ProfileRepository(tx);
+      const document = await repository.findDocumentForUpdate(userId, kind);
+      if (!document || document.occasionalLevelAddedAt) return document;
+      const blocks = parseBlocks(cipher.decrypt(document.encryptedDraft));
+      const next = addOccasionalLevelLine(blocks);
+      const now = new Date();
+      return repository.updateDocument(
+        document.id,
+        next === blocks
+          ? { occasionalLevelAddedAt: now }
+          : {
+              encryptedDraft: cipher.encrypt(serializeBlocks(next)),
+              draftUpdatedAt: now,
+              draftRevision: document.draftRevision + 1,
+              occasionalLevelAddedAt: now,
+            }
+      );
+    });
   }
 
   /**

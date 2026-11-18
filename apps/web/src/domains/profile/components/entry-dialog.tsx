@@ -264,6 +264,9 @@ function EntryForm({
               <SelectItem value="often">
                 {t.formatMessage({ defaultMessage: "I use it often" })}
               </SelectItem>
+              <SelectItem value="occasional">
+                {t.formatMessage({ defaultMessage: "Occasional experience" })}
+              </SelectItem>
               <SelectItem value="studied">
                 {t.formatMessage({
                   defaultMessage: "Studied, without professional experience",

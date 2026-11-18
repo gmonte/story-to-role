@@ -492,7 +492,7 @@ function lintCompetencies(structure: ProfileStructure, blocks: ProfileBlock[]) {
         .join("\n")
     : "";
   for (const competency of competencies) {
-    if (competency.level !== "master" && competency.level !== "often") continue;
+    if (competency.level === "studied") continue;
     if (!mentions(experienceText, competency.name)) {
       findings.push(
         finding("competencyUnbacked", competency.line, competency, {

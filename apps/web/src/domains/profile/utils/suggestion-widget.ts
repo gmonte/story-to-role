@@ -71,17 +71,17 @@ export function suggestionWidget(
     button(labels.accept, "profile-suggestion-accept", () =>
       handlers.accept(suggestion.id)
     ),
+    button(labels.reject, "profile-suggestion-reject", () =>
+      handlers.reject(suggestion.id)
+    ),
     // Only a suggestion that replaces lines with new ones can keep both.
     ...(suggestion.find.trim() && suggestion.replace.trim()
       ? [
-          button(labels.both, "profile-suggestion-reject", () =>
+          button(labels.both, "profile-suggestion-both", () =>
             handlers.both(suggestion.id)
           ),
         ]
-      : []),
-    button(labels.reject, "profile-suggestion-reject", () =>
-      handlers.reject(suggestion.id)
-    )
+      : [])
   );
   root.append(footer);
   return root;

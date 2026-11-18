@@ -148,6 +148,18 @@
   background: var(--primary);
   color: var(--primary-foreground);
 }
+/* A third way out, set apart from Accept and Reject: a quiet link. */
+.profile-editor .profile-suggestion-both {
+  padding: 0.125rem 0.25rem;
+  color: var(--muted-foreground);
+  font-weight: 500;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+.profile-editor .profile-suggestion-both:hover {
+  color: var(--foreground);
+}
 .profile-editor .profile-add-entry {
   margin: 0.25rem 0;
 }

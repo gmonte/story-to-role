@@ -2,8 +2,10 @@ import { describe, expect, it } from "vitest";
 
 import {
   decideClearKey,
+  initialCommandMenu,
   isClearCommand,
   matchingCommands,
+  reduceCommandMenu,
 } from "./chat-command";
 
 describe("chat commands", () => {
@@ -44,5 +46,51 @@ describe("clear command confirmation", () => {
 
   it("ignores keys when nothing is armed", () => {
     expect(decideClearKey(false, "a", false)).toBe("ignore");
+  });
+});
+
+describe("command menu", () => {
+  const list = ["/clear", "/limpar"];
+  const start = initialCommandMenu;
+
+  it("wraps the highlight with the arrows", () => {
+    const down = reduceCommandMenu(start, "ArrowDown", list);
+    expect(down.state.index).toBe(1);
+    expect(reduceCommandMenu(down.state, "ArrowDown", list).state.index).toBe(
+      0
+    );
+    expect(reduceCommandMenu(start, "ArrowUp", list).state.index).toBe(1);
+    expect(down.handled).toBe(true);
+  });
+
+  it("Enter picks the highlighted command and runs it", () => {
+    const down = reduceCommandMenu(start, "ArrowDown", list).state;
+    const result = reduceCommandMenu(down, "Enter", list);
+    expect(result.pick).toEqual({ command: "/limpar", run: true });
+    expect(result.handled).toBe(true);
+  });
+
+  it("Tab picks without running", () => {
+    expect(reduceCommandMenu(start, "Tab", list).pick).toEqual({
+      command: "/clear",
+      run: false,
+    });
+  });
+
+  it("Escape closes the menu and then ignores keys", () => {
+    const closed = reduceCommandMenu(start, "Escape", list).state;
+    expect(closed.closed).toBe(true);
+    expect(reduceCommandMenu(closed, "Enter", list).handled).toBe(false);
+  });
+
+  it("ignores keys when nothing matches", () => {
+    expect(reduceCommandMenu(start, "Enter", []).handled).toBe(false);
+    expect(reduceCommandMenu(start, "a", list).handled).toBe(false);
+  });
+
+  it("filters by the typed prefix", () => {
+    expect(matchingCommands("/li")).toEqual(["/limpar"]);
+    expect(matchingCommands("/x")).toEqual([]);
+    expect(matchingCommands("clear")).toEqual([]);
   });
 });

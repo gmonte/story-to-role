@@ -38,6 +38,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@repo/web/components/ui/dialog";
+import { cn } from "@repo/web/lib/utils";
 import { Textarea } from "@repo/web/components/ui/textarea";
 
 import { SourceImportStatus } from "~/domains/career/components/source-import-status";
@@ -64,8 +65,10 @@ import {
 import { useAnswerWatchdog } from "../hooks/use-answer-watchdog";
 import {
   decideClearKey,
+  initialCommandMenu,
   isClearCommand,
   matchingCommands,
+  reduceCommandMenu,
 } from "../utils/chat-command";
 import { topmostNewSuggestion } from "../utils/topmost-new-suggestion";
 import { maxQuoteCharacters, useProfileEditor } from "./profile-editor-context";
@@ -145,6 +148,7 @@ function Conversation({
   const [confirmingNew, setConfirmingNew] = useState(false);
   // /clear was sent once: a second Enter confirms, any other key cancels.
   const [clearArmed, setClearArmed] = useState(false);
+  const [menu, setMenu] = useState(initialCommandMenu);
   const [startingNew, setStartingNew] = useState(false);
   const [turnDone, setTurnDone] = useState(0);
   // The suggestions there were when the turn began.
@@ -393,6 +397,9 @@ function Conversation({
     last.parts.at(-1)?.type === "text";
 
   const commands = clearArmed ? [] : matchingCommands(text);
+  const menuOpen = commands.length > 0 && !menu.closed;
+  const activeIndex = Math.min(menu.index, Math.max(commands.length - 1, 0));
+  const optionId = (command: string) => `profile-command-${command.slice(1)}`;
 
   return (
     <div className="flex h-full min-h-0 flex-col">
@@ -622,25 +629,35 @@ function Conversation({
             </button>
           </div>
         )}
-        {commands.length > 0 && (
-          <ul className="bg-background mb-2 rounded-md border text-xs shadow-sm">
-            {commands.map((command) => (
-              <li key={command}>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setText(command);
-                    input.current?.focus();
-                  }}
-                  className="hover:bg-muted flex w-full items-baseline gap-2 px-2.5 py-1.5 text-left"
-                >
-                  <span className="font-mono font-medium">{command}</span>
-                  <span className="text-muted-foreground">
-                    {t.formatMessage({
-                      defaultMessage: "Start a new conversation",
-                    })}
-                  </span>
-                </button>
+        {menuOpen && (
+          <ul
+            id="profile-command-list"
+            role="listbox"
+            className="bg-background mb-2 rounded-md border text-xs shadow-sm"
+          >
+            {commands.map((command, index) => (
+              <li
+                key={command}
+                id={optionId(command)}
+                role="option"
+                aria-selected={index === activeIndex}
+                onMouseEnter={() => setMenu((m) => ({ ...m, index }))}
+                onMouseDown={(event) => event.preventDefault()}
+                onClick={() => {
+                  setText(command);
+                  input.current?.focus();
+                }}
+                className={cn(
+                  "flex w-full cursor-pointer items-baseline gap-2 px-2.5 py-1.5 text-left",
+                  index === activeIndex && "bg-muted"
+                )}
+              >
+                <span className="font-mono font-medium">{command}</span>
+                <span className="text-muted-foreground">
+                  {t.formatMessage({
+                    defaultMessage: "Start a new conversation",
+                  })}
+                </span>
               </li>
             ))}
           </ul>
@@ -662,8 +679,16 @@ function Conversation({
             maxLength={
               agentSettings.maxMessageCharacters - maxQuoteCharacters - 100
             }
+            role="combobox"
+            aria-expanded={menuOpen}
+            aria-controls="profile-command-list"
+            aria-autocomplete="list"
+            aria-activedescendant={
+              menuOpen ? optionId(commands[activeIndex]) : undefined
+            }
             onChange={(event) => {
               setClearArmed(false);
+              setMenu(initialCommandMenu);
               setText(event.target.value);
             }}
             onBlur={() => {
@@ -672,6 +697,16 @@ function Conversation({
               setText("");
             }}
             onKeyDown={(event) => {
+              const nav = reduceCommandMenu(menu, event.key, commands);
+              if (nav.handled) {
+                event.preventDefault();
+                setMenu(nav.state);
+                if (nav.pick) {
+                  setText(nav.pick.command);
+                  if (nav.pick.run) void send(nav.pick.command);
+                }
+                return;
+              }
               const decision = decideClearKey(
                 clearArmed && isClearCommand(text),
                 event.key,

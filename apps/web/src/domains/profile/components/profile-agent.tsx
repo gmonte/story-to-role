@@ -501,7 +501,7 @@ function Conversation({
             </button>
           </div>
         )}
-        <div className="bg-background relative rounded-xl border shadow-sm">
+        <div className="bg-background flex flex-col rounded-xl border shadow-sm">
           <Textarea
             ref={input}
             rows={2}
@@ -523,9 +523,10 @@ function Conversation({
                     defaultMessage: "Tell what you did, or ask where to start",
                   })
             }
-            className="max-h-40 resize-none border-0 pb-10 shadow-none focus-visible:ring-0"
+            className="max-h-40 resize-none border-0 shadow-none focus-visible:ring-0"
           />
-          <div className="absolute right-2 bottom-2 left-3 flex items-center gap-1">
+          {/* Below the text, not over it: a long message scrolls clear of it. */}
+          <div className="flex items-center gap-1 pr-2 pb-2 pl-3">
             <CreditCost credits={credits.data?.estimates.agentMessage} />
             {messages.length > 0 && (
               <button

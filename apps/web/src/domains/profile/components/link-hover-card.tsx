@@ -8,6 +8,8 @@ import { ExternalLink } from "lucide-react";
 import { useTranslation } from "@repo/intl/use-translation";
 import { Button } from "@repo/web/components/ui/button";
 
+import { linkAtCursor } from "../utils/editor-extensions";
+
 const openDelayMs = 300;
 const closeDelayMs = 150;
 
@@ -60,6 +62,21 @@ export function LinkHoverCard({ editor }: { editor: Editor | null }) {
       clearTimeout(closeTimer.current);
       closeTimer.current = setTimeout(() => setCard(null), closeDelayMs);
     };
+    // The cursor in a link shows the button too; leaving it hides it.
+    const cursor = () => {
+      const link = linkAtCursor(editor.state);
+      if (!link) return;
+      clearTimeout(openTimer.current);
+      clearTimeout(closeTimer.current);
+      const start = editor.view.coordsAtPos(link.from);
+      const end = editor.view.coordsAtPos(link.to);
+      setCard({ href: link.href, left: end.right, top: start.top });
+    };
+    const selectionChanged = () => {
+      if (linkAtCursor(editor.state)) cursor();
+      else setCard(null);
+    };
+    editor.on("selectionUpdate", selectionChanged);
     dom.addEventListener("mouseover", over);
     dom.addEventListener("mouseout", out);
     dom.addEventListener("keydown", close);
@@ -72,6 +89,7 @@ export function LinkHoverCard({ editor }: { editor: Editor | null }) {
       dom.removeEventListener("mouseout", out);
       dom.removeEventListener("keydown", close);
       editor.off("update", close);
+      editor.off("selectionUpdate", selectionChanged);
       document.removeEventListener("scroll", close, true);
     };
   }, [editor, close]);

@@ -5,7 +5,12 @@ import {
   type Editor,
 } from "@tiptap/core";
 import { Slice } from "@tiptap/pm/model";
-import { Plugin, PluginKey, TextSelection } from "@tiptap/pm/state";
+import {
+  Plugin,
+  PluginKey,
+  TextSelection,
+  type EditorState,
+} from "@tiptap/pm/state";
 import { Decoration, DecorationSet } from "@tiptap/pm/view";
 import StarterKit from "@tiptap/starter-kit";
 
@@ -236,13 +241,41 @@ export const ProfileLockedHeadings = Extension.create({
   },
 });
 
+/** The link the cursor is in (no selection), with its document range. */
+export function linkAtCursor(state: EditorState) {
+  const { selection } = state;
+  if (!selection.empty) return null;
+  const { $from } = selection;
+  if (!$from.parent.isTextblock || isLockedNode($from.parent)) return null;
+  const offset = $from.parentOffset;
+  const link = findLinks($from.parent.textContent).find(
+    (candidate) => offset >= candidate.from && offset <= candidate.to
+  );
+  if (!link) return null;
+  const start = $from.start();
+  return { href: link.href, from: start + link.from, to: start + link.to };
+}
+
 /**
  * Underlines the links in the text (URLs, e-mails) as decorations: the
- * stored text stays plain. Ctrl/Cmd+click opens one in a new tab; a plain
- * click still places the cursor.
+ * stored text stays plain. Ctrl/Cmd+click, or Ctrl/Cmd+Enter with the
+ * cursor in it, opens one in a new tab; a plain click still places the
+ * cursor.
  */
 export const ProfileLinks = Extension.create({
   name: "profileLinks",
+  // Ahead of the hard break's own Mod-Enter.
+  priority: 1000,
+  addKeyboardShortcuts() {
+    return {
+      "Mod-Enter": ({ editor }) => {
+        const link = linkAtCursor(editor.state);
+        if (!link) return false;
+        window.open(link.href, "_blank", "noopener,noreferrer");
+        return true;
+      },
+    };
+  },
   addProseMirrorPlugins() {
     return [
       new Plugin({

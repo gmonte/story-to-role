@@ -1,3 +1,4 @@
+import { extractText } from "unpdf";
 import { describe, expect, it } from "vitest";
 
 import type { ResumeContent } from "../schemas/resume-content";
@@ -41,6 +42,44 @@ const resume = (bullets: number): ResumeContent => ({
 });
 
 describe("rendering a resume PDF", () => {
+  it("prints a project with its period, role and link", async () => {
+    const content: ResumeContent = {
+      ...resume(1),
+      sections: [
+        ...resume(1).sections,
+        {
+          kind: "projects",
+          entries: [
+            {
+              projectId: "00000000-0000-4000-8000-0000000000aa",
+              name: "Side Product",
+              startDate: "2024-01",
+              endDate: null,
+              role: "Founder",
+              link: "https://side.example.com",
+              lines: [
+                { id: "p1", text: "Built it.", origin: { kind: "manual" } },
+              ],
+            },
+          ],
+        },
+      ],
+    };
+    const { bytes, pages } = await renderResumePdf({
+      content,
+      language: "en-US",
+    });
+    expect(pages).toBe(1);
+    const printed = await extractText(new Uint8Array(bytes), {
+      mergePages: true,
+    });
+    expect(printed.text).toContain("PROJECTS");
+    expect(printed.text).toContain("Side Product");
+    expect(printed.text).toContain("Founder");
+    expect(printed.text).toContain("Jan/2024 – Present");
+    expect(printed.text).toContain("https://side.example.com");
+  });
+
   it("measures the real number of pages", async () => {
     const short = await renderResumePdf({
       content: resume(3),

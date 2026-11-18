@@ -1,7 +1,17 @@
 import { blockToLine, parseBlocks, type ProfileBlock } from "./blocks";
-import { experienceKeys } from "./chunks";
-import { normalizeLabel } from "./sections";
-import { readCanonicalTitle, readStructure } from "./structure";
+import { experienceKeys, projectKeys } from "./chunks";
+import {
+  normalizeLabel,
+  profileSectionKeys,
+  type ProfileSectionKey,
+} from "./sections";
+import {
+  readCanonicalProjectTitle,
+  readCanonicalTitle,
+  readStructure,
+  sectionOf,
+} from "./structure";
+import { sectionTemplate } from "./template";
 
 /**
  * A change proposed to the profile (profile spec, "Suggestions"): the lines
@@ -17,11 +27,11 @@ export type ProfileChange = {
   replace: string;
 };
 
-/** A section, or one experience inside Experience. */
+/** A section, one experience inside Experience, or one project. */
 export type ProfilePart = {
   key: string;
   title: string;
-  kind: "section" | "experience";
+  kind: "section" | "experience" | "project";
   // The heading's line and the line after the part's last.
   start: number;
   end: number;
@@ -40,16 +50,29 @@ export function listParts(blocks: ProfileBlock[]): ProfilePart[] {
       start: section.heading,
       end: section.end,
     });
-    if (section.key !== "experience") continue;
-    structure.experiences.forEach((experience, index) => {
-      parts.push({
-        key: keys[index],
-        title: experience.rawTitle,
-        kind: "experience",
-        start: experience.heading,
-        end: experience.end,
+    if (section.key === "experience") {
+      structure.experiences.forEach((experience, index) => {
+        parts.push({
+          key: keys[index],
+          title: experience.rawTitle,
+          kind: "experience",
+          start: experience.heading,
+          end: experience.end,
+        });
       });
-    });
+    }
+    if (section.key === "projects") {
+      const projectKeyList = projectKeys(structure);
+      structure.projects.forEach((project, index) => {
+        parts.push({
+          key: projectKeyList[index],
+          title: project.rawTitle,
+          kind: "project",
+          start: project.heading,
+          end: project.end,
+        });
+      });
+    }
   }
   return parts;
 }
@@ -96,26 +119,58 @@ function matches(
   return found;
 }
 
-/** Where a new experience goes: before the first one that started earlier. */
-function experiencePosition(
+/**
+ * Where a new experience (or project) goes: before the first one that
+ * started earlier.
+ */
+function entryPosition(
   blocks: ProfileBlock[],
+  part: "experience" | "projects",
   heading: ProfileBlock,
   fallback: number
 ) {
-  const title = readCanonicalTitle(heading.text);
+  const structure = readStructure(blocks);
+  const title =
+    part === "experience"
+      ? readCanonicalTitle(heading.text)
+      : readCanonicalProjectTitle(heading.text);
   if (!title) return fallback;
-  const before = readStructure(blocks).experiences.find(
-    (experience) =>
-      experience.parsed && experience.parsed.range.start < title.range.start
+  const entries =
+    part === "experience" ? structure.experiences : structure.projects;
+  const before = entries.find(
+    (entry) => entry.parsed && entry.parsed.range.start < title.range.start
   );
   return before?.heading ?? fallback;
+}
+
+/**
+ * A section the document doesn't have yet, which an addition to its part
+ * creates (an experience moved to Projects, say): its heading, and where
+ * it goes in the template's order.
+ */
+export function missingSection(blocks: ProfileBlock[], part: string) {
+  const key = profileSectionKeys.find((candidate) => candidate === part);
+  if (!key || key === "addenda") return null;
+  const structure = readStructure(blocks);
+  if (sectionOf(structure, key)) return null;
+  const later = structure.sections.filter(
+    (section) =>
+      section.key &&
+      profileSectionKeys.indexOf(section.key) > profileSectionKeys.indexOf(key)
+  );
+  return {
+    key: key as ProfileSectionKey,
+    at: later.length ? Math.min(...later.map((s) => s.heading)) : blocks.length,
+    heading: sectionTemplate(key, structure.language).slice(0, 1),
+  };
 }
 
 /**
  * The lines a change replaces in the document as it is now ({start, end},
  * equal for an addition), or null when it is stale: its lines were edited
  * away or appear more than once, its part is gone and they are nowhere
- * sure, or what it adds is already there.
+ * sure, or what it adds is already there. An addition to a section the
+ * document lacks goes where the section will be created.
  * Lines are matched by their text, whatever their list marker or depth.
  */
 export function locateChange(
@@ -125,16 +180,19 @@ export function locateChange(
   const part = listParts(blocks).find((p) => p.key === change.part);
   const wanted = parseFragment(change.find);
   if (!wanted.length) {
-    if (!part) return null;
+    if (!part) {
+      const missing = missingSection(blocks, change.part);
+      return missing ? { start: missing.at, end: missing.at } : null;
+    }
     const adding = parseFragment(change.replace);
     // Already there (accepted before, or typed by the user): nothing to add.
     if (matches(blocks, adding, part.start, part.end).length) return null;
     const [first] = adding;
     const at =
-      part.key === "experience" &&
+      (part.key === "experience" || part.key === "projects") &&
       first?.type === "heading" &&
       first.level === 3
-        ? experiencePosition(blocks, first, part.end)
+        ? entryPosition(blocks, part.key, first, part.end)
         : part.end;
     return { start: at, end: at };
   }
@@ -214,15 +272,22 @@ export function splitAddition(change: ProfileChange): ProfileChange[] {
   }));
 }
 
-/** The document with the change applied, or null when it is stale. */
+/**
+ * The document with the change applied, or null when it is stale. An
+ * addition to a section the document lacks creates it, heading first.
+ */
 export function applyChange(
   blocks: ProfileBlock[],
   change: ProfileChange
 ): ProfileBlock[] | null {
   const range = locateChange(blocks, change);
   if (!range) return null;
+  const created = change.find.trim()
+    ? null
+    : missingSection(blocks, change.part);
   return [
     ...blocks.slice(0, range.start),
+    ...(created?.heading ?? []),
     ...parseFragment(change.replace),
     ...blocks.slice(range.end),
   ];

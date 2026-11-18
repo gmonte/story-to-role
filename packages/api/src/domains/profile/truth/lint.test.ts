@@ -268,3 +268,56 @@ describe("the profile linter", () => {
     ).toEqual([]);
   });
 });
+
+describe("projects in the linter", () => {
+  const withProject = (heading: string, results = "") =>
+    valid.replace(
+      "## Formação",
+      `## Projetos\n\n### ${heading}\n\n- Tecnologias: Python\n- Resultados: ${results}\n\n## Formação`
+    );
+
+  it("never demands the section, and accepts a project after the experiences", () => {
+    expect(
+      lintProfile(parseBlocks(valid)).filter((f) => f.code === "missingSection")
+    ).toEqual([]);
+    const findings = lintProfile(
+      parseBlocks(withProject("App (2024-01 a atual)", "lançado [sem número]."))
+    );
+    expect(findings.filter((f) => f.kind === "format")).toEqual([]);
+    // No "what I did not do" is asked of a project.
+    expect(findings.filter((f) => f.code === "missingNotDone")).toEqual([]);
+  });
+
+  it("flags a project title out of format, and Fix format rewrites a recognizable one", () => {
+    const blocks = parseBlocks(withProject("App (Jan/2024 - atual)"));
+    const [finding] = lintProfile(blocks).filter(
+      (f) => f.code === "projectTitle"
+    );
+    expect(finding).toMatchObject({ kind: "format", fixable: true });
+    expect(serializeBlocks(fixFinding(blocks, finding))).toContain(
+      "### App (2024-01 a atual)"
+    );
+    expect(
+      lintProfile(parseBlocks(withProject("App sem data"))).filter(
+        (f) => f.code === "projectTitle"
+      )
+    ).toMatchObject([{ fixable: false }]);
+  });
+
+  it("asks for a mark on a project result's figure", () => {
+    const findings = lintProfile(
+      parseBlocks(withProject("App (2024-01 a atual)", "120 usuários."))
+    );
+    expect(findings.filter((f) => f.code === "unmarkedFigure")).toHaveLength(1);
+  });
+
+  it("puts Projects out of order anywhere but after Experience", () => {
+    const before = valid.replace(
+      "## Experiência (mais recente primeiro)",
+      "## Projetos\n\n## Experiência (mais recente primeiro)"
+    );
+    expect(
+      lintProfile(parseBlocks(before)).filter((f) => f.code === "sectionOrder")
+    ).toHaveLength(1);
+  });
+});

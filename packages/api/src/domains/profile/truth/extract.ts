@@ -29,6 +29,16 @@ export type ProfileExtract = {
     end: string;
     notDone: string[];
   }>;
+  // The Projects section's entries: personal or side work, never a
+  // position (profile spec, "The document").
+  projects: Array<{
+    name: string;
+    start: string;
+    end: string;
+    role: string | null;
+    link: string | null;
+    notDone: string[];
+  }>;
   education: Array<{ line: string; inProgress: boolean }>;
   certifications: Array<{
     line: string;
@@ -83,26 +93,48 @@ function itemsOf(
     .filter(Boolean);
 }
 
+/** A labelled line's text, or null when the label has nothing after it. */
+export function valueOrNull(line: { value: string } | null) {
+  const value = line?.value.trim() ?? "";
+  return value.length > 0 ? value : null;
+}
+
 export function extractProfile(blocks: ProfileBlock[]): ProfileExtract {
   const structure = readStructure(blocks);
+  const notDoneOf = (entry: {
+    fields: { notDone?: { value: string; children: number[] } };
+  }) => {
+    const notDone = entry.fields.notDone;
+    return notDone
+      ? [notDone.value, ...notDone.children.map((line) => blocks[line].text)]
+          .map((text) => text.trim())
+          .filter(Boolean)
+      : [];
+  };
 
   const experiences = structure.experiences.flatMap((experience) => {
     if (!experience.parsed) return [];
-    const notDone = experience.fields.notDone;
     return [
       {
         company: experience.parsed.company,
         title: experience.parsed.title,
         start: experience.parsed.range.start,
         end: experience.parsed.range.end,
-        notDone: notDone
-          ? [
-              notDone.value,
-              ...notDone.children.map((line) => blocks[line].text),
-            ]
-              .map((text) => text.trim())
-              .filter(Boolean)
-          : [],
+        notDone: notDoneOf(experience),
+      },
+    ];
+  });
+
+  const projects = structure.projects.flatMap((project) => {
+    if (!project.parsed) return [];
+    return [
+      {
+        name: project.parsed.name,
+        start: project.parsed.range.start,
+        end: project.parsed.range.end,
+        role: valueOrNull(project.role),
+        link: valueOrNull(project.link),
+        notDone: notDoneOf(project),
       },
     ];
   });
@@ -185,6 +217,7 @@ export function extractProfile(blocks: ProfileBlock[]): ProfileExtract {
 
   return {
     experiences,
+    projects,
     education: itemsOf(blocks, sectionOf(structure, "education")).map(
       (line) => ({
         line,
@@ -202,7 +235,8 @@ export function extractProfile(blocks: ProfileBlock[]): ProfileExtract {
 
 /**
  * The passages to embed: each top-level line with the lines under it, an
- * experience's lines prefixed with its title so a passage reads on its own.
+ * experience's (or a project's) lines prefixed with its title so a passage
+ * reads on its own.
  */
 export function profilePassages(blocks: ProfileBlock[]): ProfilePassage[] {
   const structure = readStructure(blocks);
@@ -216,10 +250,15 @@ export function profilePassages(blocks: ProfileBlock[]): ProfilePassage[] {
       const experience = structure.experiences.findIndex(
         (e) => line > e.heading && line < e.end
       );
+      const project = structure.projects.find(
+        (p) => line > p.heading && line < p.end
+      );
       const prefix =
         experience >= 0
           ? `${structure.experiences[experience].rawTitle}: `
-          : "";
+          : project
+            ? `${project.rawTitle}: `
+            : "";
       if (block.type === "item" && block.depth > 0 && current) {
         current.text += `\n${block.text}`;
         current.lines.push(line);
@@ -263,8 +302,8 @@ function passageKind(
       ? "studied"
       : "evidence";
   }
-  const notDone = structure.experiences.some(
-    (experience) => experience.fields.notDone?.line === line
+  const notDone = [...structure.experiences, ...structure.projects].some(
+    (entry) => entry.fields.notDone?.line === line
   );
   return notDone ? "notDone" : "evidence";
 }

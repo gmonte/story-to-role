@@ -557,24 +557,42 @@ export function assembleResume(input: {
       return entries.length > 0 ? { kind: "experience", entries } : null;
     },
     projects: () => {
-      const entries = draft.projects.flatMap((drafted) => {
-        const project = context.projects.find(
-          (row) => row.id === drafted.project_id
+      // Each project of the profile, in its order (most recent first),
+      // written like an experience of its age: bullets per the settings,
+      // each citing the project's own lines, figures only as marked.
+      const entries = context.projects.flatMap((project) => {
+        const drafted = draft.projects.find(
+          (entry) => entry.project_id === project.id
         );
-        if (!project) return [];
-        const lines = drafted.bullets.flatMap(
+        const lines = (drafted?.bullets ?? []).flatMap(
           (bullet) =>
             toLine(bullet, (id) => {
               const evidence = evidenceById.get(id)!;
               return (
                 evidence.projectId === project.id ||
-                evidence.positionId === project.positionId
+                (!!project.positionId &&
+                  evidence.positionId === project.positionId)
               );
             }) ?? []
         );
-        return lines.length > 0
-          ? [{ projectId: project.id, name: project.name, lines }]
-          : [];
+        if (lines.length === 0) return [];
+        const age = experienceAge(project, input.settings, input.today);
+        return [
+          {
+            projectId: project.id,
+            name: project.name,
+            startDate: project.startDate,
+            endDate: project.endDate,
+            role: project.role,
+            link: project.link,
+            lines: lines.slice(
+              0,
+              age === "recent"
+                ? input.settings.bulletsRecent
+                : input.settings.bulletsOlder
+            ),
+          },
+        ];
       });
       return entries.length > 0 ? { kind: "projects", entries } : null;
     },

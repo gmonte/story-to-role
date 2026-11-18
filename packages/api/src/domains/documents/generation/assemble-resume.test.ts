@@ -33,7 +33,8 @@ import {
   applyLockedFactOverrides,
   type CareerContext,
 } from "./load-career-context";
-import { readProfileSource, stableId } from "./profile-source";
+import { projectIdOf, readProfileSource, stableId } from "./profile-source";
+import { resumeMaterial } from "./resume-prompts";
 import {
   estimatePages,
   findForbiddenLines,
@@ -1540,6 +1541,242 @@ describe("trimming to the page limit", () => {
   });
 });
 
+describe("projects of the profile", () => {
+  const profile = `# Profile
+
+## Professional identity
+
+- Professional name: Ana Souza
+
+## Experience (most recent first)
+
+### Globex — Tech Lead (2021-03 to present)
+
+- Results:
+  - Cut deploy time by 40% with Kubernetes [measured: CI dashboard].
+
+## Projects
+
+### Side Product (2024-01 to present)
+
+- Role: Founder
+- Context (what it is, for whom): a budgeting app for freelancers.
+- Tools: Next.js, Postgres
+- Results:
+  - 120 people on the waiting list [measured: spreadsheet].
+  - Doubled sign-ups after the launch post [estimated].
+- Link: https://side.example.com
+- What I did NOT do in this project: no marketing.
+
+### Old Library (2015-05 to 2016-02)
+
+- Tools: Python
+- Results:
+  - Parsed 3 formats [measured: README].
+  - Used by other teams [no number].
+`;
+  const blocks = parseBlocks(profile);
+  const source = readProfileSource({
+    careerProfileId: "career",
+    profile: {
+      versionId: stableId("version"),
+      number: 1,
+      markdown: profile,
+      extract: extractProfile(blocks),
+      passages: profilePassages(blocks).map((passage, ordinal) => ({
+        id: stableId("passage", `${ordinal}`),
+        kind: passage.kind,
+        section: passage.section,
+        experience: passage.experience,
+        text: passage.text,
+      })),
+    },
+  });
+  const ctx: CareerContext = {
+    ...source,
+    acceptedTitles: new Map(),
+    evidence: source.evidence.map((row) => ({ ...row, credentialId: null })),
+    projects: source.projects.map((row) => ({ ...row, positionId: null })),
+    instructions: [],
+  };
+  const [sideProduct, oldLibrary] = ctx.projects;
+  const idOf = (text: string) =>
+    ctx.evidence.find((row) => row.text.includes(text))!.id;
+  const projectSections = resolveSections({
+    template: defaultTemplateSections,
+    language: "en-US",
+    topics: [],
+  });
+
+  it("reads each project with a derived id, its role, link and lines, never as a position", () => {
+    expect(ctx.positions.map((position) => position.employer)).toEqual([
+      "Globex",
+    ]);
+    expect(ctx.projects).toMatchObject([
+      {
+        id: projectIdOf("career", {
+          name: "Side Product",
+          range: { start: "2024-01" },
+        }),
+        name: "Side Product",
+        startDate: "2024-01",
+        endDate: null,
+        role: "Founder",
+        link: "https://side.example.com",
+        notDone: ["no marketing."],
+      },
+      { name: "Old Library", startDate: "2015-05", endDate: "2016-02" },
+    ]);
+    // The same id across versions while the name and start stay.
+    expect(sideProduct.id).toMatch(/^[0-9a-f-]{36}$/);
+    // The lines belong to their project; the role and link are not lines.
+    const ofSide = ctx.evidence.filter(
+      (row) => row.projectId === sideProduct.id
+    );
+    expect(ofSide.map((row) => row.text)).toEqual([
+      "Context (what it is, for whom): a budgeting app for freelancers.",
+      "Tools: Next.js, Postgres",
+      "Results: 120 people on the waiting list.",
+      "Results: Doubled sign-ups after the launch post.",
+    ]);
+    // Only the measured figure may be written; marks never reach a writer.
+    expect(ofSide.map((row) => row.figures)).toEqual([
+      "a budgeting app for freelancers.",
+      "Next.js, Postgres",
+      "120 people on the waiting list.",
+      "Doubled sign-ups after the launch post.",
+    ]);
+    expect(ofSide.every((row) => row.positionId === null)).toBe(true);
+    expect(ctx.evidence.some((row) => row.text.includes("Founder"))).toBe(
+      false
+    );
+  });
+
+  it("writes a Projects section right after Experience, each bullet traced, figures by the marks", () => {
+    const { content, dropped } = assembleResume({
+      draft: {
+        ...draft,
+        experience: [],
+        skills: [],
+        summary: null,
+        projects: [
+          {
+            project_id: sideProduct.id,
+            bullets: [
+              {
+                text: "Got 120 people on the waiting list.",
+                evidence_ids: [idOf("waiting list")],
+              },
+              {
+                text: "Doubled sign-ups after the launch post.",
+                evidence_ids: [idOf("Doubled")],
+              },
+              {
+                text: "Doubled sign-ups, 2x.",
+                evidence_ids: [idOf("Doubled")],
+              },
+              // A position's line can't back a project's bullet.
+              {
+                text: "Cut deploy time by 40%.",
+                evidence_ids: [idOf("Cut deploy time")],
+              },
+            ],
+          },
+          {
+            project_id: oldLibrary.id,
+            bullets: [
+              { text: "Parsed 3 formats.", evidence_ids: [idOf("Parsed")] },
+              { text: "Used by other teams.", evidence_ids: [idOf("Used by")] },
+              { text: "Wrote it in Python.", evidence_ids: [idOf("Python")] },
+            ],
+          },
+        ],
+      },
+      context: ctx,
+      sections: projectSections,
+      settings: { ...defaultGenerationSettings, bulletsOlder: 2 },
+      today: "2026-01",
+      purposes: [],
+      targetTitle: "Founder",
+    });
+    expect(content.sections.map((section) => section.kind)).toEqual([
+      "experience",
+      "projects",
+    ]);
+    const projects = content.sections.find((s) => s.kind === "projects");
+    expect(projects?.kind === "projects" && projects.entries).toMatchObject([
+      {
+        projectId: sideProduct.id,
+        name: "Side Product",
+        role: "Founder",
+        startDate: "2024-01",
+        endDate: null,
+        link: "https://side.example.com",
+        lines: [
+          {
+            text: "Got 120 people on the waiting list.",
+            origin: { kind: "evidence", evidenceIds: [idOf("waiting list")] },
+          },
+          { text: "Doubled sign-ups after the launch post." },
+        ],
+      },
+      // An older project keeps the older count of bullets.
+      {
+        projectId: oldLibrary.id,
+        lines: [
+          { text: "Parsed 3 formats." },
+          { text: "Used by other teams." },
+        ],
+      },
+    ]);
+    expect(dropped.filter((line) => line.reason !== "unknown_skill")).toEqual([
+      { text: "Doubled sign-ups, 2x.", reason: "unsupported_figure" },
+      { text: "Cut deploy time by 40%.", reason: "no_evidence" },
+    ]);
+  });
+
+  it("leaves the section out when no project has a line, and lists projects in the material", () => {
+    const { content } = assembleResume({
+      draft: { ...draft, projects: [] },
+      context: ctx,
+      sections: projectSections,
+      settings: defaultGenerationSettings,
+      today: "2026-01",
+      purposes: [],
+      targetTitle: "Founder",
+    });
+    expect(content.sections.some((s) => s.kind === "projects")).toBe(false);
+    const material = resumeMaterial({
+      context: ctx,
+      opening: {
+        title: null,
+        company: null,
+        terms: [],
+        fitCheck: [],
+        focus: "general",
+      },
+      sections: projectSections,
+      language: "en-US",
+      tone: "direct",
+      style: null,
+      settings: defaultGenerationSettings,
+      today: "2026-01",
+    });
+    expect(material).toContain(
+      `- project ${sideProduct.id} [recent]: Side Product, 2024-01 to present`
+    );
+    expect(material).toContain(
+      "did NOT do there (never claim it): no marketing."
+    );
+    expect(material).toContain(
+      `(project ${sideProduct.id}): Tools: Next.js, Postgres`
+    );
+    expect(material).toContain(
+      "Sections to write: summary, skills, experience, projects."
+    );
+  });
+});
+
 describe("resolving template sections", () => {
   it("checks language and keyword conditions, and forced choices win", () => {
     const template = defaultTemplateSections.map((section) =>
@@ -1570,7 +1807,40 @@ describe("resolving template sections", () => {
         forcedIn: ["awards"],
         forcedOut: ["summary"],
       })
-    ).toEqual(["skills", "experience", "education", "languages", "awards"]);
+    ).toEqual([
+      "skills",
+      "experience",
+      "projects",
+      "education",
+      "languages",
+      "awards",
+    ]);
+  });
+
+  it("puts Projects right after Experience, whatever the template's order", () => {
+    // A template saved before Projects moved: the section at the end.
+    const template = [
+      ...defaultTemplateSections.filter((row) => row.kind !== "projects"),
+      ...defaultTemplateSections.filter((row) => row.kind === "projects"),
+    ];
+    expect(
+      resolveSections({ template, language: "en-US", topics: [] })
+    ).toEqual([
+      "summary",
+      "skills",
+      "experience",
+      "projects",
+      "education",
+      "languages",
+    ]);
+    expect(
+      resolveSections({
+        template,
+        language: "en-US",
+        topics: [],
+        forcedOut: ["projects"],
+      })
+    ).not.toContain("projects");
   });
 });
 

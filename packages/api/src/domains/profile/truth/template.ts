@@ -4,6 +4,9 @@ import {
   competencyLabels,
   dateWords,
   experienceFieldLabels,
+  projectFieldLabels,
+  projectLinkLabels,
+  projectRoleLabels,
   sectionHeadings,
   type ProfileLanguage,
   type ProfileSectionKey,
@@ -123,5 +126,37 @@ export function experienceTemplate(
       depth: 0,
       text: `${label}:`,
     })),
+  ];
+}
+
+export function projectTitle(
+  entry: { name: string; range: DateRange },
+  language: ProfileLanguage
+) {
+  return `${entry.name} (${formatRange(entry.range, language)})`;
+}
+
+/** A new project: its title, the labelled lines that fit it and a link. */
+export function projectTemplate(
+  entry: { name: string; range: DateRange; role?: string | null },
+  language: ProfileLanguage
+): ProfileBlock[] {
+  const labels = projectFieldLabels[language];
+  const role = entry.role?.trim();
+  return [
+    { type: "heading", level: 3, text: projectTitle(entry, language) },
+    {
+      type: "item",
+      depth: 0,
+      text: `${projectRoleLabels[language]}:${role ? ` ${role}` : ""}`,
+    },
+    ...[
+      labels.context,
+      labels.responsibilities,
+      labels.tools,
+      labels.results,
+      projectLinkLabels[language],
+      labels.notDone,
+    ].map((label) => ({ type: "item" as const, depth: 0, text: `${label}:` })),
   ];
 }

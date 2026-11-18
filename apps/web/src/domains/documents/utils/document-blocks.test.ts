@@ -76,6 +76,10 @@ const resume: ResumeContent = {
         {
           projectId,
           name: "Side project",
+          startDate: "2024-01",
+          endDate: null,
+          role: "Founder",
+          link: "https://side.example.com",
           lines: [
             { id: "p1", text: "Built a thing.", origin: { kind: "manual" } },
           ],
@@ -140,7 +144,10 @@ describe("contentToBlocks", () => {
       "bullet",
       "bullet",
       "sectionTitle",
+      "entryPeriod",
       "entry",
+      "entryTitle",
+      "entryLink",
       "bullet",
       "sectionTitle",
       "credential",
@@ -161,7 +168,18 @@ describe("contentToBlocks", () => {
       { type: "entryTitle", ownerId: positionId, text: "Tech Lead" },
       { type: "entryContext", ownerId: positionId, text: "parallel project" },
     ]);
-    expect(blocks[19]).toEqual({
+    // A project reads like a position: its period, name and link.
+    expect(blocks.slice(16, 20)).toEqual([
+      { type: "entryPeriod", ownerId: projectId, text: "Jan/2024 – Present" },
+      { type: "entry", ownerId: projectId, text: "Side project" },
+      { type: "entryTitle", ownerId: projectId, text: "Founder" },
+      {
+        type: "entryLink",
+        ownerId: projectId,
+        text: "https://side.example.com",
+      },
+    ]);
+    expect(blocks[22]).toEqual({
       type: "credential",
       credentialId,
       text: "UFMG · Computer Science (BSc) Feb/2010 – Dec/2014",
@@ -279,11 +297,17 @@ describe("blocksToContent", () => {
               ? { ...block, text: "Globex Corporation" }
               : { ...block, text: "Side project, renamed" };
           case "entryTitle":
-            return { ...block, text: "Staff Engineer" };
+            return block.ownerId === positionId
+              ? { ...block, text: "Staff Engineer" }
+              : { ...block, text: "Co-founder" };
           case "entryContext":
             return { ...block, text: "platform team" };
           case "entryPeriod":
-            return { ...block, text: "Jan/2020 – Dec/2023" };
+            return block.ownerId === positionId
+              ? { ...block, text: "Jan/2020 – Dec/2023" }
+              : { ...block, text: "Feb/2024 – Jun/2025" };
+          case "entryLink":
+            return { ...block, text: "https://side.example.org" };
           default:
             return block;
         }
@@ -310,9 +334,13 @@ describe("blocksToContent", () => {
         resume.sections[2].entries[0].lines,
     });
     const projects = next.sections.find((row) => row.kind === "projects");
-    expect(projects?.kind === "projects" && projects.entries[0].name).toBe(
-      "Side project, renamed"
-    );
+    expect(projects?.kind === "projects" && projects.entries[0]).toMatchObject({
+      name: "Side project, renamed",
+      role: "Co-founder",
+      startDate: "2024-02",
+      endDate: "2025-06",
+      link: "https://side.example.org",
+    });
     // Printed again, the blocks read as typed: the round trip holds.
     expect(contentToBlocks(next, "en-US")).toEqual(blocks);
   });

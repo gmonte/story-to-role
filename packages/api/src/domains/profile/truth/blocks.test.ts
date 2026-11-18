@@ -30,7 +30,7 @@ describe("the profile's Markdown round trip", () => {
     const markdown = serializeBlocks(profileTemplate("pt-BR"));
     expect(serializeBlocks(parseBlocks(markdown))).toBe(markdown);
     expect(markdown).toContain(
-      "## Experiência (mais recente primeiro)\n\n## Formação"
+      "## Experiência (mais recente primeiro)\n\n## Projetos\n\n## Formação"
     );
   });
 

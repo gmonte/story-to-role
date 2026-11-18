@@ -94,6 +94,10 @@ export function retraceContent<T extends DocumentContent>(
           ...entry,
           lines: entry.lines.map((line) => retrace(line, "evidence")),
         })),
+        projects: content.projects.map((entry) => ({
+          ...entry,
+          lines: entry.lines.map((line) => retrace(line, "evidence")),
+        })),
       };
     case "resume":
       return {

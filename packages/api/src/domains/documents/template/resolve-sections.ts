@@ -9,7 +9,9 @@ import type { TemplateSection } from "../schemas/template";
  * template"). Code checks the conditions so the result is predictable: a
  * section with languages shows only in those output languages, and one with
  * keywords only when the opening's terms or the library focus mention one.
- * The application's forced choices win over everything.
+ * The application's forced choices win over everything. Projects always
+ * comes right after Experience, whatever the template's order (owner's
+ * decision: projects read as a complement to the positions, never as one).
  */
 export function resolveSections(input: {
   template: TemplateSection[];
@@ -25,7 +27,7 @@ export function resolveSections(input: {
     return topics.some((topic) => topic.includes(folded));
   };
 
-  return input.template
+  const kinds = input.template
     .filter((section) => {
       if (input.forcedOut?.includes(section.kind)) return false;
       if (input.forcedIn?.includes(section.kind)) return true;
@@ -39,4 +41,19 @@ export function resolveSections(input: {
       return section.keywords.length === 0 || section.keywords.some(mentions);
     })
     .map((section) => section.kind);
+  return projectsAfterExperience(kinds);
+}
+
+/** The same kinds, with Projects moved to right after Experience. */
+export function projectsAfterExperience(kinds: ResumeSectionKind[]) {
+  if (!kinds.includes("projects") || !kinds.includes("experience")) {
+    return kinds;
+  }
+  const without = kinds.filter((kind) => kind !== "projects");
+  const at = without.indexOf("experience") + 1;
+  return [
+    ...without.slice(0, at),
+    "projects" as ResumeSectionKind,
+    ...without.slice(at),
+  ];
 }

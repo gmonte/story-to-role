@@ -41,6 +41,11 @@ export function useProfileLabels() {
           defaultMessage:
             "Write the title as “Company — Title (YYYY-MM to YYYY-MM)”, with “present” for the current position.",
         });
+      case "projectTitle":
+        return t.formatMessage({
+          defaultMessage:
+            "Write the project's title as “Name (YYYY-MM to YYYY-MM)”, with “present” while it is ongoing.",
+        });
       case "dateFormat":
         return t.formatMessage({ defaultMessage: "Write dates as YYYY-MM." });
       case "educationFormat":
@@ -139,6 +144,10 @@ export function useProfileLabels() {
       defaultMessage:
         "Add each position with the “+ Add” button or with /: company, title and dates, most recent first.",
     }),
+    projects: t.formatMessage({
+      defaultMessage:
+        "Personal or side work that isn't a position (a product of your own, open source): add each with the “+ Add” button or with /, name and dates. Optional.",
+    }),
     education: t.formatMessage({
       defaultMessage: "Add your courses with the “+ Add” button or with /.",
     }),
@@ -157,6 +166,7 @@ export function useProfileLabels() {
 
   const entryLabels: Record<ProfileEntryKind, string> = {
     experience: t.formatMessage({ defaultMessage: "Experience" }),
+    project: t.formatMessage({ defaultMessage: "Project" }),
     education: t.formatMessage({ defaultMessage: "Education" }),
     certification: t.formatMessage({ defaultMessage: "Certification" }),
     language: t.formatMessage({ defaultMessage: "Language" }),

@@ -55,6 +55,21 @@ describe("the parts of the profile", () => {
     ]);
   });
 
+  it("lists each project as a part of its own", () => {
+    const withProjects = parseBlocks(
+      profile.replace(
+        "## Lacunas conhecidas",
+        "## Projetos\n\n### App (2024-01 a atual)\n\n- Tecnologias: Go\n\n## Lacunas conhecidas"
+      )
+    );
+    expect(
+      listParts(withProjects).map((part) => [part.key, part.kind])
+    ).toContainEqual(["project:app", "project"]);
+    expect(partText(withProjects, "project:app")).toBe(
+      "### App (2024-01 a atual)\n- Tecnologias: Go"
+    );
+  });
+
   it("reads one experience, and Experience as its list of positions", () => {
     expect(partText(blocks(), "experience:gama — júnior")).toBe(
       "### Gama — Júnior (2019-02 a 2022-02)\n- Tecnologias: Python\n- Resultados: relatórios diários [sem número]."

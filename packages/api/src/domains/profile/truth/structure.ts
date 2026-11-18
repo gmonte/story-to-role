@@ -3,6 +3,8 @@ import { canonicalMonth, isPresent, readRange, type DateRange } from "./dates";
 import {
   documentLanguage,
   experienceFieldOf,
+  isProjectLinkLabel,
+  isProjectRoleLabel,
   sectionKeyOf,
   type ExperienceField,
   type ProfileLanguage,
@@ -39,10 +41,30 @@ export type ProfileExperience = {
   fields: Partial<Record<ExperienceField, ExperienceFieldLines>>;
 };
 
+/** `### Name (YYYY-MM to YYYY-MM)`: a project has no employer or title. */
+export type ProjectTitle = { name: string; range: DateRange };
+
+/**
+ * A project of the Projects section (profile spec, "The document"):
+ * personal or side work that is not a position, with the experience's
+ * labelled lines where they fit and an optional link line.
+ */
+export type ProfileProject = {
+  heading: number;
+  end: number;
+  rawTitle: string;
+  parsed: ProjectTitle | null;
+  fields: Partial<Record<ExperienceField, ExperienceFieldLines>>;
+  // "Role: Founder": what the person was to the project, optional.
+  role: { line: number; value: string } | null;
+  link: { line: number; value: string } | null;
+};
+
 export type ProfileStructure = {
   language: ProfileLanguage;
   sections: ProfileSection[];
   experiences: ProfileExperience[];
+  projects: ProfileProject[];
 };
 
 export function sectionOf(structure: ProfileStructure, key: ProfileSectionKey) {
@@ -102,6 +124,107 @@ export function readLooseTitle(text: string): ExperienceTitle | null {
   return { company: parts[0].trim(), title: parts[1].trim(), range };
 }
 
+const canonicalProjectTitle = /^(.+?) \((\S+) (?:a|to) (\S+)\)$/;
+
+/** `Name (YYYY-MM to YYYY-MM)`, with `present` for an ongoing project. */
+export function readCanonicalProjectTitle(text: string): ProjectTitle | null {
+  const match = canonicalProjectTitle.exec(text.trim());
+  if (!match) return null;
+  const [, name, start, end] = match;
+  if (!canonicalMonth.test(start)) return null;
+  if (!isPresent(end) && !canonicalMonth.test(end)) return null;
+  return {
+    name: name.trim(),
+    range: { start, end: isPresent(end) ? "present" : end },
+  };
+}
+
+/**
+ * A project title written another recognizable way ("App (Jan/2024 -
+ * present)", "App | 01/2024 – atual"), for Fix format.
+ */
+export function readLooseProjectTitle(text: string): ProjectTitle | null {
+  const value = text.trim();
+  const withParens = /^(.*?)\s*\(([^()]+)\)\s*$/.exec(value);
+  let name = withParens?.[1];
+  let range = withParens ? readRange(withParens[2]) : null;
+  if (!range) {
+    const separated = /^(.*?)\s*[|,—–]\s*([^|,—–]+)$/.exec(value);
+    name = separated?.[1];
+    range = separated ? readRange(separated[2]) : null;
+  }
+  if (!range || !name?.trim()) return null;
+  return { name: name.trim(), range };
+}
+
+/**
+ * The `###` entries of a section with their labelled lines: an experience
+ * or a project, read the same way under their own title format.
+ */
+function readEntries<Title>(
+  blocks: ProfileBlock[],
+  section: ProfileSection | undefined,
+  parseTitle: (text: string) => Title | null
+) {
+  type Entry = {
+    heading: number;
+    end: number;
+    rawTitle: string;
+    parsed: Title | null;
+    fields: Partial<Record<ExperienceField, ExperienceFieldLines>>;
+    // A labelled line that isn't a field (a project's link).
+    other: Array<{ line: number; label: string; value: string }>;
+  };
+  const entries: Entry[] = [];
+  if (!section) return entries;
+  let current: Entry | null = null;
+  let field: ExperienceFieldLines | null = null;
+  for (let i = section.start; i < section.end; i++) {
+    const block = blocks[i];
+    if (block.type === "heading" && block.level === 3) {
+      current = {
+        heading: i,
+        end: section.end,
+        rawTitle: block.text,
+        parsed: parseTitle(block.text),
+        fields: {},
+        other: [],
+      };
+      if (entries.length) entries[entries.length - 1].end = i;
+      entries.push(current);
+      field = null;
+      continue;
+    }
+    if (!current || block.type !== "item") continue;
+    if (block.depth === 0) {
+      const labelled = splitLabel(block.text);
+      const key = labelled ? experienceFieldOf(labelled.label) : null;
+      const existing = key ? current.fields[key] : undefined;
+      if (existing) {
+        // A label written twice reads as one field with both lines.
+        existing.children.push(i);
+        field = existing;
+      } else {
+        field =
+          key && labelled
+            ? { line: i, value: labelled.value, children: [] }
+            : null;
+        if (key && field) current.fields[key] = field;
+        if (!key && labelled) {
+          current.other.push({
+            line: i,
+            label: labelled.label,
+            value: labelled.value,
+          });
+        }
+      }
+    } else if (field) {
+      field.children.push(i);
+    }
+  }
+  return entries;
+}
+
 export function readStructure(blocks: ProfileBlock[]): ProfileStructure {
   const sections: ProfileSection[] = [];
   blocks.forEach((block, index) => {
@@ -128,47 +251,25 @@ export function readStructure(blocks: ProfileBlock[]): ProfileStructure {
     section.end = title >= 0 ? title : next;
   });
 
-  const experiences: ProfileExperience[] = [];
-  const experienceSection = sections.find((s) => s.key === "experience");
-  if (experienceSection) {
-    let current: ProfileExperience | null = null;
-    let field: ExperienceFieldLines | null = null;
-    for (let i = experienceSection.start; i < experienceSection.end; i++) {
-      const block = blocks[i];
-      if (block.type === "heading" && block.level === 3) {
-        current = {
-          heading: i,
-          end: experienceSection.end,
-          rawTitle: block.text,
-          parsed: readCanonicalTitle(block.text),
-          fields: {},
-        };
-        if (experiences.length) experiences[experiences.length - 1].end = i;
-        experiences.push(current);
-        field = null;
-        continue;
-      }
-      if (!current || block.type !== "item") continue;
-      if (block.depth === 0) {
-        const labelled = splitLabel(block.text);
-        const key = labelled ? experienceFieldOf(labelled.label) : null;
-        const existing = key ? current.fields[key] : undefined;
-        if (existing) {
-          // A label written twice reads as one field with both lines.
-          existing.children.push(i);
-          field = existing;
-        } else {
-          field =
-            key && labelled
-              ? { line: i, value: labelled.value, children: [] }
-              : null;
-          if (key && field) current.fields[key] = field;
-        }
-      } else if (field) {
-        field.children.push(i);
-      }
-    }
-  }
+  const experiences: ProfileExperience[] = readEntries(
+    blocks,
+    sections.find((s) => s.key === "experience"),
+    readCanonicalTitle
+  ).map(({ other: _other, ...experience }) => experience);
+
+  const projects: ProfileProject[] = readEntries(
+    blocks,
+    sections.find((s) => s.key === "projects"),
+    readCanonicalProjectTitle
+  ).map(({ other, ...project }) => {
+    const link = other.find((line) => isProjectLinkLabel(line.label));
+    const role = other.find((line) => isProjectRoleLabel(line.label));
+    return {
+      ...project,
+      role: role ? { line: role.line, value: role.value } : null,
+      link: link ? { line: link.line, value: link.value } : null,
+    };
+  });
 
   return {
     language: documentLanguage(
@@ -179,5 +280,6 @@ export function readStructure(blocks: ProfileBlock[]): ProfileStructure {
     ),
     sections,
     experiences,
+    projects,
   };
 }

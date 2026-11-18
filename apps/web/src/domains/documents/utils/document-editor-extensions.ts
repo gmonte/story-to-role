@@ -90,6 +90,7 @@ export function nodeToBlock(node: ProseMirrorNode): DocumentBlock {
     case "entryPeriod":
     case "entryTitle":
     case "entryContext":
+    case "entryLink":
     case "entryNote":
       return { type: attrs.type, ownerId: attrs.ownerId ?? "", text };
     case "bullet":
@@ -246,6 +247,8 @@ export const DocumentBlockNode = Node.create<{
       case "entryTitle":
         return block(cn("italic"), 0);
       case "entryContext":
+        return block(cn("text-muted-foreground text-xs italic"), 0);
+      case "entryLink":
         return block(cn("text-muted-foreground text-xs italic"), 0);
       case "entryNote":
         return block(

@@ -59,6 +59,14 @@ const profileMarkdown = `# Profile
 - Results:
   - Built the order services in Perl [no number].
 
+## Projects
+
+### Side Product (2024-01 to present)
+
+- Role: Founder
+- Results:
+  - Shipped the first version to 120 testers [measured: spreadsheet].
+
 ## Education
 
 ## Certifications
@@ -214,6 +222,7 @@ describe("LinkedIn text", () => {
         ],
         evidence_ids: [deploy.id, team.id],
       },
+      projects: [],
       experience: [
         {
           position_id: ctx.globex.id,
@@ -492,10 +501,41 @@ describe("LinkedIn text", () => {
       }).content.about.text
     ).toBe("");
 
+    // A project goes after the experiences, written by the same rules.
+    const project = ctx.context.projects[0];
+    const testers = ctx.lineOf("120 testers");
+    const withProject = assemble({
+      ...draft,
+      projects: [
+        {
+          project_id: project.id,
+          bullets: [
+            { text: "Shipped it to 120 testers.", evidence_ids: [testers.id] },
+            { text: "Shipped it to 200 testers.", evidence_ids: [testers.id] },
+          ],
+        },
+      ],
+    });
+    expect(withProject.content.projects).toMatchObject([
+      {
+        projectId: project.id,
+        name: "Side Product",
+        role: "Founder",
+        startDate: "2024-01",
+        endDate: null,
+        lines: [{ text: "Shipped it to 120 testers." }],
+      },
+    ]);
+    expect(withProject.dropped).toContainEqual({
+      text: "Shipped it to 200 testers.",
+      reason: "unsupported_figure",
+    });
+
     // Lines citing another position's evidence are refused.
     expect(
       assemble({
         about: draft.about,
+        projects: [],
         experience: [
           {
             position_id: ctx.acme.id,

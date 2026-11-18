@@ -48,6 +48,10 @@ _Avoid_: Resume chat, editor assistant
 One position in the profile's Experience section, titled `### Company — Title (YYYY-MM to YYYY-MM)`, with context, responsibilities, tools, results and what the user did not do.
 _Avoid_: Job, role, account
 
+**Project**:
+An entry of the profile's optional Projects section, titled `### Name (YYYY-MM to YYYY-MM)`: personal or side work that is not a position (a solo product, an open-source library), with an optional role, the experience's fields where they fit and an optional link; printed in a resume's Projects section right after the experiences, never as a job. In Portuguese, "projeto" (section "Projetos").
+_Avoid_: Side gig, portfolio item, position
+
 **Credential**:
 An education, certification or language line of the profile, in the template's format.
 _Avoid_: Qualification, certificate, diploma

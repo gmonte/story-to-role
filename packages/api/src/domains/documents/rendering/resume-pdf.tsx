@@ -134,10 +134,21 @@ function SectionBody({
         </View>
       ));
     case "projects":
+      // Like an experience: the name where the employer goes, the period
+      // aligned right, the link in italics below (resume spec, "Layout").
       return section.entries.map((entry) => (
         <View key={entry.projectId} style={styles.entry}>
           <View wrap={false}>
-            <Text style={styles.bold}>{entry.name}</Text>
+            <View style={styles.entryHeader}>
+              <Text style={styles.bold}>{entry.name}</Text>
+              {(entry.startDate ?? entry.endDate) && (
+                <Text style={styles.period}>
+                  {formatPeriod(entry.startDate, entry.endDate, language)}
+                </Text>
+              )}
+            </View>
+            {entry.role && <Text style={styles.italic}>{entry.role}</Text>}
+            {entry.link && <Text style={styles.period}>{entry.link}</Text>}
             {entry.lines.slice(0, 1).map((line) => (
               <Bullet key={line.id} text={line.text} />
             ))}

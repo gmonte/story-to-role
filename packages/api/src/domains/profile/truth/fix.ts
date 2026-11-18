@@ -8,8 +8,12 @@ import {
   type ProfileLanguage,
   type ProfileSectionKey,
 } from "./sections";
-import { readLooseTitle, readStructure } from "./structure";
-import { experienceTitle, sectionTemplate } from "./template";
+import {
+  readLooseProjectTitle,
+  readLooseTitle,
+  readStructure,
+} from "./structure";
+import { experienceTitle, projectTitle, sectionTemplate } from "./template";
 
 const statusBlank: Record<ProfileLanguage, string> = {
   "pt-BR": "situação",
@@ -82,6 +86,12 @@ export function fixFinding(
       const loose = block && readLooseTitle(block.text);
       return loose && finding.line !== null
         ? replaceText(blocks, finding.line, experienceTitle(loose, language))
+        : blocks;
+    }
+    case "projectTitle": {
+      const loose = block && readLooseProjectTitle(block.text);
+      return loose && finding.line !== null
+        ? replaceText(blocks, finding.line, projectTitle(loose, language))
         : blocks;
     }
     case "dateFormat": {

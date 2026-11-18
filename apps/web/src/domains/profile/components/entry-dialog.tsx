@@ -113,6 +113,14 @@ function EntryForm({
           title: v("title"),
           range: { start: v("start"), end: current ? "present" : v("end") },
         };
+      case "project":
+        if (!current && v("end") && v("end") < v("start")) return null;
+        return {
+          kind,
+          name: v("name"),
+          role: v("role") ? v("role") : null,
+          range: { start: v("start"), end: current ? "present" : v("end") },
+        };
       case "education":
         return {
           kind,
@@ -157,31 +165,50 @@ function EntryForm({
     if (value) onInsert(value);
   }
 
+  const period = (currentLabel: string) => (
+    <>
+      <div className="grid grid-cols-2 gap-3">
+        {month("start", t.formatMessage({ defaultMessage: "Start" }))}
+        {current ? (
+          <Field label={t.formatMessage({ defaultMessage: "End" })}>
+            <Input
+              disabled
+              value={t.formatMessage({ defaultMessage: "Present" })}
+            />
+          </Field>
+        ) : (
+          month("end", t.formatMessage({ defaultMessage: "End" }))
+        )}
+      </div>
+      <label className="flex items-center gap-2 text-sm">
+        <Checkbox
+          checked={current}
+          onCheckedChange={(c) => setCurrent(c === true)}
+        />
+        {currentLabel}
+      </label>
+    </>
+  );
+
   const fields: Record<ProfileEntryKind, ReactNode> = {
     experience: (
       <>
         {text("company", t.formatMessage({ defaultMessage: "Company" }))}
         {text("title", t.formatMessage({ defaultMessage: "Title" }))}
-        <div className="grid grid-cols-2 gap-3">
-          {month("start", t.formatMessage({ defaultMessage: "Start" }))}
-          {current ? (
-            <Field label={t.formatMessage({ defaultMessage: "End" })}>
-              <Input
-                disabled
-                value={t.formatMessage({ defaultMessage: "Present" })}
-              />
-            </Field>
-          ) : (
-            month("end", t.formatMessage({ defaultMessage: "End" }))
-          )}
-        </div>
-        <label className="flex items-center gap-2 text-sm">
-          <Checkbox
-            checked={current}
-            onCheckedChange={(c) => setCurrent(c === true)}
-          />
-          {t.formatMessage({ defaultMessage: "I work here now" })}
-        </label>
+        {period(t.formatMessage({ defaultMessage: "I work here now" }))}
+      </>
+    ),
+    project: (
+      <>
+        {text("name", t.formatMessage({ defaultMessage: "Project name" }))}
+        {text(
+          "role",
+          t.formatMessage({
+            defaultMessage: "Your role in it (e.g. Founder), optional",
+          }),
+          false
+        )}
+        {period(t.formatMessage({ defaultMessage: "Still ongoing" }))}
       </>
     ),
     education: (

@@ -247,6 +247,7 @@ function applyBlocks(
 
 const entryOfSection: Partial<Record<ProfileSectionKey, ProfileEntryKind>> = {
   experience: "experience",
+  projects: "project",
   education: "education",
   certifications: "certification",
   languages: "language",
@@ -738,8 +739,11 @@ export function ProfileEditorProvider({
       if (!editor) return;
       const { blocks: next, line } = insertEntry(currentBlocks(), entry);
       applyBlocks(editor, next);
-      // An experience opens on its first line (the context) to write on.
-      const target = entry.kind === "experience" ? line + 1 : line;
+      // An experience or a project opens on its first line (the context).
+      const target =
+        entry.kind === "experience" || entry.kind === "project"
+          ? line + 1
+          : line;
       requestAnimationFrame(() => {
         goToLine(target);
         // A label waiting for its value gets the space after the colon.

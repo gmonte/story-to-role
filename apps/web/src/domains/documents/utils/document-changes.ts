@@ -37,6 +37,7 @@ export function blockInPart(block: DocumentBlock, part: string) {
     case "entry":
     case "entryTitle":
     case "entryContext":
+    case "entryLink":
       return part === factsPart(block.ownerId);
     case "greeting":
       return part === greetingPart;

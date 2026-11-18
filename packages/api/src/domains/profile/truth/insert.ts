@@ -12,11 +12,17 @@ import {
 import { publicNamesLabels } from "../rules/public-names";
 import { splitNames } from "./lint";
 import { readStructure, sectionOf, splitLabel } from "./structure";
-import { experienceTemplate, sectionTemplate } from "./template";
+import {
+  experienceTemplate,
+  projectTemplate,
+  sectionTemplate,
+} from "./template";
 
 /** What the insert menu adds (profile spec, "The editor"). */
 export type ProfileEntry =
   | { kind: "experience"; company: string; title: string; range: DateRange }
+  // Personal or side work that is not a position (profile spec).
+  | { kind: "project"; name: string; role?: string | null; range: DateRange }
   | {
       kind: "education";
       course: string;
@@ -43,6 +49,7 @@ export type ProfileEntryKind = ProfileEntry["kind"];
 
 const sectionOfEntry: Record<ProfileEntryKind, ProfileSectionKey> = {
   experience: "experience",
+  project: "projects",
   education: "education",
   certification: "certifications",
   language: "languages",
@@ -160,21 +167,32 @@ export function insertEntry(
   );
   const language = structure.language;
 
-  if (entry.kind === "experience") {
+  if (entry.kind === "experience" || entry.kind === "project") {
     const end = entry.range.end === "present" ? "9999-12" : entry.range.end;
-    // Before the first experience that started earlier (or ended earlier).
-    const before = structure.experiences.find((experience) => {
-      if (!experience.parsed) return false;
-      const other = experience.parsed.range;
-      const otherEnd = other.end === "present" ? "9999-12" : other.end;
+    // Before the first entry that started earlier (or ended earlier).
+    const entries: Array<{
+      heading: number;
+      parsed: { range: DateRange } | null;
+    }> =
+      entry.kind === "experience" ? structure.experiences : structure.projects;
+    const before = entries.find((other) => {
+      if (!other.parsed) return false;
+      const range = other.parsed.range;
+      const otherEnd = range.end === "present" ? "9999-12" : range.end;
       return (
-        other.start < entry.range.start ||
-        (other.start === entry.range.start && otherEnd < end)
+        range.start < entry.range.start ||
+        (range.start === entry.range.start && otherEnd < end)
       );
     });
     const at = before?.heading ?? section.end;
     return {
-      blocks: insertAt(blocks, at, experienceTemplate(entry, language)),
+      blocks: insertAt(
+        blocks,
+        at,
+        entry.kind === "experience"
+          ? experienceTemplate(entry, language)
+          : projectTemplate(entry, language)
+      ),
       line: at,
     };
   }

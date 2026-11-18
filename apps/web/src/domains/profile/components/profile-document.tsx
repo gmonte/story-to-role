@@ -33,6 +33,7 @@ import { useProfileEditor } from "./profile-editor-context";
 
 export const entryKinds: ProfileEntryKind[] = [
   "experience",
+  "project",
   "education",
   "certification",
   "competency",

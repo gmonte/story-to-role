@@ -46,7 +46,7 @@ import {
  * communication rules, studied and never-claim terms refused, bullets per
  * the settings by age and the very old rule. LinkedIn has no requirement
  * to justify a very old experience, so under “relevant only” it is left
- * out. Positions with no line left are not printed.
+ * out. Positions and projects with no line left are not printed.
  */
 export function assembleLinkedin(input: {
   draft: LinkedinDraft;
@@ -73,13 +73,16 @@ export function assembleLinkedin(input: {
       relevance: null,
       bullets: entry.bullets,
     })),
-    projects: [],
+    projects: draft.projects.map((entry) => ({
+      project_id: entry.project_id,
+      bullets: entry.bullets,
+    })),
   };
   const newLineId = input.newLineId ?? (() => randomUUID().slice(0, 8));
   const { content, dropped } = assembleResume({
     draft: assemblyDraft,
     context: input.context,
-    sections: ["summary", "experience"],
+    sections: ["summary", "experience", "projects"],
     settings: input.settings,
     today: input.today,
     purposes: [],
@@ -91,6 +94,9 @@ export function assembleLinkedin(input: {
   );
   const experience = content.sections.find(
     (section) => section.kind === "experience"
+  );
+  const projects = content.sections.find(
+    (section) => section.kind === "projects"
   );
   const linkedin: LinkedinContent = {
     kind: "linkedin",
@@ -111,6 +117,20 @@ export function assembleLinkedin(input: {
               lines: entry.lines,
             }))
         : [],
+    projects:
+      projects?.kind === "projects"
+        ? projects.entries
+            .filter((entry) => entry.lines.length > 0)
+            .map((entry) => ({
+              projectId: entry.projectId,
+              name: entry.name,
+              startDate: entry.startDate,
+              endDate: entry.endDate,
+              role: entry.role,
+              link: entry.link,
+              lines: entry.lines,
+            }))
+        : [],
   };
   return { content: linkedin, dropped };
 }
@@ -124,6 +144,10 @@ const withoutLines = (
     ? { ...content.about, text: "" }
     : content.about,
   experiences: content.experiences.map((entry) => ({
+    ...entry,
+    lines: entry.lines.filter((line) => !lineIds.includes(line.id)),
+  })),
+  projects: content.projects.map((entry) => ({
     ...entry,
     lines: entry.lines.filter((line) => !lineIds.includes(line.id)),
   })),

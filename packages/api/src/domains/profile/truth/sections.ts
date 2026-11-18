@@ -8,6 +8,7 @@ export const profileSectionKeys = [
   "identity",
   "contact",
   "experience",
+  "projects",
   "education",
   "certifications",
   "competencies",
@@ -37,6 +38,14 @@ const aliases: Record<ProfileSectionKey, string[]> = {
     "experience",
     "professional experience",
     "work experience",
+  ],
+  projects: [
+    "projetos",
+    "projetos pessoais",
+    "projetos paralelos",
+    "projects",
+    "personal projects",
+    "side projects",
   ],
   education: ["formacao", "formacao academica", "education"],
   certifications: ["certificacoes", "certificados", "certifications"],
@@ -74,6 +83,7 @@ export const sectionHeadings: Record<
     identity: "Identidade profissional",
     contact: "Contato (só o que pode aparecer no currículo)",
     experience: "Experiência (mais recente primeiro)",
+    projects: "Projetos",
     education: "Formação",
     certifications: "Certificações",
     competencies: "Competências",
@@ -86,6 +96,7 @@ export const sectionHeadings: Record<
     identity: "Professional identity",
     contact: "Contact (only what may appear on a resume)",
     experience: "Experience (most recent first)",
+    projects: "Projects",
     education: "Education",
     certifications: "Certifications",
     competencies: "Competencies",
@@ -178,9 +189,71 @@ export const experienceFieldLabels: Record<
   },
 };
 
+/**
+ * The labelled lines of a project (profile spec, "The document"): the
+ * experience's fields where they fit a project, which has no employer and
+ * no position, read by the same aliases.
+ */
+export const projectFieldLabels: Record<
+  ProfileLanguage,
+  Record<ExperienceField, string>
+> = {
+  "pt-BR": {
+    context: "Contexto (o que é, para quem)",
+    responsibilities: "O que fiz",
+    tools: "Tecnologias",
+    results: "Resultados",
+    notDone: "O que NÃO fiz neste projeto (para não exagerar)",
+  },
+  "en-US": {
+    context: "Context (what it is, for whom)",
+    responsibilities: "What I did",
+    tools: "Tools",
+    results: "Results",
+    notDone: "What I did NOT do in this project (so as not to overstate)",
+  },
+};
+
+/** A project's optional role line ("Role: Founder"). */
+export const projectRoleLabels: Record<ProfileLanguage, string> = {
+  "pt-BR": "Papel",
+  "en-US": "Role",
+};
+
+const projectRoleAliases = ["papel", "role", "funcao", "cargo"];
+
+export function isProjectRoleLabel(label: string) {
+  return projectRoleAliases.includes(normalizeLabel(label));
+}
+
+/** A project's optional link line ("Link: https://…"). */
+export const projectLinkLabels: Record<ProfileLanguage, string> = {
+  "pt-BR": "Link",
+  "en-US": "Link",
+};
+
+const projectLinkAliases = [
+  "link",
+  "url",
+  "site",
+  "website",
+  "repositorio",
+  "repository",
+  "repo",
+];
+
+export function isProjectLinkLabel(label: string) {
+  return projectLinkAliases.includes(normalizeLabel(label));
+}
+
 const experienceFieldAliases: Record<ExperienceField, string[]> = {
   context: ["contexto", "context"],
-  responsibilities: ["responsabilidades", "responsibilities"],
+  responsibilities: [
+    "responsabilidades",
+    "responsibilities",
+    "o que fiz",
+    "what i did",
+  ],
   tools: [
     "tecnologias",
     "ferramentas",
@@ -192,7 +265,9 @@ const experienceFieldAliases: Record<ExperienceField, string[]> = {
   results: ["resultados", "results", "achievements", "conquistas"],
   notDone: [
     "o que nao fiz neste cargo",
+    "o que nao fiz neste projeto",
     "o que nao fiz",
+    "what i did not do in this project",
     "what i did not do in this position",
     "what i did not do",
     "what i didn't do",
@@ -247,6 +322,9 @@ const englishAliases = new Set([
   "experience",
   "professional experience",
   "work experience",
+  "projects",
+  "personal projects",
+  "side projects",
   "education",
   "certifications",
   "competencies",

@@ -78,6 +78,7 @@ export async function runValidateProfile(deps: {
       "- figureWithoutOrigin: a figure whose origin isn't clear even with its mark (a [medido] with nothing that could back it).",
       "- emptyNotDone: an experience whose “what I did not do” is missing, empty or vague.",
       "- unknown: what is still unknown about a position (context, team size, tools, results).",
+      "- A project (an entry of the optional Projects section: personal or side work, never a position) is reviewed like an experience for its results and figures; its “what I did not do” is optional, so never report emptyNotDone for a project. Never suggest making a project a position or a position a project.",
       "- The communication rules govern the documents made from the profile, never the profile itself: the profile may name anything, and you never flag text for being under a “never include” rule. But when a name in the profile (a project, company or person) falls under a “never include” category and has no entry in the “Public names” line, report it as an unknown finding on that name, asking the person which public form the documents should use for it (the line's format is `original → public form`, entries split by `;`). Never invent the public form.",
       "Never suggest a number, a result or a technology; never suggest covering a gap. Ask, don't tell. Prefer fewer, sharper findings.",
       `Write every message in ${languageNames[language]}.`,

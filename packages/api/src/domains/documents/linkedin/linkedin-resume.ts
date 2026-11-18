@@ -22,6 +22,9 @@ export function linkedinAsResume(content: LinkedinContent): ResumeContent {
           relevance: null,
         })),
       },
+      ...(content.projects.length
+        ? [{ kind: "projects" as const, entries: content.projects }]
+        : []),
     ],
   };
 }
@@ -33,15 +36,20 @@ export const aboutParagraphs = (text: string) =>
     .map((paragraph) => paragraph.trim())
     .filter(Boolean);
 
-/** An experience as text to paste on LinkedIn: the title line, then bullets. */
-export function experienceText(entry: LinkedinContent["experiences"][number]) {
+/** An experience's (or project's) text to paste on LinkedIn: its bullets. */
+export function experienceText(entry: { lines: Array<{ text: string }> }) {
   return entry.lines.map((line) => `• ${line.text}`).join("\n");
 }
 
-/** The text a LinkedIn section copies: the About, or one experience's. */
+/**
+ * The text a LinkedIn section copies: the About, one experience's, or one
+ * project's (its description for LinkedIn's Projects section).
+ */
 export function sectionText(content: LinkedinContent, section: string) {
   if (section === "about")
     return aboutParagraphs(content.about.text).join("\n\n");
-  const entry = content.experiences.find((row) => row.positionId === section);
+  const entry =
+    content.experiences.find((row) => row.positionId === section) ??
+    content.projects.find((row) => row.projectId === section);
   return entry ? experienceText(entry) : null;
 }

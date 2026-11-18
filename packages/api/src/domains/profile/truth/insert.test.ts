@@ -40,6 +40,51 @@ describe("the insert menu", () => {
     expect(lintProfile(next).filter((f) => f.kind === "format")).toEqual([]);
   });
 
+  it("adds a project in its own section, right after Experience, by date", () => {
+    // An older profile without the section: the Add menu creates it.
+    const markdown = serializeBlocks(profileTemplate("pt-BR")).replace(
+      "## Projetos\n\n",
+      ""
+    );
+    let blocks = parseBlocks(markdown);
+    blocks = insertEntry(blocks, {
+      kind: "project",
+      name: "Biblioteca",
+      range: { start: "2020-05", end: "2021-02" },
+    }).blocks;
+    const { blocks: next, line } = insertEntry(blocks, {
+      kind: "project",
+      name: "Meu Produto",
+      role: "Founder",
+      range: { start: "2024-01", end: "present" },
+    });
+    const text = serializeBlocks(next);
+    expect(next[line]).toEqual({
+      type: "heading",
+      level: 3,
+      text: "Meu Produto (2024-01 a atual)",
+    });
+    expect(text.indexOf("## Experiência")).toBeLessThan(
+      text.indexOf("## Projetos")
+    );
+    expect(text.indexOf("## Projetos")).toBeLessThan(
+      text.indexOf("## Formação")
+    );
+    expect(text.indexOf("### Meu Produto")).toBeLessThan(
+      text.indexOf("### Biblioteca (2020-05 a 2021-02)")
+    );
+    expect(text).toContain(
+      "### Meu Produto (2024-01 a atual)\n\n- Papel: Founder\n"
+    );
+    expect(text).toContain("### Biblioteca (2020-05 a 2021-02)\n\n- Papel:\n");
+    expect(text).toContain("- O que fiz:");
+    expect(text).toContain("- Link:");
+    expect(text).toContain(
+      "- O que NÃO fiz neste projeto (para não exagerar):"
+    );
+    expect(lintProfile(next).filter((f) => f.kind === "format")).toEqual([]);
+  });
+
   it("writes education, certifications, and languages in format", () => {
     let blocks = profileTemplate("en-US");
     for (const entry of [

@@ -29,6 +29,8 @@ export const defaultOnSections: ResumeSectionKind[] = [
   "summary",
   "skills",
   "experience",
+  // Prints only when the profile has projects; a template may turn it off.
+  "projects",
   "education",
   "languages",
 ];
@@ -75,11 +77,19 @@ export type CredentialEntry = z.infer<typeof credentialEntrySchema>;
 export const skillGroupSchema = lineSchema.extend({ label: z.string() });
 export type SkillGroup = z.infer<typeof skillGroupSchema>;
 
+/** A project as printed: its name, dates and link come from the profile. */
 export const projectEntrySchema = z.object({
   projectId: z.uuid(),
   name: z.string(),
+  startDate: z.string().nullable().default(null),
+  // Null while the project is ongoing.
+  endDate: z.string().nullable().default(null),
+  // What the person was to it ("Founder"), printed like a title.
+  role: z.string().nullable().default(null),
+  link: z.string().nullable().default(null),
   lines: z.array(lineSchema),
 });
+export type ProjectEntry = z.infer<typeof projectEntrySchema>;
 
 export const resumeSectionSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("summary"), line: lineSchema }),

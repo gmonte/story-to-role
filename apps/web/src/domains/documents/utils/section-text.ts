@@ -25,9 +25,14 @@ export function sectionText(section: ResumeSection, language: OutputLanguage) {
     case "projects":
       return section.entries
         .map((entry) =>
-          [entry.name, ...entry.lines.map((line) => `• ${line.text}`)].join(
-            "\n"
-          )
+          [
+            entry.role ? `${entry.name} — ${entry.role}` : entry.name,
+            ...(entry.startDate || entry.endDate
+              ? [formatPeriod(entry.startDate, entry.endDate, language)]
+              : []),
+            ...(entry.link ? [entry.link] : []),
+            ...entry.lines.map((line) => `• ${line.text}`),
+          ].join("\n")
         )
         .join("\n\n");
     default:

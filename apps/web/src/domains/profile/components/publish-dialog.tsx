@@ -2,7 +2,7 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { TRPCClientError } from "@trpc/client";
-import { Loader2, Send, Sparkles } from "lucide-react";
+import { CircleAlert, Loader2, Send, Sparkles } from "lucide-react";
 
 import { useTranslation } from "@repo/intl/use-translation";
 import { hasFormatErrors } from "@repo/api/domains/profile/truth/lint";
@@ -40,7 +40,8 @@ export function PublishDialog({
   const t = useTranslation();
   const trpc = useTRPC();
   const queryClient = useQueryClient();
-  const { findings, saveNow, revision, reviewFindings } = useProfileEditor();
+  const { findings, saveNow, revision, reviewFindings, suggestions, goToLine } =
+    useProfileEditor();
   const validation = useLatestValidation();
   const estimate = useQuery({
     ...trpc.profile.validationEstimate.queryOptions({}),
@@ -57,6 +58,57 @@ export function PublishDialog({
     validation.data?.status === "completed" &&
     validation.data.draftRevision === revision();
   const nothingToReview = estimate.data?.parts.length === 0;
+  // What still waits for the user: publishing doesn't need it settled, but
+  // it should be a choice, with a way to go and settle it first.
+  const contentFindings = findings.filter(
+    (finding) => finding.kind === "content" && finding.line !== null
+  );
+  const waitingSuggestions = suggestions.filter(
+    (suggestion) => suggestion.range
+  );
+  const pending = [
+    {
+      count: reviewFindings.length,
+      label: t.formatMessage(
+        {
+          defaultMessage:
+            "{count, plural, one {# quality review note} other {# quality review notes}}",
+        },
+        { count: reviewFindings.length }
+      ),
+    },
+    {
+      count: waitingSuggestions.length,
+      label: t.formatMessage(
+        {
+          defaultMessage:
+            "{count, plural, one {# suggestion waiting for your answer} other {# suggestions waiting for your answer}}",
+        },
+        { count: waitingSuggestions.length }
+      ),
+    },
+    {
+      count: contentFindings.length,
+      label: t.formatMessage(
+        {
+          defaultMessage: "{count, plural, one {# finding} other {# findings}}",
+        },
+        { count: contentFindings.length }
+      ),
+    },
+  ].filter((item) => item.count > 0);
+  const firstPendingLine =
+    reviewFindings[0]?.line ??
+    waitingSuggestions[0]?.range?.start ??
+    contentFindings[0]?.line ??
+    null;
+
+  function reviewFirst() {
+    onOpenChange(false);
+    if (firstPendingLine !== null) {
+      requestAnimationFrame(() => goToLine(firstPendingLine));
+    }
+  }
 
   const refresh = () =>
     queryClient.invalidateQueries({ queryKey: trpc.profile.pathKey() });
@@ -262,19 +314,48 @@ export function PublishDialog({
                     "Every version is kept; you can compare and restore them any time.",
                 })}
           </p>
+          {!blocked && pending.length > 0 && (
+            <div className="space-y-1.5 rounded-md border p-3 text-sm">
+              <p className="flex items-center gap-2 font-medium">
+                <CircleAlert className="size-4 text-amber-600" />
+                {t.formatMessage({
+                  defaultMessage: "Still open in your profile:",
+                })}
+              </p>
+              <ul className="text-muted-foreground list-disc space-y-0.5 pl-10">
+                {pending.map((item) => (
+                  <li key={item.label}>{item.label}</li>
+                ))}
+              </ul>
+              <p className="text-muted-foreground text-xs">
+                {t.formatMessage({
+                  defaultMessage:
+                    "You can review them before publishing, or publish as it is: what you settle later goes into the next version.",
+                })}
+              </p>
+            </div>
+          )}
         </section>
 
         <DialogFooter>
+          {!blocked && pending.length > 0 && (
+            <Button onClick={reviewFirst}>
+              {t.formatMessage({ defaultMessage: "Review now" })}
+            </Button>
+          )}
           <Button
+            variant={!blocked && pending.length > 0 ? "outline" : "default"}
             disabled={blocked || publish.isPending}
             onClick={() => void publishDraft()}
           >
             {publish.isPending && <Loader2 className="size-4 animate-spin" />}
-            {validated
-              ? t.formatMessage({ defaultMessage: "Publish" })
-              : t.formatMessage({
-                  defaultMessage: "Publish without validating",
-                })}
+            {pending.length > 0
+              ? t.formatMessage({ defaultMessage: "Publish anyway" })
+              : validated
+                ? t.formatMessage({ defaultMessage: "Publish" })
+                : t.formatMessage({
+                    defaultMessage: "Publish without validating",
+                  })}
           </Button>
         </DialogFooter>
       </DialogContent>

@@ -3,12 +3,18 @@
 import { useState } from "react";
 
 import { useQuery } from "@tanstack/react-query";
-import { Download, History, Loader2, Send } from "lucide-react";
+import { Download, History, Loader2, Plus, Send } from "lucide-react";
 
 import { useTranslation } from "@repo/intl/use-translation";
 import { serializeBlocks } from "@repo/api/domains/profile/truth/blocks";
 import { hasFormatErrors } from "@repo/api/domains/profile/truth/lint";
 import { Button } from "@repo/web/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@repo/web/components/ui/dropdown-menu";
 import {
   Tooltip,
   TooltipContent,
@@ -18,7 +24,9 @@ import {
 import { useTRPC } from "~/tools/trpc/client";
 
 import { useProfileEditor } from "./profile-editor-context";
+import { useProfileLabels } from "../hooks/use-profile-labels";
 import { useLatestValidation } from "../hooks/use-profile-validation";
+import { entryKinds } from "./profile-document";
 import { PublishDialog } from "./publish-dialog";
 import { VersionsDialog } from "./versions-dialog";
 
@@ -32,8 +40,17 @@ const dot = "·";
 export function ProfileToolbar() {
   const t = useTranslation();
   const trpc = useTRPC();
-  const { blocks, findings, saveStatus, markdown, draft, saveNow, resetTo } =
-    useProfileEditor();
+  const {
+    blocks,
+    findings,
+    saveStatus,
+    markdown,
+    draft,
+    saveNow,
+    resetTo,
+    entryOpenerRef,
+  } = useProfileEditor();
+  const { entryLabels } = useProfileLabels();
   const [versionsOpen, setVersionsOpen] = useState(false);
   const versions = useQuery(trpc.profile.versions.queryOptions({}));
   const latest = versions.data?.[0] ?? draft.publishedVersion;
@@ -103,6 +120,24 @@ export function ProfileToolbar() {
           : t.formatMessage({ defaultMessage: "Not published yet" })}
       </span>
       <div className="ml-auto flex items-center gap-1">
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="ghost" size="sm">
+              <Plus className="size-4" />
+              {t.formatMessage({ defaultMessage: "Add" })}
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            {entryKinds.map((kind) => (
+              <DropdownMenuItem
+                key={kind}
+                onSelect={() => entryOpenerRef.current?.(kind)}
+              >
+                {entryLabels[kind]}
+              </DropdownMenuItem>
+            ))}
+          </DropdownMenuContent>
+        </DropdownMenu>
         <Button variant="ghost" size="sm" onClick={download}>
           <Download className="size-4" />
           {t.formatMessage({ defaultMessage: "Download" })}

@@ -42,9 +42,17 @@ export function adaptContent(input: {
   const items = new Map(draft.items.map((item) => [item.id, item]));
   const refused: string[] = [];
 
-  const reword = <T extends { id: string; text: string }>(line: T): T => {
+  const reword = <T extends { id: string; text: string }>(
+    line: T,
+    // A skills line is a list: a rewrite listing fewer items than its source
+    // would silently drop one (a user's own addition among them).
+    list = false
+  ): T => {
     const text = items.get(line.id)?.text.trim();
     if (!text) return line;
+    if (list && text.split(", ").length < line.text.split(", ").length) {
+      return line;
+    }
     if (!keepsFigures(line.text, text)) {
       refused.push(line.id);
       return line;
@@ -69,7 +77,7 @@ export function adaptContent(input: {
           groups: section.groups.map((group) => {
             const label = items.get(group.id)?.label?.trim();
             return {
-              ...reword(group),
+              ...reword(group, true),
               label:
                 label && keepsFigures(group.label, label) ? label : group.label,
             };
@@ -82,7 +90,7 @@ export function adaptContent(input: {
             ...entry,
             title: input.titles.get(entry.positionId) ?? entry.title,
             context: contextOf(entry.positionId, entry.context),
-            lines: entry.lines.map(reword),
+            lines: entry.lines.map((line) => reword(line)),
           })),
         };
       case "projects":
@@ -90,7 +98,7 @@ export function adaptContent(input: {
           ...section,
           entries: section.entries.map((entry) => ({
             ...entry,
-            lines: entry.lines.map(reword),
+            lines: entry.lines.map((line) => reword(line)),
           })),
         };
       default:

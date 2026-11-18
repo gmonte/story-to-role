@@ -239,30 +239,35 @@ describe("editing a cover letter", () => {
     closing: "Sincerely,",
   };
 
-  it("marks changed and new paragraphs as the user's own", () => {
+  it("keeps a reworded paragraph's sources as edited and marks a new one as the user's own", () => {
     const edited = applyLetterEdit(base, {
       ...base,
       greeting: "Hello Hooli,",
       paragraphs: [
-        base.paragraphs[0],
+        { ...base.paragraphs[0], text: "First." },
         { ...base.paragraphs[1], text: "Second, reworded." },
         { id: "p3", text: "Third.", origin: { kind: "manual" } },
       ],
     });
     expect(edited.greeting).toBe("Hello Hooli,");
-    expect(edited.paragraphs.map((line) => line.origin.kind)).toEqual([
-      "letter",
-      "manual",
-      "manual",
+    expect(edited.paragraphs.map((line) => line.origin)).toEqual([
+      base.paragraphs[0].origin,
+      {
+        kind: "edited",
+        evidenceIds: [],
+        companyFactIds: [F1],
+        motivationPointIds: [],
+        instructionIds: [],
+      },
+      { kind: "manual" },
     ]);
   });
 
-  it("never lets an edit change the header, which comes from the template", () => {
-    expect(() =>
-      applyLetterEdit(base, {
-        ...base,
-        header: { ...header, name: "Someone Else" },
-      })
-    ).toThrow();
+  it("lets an edit change the header: the document is the user's", () => {
+    const edited = applyLetterEdit(base, {
+      ...base,
+      header: { ...header, name: "Someone Else" },
+    });
+    expect(edited.header.name).toBe("Someone Else");
   });
 });

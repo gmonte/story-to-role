@@ -501,7 +501,7 @@ describe("the document agent", () => {
       "[par1] At Globex I cut deploy time by 40% with Kubernetes."
     );
     expect(letterSystem).toContain("profile: “Results: Cut deploy time by 40%");
-    expect(letterSystem).toContain("Greeting (locked): Dear hiring team,");
+    expect(letterSystem).toContain("[greeting] Dear hiring team,");
     expect(letterSystem).toContain("Cover letter: at most");
     expect(letterSystem).toContain("No passage selected");
 
@@ -617,6 +617,7 @@ describe("the document agent", () => {
     expect(results).toContain("documentChangeId");
     expect(results).toContain("neither the profile nor the person gave 25%");
     expect(results).toContain("locked fact");
+    expect(results).toContain("ask them first");
     // The page was told of the one that waits.
     const [row, ...others] = await new DocumentsRepository(
       ctx.db
@@ -668,6 +669,41 @@ describe("the document agent", () => {
     expect(
       await new DocumentsRepository(ctx.db).listPendingChanges(version.id)
     ).toHaveLength(2);
+
+    // A locked fact changes only on the person's request, quoted back.
+    const asked = agentModel(
+      [
+        [
+          {
+            name: "propose_change",
+            input: {
+              part: "header",
+              find: "Platform Engineer | Kubernetes",
+              replace: "Staff Engineer | Kubernetes",
+              reason: "The title you asked for.",
+              requestedBy: "change my title line to Staff Engineer",
+            },
+          },
+        ],
+      ],
+      "The new title waits in the text."
+    );
+    await ctx.say(
+      chatId,
+      composeAgentMessage(
+        null,
+        "Please change my title line to Staff Engineer | Kubernetes.",
+        null,
+        null,
+        version.id
+      ),
+      asked.model,
+      [{ role: "user", content: "Make the bullets more direct." }]
+    );
+    expect(toolResultsOf(asked.prompts[1])).not.toContain("Refused");
+    expect(
+      await new DocumentsRepository(ctx.db).listPendingChanges(version.id)
+    ).toHaveLength(3);
   });
 
   it("reserves a document agent turn per message and settles it to the usage", async () => {

@@ -71,8 +71,9 @@ export type CoverageFinding = {
  * Whether a line rests on the frozen profile version (resume spec,
  * "Document workspace": a line that doesn't is "not in your profile"): a
  * profile line it cites that the version has, an instruction, a company
- * fact, a motivation point or a credential. A line the user typed, or one
- * whose cited passages the version no longer holds, doesn't.
+ * fact, a motivation point or a credential; a line the user reworded
+ * keeps those. A line the user typed, or one whose cited passages the
+ * version no longer holds, doesn't.
  */
 export function tracesToProfile(
   origin: LineOrigin | null,
@@ -83,7 +84,7 @@ export function tracesToProfile(
   if (origin.kind === "credential") return true;
   if (origin.kind === "instruction") return true;
   if (
-    origin.kind === "letter" &&
+    (origin.kind === "letter" || origin.kind === "edited") &&
     (origin.instructionIds.length > 0 ||
       origin.companyFactIds.length > 0 ||
       origin.motivationPointIds.length > 0)

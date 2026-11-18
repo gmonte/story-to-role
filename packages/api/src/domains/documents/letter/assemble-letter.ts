@@ -6,7 +6,7 @@ import { findMarks } from "@repo/api/domains/profile/truth/marks";
 import { ungivenFigures } from "@repo/api/domains/profile/truth/suggestions";
 
 import { withheld } from "../generation/profile-source";
-import { LockedFactEditError } from "../editing/apply-user-edit";
+import { markEditedLine } from "../editing/edited-origin";
 import type { Line, OutputLanguage } from "../schemas/document";
 import type { CoverLetterContent } from "../schemas/cover-letter-content";
 import type { ResumeHeader } from "../schemas/resume-content";
@@ -227,24 +227,19 @@ export function estimateLetterPages(content: CoverLetterContent) {
 }
 
 /**
- * The user's edit of a letter: changed or new paragraphs are the user's
- * own words from now on; the header comes from the template and stays.
+ * The user's edit of a letter: a new paragraph is the user's own words; a
+ * reworded one keeps its sources as "edited"; the header, the greeting
+ * and the closing are theirs to change.
  */
 export function applyLetterEdit(
   previous: CoverLetterContent,
   next: CoverLetterContent
 ): CoverLetterContent {
-  if (JSON.stringify(previous.header) !== JSON.stringify(next.header)) {
-    throw new LockedFactEditError();
-  }
   const before = new Map(previous.paragraphs.map((line) => [line.id, line]));
   return {
     ...next,
-    paragraphs: next.paragraphs.map((line) => {
-      const old = before.get(line.id);
-      return old?.text === line.text
-        ? old
-        : { ...line, origin: { kind: "manual" as const } };
-    }),
+    paragraphs: next.paragraphs.map((line) =>
+      markEditedLine(line, before.get(line.id))
+    ),
   };
 }

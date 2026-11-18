@@ -7,7 +7,7 @@ import { useTranslation } from "@repo/intl/use-translation";
 import { Textarea } from "@repo/web/components/ui/textarea";
 import { cn } from "@repo/web/lib/utils";
 
-/** Trace mode's color for each line origin, shared by both editors. */
+/** The trace's color for each line origin, shared by both editors. */
 export const originTone: Record<LineOrigin["kind"], string> = {
   evidence: "border-l-emerald-500 bg-emerald-500/5",
   skill: "border-l-emerald-500 bg-emerald-500/5",
@@ -15,6 +15,22 @@ export const originTone: Record<LineOrigin["kind"], string> = {
   instruction: "border-l-sky-500 bg-sky-500/5",
   manual: "border-l-amber-500 bg-amber-500/5",
   letter: "border-l-emerald-500 bg-emerald-500/5",
+  edited: "border-l-emerald-500 border-dashed bg-amber-500/5",
+};
+
+/**
+ * The origin marker the document editor always shows (resume spec, "Trace
+ * in the editor"): a thin rule beside the line, quiet enough to read past;
+ * a dashed one marks a traced line the user reworded.
+ */
+export const originMarker: Record<LineOrigin["kind"], string> = {
+  evidence: "border-l-emerald-500/50",
+  skill: "border-l-emerald-500/50",
+  credential: "border-l-emerald-500/50",
+  instruction: "border-l-sky-500/50",
+  manual: "border-l-amber-500/60",
+  letter: "border-l-emerald-500/50",
+  edited: "border-l-emerald-500/50 border-dashed",
 };
 
 /** Text that turns into a textarea when clicked. */

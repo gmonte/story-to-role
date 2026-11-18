@@ -8,6 +8,7 @@ import {
   ChevronRight,
   EyeOff,
   Loader2,
+  MessageSquare,
   Send,
   UserPlus,
   Wand2,
@@ -18,10 +19,18 @@ import { useRouter } from "next/navigation";
 import { useTranslation } from "@repo/intl/use-translation";
 import { Button } from "@repo/web/components/ui/button";
 import { toast } from "@repo/web/components/ui/sonner";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@repo/web/components/ui/tooltip";
+import { cn } from "@repo/web/lib/utils";
+import type { AgentAttachment } from "@repo/api/domains/agents/agent-message";
 
 import { useTRPC } from "~/tools/trpc/client";
 
 import { useFindingLabel } from "./coverage-review";
+import { useDocumentAgent } from "./document-agent-context";
 import {
   useDocumentEditor,
   type DocumentFinding,
@@ -76,17 +85,43 @@ export function ProfileActionButton({
   );
 }
 
+/** The icon-only "Talk to the agent" of a finding's row, as in the profile. */
+function TalkButton({ onClick }: { onClick: () => void }) {
+  const t = useTranslation();
+  const label = t.formatMessage({ defaultMessage: "Talk to the agent" });
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <Button
+          size="sm"
+          variant="ghost"
+          className="text-muted-foreground h-6 px-2 text-xs"
+          aria-label={label}
+          onClick={onClick}
+        >
+          <MessageSquare className="size-3" />
+        </Button>
+      </TooltipTrigger>
+      <TooltipContent>{label}</TooltipContent>
+    </Tooltip>
+  );
+}
+
 /**
  * The document's findings (resume spec, "Document workspace"): the code
  * checks, which point out and never block, then the AI review's notes;
- * the user may ignore any. Each opens its line; Fix appears where code
- * fixes it, and "Add to the profile" on a line the profile doesn't back.
+ * the user may ignore any. Each opens its passage, selected in the text;
+ * the active one (opened, or under the pointer in the text) is marked,
+ * and a row under the pointer lights its passage up. Fix appears where
+ * code fixes it, "Add to the profile" on a line the profile doesn't back,
+ * and "Talk to the agent" sends the finding with its passage.
  */
 export function DocumentFindings() {
   const t = useTranslation();
   const label = useFindingLabel();
   const trpc = useTRPC();
   const router = useRouter();
+  const agent = useDocumentAgent();
   const {
     version,
     findings,
@@ -99,9 +134,22 @@ export function DocumentFindings() {
     restoreNote,
     fixFor,
     profileActionFor,
-    goToLine,
-    goToOwner,
+    findingKey,
+    noteKey,
+    activeFinding,
+    hoverFinding,
+    passageOf,
+    goToFinding,
+    goToNote,
   } = useDocumentEditor();
+  const talk = (
+    target: { lineId: string | null; positionId?: string | null },
+    attachment: AgentAttachment
+  ) => agent?.talkAbout({ quote: passageOf(target), attachment });
+  const rowProps = (key: string) => ({
+    onMouseEnter: () => hoverFinding(key),
+    onMouseLeave: () => hoverFinding(null),
+  });
   const [open, setOpen] = useState(true);
   const [showIgnored, setShowIgnored] = useState(false);
   const [sent, setSent] = useState<string[]>([]);
@@ -134,24 +182,22 @@ export function DocumentFindings() {
     })
   );
 
-  const goTo = (target: {
-    lineId: string | null;
-    positionId?: string | null;
-  }) =>
-    target.lineId
-      ? goToLine(target.lineId)
-      : target.positionId && goToOwner(target.positionId);
-
-  const findingItem = (finding: DocumentFinding, key: string) => {
+  const findingItem = (finding: DocumentFinding) => {
     const fix = fixFor(finding);
+    const key = findingKey(finding);
+    const text = label(finding, version);
+    const anchored = finding.lineId !== null || finding.positionId !== null;
     return (
-      <li key={key} className="flex flex-col">
+      <li key={key} className="flex flex-col" {...rowProps(key)}>
         <button
           type="button"
-          onClick={() => goTo(finding)}
-          className="hover:bg-muted w-full rounded px-2 py-1 text-left text-xs text-amber-700 dark:text-amber-400"
+          onClick={() => goToFinding(finding)}
+          className={cn(
+            "hover:bg-muted w-full rounded px-2 py-1 text-left text-xs text-amber-700 dark:text-amber-400",
+            activeFinding === key && "bg-muted"
+          )}
         >
-          {label(finding, version)}
+          {text}
         </button>
         {
           <div className="flex flex-wrap items-center gap-1 px-2 pb-1">
@@ -166,6 +212,11 @@ export function DocumentFindings() {
                 <Wand2 className="size-3" />
                 {t.formatMessage({ defaultMessage: "Fix" })}
               </Button>
+            )}
+            {agent && anchored && (
+              <TalkButton
+                onClick={() => talk(finding, { kind: "finding", text })}
+              />
             )}
             <Button
               size="sm"
@@ -185,15 +236,19 @@ export function DocumentFindings() {
     );
   };
 
-  const noteItem = (note: ReviewNote, index: number) => {
+  const noteItem = (note: ReviewNote) => {
     const done = !!note.lineId && sent.includes(note.lineId);
+    const key = noteKey(note);
     return (
-      <li key={`note-${index}`} className="flex flex-col">
+      <li key={key} className="flex flex-col" {...rowProps(key)}>
         <button
           type="button"
           disabled={!note.lineId}
-          onClick={() => goTo(note)}
-          className="text-muted-foreground hover:bg-muted w-full rounded px-2 py-1 text-left text-xs"
+          onClick={() => goToNote(note)}
+          className={cn(
+            "text-muted-foreground hover:bg-muted w-full rounded px-2 py-1 text-left text-xs",
+            activeFinding === key && "bg-muted"
+          )}
         >
           {note.kind === "inconsistency"
             ? t.formatMessage(
@@ -219,6 +274,11 @@ export function DocumentFindings() {
                 ? t.formatMessage({ defaultMessage: "Sent to my profile" })
                 : t.formatMessage({ defaultMessage: "Send to my profile" })}
             </Button>
+          )}
+          {agent && note.lineId && (
+            <TalkButton
+              onClick={() => talk(note, { kind: "review", text: note.text })}
+            />
           )}
           <Button
             size="sm"
@@ -329,9 +389,7 @@ export function DocumentFindings() {
       </button>
       {open && (
         <ul className="space-y-0.5">
-          {findings.map((finding, index) =>
-            findingItem(finding, `finding-${index}`)
-          )}
+          {findings.map(findingItem)}
           {notes.map(noteItem)}
         </ul>
       )}

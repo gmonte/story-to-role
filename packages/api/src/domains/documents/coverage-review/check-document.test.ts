@@ -178,10 +178,20 @@ describe("the coverage review's code checks", () => {
         { id: "gone", text: "Wrote the on-call runbook." },
         { id: "told", text: "Ran the migration." },
       ]),
+      entry(P2, [{ id: "reworded", text: "Built the services, in Node.js." }]),
     ]);
-    const lines = (content.sections[1] as { entries: ExperienceEntry[] })
-      .entries[0].lines;
+    const entries = (content.sections[1] as { entries: ExperienceEntry[] })
+      .entries;
+    const lines = entries[0].lines;
     lines[0].origin = { kind: "manual" };
+    // Reworded by the person: keeps the passage it came from.
+    entries[1].lines[0].origin = {
+      kind: "edited",
+      evidenceIds: [E1],
+      instructionIds: [],
+      companyFactIds: [],
+      motivationPointIds: [],
+    };
     // Cites a passage this version doesn't hold.
     lines[1].origin = { kind: "evidence", evidenceIds: [E9] };
     // Rests on an instruction: the person's own words, kept.
@@ -194,6 +204,9 @@ describe("the coverage review's code checks", () => {
       { code: "notInProfile", lineId: "typed", text: "Mentored two interns." },
       { code: "notInProfile", lineId: "gone" },
     ]);
+    expect(
+      check(content).filter((finding) => finding.lineId === "reworded")
+    ).toEqual([]);
   });
 
   it("passes a resume that rests on the profile within its settings", () => {

@@ -223,12 +223,14 @@ Acceptance:
 
 ### D3: Suggestions in the document
 
-- A document change (a part, the lines it replaces, the lines it writes, the profile passages it draws on) shown in place with the word-level diff; Accept creates a snapshot authored by the AI and accepted by the user, Reject drops it; a newer one on the same lines supersedes the waiting one.
-- The agent grounds a suggestion on the profile version and on the user's words in the conversation; code refuses a figure found in neither (the profile agent's rule) and a change to a locked fact.
+- A document change (a part, the lines it replaces, the lines it writes, the profile passages it draws on) shown in place with the word-level diff; Accept creates a snapshot authored by the AI and accepted by the user, Reject drops it; a newer one on the same lines supersedes the waiting one. Every change the agent makes is a suggestion, including one the user asked for; it can replace, remove or add lines.
+- The agent grounds a suggestion on the profile version and on the user's words in the conversation; code refuses a figure found in neither (the profile agent's rule). A locked fact (the header, a position's employer, title and context) it suggests changing only on the user's request, which code checks against their messages.
+- The user edits everything except the section titles; a reworded line keeps its trace (origin `edited`).
 
 Acceptance:
-- [ ] Only accepted suggestions reach the document, each as a snapshot.
-- [ ] Asked to, the agent writes a fact the user just told it, and refuses a figure nobody gave.
+- [x] Only accepted suggestions reach the document, each as a snapshot.
+- [x] Asked to, the agent writes a fact the user just told it, and refuses a figure nobody gave.
+- [x] The agent's change to a locked fact is refused unless the user asked for it in this conversation.
 
 ### D4: Pointing out what the profile doesn't back
 

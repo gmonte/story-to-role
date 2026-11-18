@@ -25,14 +25,18 @@ export function DocumentIndex() {
         break;
       case "entry": {
         const parent = items[items.length - 1];
+        const title = blocks.find(
+          (row) => row.type === "entryTitle" && row.ownerId === block.ownerId
+        );
         const item = {
           index,
-          title: block.subtitle
-            ? t.formatMessage(
-                { defaultMessage: "{employer} — {title}" },
-                { employer: block.title, title: block.subtitle }
-              )
-            : block.title,
+          title:
+            title && "text" in title
+              ? t.formatMessage(
+                  { defaultMessage: "{employer} — {title}" },
+                  { employer: block.text, title: title.text }
+                )
+              : block.text,
           children: [],
         };
         if (parent) parent.children.push(item);

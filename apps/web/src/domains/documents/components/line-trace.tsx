@@ -94,33 +94,42 @@ export function TraceContent({
     origin.evidenceIds.includes(row.evidenceId)
   );
   const instructions =
-    origin.kind === "instruction" || origin.kind === "letter"
+    origin.kind === "instruction" ||
+    origin.kind === "letter" ||
+    origin.kind === "edited"
       ? version.instructionTrace.filter((row) =>
           origin.instructionIds.includes(row.instructionId)
         )
       : [];
   const facts =
-    origin.kind === "letter"
+    origin.kind === "letter" || origin.kind === "edited"
       ? (version.letterTrace?.companyFacts ?? []).filter((row) =>
           origin.companyFactIds.includes(row.id)
         )
       : [];
   const words =
-    origin.kind === "letter"
+    origin.kind === "letter" || origin.kind === "edited"
       ? (version.letterTrace?.motivationPoints ?? []).filter((row) =>
           origin.motivationPointIds.includes(row.id)
         )
       : [];
+  const edited =
+    origin.kind === "edited"
+      ? t.formatMessage({ defaultMessage: "From your profile, edited by you" })
+      : null;
   if (
     !evidence.length &&
     !instructions.length &&
     !facts.length &&
     !words.length
   ) {
-    return <>{t.formatMessage({ defaultMessage: "From your profile" })}</>;
+    return (
+      <>{edited ?? t.formatMessage({ defaultMessage: "From your profile" })}</>
+    );
   }
   return (
     <div className="flex flex-col gap-2">
+      {edited && <span className="font-medium">{edited}</span>}
       {instructions.map((row) => (
         <InstructionQuote key={row.instructionId} text={row.text} />
       ))}
@@ -154,8 +163,8 @@ export type TraceIndex = {
 };
 
 /**
- * A line with its origin on hover, colored by origin in trace mode (the
- * LinkedIn editor's lines; the document editor draws its own).
+ * A line with its origin on hover, colored by origin when `trace` is on
+ * (the LinkedIn editor's lines; the document editor draws its own).
  */
 export function TracedLine({
   lineId,
@@ -176,7 +185,7 @@ export function TracedLine({
       ? []
       : origin.evidenceIds.flatMap((id) => traceIndex.evidence.get(id) ?? []);
   const instructions =
-    origin.kind === "instruction"
+    origin.kind === "instruction" || origin.kind === "edited"
       ? origin.instructionIds.flatMap(
           (id) => traceIndex.instructions.get(id) ?? []
         )
@@ -201,6 +210,13 @@ export function TracedLine({
           t.formatMessage({ defaultMessage: "Written by you" })
         ) : sources.length > 0 || instructions.length > 0 ? (
           <div className="flex flex-col gap-2">
+            {origin.kind === "edited" && (
+              <span className="font-medium">
+                {t.formatMessage({
+                  defaultMessage: "From your profile, edited by you",
+                })}
+              </span>
+            )}
             {instructions.map((text) => (
               <InstructionQuote key={text} text={text} />
             ))}

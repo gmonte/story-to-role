@@ -27,28 +27,28 @@ const grey = "#666666";
 
 const styles = StyleSheet.create({
   page: {
-    paddingTop: 40,
-    paddingBottom: 40,
-    paddingHorizontal: 48,
+    paddingTop: 32,
+    paddingBottom: 32,
+    paddingHorizontal: 36,
     fontFamily: "Helvetica",
-    fontSize: 10,
+    fontSize: 9.5,
     lineHeight: 1.35,
     color: "#1a1a1a",
   },
   name: {
     fontFamily: "Helvetica-Bold",
-    fontSize: 20,
+    fontSize: 18,
     // Its own line height: the page's would be too short for this size.
     lineHeight: 1.2,
     color: navy,
     marginBottom: 4,
   },
-  titleLine: { fontFamily: "Helvetica-Bold", fontSize: 11, marginBottom: 2 },
-  contacts: { color: grey, fontSize: 9 },
+  titleLine: { fontFamily: "Helvetica-Bold", fontSize: 10.5, marginBottom: 2 },
+  contacts: { color: grey, fontSize: 8.5 },
   section: { marginTop: 12 },
   sectionTitle: {
     fontFamily: "Helvetica-Bold",
-    fontSize: 10.5,
+    fontSize: 10,
     color: navy,
     textTransform: "uppercase",
     borderBottomWidth: 0.6,
@@ -61,7 +61,7 @@ const styles = StyleSheet.create({
   italic: { fontFamily: "Helvetica-Oblique" },
   entry: { marginBottom: 6 },
   entryHeader: { flexDirection: "row", justifyContent: "space-between" },
-  period: { color: grey, fontSize: 9 },
+  period: { color: grey, fontSize: 8.5 },
   bullet: { flexDirection: "row", marginTop: 1.5 },
   bulletMark: { width: 10 },
   bulletText: { flex: 1 },
@@ -114,14 +114,21 @@ function SectionBody({
     case "experience":
       return section.entries.map((entry) => (
         <View key={entry.positionId} style={styles.entry}>
-          <View style={styles.entryHeader} wrap={false}>
-            <Text style={styles.bold}>{entry.employer}</Text>
-            <Text style={styles.period}>
-              {formatPeriod(entry.startDate, entry.endDate, language)}
-            </Text>
+          {/* The company, title and first bullet stay together: a heading
+              alone at the foot of a page moves to the next one. */}
+          <View wrap={false}>
+            <View style={styles.entryHeader}>
+              <Text style={styles.bold}>{entry.employer}</Text>
+              <Text style={styles.period}>
+                {formatPeriod(entry.startDate, entry.endDate, language)}
+              </Text>
+            </View>
+            <Text style={styles.italic}>{positionTitleLine(entry)}</Text>
+            {entry.lines.slice(0, 1).map((line) => (
+              <Bullet key={line.id} text={line.text} />
+            ))}
           </View>
-          <Text style={styles.italic}>{positionTitleLine(entry)}</Text>
-          {entry.lines.map((line) => (
+          {entry.lines.slice(1).map((line) => (
             <Bullet key={line.id} text={line.text} />
           ))}
         </View>
@@ -129,8 +136,13 @@ function SectionBody({
     case "projects":
       return section.entries.map((entry) => (
         <View key={entry.projectId} style={styles.entry}>
-          <Text style={styles.bold}>{entry.name}</Text>
-          {entry.lines.map((line) => (
+          <View wrap={false}>
+            <Text style={styles.bold}>{entry.name}</Text>
+            {entry.lines.slice(0, 1).map((line) => (
+              <Bullet key={line.id} text={line.text} />
+            ))}
+          </View>
+          {entry.lines.slice(1).map((line) => (
             <Bullet key={line.id} text={line.text} />
           ))}
         </View>
@@ -166,7 +178,7 @@ export function ResumeDocument({
         {header.city && <Text style={styles.contacts}>{header.city}</Text>}
         {content.sections.map((section) => (
           <View key={section.kind} style={styles.section}>
-            <Text style={styles.sectionTitle} minPresenceAhead={30}>
+            <Text style={styles.sectionTitle} minPresenceAhead={60}>
               {sectionTitles[language][section.kind]}
             </Text>
             <SectionBody section={section} language={language} />

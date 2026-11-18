@@ -218,9 +218,9 @@ export function lockedFactViolations(
   );
 }
 
-/** Lines of 10pt Helvetica on an A4 page in the specified layout. */
-const LINES_PER_PAGE = 54;
-const CHARACTERS_PER_LINE = 100;
+/** Lines of 9.5pt Helvetica on an A4 page in the specified layout. */
+const LINES_PER_PAGE = 58;
+const CHARACTERS_PER_LINE = 110;
 
 /**
  * An estimate of the rendered length, so generation can aim at two pages

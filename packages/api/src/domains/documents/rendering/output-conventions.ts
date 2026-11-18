@@ -114,7 +114,13 @@ export function credentialLine(
   },
   language: OutputLanguage
 ) {
-  const title = entry.level ? `${entry.title} (${entry.level})` : entry.title;
+  // A level that already holds parentheses (“full professional (B2/C1)”)
+  // follows a dash instead of nesting them.
+  const title = !entry.level
+    ? entry.title
+    : entry.level.includes("(")
+      ? `${entry.title} — ${entry.level}`
+      : `${entry.title} (${entry.level})`;
   const period =
     entry.startDate || entry.endDate
       ? formatPeriod(entry.startDate, entry.endDate, language)

@@ -35,16 +35,14 @@ const unset = "unset";
 
 /**
  * The method's fields of an application (tracker spec): source,
- * application type, the resume sent, next step, notes and the user's
- * decline reason, with the two buttons that feed the job preferences.
- * Notes and next steps are encrypted and never reach a prompt.
+ * application type, the resume sent, next step and notes. Notes and next
+ * steps are encrypted and never reach a prompt.
  */
 export function ApplicationDetails({ detail }: { detail: ApplicationDetail }) {
   const t = useTranslation();
   const labels = useTrackerLabels();
   const trpc = useTRPC();
   const refresh = useRefreshTracker();
-  const queryClient = useQueryClient();
   const [source, setSource] = useState<ApplicationSource | null>(detail.source);
   const [sourceDetail, setSourceDetail] = useState(detail.sourceDetail ?? "");
   const [type, setType] = useState<ApplicationType | null>(
@@ -55,9 +53,6 @@ export function ApplicationDetails({ detail }: { detail: ApplicationDetail }) {
   );
   const [nextStep, setNextStep] = useState(detail.nextStep ?? "");
   const [notes, setNotes] = useState(detail.notes ?? "");
-  const [declineReason, setDeclineReason] = useState(
-    detail.declineReason ?? ""
-  );
   const onError = (error: { message: string }) => toast.error(error.message);
 
   const options = useQuery({
@@ -73,42 +68,6 @@ export function ApplicationDetails({ detail }: { detail: ApplicationDetail }) {
       onError,
     })
   );
-  const preferencesChanged = () => {
-    void queryClient.invalidateQueries({ queryKey: trpc.profile.pathKey() });
-    void queryClient.invalidateQueries({ queryKey: trpc.openings.pathKey() });
-  };
-  const addRule = useMutation(
-    trpc.tracker.addDeclineReasonAsRule.mutationOptions({
-      onSuccess: () => {
-        preferencesChanged();
-        toast.success(
-          t.formatMessage({
-            defaultMessage:
-              "Added to your discard rules; the next fit checks count it.",
-          })
-        );
-      },
-      onError,
-    })
-  );
-  const exclude = useMutation(
-    trpc.tracker.excludeCompany.mutationOptions({
-      onSuccess: ({ company }) => {
-        preferencesChanged();
-        toast.success(
-          t.formatMessage(
-            {
-              defaultMessage:
-                "{company} is now among your excluded companies; the next fit checks count it.",
-            },
-            { company }
-          )
-        );
-      },
-      onError,
-    })
-  );
-
   const sentResume = detail.submissions.find(
     (submission) => submission.documentKind === "resume"
   );
@@ -127,7 +86,6 @@ export function ApplicationDetails({ detail }: { detail: ApplicationDetail }) {
           ...(detail.external && !sentResume ? { resumeVersionId } : {}),
           nextStep: text(nextStep),
           notes: text(notes),
-          declineReason: text(declineReason),
         });
       }}
     >
@@ -285,6 +243,88 @@ export function ApplicationDetails({ detail }: { detail: ApplicationDetail }) {
           })}
         </p>
       </div>
+      <Button
+        type="submit"
+        size="sm"
+        className="self-start"
+        disabled={save.isPending}
+      >
+        {t.formatMessage({ defaultMessage: "Save" })}
+      </Button>
+    </form>
+  );
+}
+
+/**
+ * Giving up (tracker spec): the user's own reason, kept for the
+ * retrospective, and the two buttons that feed the job preferences from
+ * it. Apart from the rest of the form: they change what is recommended.
+ */
+export function ApplicationWithdraw({ detail }: { detail: ApplicationDetail }) {
+  const t = useTranslation();
+  const trpc = useTRPC();
+  const refresh = useRefreshTracker();
+  const queryClient = useQueryClient();
+  const [declineReason, setDeclineReason] = useState(
+    detail.declineReason ?? ""
+  );
+  const onError = (error: { message: string }) => toast.error(error.message);
+  const save = useMutation(
+    trpc.tracker.updateDetails.mutationOptions({
+      onSuccess: async () => {
+        await refresh();
+        toast.success(t.formatMessage({ defaultMessage: "Saved" }));
+      },
+      onError,
+    })
+  );
+  const preferencesChanged = () => {
+    void queryClient.invalidateQueries({ queryKey: trpc.profile.pathKey() });
+    void queryClient.invalidateQueries({ queryKey: trpc.openings.pathKey() });
+  };
+  const addRule = useMutation(
+    trpc.tracker.addDeclineReasonAsRule.mutationOptions({
+      onSuccess: () => {
+        preferencesChanged();
+        toast.success(
+          t.formatMessage({
+            defaultMessage:
+              "Added to your discard rules; the next fit checks count it.",
+          })
+        );
+      },
+      onError,
+    })
+  );
+  const exclude = useMutation(
+    trpc.tracker.excludeCompany.mutationOptions({
+      onSuccess: ({ company }) => {
+        preferencesChanged();
+        toast.success(
+          t.formatMessage(
+            {
+              defaultMessage:
+                "{company} is now among your excluded companies; the next fit checks count it.",
+            },
+            { company }
+          )
+        );
+      },
+      onError,
+    })
+  );
+
+  return (
+    <form
+      className="flex flex-col gap-3"
+      onSubmit={(event) => {
+        event.preventDefault();
+        save.mutate({
+          applicationId: detail.id,
+          declineReason: declineReason.trim() || null,
+        });
+      }}
+    >
       <div className="grid gap-1.5">
         <Label htmlFor="decline-reason">
           {t.formatMessage({ defaultMessage: "Why you gave up (your reason)" })}
@@ -296,10 +336,14 @@ export function ApplicationDetails({ detail }: { detail: ApplicationDetail }) {
           onChange={(event) => setDeclineReason(event.target.value)}
         />
       </div>
-
       <div className="flex flex-wrap gap-2">
-        <Button type="submit" size="sm" disabled={save.isPending}>
-          {t.formatMessage({ defaultMessage: "Save" })}
+        <Button
+          type="submit"
+          size="sm"
+          variant="outline"
+          disabled={save.isPending}
+        >
+          {t.formatMessage({ defaultMessage: "Save the reason" })}
         </Button>
         {/* Saved reason only: the rule is what the server stored. */}
         <Button
@@ -314,7 +358,7 @@ export function ApplicationDetails({ detail }: { detail: ApplicationDetail }) {
         <Button
           type="button"
           size="sm"
-          variant="outline"
+          variant="destructive"
           disabled={exclude.isPending}
           onClick={() =>
             exclude.mutate({ applicationId: detail.id, date: today() })

@@ -1,9 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { Send, Trash2 } from "lucide-react";
+import { ChevronDown, Send, Trash2 } from "lucide-react";
 
 import {
   type ApplicationStatus,
@@ -14,6 +14,11 @@ import { useTranslation } from "@repo/intl/use-translation";
 import { Badge } from "@repo/web/components/ui/badge";
 import { Button } from "@repo/web/components/ui/button";
 import { Checkbox } from "@repo/web/components/ui/checkbox";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@repo/web/components/ui/collapsible";
 import {
   Dialog,
   DialogContent,
@@ -44,26 +49,60 @@ import { useOpening } from "~/domains/openings/hooks/use-opening";
 import { useRefreshTracker } from "../hooks/use-tracker";
 import { useTrackerLabels } from "../hooks/use-tracker-labels";
 import { dayToDate, today } from "../utils/dates";
-import { ApplicationDetails } from "./application-details";
+import { ApplicationDetails, ApplicationWithdraw } from "./application-details";
 
 /**
- * The opening's application in the tracker (tracker spec): its status,
- * "Mark as applied" (recording what was sent), and the timeline of events.
+ * The opening's application in the tracker (tracker spec), as a summary:
+ * its status, "Mark as applied" (recording what was sent), what was sent
+ * and the next step; the details, the timeline and giving up stay folded
+ * until asked for. The full tracker comes to the Application step later.
  */
 export function ApplicationTracker({ openingId }: { openingId: string }) {
+  const t = useTranslation();
   const trpc = useTRPC();
   const applicationId = useOpening(openingId).data?.applicationId;
   const detail = useQuery({
     ...trpc.tracker.get.queryOptions({ applicationId: applicationId ?? "" }),
     enabled: !!applicationId,
   });
-  if (!applicationId || !detail.data) return null;
+  if (!applicationId) {
+    return (
+      <p className="text-muted-foreground text-xs">
+        {t.formatMessage({
+          defaultMessage:
+            "No application yet. It starts with the first document you write for this opening.",
+        })}
+      </p>
+    );
+  }
+  if (!detail.data) return null;
   return (
     <TrackerBlock
       key={detail.data.id}
       detail={detail.data}
       openingId={openingId}
     />
+  );
+}
+
+/** A folded section of the summary. */
+function Folded({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <Collapsible className="flex flex-col gap-3">
+      <CollapsibleTrigger asChild>
+        <Button
+          size="sm"
+          variant="ghost"
+          className="group justify-between px-2"
+        >
+          {label}
+          <ChevronDown className="transition-transform group-data-[state=open]:rotate-180" />
+        </Button>
+      </CollapsibleTrigger>
+      <CollapsibleContent className="flex flex-col gap-3">
+        {children}
+      </CollapsibleContent>
+    </Collapsible>
   );
 }
 
@@ -83,9 +122,6 @@ function TrackerBlock({
   const setStatus = useMutation(
     trpc.tracker.setStatus.mutationOptions({ onSuccess: refresh, onError })
   );
-  const deleteEvent = useMutation(
-    trpc.tracker.deleteEvent.mutationOptions({ onSuccess: refresh, onError })
-  );
   // "No response" only comes with time; "Applied" with documents goes
   // through the dialog that records what was sent.
   const statuses = applicationStatusSchema.options.filter(
@@ -96,16 +132,11 @@ function TrackerBlock({
 
   return (
     <section className="flex flex-col gap-3">
-      <div className="flex items-center justify-between gap-2">
-        <h3 className="text-sm font-medium">
-          {t.formatMessage({ defaultMessage: "Application" })}
-        </h3>
-        {detail.external && (
-          <Badge variant="outline">
-            {t.formatMessage({ defaultMessage: "Applied outside StoryToRole" })}
-          </Badge>
-        )}
-      </div>
+      {detail.external && (
+        <Badge variant="outline" className="self-start">
+          {t.formatMessage({ defaultMessage: "Applied outside StoryToRole" })}
+        </Badge>
+      )}
       <div className="flex flex-wrap items-center gap-2">
         <Select
           value={detail.status}
@@ -159,58 +190,107 @@ function TrackerBlock({
         </div>
       )}
 
-      <ApplicationDetails key={detail.id} detail={detail} />
+      {(detail.nextEvent ?? detail.nextStep) && (
+        <p className="text-xs">
+          <span className="text-muted-foreground">
+            {t.formatMessage({ defaultMessage: "Next step" })}
+          </span>
+          <span className="block">
+            {detail.nextEvent
+              ? t.formatMessage(
+                  { defaultMessage: "{event} on {date}" },
+                  {
+                    event:
+                      detail.nextEvent.text ??
+                      t.formatMessage({ defaultMessage: "an event" }),
+                    date: t.formatDate(detail.nextEvent.occurredAt, {
+                      dateStyle: "medium",
+                    }),
+                  }
+                )
+              : detail.nextStep}
+          </span>
+        </p>
+      )}
 
-      <AddEventForm applicationId={detail.id} />
+      <Folded label={t.formatMessage({ defaultMessage: "Edit details" })}>
+        <ApplicationDetails key={detail.id} detail={detail} />
+      </Folded>
 
-      <ol className="flex flex-col gap-2 border-l pl-3 text-xs">
-        {detail.events.map((event) => (
-          <li key={event.id} className="flex items-start justify-between gap-2">
-            <span className="flex flex-col">
-              <span className="text-muted-foreground">
-                {t.formatDate(event.occurredAt, {
-                  dateStyle: "medium",
-                  ...(event.kind === "note" ? { timeStyle: "short" } : {}),
-                })}
-              </span>
-              <span>
-                {event.kind === "status_change" && event.toStatus
-                  ? event.fromStatus
-                    ? t.formatMessage(
-                        { defaultMessage: "{from} → {to}" },
-                        {
-                          from: labels.status(event.fromStatus),
-                          to: labels.status(event.toStatus),
-                        }
-                      )
-                    : labels.status(event.toStatus)
-                  : event.text}
-              </span>
-              {event.kind === "status_change" && event.text && (
-                <span className="text-muted-foreground">{event.text}</span>
-              )}
-            </span>
-            {event.kind === "note" && (
-              <Button
-                size="icon"
-                variant="ghost"
-                className="size-6"
-                aria-label={t.formatMessage({ defaultMessage: "Delete event" })}
-                disabled={deleteEvent.isPending}
-                onClick={() =>
-                  deleteEvent.mutate({
-                    applicationId: detail.id,
-                    eventId: event.id,
-                  })
-                }
-              >
-                <Trash2 className="size-3.5" />
-              </Button>
-            )}
-          </li>
-        ))}
-      </ol>
+      <Folded label={t.formatMessage({ defaultMessage: "Timeline" })}>
+        <AddEventForm applicationId={detail.id} />
+        <EventsTimeline detail={detail} />
+      </Folded>
+
+      <Folded
+        label={t.formatMessage({ defaultMessage: "Give up this opening" })}
+      >
+        <ApplicationWithdraw key={detail.id} detail={detail} />
+      </Folded>
     </section>
+  );
+}
+
+/** What happened, with the notes the user can delete. */
+function EventsTimeline({ detail }: { detail: ApplicationDetail }) {
+  const t = useTranslation();
+  const labels = useTrackerLabels();
+  const trpc = useTRPC();
+  const refresh = useRefreshTracker();
+  const deleteEvent = useMutation(
+    trpc.tracker.deleteEvent.mutationOptions({
+      onSuccess: refresh,
+      onError: (error) => toast.error(error.message),
+    })
+  );
+  return (
+    <ol className="flex flex-col gap-2 border-l pl-3 text-xs">
+      {detail.events.map((event) => (
+        <li key={event.id} className="flex items-start justify-between gap-2">
+          <span className="flex flex-col">
+            <span className="text-muted-foreground">
+              {t.formatDate(event.occurredAt, {
+                dateStyle: "medium",
+                ...(event.kind === "note" ? { timeStyle: "short" } : {}),
+              })}
+            </span>
+            <span>
+              {event.kind === "status_change" && event.toStatus
+                ? event.fromStatus
+                  ? t.formatMessage(
+                      { defaultMessage: "{from} → {to}" },
+                      {
+                        from: labels.status(event.fromStatus),
+                        to: labels.status(event.toStatus),
+                      }
+                    )
+                  : labels.status(event.toStatus)
+                : event.text}
+            </span>
+            {event.kind === "status_change" && event.text && (
+              <span className="text-muted-foreground">{event.text}</span>
+            )}
+          </span>
+          {event.kind === "note" && (
+            <Button
+              size="icon"
+              variant="ghost"
+              className="size-6"
+              aria-label={t.formatMessage({ defaultMessage: "Delete event" })}
+              disabled={deleteEvent.isPending}
+              onClick={() =>
+                deleteEvent.mutate({
+                  applicationId: detail.id,
+                  eventId: event.id,
+                })
+              }
+            >
+              <Trash2 className="size-3.5" />
+            </Button>
+          )}
+        </li>
+      ))}
+    </ol>
   );
 }
 
@@ -271,22 +351,27 @@ function AddEventForm({ applicationId }: { applicationId: string }) {
 }
 
 /** Marks the application as sent, recording the snapshot of each version. */
-function MarkAppliedDialog({
+export function MarkAppliedDialog({
   applicationId,
   openingId,
+  trigger,
 }: {
   applicationId: string;
   openingId: string;
+  /** The page's own button, instead of the summary's. */
+  trigger?: ReactNode;
 }) {
   const t = useTranslation();
   const [open, setOpen] = useState(false);
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button size="sm">
-          <Send />
-          {t.formatMessage({ defaultMessage: "Mark as applied" })}
-        </Button>
+        {trigger ?? (
+          <Button size="sm">
+            <Send />
+            {t.formatMessage({ defaultMessage: "Mark as applied" })}
+          </Button>
+        )}
       </DialogTrigger>
       <DialogContent>
         {/* Mounted per opening: the choices start fresh each time. */}

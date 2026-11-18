@@ -85,7 +85,7 @@ export function SimilarDocuments({
           application={documents.data.application}
           trigger={
             <Button size="sm" variant="outline" className="self-start">
-              {t.formatMessage({ defaultMessage: "Generate a new version" })}
+              {t.formatMessage({ defaultMessage: "Generate resume" })}
             </Button>
           }
         />

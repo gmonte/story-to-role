@@ -113,7 +113,9 @@ export function WorkspaceBody({
     <div ref={container} className="flex min-h-0 flex-1">
       {/* The main column keeps room to work: the columns beside it give way
           (down to their minimum) when the screen is too narrow for all. */}
-      <main className="flex min-w-[40rem] flex-1 flex-col">{chat}</main>
+      <main className="flex min-w-0 flex-1 flex-col lg:min-w-[40rem]">
+        {chat}
+      </main>
       {panel && (
         <Divider onPointerDown={(event) => startDrag(event, "panel")} />
       )}

@@ -58,7 +58,7 @@ export function AppSidebar() {
     },
     {
       href: "/app/tracker",
-      label: t.formatMessage({ defaultMessage: "Tracker" }),
+      label: t.formatMessage({ defaultMessage: "Applications" }),
       icon: KanbanSquare,
       count: reminders.data?.length,
     },

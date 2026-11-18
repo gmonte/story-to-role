@@ -49,10 +49,14 @@ export function CoverLetterPrep({
   openingId,
   defaultLanguage,
   defaultTone,
+  aside,
 }: {
   openingId: string;
   defaultLanguage: OutputLanguage;
   defaultTone: Tone;
+  /** The left column beside the steps (the page's context), as the
+   * document workspace has its index there. */
+  aside?: ReactNode;
 }) {
   const trpc = useTRPC();
   const motivation = useQuery({
@@ -90,7 +94,7 @@ export function CoverLetterPrep({
   }
   if (!data.status || data.status === "failed") {
     return (
-      <Prep>
+      <Prep aside={aside}>
         <MotivationStart
           openingId={openingId}
           failed={data.status === "failed"}
@@ -100,7 +104,7 @@ export function CoverLetterPrep({
   }
   if (data.status === "skipped") {
     return (
-      <Prep>
+      <Prep aside={aside}>
         <div className="flex flex-col gap-4">
           <Skipped openingId={openingId} />
           {writeLetter}
@@ -110,13 +114,13 @@ export function CoverLetterPrep({
   }
   if (data.status === "in_progress") {
     return (
-      <Prep>
+      <Prep aside={aside}>
         <Interview openingId={openingId} motivation={data} />
       </Prep>
     );
   }
   return (
-    <Prep>
+    <Prep aside={aside}>
       <div className="flex flex-col gap-6">
         <PointsReview
           key={data.points.map((point) => `${point.id}:${point.status}`).join()}
@@ -129,11 +133,21 @@ export function CoverLetterPrep({
   );
 }
 
-/** The steps before the letter, read in the column's width. */
-function Prep({ children }: { children: ReactNode }) {
+/**
+ * The steps before the letter, read in the column's width, in the same
+ * three zones as the document workspace so the page doesn't jump.
+ */
+function Prep({ children, aside }: { children: ReactNode; aside?: ReactNode }) {
   return (
-    <div className="min-h-0 flex-1 overflow-y-auto">
-      <div className="mx-auto w-full max-w-3xl p-6">{children}</div>
+    <div className="flex min-h-0 flex-1">
+      {aside && (
+        <aside className="hidden w-60 shrink-0 space-y-6 overflow-y-auto border-r p-4 md:block">
+          {aside}
+        </aside>
+      )}
+      <div className="min-w-0 flex-1 overflow-y-auto">
+        <div className="mx-auto w-full max-w-3xl p-6">{children}</div>
+      </div>
     </div>
   );
 }

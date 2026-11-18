@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  useEffect,
   useRef,
   useState,
   type PointerEvent as ReactPointerEvent,
@@ -70,11 +71,12 @@ export function WorkspaceBody({
       ? defaultPreview
       : readWidth(storageKey, defaultPreview)
   );
-  const [panelWidth, setPanelWidth] = useState(() =>
-    typeof window === "undefined"
-      ? panelFallback
-      : readWidth(panelKey, panelFallback)
-  );
+  // The server renders the default; the saved width comes after hydration,
+  // so both renders agree.
+  const [panelWidth, setPanelWidth] = useState(panelFallback);
+  useEffect(() => {
+    setPanelWidth(readWidth(panelKey, panelFallback));
+  }, [panelKey, panelFallback]);
 
   /** Drags a divider: leftwards widens the column on its right. */
   function startDrag(

@@ -49,11 +49,12 @@ export function CoverageReviewBlock({ version }: { version: VersionView }) {
       </p>
 
       {findings.length > 0 ? (
-        <div className="flex flex-col gap-1.5 rounded-lg border border-red-500/40 bg-red-500/10 p-2.5">
+        <div className="flex flex-col gap-1.5 rounded-lg border p-2.5">
           <p className="flex items-center gap-1.5 font-medium">
-            <AlertTriangle className="size-3.5 shrink-0 text-red-600 dark:text-red-400" />
+            <AlertTriangle className="size-3.5 shrink-0 text-amber-600" />
             {t.formatMessage({
-              defaultMessage: "Fix before downloading, sending or copying",
+              defaultMessage:
+                "Worth a look before you send it; you can still download it",
             })}
           </p>
           <ul className="flex flex-col gap-1">

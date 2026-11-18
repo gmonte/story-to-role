@@ -47,7 +47,7 @@ export function LibraryDocumentView({ documentId }: { documentId: string }) {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      {running && (
+      {running && document.data?.kind !== "resume" && (
         <div className="p-6">
           <GenerationProgress generation={generation} />
         </div>
@@ -77,8 +77,8 @@ export function LibraryDocumentView({ documentId }: { documentId: string }) {
           <LinkedinEditor versions={versions} defaultTone={generation?.tone} />
         </div>
       )}
-      {versions.length > 0 && document.data?.kind === "resume" && (
-        <ResumeWorkspace versions={versions} />
+      {(versions.length > 0 || running) && document.data?.kind === "resume" && (
+        <ResumeWorkspace versions={versions} generation={generation} />
       )}
     </div>
   );
@@ -91,7 +91,18 @@ export function LibraryDocumentPanel({ documentId }: { documentId: string }) {
   const document = useLibraryDocument(documentId);
   const versions = document.data?.versions ?? [];
   const { selected, select } = useSelectedVersion(versions);
-  if (!document.data || versions.length === 0 || !selected) return null;
+  const generating =
+    document.data?.generation?.status === "pending" ||
+    document.data?.generation?.status === "running";
+  // A resume generating again hides the old version until the new one lands.
+  if (
+    !document.data ||
+    versions.length === 0 ||
+    !selected ||
+    (generating && document.data.kind === "resume")
+  ) {
+    return null;
+  }
 
   // LinkedIn text: a new version is a generation in another language; the
   // coverage review sits beside the text, in the editor.

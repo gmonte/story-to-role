@@ -133,9 +133,10 @@ export function OpeningView({ openingId }: { openingId: string }) {
   }
 
   const gaps = data.fitCheck?.items.filter((item) => item.gapQuestion) ?? [];
-  const resumeVersions =
-    documents.data?.documents.find((document) => document.kind === "resume")
-      ?.versions ?? [];
+  const resumeDocument = documents.data?.documents.find(
+    (document) => document.kind === "resume"
+  );
+  const resumeVersions = resumeDocument?.versions ?? [];
   const tone =
     documents.data?.application?.tone ?? data.suggestedTone ?? "your_style";
   const tabs = data.status === "analyzed" && (
@@ -176,7 +177,10 @@ export function OpeningView({ openingId }: { openingId: string }) {
             defaultTone={tone}
           />
         ) : (
-          <ResumeWorkspace versions={resumeVersions} />
+          <ResumeWorkspace
+            versions={resumeVersions}
+            generation={resumeDocument?.generation}
+          />
         )}
       </div>
     );

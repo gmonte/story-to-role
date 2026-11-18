@@ -417,11 +417,13 @@ export class DocumentsService {
         dismissedFindings: version.dismissedFindings,
         profile: {
           versionNumber: frozen.profileVersionNumber,
+          // A snapshot from before they carried a version reads the one
+          // published now: "Use version N" pins it.
           newer:
             published &&
-            latest.profileVersionId &&
             published.id !== latest.profileVersionId &&
-            published.number > (frozen.profileVersionNumber ?? 0)
+            (!latest.profileVersionId ||
+              published.number > (frozen.profileVersionNumber ?? 0))
               ? { profileVersionId: published.id, number: published.number }
               : null,
         },

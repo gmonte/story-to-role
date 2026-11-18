@@ -30,10 +30,17 @@ export function printedFields(input: {
     : [];
   const field = (text: string) =>
     active ? translateField(dictionary, text) : text;
-  const languageTerm = (text: string) =>
-    active
-      ? translateField(dictionary, translateLanguageTerm(text, input.language!))
-      : text;
+  // The profile's own entry, written against the original, wins; then the
+  // built-in names and levels, and the dictionary again on their result.
+  const languageTerm = (text: string) => {
+    if (!active) return text;
+    const own = translateField(dictionary, text);
+    if (own !== text) return own;
+    return translateField(
+      dictionary,
+      translateLanguageTerm(text, input.language!)
+    );
+  };
   return {
     active,
     dictionary,
@@ -43,5 +50,21 @@ export function printedFields(input: {
     languageTerm,
     nullableLanguageTerm: (text: string | null) =>
       text === null ? null : languageTerm(text),
+    /**
+     * A Languages line: an entry for the whole line as the profile prints
+     * it (“Inglês (proficiência profissional C1)”) replaces it whole;
+     * otherwise its name and level are printed one by one.
+     */
+    languageLine: (title: string, level: string | null) => {
+      if (active) {
+        const whole = level ? `${title} (${level})` : title;
+        const own = translateField(dictionary, whole);
+        if (own !== whole) return { title: own, level: null };
+      }
+      return {
+        title: languageTerm(title),
+        level: level === null ? null : languageTerm(level),
+      };
+    },
   };
 }

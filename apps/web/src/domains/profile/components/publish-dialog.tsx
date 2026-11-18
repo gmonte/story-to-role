@@ -111,8 +111,14 @@ export function PublishDialog({
     }
   }
 
+  // A new version also changes what documents offer (“Use version N”):
+  // their cached views are read again.
   const refresh = () =>
-    queryClient.invalidateQueries({ queryKey: trpc.profile.pathKey() });
+    Promise.all([
+      queryClient.invalidateQueries({ queryKey: trpc.profile.pathKey() }),
+      queryClient.invalidateQueries({ queryKey: trpc.documents.pathKey() }),
+      queryClient.invalidateQueries({ queryKey: trpc.library.pathKey() }),
+    ]);
 
   async function startValidation() {
     const saved = await saveNow();

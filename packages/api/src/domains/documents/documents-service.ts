@@ -671,13 +671,18 @@ export class DocumentsService {
       const cipher = await getUserCipher(tx, input.userId);
       const contexts = new FrozenContexts(tx, cipher, profile.id);
       const openingId = await contexts.openingOf(document.applicationId);
-      const load = (profileVersionId: string | null) =>
+      // `untranslated`: the version as the profile wrote it, in its own
+      // language (no dictionaries applied).
+      const load = (profileVersionId: string | null, untranslated = false) =>
         contexts.load({
           profileVersionId,
           openingId,
-          language: version.language,
+          language: untranslated ? undefined : version.language,
         });
       const from = await load(latest.profileVersionId);
+      // The same version untranslated: a field a document printed before
+      // translations existed still reads as the profile wrote it.
+      const fromSource = await load(latest.profileVersionId, true);
       const to = await load(published.id);
       const retraced = retraceContent(decryptDocument(cipher, latest), {
         from,
@@ -687,7 +692,7 @@ export class DocumentsService {
       // fields code printed and the user left as printed.
       const content =
         retraced.kind === "resume"
-          ? reprintFields(retraced, to, from)
+          ? reprintFields(retraced, to, from, fromSource)
           : retraced;
       const snapshot = await repository.insertSnapshot({
         versionId: version.id,

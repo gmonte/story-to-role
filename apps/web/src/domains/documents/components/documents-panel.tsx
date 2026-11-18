@@ -1,5 +1,7 @@
 "use client";
 
+import type { ReactNode } from "react";
+
 import { FileText, Plus } from "lucide-react";
 
 import type {
@@ -36,11 +38,14 @@ export function DocumentsPanel({
   defaultLanguage,
   defaultTone,
   pendingGaps,
+  actions,
 }: {
   openingId: string;
   defaultLanguage: OutputLanguage;
   defaultTone: Tone;
   pendingGaps: number;
+  /** The selected version's actions, when the editor is open beside. */
+  actions?: (version: VersionView) => ReactNode;
 }) {
   const t = useTranslation();
   const labels = useDocumentLabels();
@@ -159,6 +164,7 @@ export function DocumentsPanel({
         </ul>
       )}
 
+      {selected && actions?.(selected)}
       {versions.length > 0 && (
         <DownloadZipButton
           openingId={openingId}

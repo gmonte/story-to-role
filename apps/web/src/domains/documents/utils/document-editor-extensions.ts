@@ -1,0 +1,530 @@
+import { Extension, Node, type Editor, type JSONContent } from "@tiptap/core";
+import type { DOMOutputSpec, Node as ProseMirrorNode } from "@tiptap/pm/model";
+import { Plugin, PluginKey, Selection } from "@tiptap/pm/state";
+import StarterKit from "@tiptap/starter-kit";
+
+import { cn } from "@repo/web/lib/utils";
+
+import {
+  allowStructure,
+  ProfileDecorations,
+} from "~/domains/profile/utils/editor-extensions";
+
+import {
+  type DocumentBlock,
+  isEditableBlock,
+  isListBlock,
+  newLineId,
+} from "./document-blocks";
+
+export const blockNodeName = "documentBlock";
+
+type BlockAttrs = {
+  type: DocumentBlock["type"];
+  locked: boolean;
+  lineId: string | null;
+  ownerId: string | null;
+  label: string | null;
+  kind: string | null;
+  subtitle: string | null;
+  period: string | null;
+  note: string | null;
+  credentialId: string | null;
+};
+
+const emptyAttrs: BlockAttrs = {
+  type: "bullet",
+  locked: false,
+  lineId: null,
+  ownerId: null,
+  label: null,
+  kind: null,
+  subtitle: null,
+  period: null,
+  note: null,
+  credentialId: null,
+};
+
+/** The editor's node for a block, with the block's fields as attributes. */
+export function blockToNode(block: DocumentBlock): JSONContent {
+  const text = block.type === "entry" ? block.title : block.text;
+  const attrs: BlockAttrs = {
+    ...emptyAttrs,
+    type: block.type,
+    locked: !isEditableBlock(block),
+    lineId: "lineId" in block ? block.lineId : null,
+    ownerId: "ownerId" in block ? block.ownerId : null,
+    label: block.type === "skill" ? block.label : null,
+    kind: block.type === "sectionTitle" ? block.kind : null,
+    subtitle: block.type === "entry" ? block.subtitle : null,
+    period: block.type === "entry" ? block.period : null,
+    note: block.type === "entry" ? block.note : null,
+    credentialId: block.type === "credential" ? block.credentialId : null,
+  };
+  return {
+    type: blockNodeName,
+    attrs,
+    content: text ? [{ type: "text", text }] : [],
+  };
+}
+
+export function blocksToDoc(blocks: DocumentBlock[]): JSONContent {
+  return { type: "doc", content: blocks.map(blockToNode) };
+}
+
+/** The block a node holds; the text is what the user sees in it. */
+export function nodeToBlock(node: ProseMirrorNode): DocumentBlock {
+  const attrs = node.attrs as BlockAttrs;
+  const text = node.textContent;
+  switch (attrs.type) {
+    case "sectionTitle":
+      return {
+        type: "sectionTitle",
+        kind: attrs.kind as Extract<
+          DocumentBlock,
+          { type: "sectionTitle" }
+        >["kind"],
+        text,
+      };
+    case "summary":
+      return { type: "summary", lineId: attrs.lineId ?? "", text };
+    case "skill":
+      return {
+        type: "skill",
+        lineId: attrs.lineId ?? "",
+        label: attrs.label ?? "",
+        text,
+      };
+    case "entry":
+      return {
+        type: "entry",
+        ownerId: attrs.ownerId ?? "",
+        title: text,
+        subtitle: attrs.subtitle,
+        period: attrs.period,
+        note: attrs.note,
+      };
+    case "bullet":
+      return {
+        type: "bullet",
+        lineId: attrs.lineId ?? "",
+        ownerId: attrs.ownerId ?? "",
+        text,
+      };
+    case "credential":
+      return {
+        type: "credential",
+        credentialId: attrs.credentialId ?? "",
+        text,
+      };
+    case "paragraph":
+      return { type: "paragraph", lineId: attrs.lineId ?? "", text };
+    case "name":
+    case "titleLine":
+    case "contacts":
+    case "greeting":
+    case "closing":
+      return { type: attrs.type, text };
+  }
+}
+
+export function docToBlocks(doc: ProseMirrorNode): DocumentBlock[] {
+  const blocks: DocumentBlock[] = [];
+  doc.forEach((node) => {
+    if (node.type.name === blockNodeName) blocks.push(nodeToBlock(node));
+  });
+  return blocks;
+}
+
+/** Where each top-level node starts, by block index. */
+export function blockPositions(doc: ProseMirrorNode) {
+  const positions: number[] = [];
+  doc.forEach((node, offset) => {
+    if (node.type.name === blockNodeName) positions.push(offset);
+  });
+  return positions;
+}
+
+/** The locked blocks as one string: a change to it is a change to a fact. */
+function lockedSignature(doc: ProseMirrorNode) {
+  const parts: string[] = [];
+  doc.forEach((node) => {
+    if (node.type.name !== blockNodeName) {
+      parts.push("!");
+      return;
+    }
+    const attrs = node.attrs as BlockAttrs;
+    if (attrs.locked) parts.push(JSON.stringify([attrs, node.textContent]));
+  });
+  return parts.join("\n");
+}
+
+const attribute = (name: keyof BlockAttrs) => ({
+  default: emptyAttrs[name],
+  parseHTML: (element: HTMLElement) => {
+    const value = element.getAttribute(`data-${name}`);
+    return name === "locked" ? value === "true" : value;
+  },
+  renderHTML: () => ({}),
+});
+
+/**
+ * One block of the document in its PDF look (resume spec, "Layout"): the
+ * header in the accent color, uppercase section titles over a rule, the
+ * employer bold with the period aligned right and the title in italics,
+ * bullets with a hanging indent. Facts code prints are not editable.
+ */
+export const DocumentBlockNode = Node.create<{
+  // "Included for: {requirement}", in the interface's language.
+  noteLabel: (requirement: string) => string;
+}>({
+  name: blockNodeName,
+  group: "block",
+  content: "text*",
+  defining: true,
+  addOptions() {
+    return { noteLabel: (requirement: string) => requirement };
+  },
+  addAttributes() {
+    return Object.fromEntries(
+      (Object.keys(emptyAttrs) as Array<keyof BlockAttrs>).map((name) => [
+        name,
+        attribute(name),
+      ])
+    );
+  },
+  parseHTML() {
+    return [{ tag: "div[data-document-block]" }];
+  },
+  renderHTML({ node }) {
+    const attrs = node.attrs as BlockAttrs;
+    const base: Record<string, string> = {
+      "data-document-block": attrs.type,
+      ...(attrs.lineId ? { "data-line-id": attrs.lineId } : {}),
+      ...(attrs.ownerId && attrs.type === "entry"
+        ? { "data-position-id": attrs.ownerId }
+        : {}),
+      ...(attrs.locked
+        ? { contenteditable: "false", "data-locked": attrs.type }
+        : {}),
+    };
+    // `0` is the hole the block's text goes in.
+    const block = (className: string, ...rest: Array<DOMOutputSpec | 0>) =>
+      [
+        "div",
+        { ...base, class: className },
+        ...rest,
+      ] as unknown as DOMOutputSpec;
+    switch (attrs.type) {
+      case "name":
+        return block(cn("text-doc-accent text-2xl leading-tight font-bold"), 0);
+      case "titleLine":
+        return block(cn("mt-1 font-semibold"), 0);
+      case "contacts":
+        return block(cn("text-muted-foreground text-xs"), 0);
+      case "sectionTitle":
+        return block(
+          cn(
+            "text-doc-accent border-doc-accent/60 mt-5 mb-1.5 border-b pb-0.5 text-xs font-bold tracking-wide uppercase"
+          ),
+          0
+        );
+      case "summary":
+        return block(cn("text-justify"), 0);
+      case "skill":
+        return block(
+          cn("flex gap-1.5"),
+          [
+            "span",
+            { class: cn("shrink-0 font-semibold"), contenteditable: "false" },
+            `${attrs.label ?? ""}:`,
+          ],
+          [
+            "span",
+            { class: cn("min-w-0 flex-1") },
+            0,
+          ] as unknown as DOMOutputSpec
+        );
+      case "entry": {
+        const children: DOMOutputSpec[] = [
+          [
+            "div",
+            { class: cn("flex items-baseline justify-between gap-2") },
+            ["span", { class: cn("font-bold") }, 0] as unknown as DOMOutputSpec,
+            ...(attrs.period
+              ? [
+                  [
+                    "span",
+                    { class: cn("text-muted-foreground shrink-0 text-xs") },
+                    attrs.period,
+                  ] as DOMOutputSpec,
+                ]
+              : []),
+          ],
+          ...(attrs.subtitle
+            ? [
+                [
+                  "div",
+                  { class: cn("italic") },
+                  attrs.subtitle,
+                ] as DOMOutputSpec,
+              ]
+            : []),
+          ...(attrs.note
+            ? [
+                [
+                  "div",
+                  { class: cn("text-muted-foreground text-xs") },
+                  this.options.noteLabel(attrs.note),
+                ] as DOMOutputSpec,
+              ]
+            : []),
+        ];
+        return block(cn("mt-2.5 flex flex-col"), ...children);
+      }
+      case "bullet":
+        return block(
+          cn(
+            "relative pl-4 before:absolute before:left-1 before:content-['•']"
+          ),
+          0
+        );
+      case "credential":
+        return block(cn("mt-0.5"), 0);
+      case "greeting":
+        return block(cn("mt-6"), 0);
+      case "paragraph":
+        return block(cn("mt-3 text-justify"), 0);
+      case "closing":
+        return block(cn("mt-4"), 0);
+    }
+  },
+});
+
+/** The node under the cursor when it is a block the user may edit. */
+function editableParent(editor: Editor) {
+  const { $from } = editor.state.selection;
+  const node = $from.parent;
+  if (node.type.name !== blockNodeName) return null;
+  const attrs = node.attrs as BlockAttrs;
+  return attrs.locked ? null : { node, attrs, $from };
+}
+
+/**
+ * The keys of the flat blocks: Enter splits a bullet or a paragraph into
+ * a new one (a single line never splits), Backspace at the start of an
+ * empty bullet removes it and never merges two blocks, Delete at the end
+ * never pulls the next block in.
+ */
+export const DocumentKeys = Extension.create({
+  name: "documentKeys",
+  addKeyboardShortcuts() {
+    return {
+      Enter: ({ editor }) => {
+        const parent = editableParent(editor);
+        if (!parent) return true;
+        const { node, attrs, $from } = parent;
+        if (!isListBlock(attrs.type)) return true;
+        return editor.commands.command(({ tr, dispatch }) => {
+          if (dispatch) {
+            tr.split($from.pos, 1, [
+              { type: node.type, attrs: { ...attrs, lineId: newLineId() } },
+            ]);
+            tr.scrollIntoView();
+          }
+          return true;
+        });
+      },
+      "Shift-Enter": () => true,
+      "Mod-Enter": () => true,
+      Backspace: ({ editor }) => {
+        const { $from, empty } = editor.state.selection;
+        if (!empty || $from.parentOffset !== 0) return false;
+        const parent = editableParent(editor);
+        if (!parent) return true;
+        if (!isListBlock(parent.attrs.type) || parent.node.textContent) {
+          return true;
+        }
+        return editor.commands.command(({ tr, dispatch }) => {
+          if (dispatch) {
+            const from = $from.before();
+            tr.delete(from, $from.after());
+            tr.setSelection(Selection.near(tr.doc.resolve(from), -1));
+            tr.scrollIntoView();
+          }
+          return true;
+        });
+      },
+      Delete: ({ editor }) => {
+        const { $from, empty } = editor.state.selection;
+        if (!empty) return false;
+        return $from.parentOffset === $from.parent.content.size;
+      },
+    };
+  },
+});
+
+/**
+ * Pasted text stays plain: several lines pasted in a bullet or a paragraph
+ * become one block each; anywhere else they join into the line.
+ */
+export const DocumentClipboard = Extension.create({
+  name: "documentClipboard",
+  addProseMirrorPlugins() {
+    const editor = this.editor;
+    return [
+      new Plugin({
+        key: new PluginKey("documentClipboard"),
+        props: {
+          handlePaste: (view, event) => {
+            const text = event.clipboardData?.getData("text/plain") ?? "";
+            const parent = editableParent(editor);
+            if (!parent) return true;
+            const lines = text
+              .split(/\r?\n/)
+              .map((line) => line.replace(/^\s*[-•*]\s+/, "").trim())
+              .filter(Boolean);
+            if (!lines.length) return true;
+            const { tr } = view.state;
+            if (!isListBlock(parent.attrs.type) || lines.length === 1) {
+              view.dispatch(tr.insertText(lines.join(" ")).scrollIntoView());
+              return true;
+            }
+            tr.insertText(lines[0]);
+            const type = parent.node.type;
+            let at = tr.selection.$from.after();
+            for (const line of lines.slice(1)) {
+              const node = type.create(
+                { ...parent.attrs, lineId: newLineId() },
+                view.state.schema.text(line)
+              );
+              tr.insert(at, node);
+              at += node.nodeSize;
+            }
+            tr.setSelection(Selection.near(tr.doc.resolve(at), -1));
+            view.dispatch(tr.scrollIntoView());
+            return true;
+          },
+        },
+      }),
+    ];
+  },
+});
+
+/**
+ * The header, the section titles, each position's facts and the
+ * credentials are locked: a change to them is rejected, unless the app
+ * made it on purpose (a reset from the server, a fix, undo).
+ */
+export const DocumentLocked = Extension.create({
+  name: "documentLocked",
+  addProseMirrorPlugins() {
+    return [
+      new Plugin({
+        key: new PluginKey("documentLocked"),
+        filterTransaction: (tr, state) => {
+          if (!tr.docChanged) return true;
+          if (tr.getMeta(allowStructure) || tr.getMeta("history$")) {
+            return true;
+          }
+          return lockedSignature(state.doc) === lockedSignature(tr.doc);
+        },
+      }),
+    ];
+  },
+});
+
+export function documentExtensions(options: {
+  noteLabel: (requirement: string) => string;
+}) {
+  return [
+    StarterKit.configure({
+      blockquote: false,
+      bold: false,
+      bulletList: false,
+      code: false,
+      codeBlock: false,
+      dropcursor: false,
+      gapcursor: false,
+      hardBreak: false,
+      heading: false,
+      horizontalRule: false,
+      italic: false,
+      link: false,
+      listItem: false,
+      listKeymap: false,
+      orderedList: false,
+      paragraph: false,
+      strike: false,
+      trailingNode: false,
+      underline: false,
+    }),
+    DocumentBlockNode.configure(options),
+    DocumentKeys,
+    DocumentClipboard,
+    DocumentLocked,
+    ProfileDecorations,
+  ];
+}
+
+/**
+ * Replaces the whole document (a new official snapshot from the server),
+ * outside the undo history and past the lock.
+ */
+export function resetDocument(editor: Editor, blocks: DocumentBlock[]) {
+  const nodes = (blocksToDoc(blocks).content ?? []).map((json) =>
+    editor.schema.nodeFromJSON(json)
+  );
+  const { doc } = editor.state;
+  editor.view.dispatch(
+    editor.state.tr
+      .replaceWith(0, doc.content.size, nodes)
+      .setMeta(allowStructure, true)
+      .setMeta("addToHistory", false)
+  );
+}
+
+/** Writes new text into one block (a fix), as one undo step. */
+export function replaceBlockText(editor: Editor, index: number, text: string) {
+  const start = blockPositions(editor.state.doc)[index];
+  const node = start === undefined ? null : editor.state.doc.nodeAt(start);
+  if (!node) return;
+  editor.view.dispatch(
+    editor.state.tr
+      .insertText(text, start + 1, start + 1 + node.content.size)
+      .setMeta(allowStructure, true)
+  );
+}
+
+/** Adds an empty bullet after the last block of a position or project. */
+export function appendBullet(editor: Editor, ownerId: string) {
+  const { doc, schema } = editor.state;
+  let at = -1;
+  doc.forEach((node, offset) => {
+    const attrs = node.attrs as BlockAttrs;
+    if (node.type.name === blockNodeName && attrs.ownerId === ownerId) {
+      at = offset + node.nodeSize;
+    }
+  });
+  if (at < 0) return;
+  const node = schema.nodes[blockNodeName].create({
+    ...emptyAttrs,
+    type: "bullet",
+    lineId: newLineId(),
+    ownerId,
+  });
+  const tr = editor.state.tr.insert(at, node);
+  tr.setSelection(Selection.near(tr.doc.resolve(at + 1)));
+  editor.view.dispatch(tr.scrollIntoView());
+  editor.view.focus();
+}
+
+/** Scrolls a block into view without moving the cursor. */
+export function scrollToBlock(editor: Editor, index: number) {
+  const start = blockPositions(editor.state.doc)[index];
+  if (start === undefined) return;
+  const dom = editor.view.nodeDOM(start);
+  if (dom instanceof HTMLElement) {
+    dom.scrollIntoView({ behavior: "smooth", block: "center" });
+  }
+}

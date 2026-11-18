@@ -39,6 +39,11 @@ import { readSuggestionContent } from "@repo/api/domains/profile/suggestions/pro
 import { loadProfileSource } from "./generation/load-profile-source";
 import { AdaptationService } from "./adaptation/adaptation-service";
 import type { CoverageReviewDraft } from "./coverage-review/coverage-review";
+import {
+  coverageFindingKey,
+  withoutDismissedFindings,
+} from "./coverage-review/finding-key";
+import { warningsToConfirm } from "./coverage-review/snapshot-coverage";
 import { LibraryService } from "./library/library-service";
 import { embedStaleVersions } from "./similar/embed-versions";
 import { runAdaptDocument } from "./adaptation/run-adapt-document";
@@ -1157,6 +1162,108 @@ describe("resume generation and snapshots", () => {
       ctx.documents.forOpening({
         userId: stranger.id,
         openingId: ctx.opening.id,
+      })
+    ).rejects.toMatchObject({ code: "NOT_FOUND" });
+  });
+
+  it("ignores a warning per version, which then needs no confirmation to leave", async () => {
+    // The profile writes Globex under a public name; the typed line keeps
+    // the real one, which only warns.
+    const ctx = await setup({
+      markdown: profileMarkdown({
+        rules: ["Public names: Globex → a logistics company"],
+      }),
+    });
+    const line = {
+      text: "Led a team of 5 engineers.",
+      evidence_ids: [ctx.evidence[1].id],
+    };
+    await ctx.generate("quick", { drafts: [ctx.draft([line])], ratings: [9] });
+    const pdfs = new PdfService(ctx.db, new TasksService(ctx.db, ctx.trigger));
+    const userId = ctx.user.id;
+    const view = async () =>
+      (await ctx.documents.forOpening({ userId, openingId: ctx.opening.id }))
+        .documents[0].versions[0];
+    const clean = await view();
+    const entry = experienceOf(clean.content);
+    await ctx.documents.saveEdit({
+      userId,
+      versionId: clean.id,
+      baseSnapshotId: clean.snapshot.id,
+      content: {
+        ...resumeOf(clean.content),
+        sections: resumeOf(clean.content).sections.map((section) =>
+          section.kind === "experience"
+            ? {
+                ...section,
+                entries: [
+                  {
+                    ...entry,
+                    lines: [
+                      ...entry.lines,
+                      {
+                        id: "named",
+                        text: "Kept Globex running.",
+                        origin: { kind: "manual" as const },
+                      },
+                    ],
+                  },
+                ],
+              }
+            : section
+        ),
+      },
+    });
+    const warned = await view();
+    const [finding] = warned.coverage!.findings;
+    expect(finding).toMatchObject({ code: "publicName", lineId: "named" });
+    expect(warned.dismissedFindings).toEqual([]);
+    // A warning asks for confirmation before the PDF.
+    await expect(
+      pdfs.request({ userId, versionId: clean.id })
+    ).rejects.toMatchObject({ message: warningsToConfirm });
+
+    // Ignored, it is remembered by the version and asks nothing.
+    const key = coverageFindingKey(finding);
+    expect(
+      await ctx.documents.setFindingDismissed({
+        userId,
+        versionId: clean.id,
+        findingKey: key,
+        dismissed: true,
+      })
+    ).toEqual({ dismissedFindings: [key] });
+    expect((await view()).dismissedFindings).toEqual([key]);
+    expect(await pdfs.request({ userId, versionId: clean.id })).toEqual({
+      ready: false,
+    });
+    // A blocking finding is never ignored, even under its key.
+    expect(
+      withoutDismissedFindings(
+        [{ code: "figure", text: "x", params: {} }],
+        [coverageFindingKey({ code: "figure", text: "x", params: {} })]
+      )
+    ).toHaveLength(1);
+
+    // Brought back, it asks again; another user never touches it.
+    await ctx.documents.setFindingDismissed({
+      userId,
+      versionId: clean.id,
+      findingKey: key,
+      dismissed: false,
+    });
+    expect((await view()).dismissedFindings).toEqual([]);
+    const stranger = await createTestUser("mallory@example.com");
+    await new CareerService(ctx.db).getOrCreateProfile({
+      userId: stranger.id,
+      defaultLanguage: "en-US",
+    });
+    await expect(
+      ctx.documents.setFindingDismissed({
+        userId: stranger.id,
+        versionId: clean.id,
+        findingKey: key,
+        dismissed: true,
       })
     ).rejects.toMatchObject({ code: "NOT_FOUND" });
   });

@@ -26,6 +26,8 @@ import { documentContentSchema } from "./schemas/document-content";
 import { resumeSectionKindSchema } from "./schemas/resume-content";
 
 const snapshotRef = z.object({ snapshotId: z.uuid() });
+const findingKeySchema = z.string().regex(/^[0-9a-f]{16}$/);
+const dismissedSchema = z.object({ dismissedFindings: z.array(z.string()) });
 
 export const documentsRouter = createTRPCRouter({
   forOpening: userProcedure
@@ -93,6 +95,44 @@ export const documentsRouter = createTRPCRouter({
     .output(snapshotRef)
     .mutation(({ ctx, input }) =>
       new DocumentsService(db).saveEdit({ userId: ctx.userId, ...input })
+    ),
+
+  dismissFinding: userProcedure
+    .meta(
+      openApiMeta(
+        "documents",
+        "POST",
+        "/document-versions/by-id/{versionId}/findings/by-key/{findingKey}/dismiss",
+        "Ignores a warning or a review note of the version"
+      )
+    )
+    .input(z.object({ versionId: z.uuid(), findingKey: findingKeySchema }))
+    .output(dismissedSchema)
+    .mutation(({ ctx, input }) =>
+      new DocumentsService(db).setFindingDismissed({
+        userId: ctx.userId,
+        dismissed: true,
+        ...input,
+      })
+    ),
+
+  restoreFinding: userProcedure
+    .meta(
+      openApiMeta(
+        "documents",
+        "DELETE",
+        "/document-versions/by-id/{versionId}/findings/by-key/{findingKey}/dismiss",
+        "Brings back an ignored finding of the version"
+      )
+    )
+    .input(z.object({ versionId: z.uuid(), findingKey: findingKeySchema }))
+    .output(dismissedSchema)
+    .mutation(({ ctx, input }) =>
+      new DocumentsService(db).setFindingDismissed({
+        userId: ctx.userId,
+        dismissed: false,
+        ...input,
+      })
     ),
 
   undo: userProcedure

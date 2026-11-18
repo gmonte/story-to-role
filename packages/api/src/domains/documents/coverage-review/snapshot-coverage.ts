@@ -24,6 +24,7 @@ import { decryptDocument } from "../snapshot-content";
 import { linkedinAsResume } from "../linkedin/linkedin-resume";
 import { checkDocument } from "./check-document";
 import { checkLetter } from "./check-letter";
+import { withoutDismissedFindings } from "./finding-key";
 import { isWarningFinding } from "./warning-codes";
 
 type Snapshot = NonNullable<
@@ -241,7 +242,13 @@ export async function assertSendable(input: {
   cipher: UserCipher;
   profileId: string;
   document: Document;
-  version: { id: string; documentId: string; language: OutputLanguage };
+  version: {
+    id: string;
+    documentId: string;
+    language: OutputLanguage;
+    // Warnings the user ignored in the editor need no confirmation.
+    dismissedFindings?: string[];
+  };
   snapshot: Pick<Snapshot, "id" | "encryptedContent" | "profileVersionId">;
   // Shared by the caller when it checks several documents at once.
   contexts?: FrozenContexts;
@@ -261,7 +268,11 @@ export async function assertSendable(input: {
       message: "The document has coverage findings to fix before it can leave.",
     });
   }
-  if (findings.length > 0 && !input.acknowledgeWarnings) {
+  const open = withoutDismissedFindings(
+    findings,
+    input.version.dismissedFindings ?? []
+  );
+  if (open.length > 0 && !input.acknowledgeWarnings) {
     throw new TRPCError({
       code: "PRECONDITION_FAILED",
       message: warningsToConfirm,

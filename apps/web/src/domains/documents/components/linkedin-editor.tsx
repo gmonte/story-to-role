@@ -29,7 +29,7 @@ import { WarningsDialog } from "./warnings-dialog";
 import { CoverageReviewBlock } from "./coverage-review";
 import { EditableText } from "./editing";
 import { LinkedinDialog } from "./linkedin-dialog";
-import { type TraceIndex, TracedLine } from "./resume-editor";
+import { type TraceIndex, TracedLine } from "./line-trace";
 import { hasFindings, hasWarnings } from "../utils/version-checks";
 import { VersionHistorySheet } from "./version-history-sheet";
 

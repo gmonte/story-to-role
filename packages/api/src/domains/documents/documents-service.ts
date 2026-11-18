@@ -80,6 +80,9 @@ import type {
 
 const notFound = () => new TRPCError({ code: "NOT_FOUND" });
 
+// Ignored findings a version remembers; the oldest keys fall off.
+const maxDismissedFindings = 200;
+
 type TraceSource = Awaited<ReturnType<DocumentsService["traceSource"]>>;
 
 /**
@@ -393,6 +396,7 @@ export class DocumentsService {
           findings: coverage.findings,
           context: frozen,
         }),
+        dismissedFindings: version.dismissedFindings,
         outdated: outdated.get(version.id) ?? [],
         titleProposals: isResume
           ? trace.titleProposalsFor(content, version.language)
@@ -755,6 +759,36 @@ export class DocumentsService {
         ...resumeLinkOf(latest),
       });
       return { snapshotId: snapshot.id };
+    });
+  }
+
+  /**
+   * Ignores (or brings back) a finding of the version by its key (resume
+   * spec, "Document workspace"): a warning or a review note, stored as a
+   * hash the editor computes again from the finding's own words.
+   */
+  async setFindingDismissed(input: {
+    userId: string;
+    versionId: string;
+    findingKey: string;
+    dismissed: boolean;
+  }) {
+    return this.db.transaction(async (tx) => {
+      const repository = new DocumentsRepository(tx);
+      const { version } = await requireUserVersion(
+        tx,
+        input.userId,
+        input.versionId,
+        { lock: true }
+      );
+      const others = version.dismissedFindings.filter(
+        (key) => key !== input.findingKey
+      );
+      const dismissedFindings = input.dismissed
+        ? [...others, input.findingKey].slice(-maxDismissedFindings)
+        : others;
+      await repository.updateVersion(version.id, { dismissedFindings });
+      return { dismissedFindings };
     });
   }
 

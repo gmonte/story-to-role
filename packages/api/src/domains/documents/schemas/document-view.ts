@@ -169,6 +169,9 @@ export const versionViewSchema = z.object({
   ),
   // A resume's or a cover letter's coverage review.
   coverage: coverageViewSchema.nullable(),
+  // Keys of the findings the user ignored in this version
+  // (`coverageFindingKey`, `reviewNoteKey`): warnings and review notes.
+  dismissedFindings: z.array(z.string()),
   // Linked versions with changes this one has not received (language sync).
   outdated: z.array(
     z.object({

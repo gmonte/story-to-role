@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Send } from "lucide-react";
@@ -19,7 +19,7 @@ import type { Tone } from "@repo/api/domains/openings/schemas/opening";
 
 import { AiAtWork } from "~/domains/workspace/components/ai-at-work";
 import { VoiceInputButton } from "~/domains/career/components/voice-input-button";
-import { CoverLetterEditor } from "~/domains/documents/components/cover-letter-editor";
+import { CoverLetterWorkspace } from "~/domains/documents/components/cover-letter-workspace";
 import {
   chosenStory,
   LetterStoryPicker,
@@ -86,42 +86,54 @@ export function CoverLetterPrep({
     letter?.versions.length &&
     (data.status === "finished" || data.status === "skipped")
   ) {
-    return (
-      <CoverLetterEditor
-        openingId={openingId}
-        document={letter}
-        resumeVersions={resumeVersions}
-        defaultTone={defaultTone}
-      />
-    );
+    return <CoverLetterWorkspace document={letter} />;
   }
   if (!data.status || data.status === "failed") {
     return (
-      <MotivationStart
-        openingId={openingId}
-        failed={data.status === "failed"}
-      />
+      <Prep>
+        <MotivationStart
+          openingId={openingId}
+          failed={data.status === "failed"}
+        />
+      </Prep>
     );
   }
   if (data.status === "skipped") {
     return (
-      <div className="flex flex-col gap-4">
-        <Skipped openingId={openingId} />
-        {writeLetter}
-      </div>
+      <Prep>
+        <div className="flex flex-col gap-4">
+          <Skipped openingId={openingId} />
+          {writeLetter}
+        </div>
+      </Prep>
     );
   }
   if (data.status === "in_progress") {
-    return <Interview openingId={openingId} motivation={data} />;
+    return (
+      <Prep>
+        <Interview openingId={openingId} motivation={data} />
+      </Prep>
+    );
   }
   return (
-    <div className="flex flex-col gap-6">
-      <PointsReview
-        key={data.points.map((point) => `${point.id}:${point.status}`).join()}
-        openingId={openingId}
-        motivation={data}
-      />
-      {!data.points.some((point) => point.status === "draft") && writeLetter}
+    <Prep>
+      <div className="flex flex-col gap-6">
+        <PointsReview
+          key={data.points.map((point) => `${point.id}:${point.status}`).join()}
+          openingId={openingId}
+          motivation={data}
+        />
+        {!data.points.some((point) => point.status === "draft") && writeLetter}
+      </div>
+    </Prep>
+  );
+}
+
+/** The steps before the letter, read in the column's width. */
+function Prep({ children }: { children: ReactNode }) {
+  return (
+    <div className="min-h-0 flex-1 overflow-y-auto">
+      <div className="mx-auto w-full max-w-3xl p-6">{children}</div>
     </div>
   );
 }

@@ -311,8 +311,16 @@ export type EditorDecorationSpec =
       finding?: string;
       key: string;
     }
-  // A whole block (a line a suggestion would replace).
-  | { kind: "node"; from: number; to: number; className: string; key: string }
+  // A whole block (a line a suggestion would replace, an entry a finding
+  // is about).
+  | {
+      kind: "node";
+      from: number;
+      to: number;
+      className: string;
+      finding?: string;
+      key: string;
+    }
   | {
       kind: "widget";
       at: number;
@@ -375,7 +383,9 @@ export function setDecorations(editor: Editor, specs: EditorDecorationSpec[]) {
         Decoration.node(
           spec.from,
           spec.to,
-          { class: spec.className },
+          spec.finding
+            ? { class: spec.className, "data-finding": spec.finding }
+            : { class: spec.className },
           { key: spec.key }
         ),
       ];

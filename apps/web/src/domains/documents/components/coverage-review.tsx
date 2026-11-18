@@ -26,7 +26,7 @@ import { useTRPC } from "~/tools/trpc/client";
 
 import { focusDocumentLine } from "../utils/focus-line";
 import { oldestWithBullets } from "../utils/version-checks";
-import { ProfilePassage } from "./resume-editor";
+import { ProfilePassage } from "./line-trace";
 
 type Finding = CoverageView["findings"][number];
 
@@ -105,7 +105,7 @@ function FindingItem({
   finding: Finding;
   version: VersionView;
 }) {
-  const text = useFindingText(finding, version);
+  const text = useFindingLabel()(finding, version);
   const anchored = finding.lineId !== null || finding.positionId !== null;
   return anchored ? (
     <button
@@ -121,8 +121,17 @@ function FindingItem({
 }
 
 /** The wording of a finding, from its code and what the check recorded. */
-function useFindingText(finding: Finding, version: VersionView) {
+export function useFindingLabel() {
   const t = useTranslation();
+  return (finding: Finding, version: VersionView) =>
+    findingText(t, finding, version);
+}
+
+function findingText(
+  t: ReturnType<typeof useTranslation>,
+  finding: Finding,
+  version: VersionView
+) {
   const { text, params } = finding;
   const str = (key: string) => String(params[key] ?? "");
   switch (finding.code) {

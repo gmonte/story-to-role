@@ -36,6 +36,7 @@ import {
 import {
   findingKey,
   reviewNoteKey,
+  findingKeys,
   withoutDismissed,
 } from "@repo/api/domains/profile/truth/finding-key";
 import {
@@ -317,7 +318,12 @@ export function ProfileEditorProvider({
   );
   const setIgnored = (finding: ProfileFinding, ignore: boolean) => {
     if (finding.kind === "format") return;
-    setKeyIgnored(findingKey(finding, blocks), ignore);
+    if (ignore) setKeyIgnored(findingKey(finding, blocks), true);
+    // An older key may hold it too.
+    else
+      findingKeys(finding, blocks)
+        .filter((key) => dismissed.includes(key))
+        .forEach((key) => setKeyIgnored(key, false));
   };
   const setKeyIgnored = (key: string, ignore: boolean) => {
     setDismissed((keys) =>

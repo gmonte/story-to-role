@@ -66,16 +66,34 @@ export function sha256Hex(text: string) {
 }
 
 /**
- * The key a dismissed finding is stored under: the code, the text of the
- * line it is on and its params. Editing the line changes the key, so the
- * finding comes back, as intended. Shared by the browser and the server.
+ * The key a dismissed finding is stored under: the code, the text the
+ * finding covers (the term, the figure, the dates) and its params, not the
+ * whole line, so editing elsewhere in a long line keeps it ignored; changing
+ * that text brings it back. Shared by the browser and the server.
  */
 export function findingKey(finding: ProfileFinding, blocks: ProfileBlock[]) {
+  const span =
+    finding.line === null
+      ? ""
+      : (blocks[finding.line]?.text.slice(finding.from, finding.to).trim() ??
+        "");
+  return sha256Hex(
+    `${finding.code} | span: ${span} | ${JSON.stringify(finding.params ?? {})}`
+  ).slice(0, 16);
+}
+
+/** The key of findings ignored before keys stopped using the whole line. */
+function lineKey(finding: ProfileFinding, blocks: ProfileBlock[]) {
   const line =
     finding.line === null ? "" : (blocks[finding.line]?.text.trim() ?? "");
   return sha256Hex(
     `${finding.code} | ${line} | ${JSON.stringify(finding.params ?? {})}`
   ).slice(0, 16);
+}
+
+/** Every key a finding may be stored under (restoring removes them all). */
+export function findingKeys(finding: ProfileFinding, blocks: ProfileBlock[]) {
+  return [findingKey(finding, blocks), lineKey(finding, blocks)];
 }
 
 /**
@@ -96,6 +114,7 @@ export function withoutDismissed(
   const hidden = new Set(dismissed);
   return findings.filter(
     (finding) =>
-      finding.kind === "format" || !hidden.has(findingKey(finding, blocks))
+      finding.kind === "format" ||
+      !findingKeys(finding, blocks).some((key) => hidden.has(key))
   );
 }

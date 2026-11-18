@@ -6,6 +6,8 @@ import { useTranslation } from "@repo/intl/use-translation";
 import { Button } from "@repo/web/components/ui/button";
 
 import { ApplicationTracker } from "~/domains/applications/components/application-tracker";
+import { DocumentAgent } from "~/domains/documents/components/document-agent";
+import { DocumentAgentProvider } from "~/domains/documents/components/document-agent-context";
 import {
   DocumentSidePanel,
   useVersionRowLabel,
@@ -31,11 +33,13 @@ import { OpeningView } from "./opening-view";
  */
 export function OpeningBody({ openingId }: { openingId: string }) {
   return (
-    <WorkspaceBody
-      layoutId="opening"
-      chat={<OpeningView openingId={openingId} />}
-      panel={<OpeningPanel openingId={openingId} />}
-    />
+    <DocumentAgentProvider>
+      <WorkspaceBody
+        layoutId="opening"
+        chat={<OpeningView openingId={openingId} />}
+        panel={<OpeningPanel openingId={openingId} />}
+      />
+    </DocumentAgentProvider>
   );
 }
 
@@ -59,11 +63,18 @@ function OpeningPanel({ openingId }: { openingId: string }) {
     documents.data?.application?.tone ?? data?.suggestedTone ?? "your_style";
   const tracker = <ApplicationTracker openingId={openingId} />;
 
-  if (analyzed && view === "resume" && resumeSelection.selected) {
+  if (analyzed && view === "resume" && resume && resumeSelection.selected) {
     return (
-      <div className="flex flex-col gap-6">
+      <div className="flex h-full flex-col gap-6">
         <DocumentSidePanel
           version={resumeSelection.selected}
+          agent={
+            <DocumentAgent
+              documentId={resume.id}
+              kind="resume"
+              version={resumeSelection.selected}
+            />
+          }
           versions={
             <DocumentsPanel
               openingId={openingId}
@@ -96,9 +107,16 @@ function OpeningPanel({ openingId }: { openingId: string }) {
   }
   if (analyzed && view === "letter" && letter && letterSelection.selected) {
     return (
-      <div className="flex flex-col gap-6">
+      <div className="flex h-full flex-col gap-6">
         <DocumentSidePanel
           version={letterSelection.selected}
+          agent={
+            <DocumentAgent
+              documentId={letter.id}
+              kind="cover_letter"
+              version={letterSelection.selected}
+            />
+          }
           versions={
             <VersionsBlock
               document={letter}

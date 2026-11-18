@@ -1,48 +1,37 @@
 "use client";
 
-import { useEffect, useRef, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState } from "react";
 
-import { useChat } from "@ai-sdk/react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import {
-  useChatActions,
-  useTriggerChatTransport,
-} from "@trigger.dev/sdk/chat/react";
+import { useChatActions } from "@trigger.dev/sdk/chat/react";
 import type { UIMessage } from "ai";
-import {
-  ArrowUp,
-  Loader2,
-  MessageSquarePlus,
-  Paperclip,
-  Quote,
-  Sparkles,
-  Square,
-  X,
-} from "lucide-react";
+import { Loader2, Paperclip, Sparkles } from "lucide-react";
 
-import {
-  composeAgentMessage,
-  splitAgentMessage,
-} from "@repo/api/domains/profile/agent/agent-message";
-import { agentSettings } from "@repo/api/domains/profile/agent/agent-settings";
+import { composeAgentMessage } from "@repo/api/domains/agents/agent-message";
+import { agentSettings } from "@repo/api/domains/agents/agent-settings";
 import type { profileAgent } from "@repo/api/domains/profile/tasks/profile-agent";
 import { listParts } from "@repo/api/domains/profile/truth/suggestions";
 import { useTranslation } from "@repo/intl/use-translation";
 import { Button } from "@repo/web/components/ui/button";
 import { toast } from "@repo/web/components/ui/sonner";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@repo/web/components/ui/dialog";
-import { cn } from "@repo/web/lib/utils";
-import { Textarea } from "@repo/web/components/ui/textarea";
 
+import { loadAgentChat } from "~/domains/agents/actions/agent-chat-actions";
+import {
+  ActivityRow,
+  AgentComposer,
+  AttachmentCard,
+  ErrorRow,
+  FailedRow,
+  NewConversationBar,
+  QuoteCard,
+  UserMessage,
+  withStored,
+} from "~/domains/agents/components/agent-conversation";
+import {
+  useAgentChat,
+  type ChatSession,
+} from "~/domains/agents/hooks/use-agent-chat";
 import { SourceImportStatus } from "~/domains/career/components/source-import-status";
-import { VoiceInputButton } from "~/domains/career/components/voice-input-button";
 import {
   useRefreshCareer,
   useTimeline,
@@ -51,29 +40,14 @@ import {
   sourceAccept,
   useSourceUpload,
 } from "~/domains/career/hooks/use-source-upload";
-import { CreditCost } from "~/domains/credits/components/credit-cost";
 import { useCredits } from "~/domains/credits/hooks/use-credits";
 import { useTRPC } from "~/tools/trpc/client";
 
-import {
-  loadProfileChat,
-  mintProfileChatToken,
-  recoverProfileChatRun,
-  startNewProfileChat,
-  startProfileChatSession,
-} from "../actions/profile-agent-actions";
-import { useAnswerWatchdog } from "../hooks/use-answer-watchdog";
-import {
-  decideClearKey,
-  initialCommandMenu,
-  isClearCommand,
-  matchingCommands,
-  reduceCommandMenu,
-} from "../utils/chat-command";
 import { topmostNewSuggestion } from "../utils/topmost-new-suggestion";
 import { maxQuoteCharacters, useProfileEditor } from "./profile-editor-context";
 
-type ChatSession = { publicAccessToken: string; lastEventId?: string };
+const subject = { kind: "profile" } as const;
+const queryKey = ["profile-chat"];
 
 /**
  * The profile agent, beside the document (profile spec, "The agent"): the
@@ -86,8 +60,8 @@ export function ProfileAgent() {
   // elsewhere is only in the stored transcript, and useChat reads its
   // messages once, on mount.
   const loaded = useQuery({
-    queryKey: ["profile-chat"],
-    queryFn: () => loadProfileChat(),
+    queryKey,
+    queryFn: () => loadAgentChat(subject),
     staleTime: Infinity,
     gcTime: 0,
   });
@@ -149,11 +123,6 @@ function Conversation({
     scrollToLine,
   } = useProfileEditor();
   const [text, setText] = useState("");
-  const [confirmingNew, setConfirmingNew] = useState(false);
-  // /clear was sent once: a second Enter confirms, any other key cancels.
-  const [clearArmed, setClearArmed] = useState(false);
-  const [menu, setMenu] = useState(initialCommandMenu);
-  const [startingNew, setStartingNew] = useState(false);
   const [turnDone, setTurnDone] = useState(0);
   // The suggestions there were when the turn began.
   const knownIds = useRef<Set<string>>(new Set());
@@ -165,30 +134,30 @@ function Conversation({
     if (focusOnMount) input.current?.focus();
   }, [focusOnMount]);
   const quote = agentTopic?.quote ?? null;
-  const attachmentLabel = useAttachmentLabel();
   const attachment = agentTopic?.attachment ?? null;
 
-  const transport = useTriggerChatTransport<typeof profileAgent>({
-    task: "profile_agent",
-    accessToken: (session) => mintProfileChatToken(session.chatId),
-    startSession: (session) =>
-      startProfileChatSession({ chatId: session.chatId }),
-    // A session under way: reconnect to it instead of starting one.
-    sessions: session ? { [chatId]: session } : undefined,
-  });
   const {
     messages,
     sendMessage,
-    regenerate,
     setMessages,
     status,
     error,
     stop,
-  } = useChat({
-    id: chatId,
-    messages: initialMessages,
-    transport,
-    resume: initialMessages.length > 0,
+    busy,
+    failed,
+    watchdog,
+    resend,
+    startNew,
+    startingNew,
+    last,
+    streamingText,
+  } = useAgentChat<typeof profileAgent>({
+    task: "profile_agent",
+    subject,
+    queryKey,
+    chatId,
+    initialMessages,
+    session,
     onData: (part) => {
       // A suggestion was just proposed: it shows in the text at once.
       if (part.type === "data-suggestion") void refreshSuggestions();
@@ -201,7 +170,6 @@ function Conversation({
       void queryClient.invalidateQueries({ queryKey: trpc.credits.pathKey() });
     },
   });
-  const busy = status === "submitted" || status === "streaming";
   useEffect(() => {
     if (busy) {
       knownIds.current = new Set(latestSuggestions.current.map((s) => s.id));
@@ -256,7 +224,7 @@ function Conversation({
     void sendAction({ type: "catch_up" }).finally(async () => {
       // The stored transcript catches up what the stream may have missed;
       // what the stream showed stays, as the store may not have it yet.
-      const stored = (await loadProfileChat()).messages;
+      const stored = (await loadAgentChat(subject)).messages;
       setMessages((current) => withStored(current, stored));
       // The sources say it was said before another request may go.
       await refreshCareer();
@@ -277,66 +245,27 @@ function Conversation({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [topicId]);
 
-  // An answer that never starts (the run holding the session died, say):
-  // the run is cancelled and the same message goes again, once; if that is
-  // not answered either, the user is asked instead of looping.
-  const resend = async () => {
-    await recoverProfileChatRun({ chatId });
-    await stop();
-    // Same message, same id: the agent doesn't take it twice.
-    await regenerate();
-  };
-  const watchdog = useAnswerWatchdog({
-    status,
-    timeoutMs: agentSettings.answerStartTimeoutMs,
-    recover: resend,
-  });
-  const failed = watchdog.phase === "failed";
-  useEffect(() => {
-    if (failed) void stop();
-  }, [failed, stop]);
-
   useEffect(() => {
     bottom.current?.scrollIntoView({ block: "end" });
   }, [messages, status]);
 
-  // The conversation's messages are deleted; the new chat's id remounts
-  // the conversation, so its messages, composer and transport start over.
-  async function startNew() {
-    // Optimistic: the conversation empties at once; the new chat's id comes
-    // right after and remounts it.
-    const previous = messages;
-    setStartingNew(true);
-    setMessages([]);
-    clearAgentQuote();
-    clearAgentAttachment();
-    setText("");
-    setConfirmingNew(false);
+  async function restart() {
     try {
-      await stop();
-      const fresh = await startNewProfileChat();
-      queryClient.setQueryData(["profile-chat"], {
-        ...fresh,
-        replaced: true,
+      await startNew(() => {
+        clearAgentQuote();
+        clearAgentAttachment();
+        setText("");
       });
     } catch {
-      setMessages(previous);
       toast.error(
         t.formatMessage({
           defaultMessage: "The conversation couldn't be restarted. Try again.",
         })
       );
-    } finally {
-      setStartingNew(false);
     }
   }
 
   async function send(words: string) {
-    // The command starts a new conversation; the agent never sees it.
-    if (isClearCommand(words)) {
-      setClearArmed(true);
-      return;
-    }
     // An attachment alone is a question: how to resolve it.
     if ((!words.trim() && !attachment) || busy) return;
     watchdog.reset();
@@ -355,11 +284,6 @@ function Conversation({
     setText("");
     clearAgentQuote();
     clearAgentAttachment();
-  }
-
-  function onSubmit(event: FormEvent) {
-    event.preventDefault();
-    void send(text);
   }
 
   // The import's cost shows where the file is attached, too.
@@ -381,7 +305,6 @@ function Conversation({
       ?.title.replace(/\s*\(.*\)$/, "") ?? "";
 
   // What the agent is doing right now, in words: never a still label.
-  const last = messages.at(-1);
   const running =
     last?.role === "assistant"
       ? last.parts
@@ -406,60 +329,18 @@ function Conversation({
     : last?.id.startsWith("catch-up-")
       ? t.formatMessage({ defaultMessage: "Summing up what the file added…" })
       : t.formatMessage({ defaultMessage: "Thinking…" });
-  const streamingText =
-    status === "streaming" &&
-    last?.role === "assistant" &&
-    last.parts.at(-1)?.type === "text";
-
-  const commands = clearArmed ? [] : matchingCommands(text);
-  const menuOpen = commands.length > 0 && !menu.closed;
-  const activeIndex = Math.min(menu.index, Math.max(commands.length - 1, 0));
-  const optionId = (command: string) => `profile-command-${command.slice(1)}`;
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      {messages.length > 0 && (
-        <div className="flex justify-end border-b px-3 py-1.5">
-          <Button
-            type="button"
-            size="sm"
-            variant="ghost"
-            className="text-muted-foreground"
-            onClick={() => setConfirmingNew(true)}
-          >
-            <MessageSquarePlus />
-            {t.formatMessage({ defaultMessage: "New conversation" })}
-          </Button>
-        </div>
-      )}
-      <Dialog open={confirmingNew} onOpenChange={setConfirmingNew}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>
-              {t.formatMessage({ defaultMessage: "Start a new conversation?" })}
-            </DialogTitle>
-            <DialogDescription>
-              {t.formatMessage({
-                defaultMessage:
-                  "The questions and answers of this conversation will be deleted. Everything already in your profile stays: the accepted changes and the suggestions still waiting for your answer in the text.",
-              })}
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button
-              variant="outline"
-              disabled={startingNew}
-              onClick={() => setConfirmingNew(false)}
-            >
-              {t.formatMessage({ defaultMessage: "Cancel" })}
-            </Button>
-            <Button disabled={startingNew} onClick={() => void startNew()}>
-              {startingNew && <Loader2 className="animate-spin" />}
-              {t.formatMessage({ defaultMessage: "New conversation" })}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <NewConversationBar
+        show={messages.length > 0}
+        starting={startingNew}
+        description={t.formatMessage({
+          defaultMessage:
+            "The questions and answers of this conversation will be deleted. Everything already in your profile stays: the accepted changes and the suggestions still waiting for your answer in the text.",
+        })}
+        onConfirm={() => void restart()}
+      />
       <div className="min-h-0 flex-1 overflow-y-auto">
         <ol className="flex flex-col gap-3 p-4">
           {messages.length === 0 && (
@@ -473,7 +354,7 @@ function Conversation({
               <UserMessage
                 key={message.id}
                 message={message}
-                partTitle={partTitle}
+                from={partTitle}
               />
             ) : message.parts.length === 0 ? null : (
               <li key={message.id} className="flex flex-col gap-2 self-start">
@@ -529,338 +410,108 @@ function Conversation({
             </li>
           ))}
           {busy && !streamingText && (
-            <li
-              role="status"
-              className="text-muted-foreground flex items-center gap-2 self-start text-sm"
-            >
-              <Sparkles className="text-primary size-4 motion-safe:animate-pulse" />
-              <span className="from-foreground via-muted-foreground to-foreground motion-safe:animate-shimmer bg-linear-to-r bg-[length:200%_100%] bg-clip-text text-transparent">
-                {watchdog.phase === "recovering"
-                  ? t.formatMessage({
-                      defaultMessage: "Reconnecting to the agent…",
-                    })
-                  : activity}
-              </span>
-            </li>
+            <ActivityRow phase={watchdog.phase} activity={activity} />
           )}
           {failed && (
-            <li
-              role="alert"
-              className="text-destructive flex flex-col items-start gap-2 self-start text-sm"
-            >
-              {t.formatMessage({
-                defaultMessage:
-                  "The agent didn't answer. Check your connection and try again.",
-              })}
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => {
-                  watchdog.reset();
-                  void resend().catch(() => watchdog.fail());
-                }}
-              >
-                {t.formatMessage({ defaultMessage: "Try again" })}
-              </Button>
-            </li>
+            <FailedRow
+              onRetry={() => {
+                watchdog.reset();
+                void resend().catch(() => watchdog.fail());
+              }}
+            />
           )}
-          {error && !failed && (
-            // The agent's own message is English-only; this one is the
-            // user's language.
-            <li className="text-destructive self-start text-sm">
-              {t.formatMessage({
-                defaultMessage:
-                  "Something went wrong with this answer. Please send it again.",
-              })}
-            </li>
-          )}
+          {error && !failed && <ErrorRow />}
         </ol>
         <div ref={bottom} />
       </div>
 
-      <form onSubmit={onSubmit} className="border-t p-3">
-        <input
-          ref={fileInput}
-          type="file"
-          accept={sourceAccept}
-          multiple
-          hidden
-          onChange={(event) => {
-            add(Array.from(event.target.files ?? []));
-            event.target.value = "";
-          }}
-        />
-        {credits.data?.nearReserve && (
-          <p className="mb-2 text-xs text-amber-600">
-            {t.formatMessage({
-              defaultMessage:
-                "Your credits are close to the reserve kept for your resume.",
-            })}
-          </p>
-        )}
-        {quote && (
-          <div className="bg-muted/60 mb-2 flex items-start gap-2 rounded-md border px-2.5 py-1.5 text-xs">
-            <Quote className="text-muted-foreground mt-0.5 size-3.5 shrink-0" />
-            <span className="min-w-0 flex-1">
-              {agentTopic?.part && (
-                <span className="text-muted-foreground block font-medium">
-                  {partTitle(agentTopic.part)}
-                </span>
-              )}
-              <span className="line-clamp-3 whitespace-pre-wrap">{quote}</span>
-            </span>
-            <button
-              type="button"
-              aria-label={t.formatMessage({
-                defaultMessage: "Talk about the whole profile instead",
-              })}
-              onClick={clearAgentQuote}
-              className="text-muted-foreground hover:text-foreground"
-            >
-              <X className="size-3.5" />
-            </button>
-          </div>
-        )}
-        {attachment && (
-          <div className="bg-muted/60 mb-2 flex items-start gap-2 rounded-md border px-2.5 py-1.5 text-xs">
-            <Sparkles className="text-muted-foreground mt-0.5 size-3.5 shrink-0" />
-            <span className="min-w-0 flex-1">
-              <span className="text-muted-foreground block font-medium">
-                {attachmentLabel(attachment.kind)}
-              </span>
-              <span className="text-muted-foreground line-clamp-3 whitespace-pre-wrap">
-                {attachment.text}
-              </span>
-            </span>
-            <button
-              type="button"
-              aria-label={t.formatMessage({
-                defaultMessage: "Remove the attachment",
-              })}
-              onClick={clearAgentAttachment}
-              className="text-muted-foreground hover:text-foreground"
-            >
-              <X className="size-3.5" />
-            </button>
-          </div>
-        )}
-        {menuOpen && (
-          <ul
-            id="profile-command-list"
-            role="listbox"
-            className="bg-background mb-2 rounded-md border text-xs shadow-sm"
-          >
-            {commands.map((command, index) => (
-              <li
-                key={command}
-                id={optionId(command)}
-                role="option"
-                aria-selected={index === activeIndex}
-                onMouseEnter={() => setMenu((m) => ({ ...m, index }))}
-                onMouseDown={(event) => event.preventDefault()}
-                onClick={() => {
-                  setText(command);
-                  input.current?.focus();
-                }}
-                className={cn(
-                  "flex w-full cursor-pointer items-baseline gap-2 px-2.5 py-1.5 text-left",
-                  index === activeIndex && "bg-muted"
-                )}
-              >
-                <span className="font-mono font-medium">{command}</span>
-                <span className="text-muted-foreground">
-                  {t.formatMessage({
-                    defaultMessage: "Start a new conversation",
-                  })}
-                </span>
-              </li>
-            ))}
-          </ul>
-        )}
-        {clearArmed && (
-          <p className="text-muted-foreground mb-1.5 text-xs">
-            {t.formatMessage({
-              defaultMessage:
-                "Press Enter again to delete this conversation. Any other key cancels.",
-            })}
-          </p>
-        )}
-        <div className="bg-background flex flex-col rounded-xl border shadow-sm">
-          <Textarea
-            ref={input}
-            rows={2}
-            value={text}
-            // The quote travels in the message: the two share its limit.
-            maxLength={
-              agentSettings.maxMessageCharacters - maxQuoteCharacters - 100
-            }
-            role="combobox"
-            aria-expanded={menuOpen}
-            aria-controls="profile-command-list"
-            aria-autocomplete="list"
-            aria-activedescendant={
-              menuOpen ? optionId(commands[activeIndex]) : undefined
-            }
-            onChange={(event) => {
-              setClearArmed(false);
-              setMenu(initialCommandMenu);
-              setText(event.target.value);
-            }}
-            onBlur={() => {
-              if (!clearArmed) return;
-              setClearArmed(false);
-              setText("");
-            }}
-            onKeyDown={(event) => {
-              const nav = reduceCommandMenu(menu, event.key, commands);
-              if (nav.handled) {
-                event.preventDefault();
-                setMenu(nav.state);
-                if (nav.pick) {
-                  setText(nav.pick.command);
-                  if (nav.pick.run) void send(nav.pick.command);
+      <input
+        ref={fileInput}
+        type="file"
+        accept={sourceAccept}
+        multiple
+        hidden
+        onChange={(event) => {
+          add(Array.from(event.target.files ?? []));
+          event.target.value = "";
+        }}
+      />
+      <AgentComposer
+        id="profile"
+        inputRef={input}
+        text={text}
+        setText={setText}
+        onSend={(words) => void send(words)}
+        onStartNew={() => void restart()}
+        busy={busy}
+        canSend={!!text.trim()}
+        onStop={() => void stop()}
+        cost={credits.data?.estimates.agentMessage}
+        nearReserve={credits.data?.nearReserve}
+        // The quote travels in the message: the two share its limit.
+        maxLength={
+          agentSettings.maxMessageCharacters - maxQuoteCharacters - 100
+        }
+        placeholder={
+          attachment
+            ? t.formatMessage({
+                defaultMessage: "What do you want to do about it?",
+              })
+            : quote
+              ? t.formatMessage({ defaultMessage: "What about this passage?" })
+              : t.formatMessage({
+                  defaultMessage: "Tell what you did, or ask where to start",
+                })
+        }
+        cards={
+          <>
+            {quote && (
+              <QuoteCard
+                title={
+                  agentTopic?.part ? partTitle(agentTopic.part) : undefined
                 }
-                return;
-              }
-              const decision = decideClearKey(
-                clearArmed && isClearCommand(text),
-                event.key,
-                event.shiftKey
-              );
-              if (decision === "confirm") {
-                event.preventDefault();
-                setClearArmed(false);
-                void startNew();
-              } else if (decision === "cancel") {
-                // The key is not swallowed: it types into the emptied box.
-                setClearArmed(false);
-                setText("");
-              } else if (decision === "send") onSubmit(event);
-            }}
-            placeholder={
-              attachment
-                ? t.formatMessage({
-                    defaultMessage: "What do you want to do about it?",
-                  })
-                : quote
-                  ? t.formatMessage({
-                      defaultMessage: "What about this passage?",
-                    })
-                  : t.formatMessage({
-                      defaultMessage:
-                        "Tell what you did, or ask where to start",
-                    })
-            }
-            className="max-h-40 resize-none border-0 shadow-none focus-visible:ring-0"
-          />
-          {/* Below the text, not over it: a long message scrolls clear of it. */}
-          <div className="flex items-center gap-1 pr-2 pb-2 pl-3">
-            <CreditCost credits={credits.data?.estimates.agentMessage} />
-            {messages.length > 0 && (
-              <button
-                type="button"
-                disabled={busy}
-                onClick={() => void send(interviewRequest)}
-                className="text-muted-foreground hover:text-foreground mr-auto ml-2 text-xs underline-offset-2 hover:underline disabled:opacity-50"
-              >
-                {t.formatMessage({ defaultMessage: "Interview me" })}
-              </button>
+                quote={quote}
+                removeLabel={t.formatMessage({
+                  defaultMessage: "Talk about the whole profile instead",
+                })}
+                onRemove={clearAgentQuote}
+              />
             )}
-            <span className="mr-auto" />
-            <Button
+            {attachment && (
+              <AttachmentCard
+                attachment={attachment}
+                onRemove={clearAgentAttachment}
+              />
+            )}
+          </>
+        }
+        actionsStart={
+          messages.length > 0 && (
+            <button
               type="button"
-              size="icon"
-              variant="ghost"
-              className="size-8"
-              aria-label={attachLabel}
-              title={attachLabel}
-              onClick={() => fileInput.current?.click()}
+              disabled={busy}
+              onClick={() => void send(interviewRequest)}
+              className="text-muted-foreground hover:text-foreground mr-auto ml-2 text-xs underline-offset-2 hover:underline disabled:opacity-50"
             >
-              <Paperclip />
-            </Button>
-            <VoiceInputButton
-              language={t.locale === "pt-BR" ? "pt-BR" : "en-US"}
-              value={text}
-              onValueChange={setText}
-            />
-            {busy ? (
-              // Stops the answer being written; what was said so far stays.
-              <Button
-                type="button"
-                size="icon"
-                className="size-8 rounded-full"
-                aria-label={t.formatMessage({ defaultMessage: "Stop" })}
-                title={t.formatMessage({ defaultMessage: "Stop" })}
-                onClick={() => void stop()}
-              >
-                <Square className="size-3 fill-current" />
-              </Button>
-            ) : (
-              <Button
-                type="submit"
-                size="icon"
-                disabled={!text.trim()}
-                className="size-8 rounded-full"
-                aria-label={t.formatMessage({ defaultMessage: "Send" })}
-              >
-                <ArrowUp />
-              </Button>
-            )}
-          </div>
-        </div>
-      </form>
+              {t.formatMessage({ defaultMessage: "Interview me" })}
+            </button>
+          )
+        }
+        actionsEnd={
+          <Button
+            type="button"
+            size="icon"
+            variant="ghost"
+            className="size-8"
+            aria-label={attachLabel}
+            title={attachLabel}
+            onClick={() => fileInput.current?.click()}
+          >
+            <Paperclip />
+          </Button>
+        }
+      />
     </div>
-  );
-}
-
-/** What an attachment is called, by its kind. */
-function useAttachmentLabel() {
-  const t = useTranslation();
-  return (kind: "finding" | "review") =>
-    kind === "finding"
-      ? t.formatMessage({
-          defaultMessage: "Finding",
-          description: "Label of a linter finding attached to a chat message",
-        })
-      : t.formatMessage({
-          defaultMessage: "Review",
-          description: "Label of a quality-review note attached to a message",
-        });
-}
-
-/** The user's message: the passage it is about, where from, then their words. */
-function UserMessage({
-  message,
-  partTitle,
-}: {
-  message: UIMessage;
-  partTitle: (key: string | undefined) => string;
-}) {
-  const { quote, part, attachment, text } = splitAgentMessage(
-    message.parts
-      .flatMap((piece) => (piece.type === "text" ? [piece.text] : []))
-      .join("")
-  );
-  const attachmentLabel = useAttachmentLabel();
-  const from = part ? partTitle(part) : "";
-  return (
-    <li className="bg-muted max-w-[90%] self-end rounded-2xl px-3.5 py-2 text-sm whitespace-pre-wrap">
-      {quote && (
-        <span className="text-muted-foreground mb-1 block border-l-2 pl-2 text-xs">
-          {from && <span className="block font-medium">{from}</span>}
-          <span className="line-clamp-3">{quote}</span>
-        </span>
-      )}
-      {attachment && (
-        <span className="text-muted-foreground mb-1 block border-l-2 pl-2 text-xs">
-          <span className="block font-medium">
-            {attachmentLabel(attachment.kind)}
-          </span>
-          <span className="line-clamp-3">{attachment.text}</span>
-        </span>
-      )}
-      {text}
-    </li>
   );
 }
 
@@ -895,19 +546,4 @@ function Introduction({
       </Button>
     </li>
   );
-}
-
-/**
- * The stored messages, then the local ones the store doesn't have yet (just
- * streamed, saved a moment later); an empty one the answer never filled
- * goes.
- */
-function withStored(local: UIMessage[], stored: UIMessage[]) {
-  const ids = new Set(stored.map((message) => message.id));
-  return [
-    ...stored,
-    ...local.filter(
-      (message) => !ids.has(message.id) && message.parts.length > 0
-    ),
-  ];
 }

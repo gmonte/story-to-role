@@ -1,5 +1,6 @@
 import { z } from "zod";
 
+import { bulletFormatRule } from "../writing/bullet-format";
 import { draftLine } from "../generation/assemble-resume";
 import type { GenerationSettings } from "../schemas/generation-settings";
 
@@ -47,6 +48,7 @@ export function linkedinPrompt(material: string, settings: GenerationSettings) {
     `- experience: for each position, bullets: up to ${settings.bulletsRecent} for a recent position and ${settings.bulletsOlder} for an older one, leaner than a resume's, put first the strongest. Each bullet cites, in evidence_ids, lines of its own position only; a bullet without any is deleted.`,
     `- ${veryOld}`,
     `- projects: for each project listed in the material (personal or side work, never a position), bullets like a position's by its age (${settings.bulletsRecent} recent, ${settings.bulletsOlder} older), each citing only lines of its own project; code prints the name, dates and link. Never write a project as a position.`,
+    bulletFormatRule,
     "- A figure appears only when the line it cites shows it; a line carrying any other number is deleted. A result with “[figure withheld]” is told as a qualitative one.",
     "- Never write employers, titles or dates: code prints them. No headline, no list of skills, no hashtags.",
     "- Invent nothing: no technology, figure, certification or responsibility the profile doesn't state. Never claim what a position says the person did not do, nor a competency only studied, nor what the communication rules forbid.",

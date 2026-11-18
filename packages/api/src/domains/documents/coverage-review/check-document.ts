@@ -15,7 +15,8 @@ import {
   experienceAge,
   type GenerationSettings,
 } from "../schemas/generation-settings";
-import type { LineOrigin } from "../schemas/document";
+import type { LineOrigin, OutputLanguage } from "../schemas/document";
+import { checkBulletShape } from "../writing/bullet-format";
 import type { ExperienceEntry, ResumeContent } from "../schemas/resume-content";
 
 /**
@@ -52,6 +53,10 @@ export const coverageFindingCodes = [
   "veryOld",
   // A cover letter has more paragraphs than the settings allow.
   "paragraphs",
+  // A resume or LinkedIn bullet that is off the product's bullet format in
+  // a way code can tell (a bare list of technologies, too long, or opening
+  // with “Responsible for” or a noun). Ignorable, never blocking.
+  "bulletShape",
 ] as const;
 export type CoverageFindingCode = (typeof coverageFindingCodes)[number];
 
@@ -161,6 +166,8 @@ export function checkDocument(input: {
   purposes: Purpose[];
   // The opening's title, which code prints on the title line as written.
   targetTitle?: string | null;
+  // The document's output language, for the bullet shape check.
+  language?: OutputLanguage;
   // The rendered PDF's measured pages. Without a file there is no finding:
   // an estimate is too rough to point out (the editor warns on it instead).
   pages?: number | null;
@@ -334,6 +341,27 @@ export function checkDocument(input: {
     for (const denied of deniedNames(line.positionId)) {
       if (mentions(line.text, denied.name)) {
         findings.push(lineFinding(line, "notDone", denied));
+      }
+    }
+  }
+
+  for (const section of content.sections) {
+    if (section.kind !== "experience" && section.kind !== "projects") continue;
+    for (const entry of section.entries) {
+      const positionId = "positionId" in entry ? entry.positionId : null;
+      for (const bullet of entry.lines) {
+        const problems = checkBulletShape(
+          bullet.text,
+          input.language ?? "en-US"
+        );
+        if (!problems.length) continue;
+        findings.push({
+          code: "bulletShape",
+          lineId: bullet.id,
+          positionId,
+          text: bullet.text,
+          params: { problems: problems.join(",") },
+        });
       }
     }
   }

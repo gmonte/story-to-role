@@ -201,6 +201,7 @@ export async function snapshotCoverage(input: {
           today: input.today ?? new Date().toISOString().slice(0, 7),
           purposes: [],
           targetTitle: null,
+          language: input.version.language,
           pages: null,
         })
       : content.kind === "cover_letter"
@@ -223,6 +224,7 @@ export async function snapshotCoverage(input: {
             today: input.today ?? new Date().toISOString().slice(0, 7),
             purposes,
             targetTitle: brief.focus ? null : brief.title,
+            language: input.version.language,
             pages: rendered?.pages ?? null,
           });
   return { context, findings };

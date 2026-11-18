@@ -1,8 +1,18 @@
+import { isWarningFinding } from "@repo/api/domains/documents/coverage-review/warning-codes";
 import type { VersionView } from "@repo/api/domains/documents/schemas/document-view";
 
 /** Whether the version's official snapshot has findings that block it. */
 export const hasFindings = (version: VersionView) =>
-  (version.coverage?.findings.length ?? 0) > 0;
+  (version.coverage?.findings ?? []).some(
+    (finding) => !isWarningFinding(finding)
+  );
+
+/**
+ * Whether it has only warnings (a real name a public name should have
+ * replaced): it can leave once the user confirms.
+ */
+export const hasWarnings = (version: VersionView) =>
+  !hasFindings(version) && (version.coverage?.findings.length ?? 0) > 0;
 
 /** Where trimming costs least: the oldest position that still has bullets. */
 export function oldestWithBullets(version: VersionView) {

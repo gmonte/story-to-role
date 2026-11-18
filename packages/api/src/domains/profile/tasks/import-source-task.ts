@@ -20,7 +20,12 @@ export const importSourceTask = task({
       async ({ userId, subjectId, reportProgress }) => {
         if (!subjectId) throw new Error(`Task ${taskId} has no source`);
         try {
-          const { ai, cipher } = await createTaskAi({ db, userId, taskId });
+          const { ai, cipher } = await createTaskAi({
+            db,
+            userId,
+            taskId,
+            applyCommunicationRules: false,
+          });
           const outcome = await runImportSource({
             db,
             ai,

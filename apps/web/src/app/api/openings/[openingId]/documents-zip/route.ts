@@ -1,3 +1,5 @@
+import type { NextRequest } from "next/server";
+
 import { PdfService } from "@repo/api/domains/documents/rendering/pdf-service";
 import { db } from "@repo/api/tools/db";
 import { logger } from "@repo/common/tools/logger";
@@ -6,7 +8,7 @@ import { currentUserId, fileResponse } from "../../../documents/download";
 
 /** The application's ZIP, once every version's PDF is rendered (409 before). */
 export async function GET(
-  _request: Request,
+  request: NextRequest,
   { params }: { params: Promise<{ openingId: string }> }
 ) {
   const userId = await currentUserId();
@@ -16,6 +18,8 @@ export async function GET(
     const file = await new PdfService(db).readApplicationZip({
       userId,
       openingId,
+      acknowledgeWarnings:
+        request.nextUrl.searchParams.get("acknowledge") === "1",
     });
     if (!file) return new Response(null, { status: 409 });
     return fileResponse({

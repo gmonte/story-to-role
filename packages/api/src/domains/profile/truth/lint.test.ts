@@ -59,10 +59,6 @@ const valid = `# Perfil
 
 - Nunca incluir: Projeto Fênix
 - Nunca afirmar: liderança de pessoas
-
-## Adendos (detalhes lembrados depois)
-
-- 2026-09-21: rotinas SQL agendadas [sem número].
 `;
 
 function codes(findings: ProfileFinding[]) {
@@ -83,6 +79,21 @@ describe("the profile linter", () => {
       const findings = lintProfile(profileTemplate(language));
       expect(findings.filter((f) => f.kind === "format")).toEqual([]);
     }
+  });
+
+  it("has no Addenda in a new profile, and flags an item under it", () => {
+    for (const language of ["pt-BR", "en-US"] as const) {
+      const markdown = serializeBlocks(profileTemplate(language));
+      expect(markdown).not.toMatch(/adendos|addenda/i);
+    }
+    const findings = lint(
+      `${valid}\n## Adendos (detalhes lembrados depois)\n\n- 2026-09-21: rotinas SQL agendadas [sem número].\n`
+    );
+    expect(codes(findings)).toEqual(["addendumToPlace"]);
+    expect(findings[0].kind).toBe("content");
+    expect(lint(`${valid}\n## Addenda (details remembered later)\n`)).toEqual(
+      []
+    );
   });
 
   it("marks a missing section and a section out of order", () => {
@@ -199,6 +210,19 @@ describe("the profile linter", () => {
     expect(missing?.params).toEqual({ name: "Docker" });
   });
 
+  it("accepts an occasional competency an experience uses", () => {
+    const markdown = valid
+      .replace(
+        "- Uso com frequência: PostgreSQL\n",
+        "- Uso com frequência: PostgreSQL\n- Experiência pontual: Redis\n"
+      )
+      .replace(
+        "- Tecnologias: Python, PostgreSQL\n",
+        "- Tecnologias: Python, PostgreSQL, Redis\n"
+      );
+    expect(codes(lint(markdown))).toEqual(codes(lint(valid)));
+  });
+
   it("marks a studied competency used in an experience", () => {
     const markdown = valid.replace(
       "- Tecnologias: Python\n",
@@ -207,14 +231,23 @@ describe("the profile linter", () => {
     expect(codes(lint(markdown))).toContain("studiedUsed");
   });
 
-  it("marks a “never include” term found in the text", () => {
+  it("never flags a “never include” term in the profile itself", () => {
     const markdown = valid.replace(
       "- Contexto: time de 8 pessoas.",
       "- Contexto: time de 8 pessoas no Projeto Fênix."
     );
+    expect(codes(lint(markdown))).toEqual([]);
+  });
+
+  it("marks a half-written public names entry, as a content finding", () => {
+    const markdown = valid.replace(
+      "- Nunca incluir: Projeto Fênix",
+      "- Nunca incluir: Projeto Fênix\n- Nomes públicos: Banco X →; Projeto Fênix → plataforma de pagamentos"
+    );
     const findings = lint(markdown);
-    expect(codes(findings)).toEqual(["neverInclude"]);
-    expect(findings[0].params).toEqual({ term: "Projeto Fênix" });
+    expect(codes(findings)).toEqual(["publicNameFormat"]);
+    expect(findings[0].kind).toBe("content");
+    expect(findings[0].params).toEqual({ entry: "Banco X →" });
   });
 
   it("never blocks publishing over a mark written another way", () => {
@@ -223,24 +256,6 @@ describe("the profile linter", () => {
       "[Sem número].\n- O que"
     );
     expect(lint(markdown).map((f) => f.kind)).toEqual(["content"]);
-  });
-
-  it("checks long “never include” terms and marks them where they are", () => {
-    const markdown = valid
-      .replace(
-        "- Nunca incluir: Projeto Fênix",
-        "- Nunca incluir: dados pessoais fora da seção Contato"
-      )
-      .replace(
-        "- Contexto: time de 8 pessoas.",
-        "- Contexto: dados pessoais fora da seção Contato."
-      );
-    const [found] = lint(markdown);
-    expect(found.code).toBe("neverInclude");
-    const line = parseBlocks(markdown)[found.line!].text;
-    expect(line.slice(found.from, found.to)).toBe(
-      "dados pessoais fora da seção Contato"
-    );
   });
 
   it("inserts missing sections and reorders them with Fix format", () => {

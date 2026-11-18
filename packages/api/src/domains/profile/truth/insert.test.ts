@@ -40,7 +40,7 @@ describe("the insert menu", () => {
     expect(lintProfile(next).filter((f) => f.kind === "format")).toEqual([]);
   });
 
-  it("writes education, certifications, languages and addenda in format", () => {
+  it("writes education, certifications, and languages in format", () => {
     let blocks = profileTemplate("en-US");
     for (const entry of [
       {
@@ -58,11 +58,6 @@ describe("the insert menu", () => {
         expiredOn: "2026-01",
       },
       { kind: "language", language: "Portuguese", level: "native" },
-      {
-        kind: "addendum",
-        date: "2026-11-17",
-        text: "ran the on-call [no number]",
-      },
     ] as const) {
       blocks = insertEntry(blocks, entry).blocks;
     }
@@ -72,7 +67,6 @@ describe("the insert menu", () => {
     );
     expect(markdown).toContain("- AWS — Amazon — 2023-01 — expired in 2026-01");
     expect(markdown).toContain("## Languages\n\n- Portuguese — native");
-    expect(markdown).toContain("- 2026-11-17: ran the on-call [no number]");
     expect(lintProfile(blocks).filter((f) => f.kind === "format")).toEqual([]);
   });
 
@@ -88,7 +82,9 @@ describe("the insert menu", () => {
     expect(markdown).toContain("- Domino: Python, SQL\n");
     expect(
       insert(markdown, { kind: "rule", rule: "neverClaim", text: "liderança" })
-    ).toContain("- Nunca afirmar: liderança\n");
+    ).toContain(
+      "- Nunca afirmar: números que não estejam marcados como [medido] ou [estimado], liderança\n"
+    );
   });
 
   it("creates a missing section where it belongs", () => {
@@ -112,6 +108,46 @@ describe("the insert menu", () => {
       )
     ).toBe(
       "## Competências\n\n- Domino: Python, SQL\n- Uso com frequência: Docker\n"
+    );
+  });
+
+  it("moves a competency to occasional experience", () => {
+    const markdown =
+      "## Competências\n\n- Domino: Python\n- Uso com frequência: SQL, Docker\n";
+    const out = serializeBlocks(
+      setCompetencyLevel(parseBlocks(markdown), "Docker", "occasional")
+    );
+    expect(out).toContain("- Uso com frequência: SQL\n");
+    expect(out).toContain("- Experiência pontual: Docker");
+  });
+  it("adds a public name to the dictionary, inline or as a sub-item", () => {
+    const base = `# Perfil\n\n## Regras de comunicação\n\n- Nunca afirmar: liderança`;
+    const created = insert(base, {
+      kind: "rule",
+      rule: "publicName",
+      original: "Instabov",
+      public: "plataforma de gado",
+    });
+    expect(created).toContain(
+      "- Nomes públicos:\n  - Instabov → plataforma de gado"
+    );
+    const listed = insert(created, {
+      kind: "rule",
+      rule: "publicName",
+      original: "Chief",
+      public: "chat de IA",
+    });
+    expect(listed).toContain(
+      "  - Instabov → plataforma de gado\n  - Chief → chat de IA"
+    );
+    const inline = insert(`${base}\n- Nomes públicos: Banco X → banco`, {
+      kind: "rule",
+      rule: "publicName",
+      original: "Chief",
+      public: "chat de IA",
+    });
+    expect(inline).toContain(
+      "- Nomes públicos: Banco X → banco; Chief → chat de IA"
     );
   });
 });

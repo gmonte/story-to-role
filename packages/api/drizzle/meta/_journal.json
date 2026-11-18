@@ -92,6 +92,20 @@
       "when": 1794961616687,
       "tag": "0012_remove_leftover_career_tables",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1794968013264,
+      "tag": "0013_add_occasional_level_added_at",
+      "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1794974554710,
+      "tag": "0014_add_dismissed_findings",
+      "breakpoints": true
     }
   ]
 }

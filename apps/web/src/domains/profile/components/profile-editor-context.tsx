@@ -9,11 +9,13 @@ import {
   useRef,
   useState,
   type ReactNode,
+  type RefObject,
 } from "react";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEditor, type Editor } from "@tiptap/react";
 
+import type { AgentAttachment } from "@repo/api/domains/profile/agent/agent-message";
 import { useTranslation } from "@repo/intl/use-translation";
 import {
   parseBlocks,
@@ -22,15 +24,29 @@ import {
 } from "@repo/api/domains/profile/truth/blocks";
 import { fixFormat, fixFinding } from "@repo/api/domains/profile/truth/fix";
 import {
+  quickActionsFor,
+  type QuickAction,
+} from "@repo/api/domains/profile/truth/quick-fix";
+import {
   insertEntry,
   setCompetencyLevel,
   type ProfileEntry,
+  type ProfileEntryKind,
 } from "@repo/api/domains/profile/truth/insert";
+import {
+  findingKey,
+  reviewNoteKey,
+  findingKeys,
+  withoutDismissed,
+} from "@repo/api/domains/profile/truth/finding-key";
 import {
   lintProfile,
   type ProfileFinding,
 } from "@repo/api/domains/profile/truth/lint";
-import type { CompetencyLevel } from "@repo/api/domains/profile/truth/sections";
+import type {
+  CompetencyLevel,
+  ProfileSectionKey,
+} from "@repo/api/domains/profile/truth/sections";
 import {
   readStructure,
   type ProfileStructure,
@@ -39,11 +55,14 @@ import {
   applyChange,
   listParts,
   locateChange,
+  parseFragment,
 } from "@repo/api/domains/profile/truth/suggestions";
 import type {
   ProfileDraft,
   ProfileSuggestion,
 } from "@repo/api/domains/profile/schemas/profile";
+import { buttonVariants } from "@repo/web/components/ui/button";
+import { cn } from "@repo/web/lib/utils";
 import { toast } from "@repo/web/components/ui/sonner";
 
 import { useTRPC } from "~/tools/trpc/client";
@@ -57,12 +76,15 @@ import {
 } from "../hooks/use-profile-validation";
 import { blockPositions, blocksToDoc, docToBlocks } from "../utils/editor-doc";
 import {
+  allowStructure,
   focusNodeEnd,
   profileExtensions,
   setDecorations,
   type EditorDecorationSpec,
+  editorScrollMargins,
 } from "../utils/editor-extensions";
 import { suggestionWidget } from "../utils/suggestion-widget";
+import { lineDiff } from "../utils/word-diff";
 
 // The most of a passage a message quotes.
 export const maxQuoteCharacters = 1500;
@@ -70,11 +92,19 @@ export const maxQuoteCharacters = 1500;
 // Lint runs after the user pauses this long, not on every keystroke.
 const lintDelayMs = 150;
 
+// A scroll the editor didn't ask for waits out typing this recent.
+const typingQuietMs = 2000;
+
 type ProfileEditorState = {
   editor: Editor | null;
   blocks: ProfileBlock[];
   structure: ProfileStructure;
+  // The findings that count: the ignored content ones are left out.
   findings: ProfileFinding[];
+  /** Content findings the user ignored, kept apart so they can be restored. */
+  ignored: ProfileFinding[];
+  ignoreFinding: (finding: ProfileFinding) => void;
+  restoreFinding: (finding: ProfileFinding) => void;
   saveStatus: SaveStatus;
   draft: ProfileDraft;
   markdown: () => string;
@@ -83,23 +113,44 @@ type ProfileEditorState = {
   revision: () => number;
   resetTo: (next: { markdown: string; revision: number }) => void;
   insert: (entry: ProfileEntry) => void;
+  // Set by the document: opens its dialog to write an entry of that kind.
+  entryOpenerRef: RefObject<((kind: ProfileEntryKind) => void) | null>;
   fix: (finding: ProfileFinding) => void;
+  /** The one-click edits a finding offers, none when it has no such edit. */
+  quickActions: (finding: ProfileFinding) => QuickAction[];
+  /** Applies one of them as a single undo step and goes to its line. */
+  // `goTo`: puts the cursor on the changed line, scrolling to it; from the
+  // findings list, not from the card over the text being read.
+  applyQuickAction: (action: QuickAction, options?: { goTo?: boolean }) => void;
   fixWholeFormat: () => void;
   goToLine: (line: number, range?: { from: number; to: number }) => void;
   // The last validation's findings, where their passages are now.
   reviewFindings: LocatedReviewFinding[];
+  /** Review notes the user ignored, kept apart so they can be restored. */
+  ignoredReviewFindings: LocatedReviewFinding[];
+  ignoreReviewFinding: (note: LocatedReviewFinding) => void;
+  restoreReviewFinding: (note: LocatedReviewFinding) => void;
+  refreshDismissed: () => Promise<void>;
   applyCompetencyLevel: (name: string, level: CompetencyLevel) => void;
   // The suggestions waiting, with the lines each would replace now (null
   // when its lines were edited away).
   suggestions: LocatedSuggestion[];
   acceptSuggestions: (profileSuggestionIds?: string[]) => void;
   rejectSuggestions: (profileSuggestionIds?: string[]) => void;
-  refreshSuggestions: () => void;
-  // What the agent's composer is about: a passage, and words to start from.
+  refreshSuggestions: () => Promise<void>;
+  // Smoothly scrolls a line into view without moving the cursor or focus;
+  // skipped while the user is typing in the editor.
+  scrollToLine: (line: number) => void;
+  // What the agent's composer is about: a passage, and a finding or review.
   agentTopic: AgentTopic | null;
   // `line` is where the passage starts, which tells its part.
-  talkAbout: (topic: { quote: string; line: number; text?: string }) => void;
+  talkAbout: (topic: {
+    quote: string;
+    line: number;
+    attachment?: AgentAttachment;
+  }) => void;
   clearAgentQuote: () => void;
+  clearAgentAttachment: () => void;
 };
 
 export type LocatedSuggestion = ProfileSuggestion & {
@@ -112,7 +163,8 @@ export type AgentTopic = {
   quote: string | null;
   // The key of the part of the profile the passage is in.
   part: string | null;
-  text: string;
+  // The finding or review being discussed, shown apart from the words.
+  attachment: AgentAttachment | null;
 };
 
 const ProfileEditorContext = createContext<ProfileEditorState | null>(null);
@@ -136,7 +188,13 @@ function sameBlocks(a: ProfileBlock[], b: ProfileBlock[]) {
  * insert is a single undo step and the rest of the text (and the cursor)
  * stays put.
  */
-function applyBlocks(editor: Editor, next: ProfileBlock[]) {
+// `scroll`: brings the cursor into view after the change; off for an edit
+// made from where the user is reading.
+function applyBlocks(
+  editor: Editor,
+  next: ProfileBlock[],
+  { scroll = true }: { scroll?: boolean } = {}
+) {
   const { doc } = editor.state;
   const current = docToBlocks(doc);
   const positions = blockPositions(doc);
@@ -165,7 +223,10 @@ function applyBlocks(editor: Editor, next: ProfileBlock[]) {
       editor.schema.nodeFromJSON(json)
     );
     editor.view.dispatch(
-      editor.state.tr.replaceWith(0, doc.content.size, nodes).scrollIntoView()
+      editor.state.tr
+        .replaceWith(0, doc.content.size, nodes)
+        .setMeta(allowStructure, true)
+        .scrollIntoView()
     );
     return;
   }
@@ -178,10 +239,21 @@ function applyBlocks(editor: Editor, next: ProfileBlock[]) {
   const fragment = next.slice(start, endNext).length
     ? nodes.map((json) => editor.schema.nodeFromJSON(json))
     : [];
-  editor.view.dispatch(
-    editor.state.tr.replaceWith(from, to, fragment).scrollIntoView()
-  );
+  const tr = editor.state.tr
+    .replaceWith(from, to, fragment)
+    .setMeta(allowStructure, true);
+  editor.view.dispatch(scroll ? tr.scrollIntoView() : tr);
 }
+
+const entryOfSection: Partial<Record<ProfileSectionKey, ProfileEntryKind>> = {
+  experience: "experience",
+  education: "education",
+  certifications: "certification",
+  languages: "language",
+  competencies: "competency",
+  gaps: "gap",
+  rules: "rule",
+};
 
 const labelHint = /^([^:(]*)(\([^)]*\))\s*:/;
 
@@ -195,10 +267,14 @@ export function ProfileEditorProvider({
   const t = useTranslation();
   const trpc = useTRPC();
   const queryClient = useQueryClient();
-  const { findingMessage, sectionHints } = useProfileLabels();
+  const { sectionHints, entryLabels } = useProfileLabels();
+  const entryOpenerRef = useRef<((kind: ProfileEntryKind) => void) | null>(
+    null
+  );
   const autosave = useDraftAutosave(draft);
   const [blocks, setBlocks] = useState(() => parseBlocks(draft.markdown));
   const lintTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const lastEditAt = useRef(0);
 
   const editor = useEditor({
     extensions: profileExtensions(),
@@ -209,9 +285,11 @@ export function ProfileEditorProvider({
         class: "profile-editor focus:outline-none",
         spellcheck: "true",
       },
+      ...editorScrollMargins,
     },
     onUpdate: ({ editor: current, transaction }) => {
       if (!transaction.docChanged) return;
+      lastEditAt.current = Date.now();
       clearTimeout(lintTimer.current);
       lintTimer.current = setTimeout(() => {
         const next = docToBlocks(current.state.doc);
@@ -222,12 +300,68 @@ export function ProfileEditorProvider({
   });
 
   const structure = useMemo(() => readStructure(blocks), [blocks]);
-  const findings = useMemo(() => lintProfile(blocks), [blocks]);
-  const validation = useLatestValidation();
-  const reviewFindings = useMemo(
-    () => locateReviewFindings(validation.data?.report, blocks),
-    [validation.data, blocks]
+  // Optimistic: the keys change here first, then the server records them.
+  const [dismissed, setDismissed] = useState(draft.dismissedFindings);
+  const { findings, ignored } = useMemo(() => {
+    const all = lintProfile(blocks);
+    const kept = withoutDismissed(all, blocks, dismissed);
+    return {
+      findings: kept,
+      ignored: all.filter((finding) => !kept.includes(finding)),
+    };
+  }, [blocks, dismissed]);
+  const { mutate: dismissOnServer } = useMutation(
+    trpc.profile.dismissFinding.mutationOptions()
   );
+  const { mutate: restoreOnServer } = useMutation(
+    trpc.profile.restoreFinding.mutationOptions()
+  );
+  const setIgnored = (finding: ProfileFinding, ignore: boolean) => {
+    if (finding.kind === "format") return;
+    if (ignore) setKeyIgnored(findingKey(finding, blocks), true);
+    // An older key may hold it too.
+    else
+      findingKeys(finding, blocks)
+        .filter((key) => dismissed.includes(key))
+        .forEach((key) => setKeyIgnored(key, false));
+  };
+  const setKeyIgnored = (key: string, ignore: boolean) => {
+    setDismissed((keys) =>
+      ignore
+        ? [...keys.filter((existing) => existing !== key), key]
+        : keys.filter((existing) => existing !== key)
+    );
+    const revert = () =>
+      setDismissed((keys) =>
+        ignore ? keys.filter((existing) => existing !== key) : [...keys, key]
+      );
+    (ignore ? dismissOnServer : restoreOnServer)(
+      { findingKey: key, kind: "profile" },
+      { onError: revert }
+    );
+  };
+  const validation = useLatestValidation();
+  // Review notes are ignored by their own key, in the same list.
+  const { reviewFindings, ignoredReviewFindings } = useMemo(() => {
+    const all = locateReviewFindings(validation.data?.report, blocks);
+    const hidden = new Set(dismissed);
+    return {
+      reviewFindings: all.filter((note) => !hidden.has(reviewNoteKey(note))),
+      ignoredReviewFindings: all.filter((note) =>
+        hidden.has(reviewNoteKey(note))
+      ),
+    };
+  }, [validation.data, blocks, dismissed]);
+  const setReviewIgnored = (note: LocatedReviewFinding, ignore: boolean) =>
+    setKeyIgnored(reviewNoteKey(note), ignore);
+  // The agent ignored a note: the draft's keys are read again.
+  const refreshDismissed = async () => {
+    const fresh = await queryClient.fetchQuery({
+      ...trpc.profile.draft.queryOptions({ kind: "profile" }),
+      staleTime: 0,
+    });
+    setDismissed(fresh.dismissedFindings);
+  };
 
   const suggestionsQuery = useQuery(trpc.profile.suggestions.queryOptions({}));
   const suggestions = useMemo<LocatedSuggestion[]>(
@@ -245,10 +379,15 @@ export function ProfileEditorProvider({
   // The widgets in the text call the latest handlers.
   const suggestionHandlers = useRef<{
     accept: (profileSuggestionId: string) => void;
+    both: (profileSuggestionId: string) => void;
     reject: (profileSuggestionId: string) => void;
   } | null>(null);
   const suggestionLabels = {
     accept: t.formatMessage({ defaultMessage: "Accept" }),
+    both: t.formatMessage({
+      defaultMessage: "Keep both",
+      description: "Keeps the old lines and adds the suggested ones after them",
+    }),
     reject: t.formatMessage({ defaultMessage: "Reject" }),
     removal: t.formatMessage({ defaultMessage: "Remove the lines above" }),
   };
@@ -270,7 +409,7 @@ export function ProfileEditorProvider({
         from: Math.min(start + finding.from, end),
         to: Math.min(start + Math.max(finding.to, finding.from + 1), end),
         className: `profile-finding profile-finding-${finding.kind}`,
-        title: findingMessage(finding, structure.language),
+        finding: `finding-${index}`,
         key: `finding-${index}`,
       });
     });
@@ -281,7 +420,7 @@ export function ProfileEditorProvider({
         from: start + finding.from,
         to: start + finding.to,
         className: "profile-finding profile-finding-review",
-        title: finding.message,
+        finding: `review-${index}`,
         key: `review-${index}`,
       });
     });
@@ -290,15 +429,36 @@ export function ProfileEditorProvider({
     for (const suggestion of suggestions) {
       const { range } = suggestion;
       if (!range) continue;
+      const diff = lineDiff(
+        blocks.slice(range.start, range.end).map((block) => block.text),
+        parseFragment(suggestion.replace).map((block) => block.text)
+      );
       for (let line = range.start; line < range.end; line++) {
         const from = positions[line];
         specs.push({
           kind: "node",
           from,
           to: from + (doc.nodeAt(from)?.nodeSize ?? 0),
-          className: "profile-suggestion-old",
+          className: diff.fallback
+            ? "profile-suggestion-old"
+            : "profile-suggestion-old profile-suggestion-old-diff",
           key: `suggestion-old-${suggestion.id}-${line}`,
         });
+        if (diff.fallback) continue;
+        // Only the removed words are struck; the rest stays readable.
+        let offset = from + 1;
+        for (const segment of diff.old[line - range.start] ?? []) {
+          if (segment.changed) {
+            specs.push({
+              kind: "inline",
+              from: offset,
+              to: offset + segment.text.length,
+              className: "profile-suggestion-removed",
+              key: `suggestion-removed-${suggestion.id}-${offset}`,
+            });
+          }
+          offset += segment.text.length;
+        }
       }
       specs.push({
         kind: "widget",
@@ -311,6 +471,8 @@ export function ProfileEditorProvider({
           suggestionWidget(suggestion, suggestionLabels, {
             accept: (profileSuggestionId) =>
               suggestionHandlers.current?.accept(profileSuggestionId),
+            both: (profileSuggestionId) =>
+              suggestionHandlers.current?.both(profileSuggestionId),
             reject: (profileSuggestionId) =>
               suggestionHandlers.current?.reject(profileSuggestionId),
           }),
@@ -348,8 +510,48 @@ export function ProfileEditorProvider({
         key: `hint-${section.heading}-${hint}`,
       });
     }
+    // A quiet button closing each section that holds entries.
+    for (const section of structure.sections) {
+      const kind = section.key && entryOfSection[section.key];
+      if (!kind) continue;
+      const label = t.formatMessage(
+        { defaultMessage: "Add {entry}" },
+        { entry: entryLabels[kind].toLocaleLowerCase() }
+      );
+      specs.push({
+        kind: "widget",
+        at:
+          section.end < positions.length
+            ? positions[section.end]
+            : doc.content.size,
+        interactive: true,
+        element: () => {
+          const element = document.createElement("div");
+          element.className = "profile-add-entry";
+          element.setAttribute("data-profile-aside", "");
+          element.contentEditable = "false";
+          const button = document.createElement("button");
+          button.type = "button";
+          // The app's secondary Button, small, as classes: plain DOM here.
+          button.className = cn(
+            buttonVariants({ variant: "secondary" }),
+            "h-7 px-2.5 text-xs"
+          );
+          button.textContent = `+ ${label}`;
+          button.addEventListener("mousedown", (event) =>
+            event.preventDefault()
+          );
+          button.addEventListener("click", () =>
+            entryOpenerRef.current?.(kind)
+          );
+          element.append(button);
+          return element;
+        },
+        key: `add-${section.heading}-${label}`,
+      });
+    }
     setDecorations(editor, specs);
-    // findingMessage and sectionHints change with the interface language only.
+    // sectionHints change with the interface language only.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editor, blocks, findings, structure, reviewFindings, suggestions]);
 
@@ -381,6 +583,21 @@ export function ProfileEditorProvider({
     [editor]
   );
 
+  const scrollToLine = useCallback(
+    (line: number) => {
+      if (!editor || editor.isDestroyed) return;
+      // Not under the cursor of someone who is typing.
+      if (Date.now() - lastEditAt.current < typingQuietMs) return;
+      const start = blockPositions(editor.state.doc)[line];
+      if (start === undefined) return;
+      const node = editor.view.nodeDOM(start);
+      if (node instanceof HTMLElement) {
+        node.scrollIntoView({ behavior: "smooth", block: "center" });
+      }
+    },
+    [editor]
+  );
+
   /** Saves what is in the editor now, resolving to the saved revision. */
   const saveNow = async () => {
     if (editor) {
@@ -400,14 +617,14 @@ export function ProfileEditorProvider({
     );
 
   const refreshSuggestions = () =>
-    void queryClient.invalidateQueries({
+    queryClient.invalidateQueries({
       queryKey: trpc.profile.suggestions.queryKey({}),
     });
 
   // The answer didn't reach the server: the list shows what it still holds
   // (a change already in the text no longer fits, and can be rejected).
   const suggestionsNotRecorded = () => {
-    refreshSuggestions();
+    void refreshSuggestions();
     toast.error(
       t.formatMessage({
         defaultMessage:
@@ -420,7 +637,11 @@ export function ProfileEditorProvider({
    * Applies the given suggestions (all of them by default) to the text as
    * one undo step; those whose lines are gone stay waiting.
    */
-  const acceptSuggestions = (profileSuggestionIds?: string[]) => {
+  const acceptSuggestions = (
+    profileSuggestionIds?: string[],
+    // Keep the lines a suggestion replaces, adding its lines after them.
+    { keepBoth = false }: { keepBoth?: boolean } = {}
+  ) => {
     if (!editor) return;
     let next = currentBlocks();
     const applied: string[] = [];
@@ -431,7 +652,15 @@ export function ProfileEditorProvider({
       ) {
         continue;
       }
-      const changed = applyChange(next, suggestion);
+      const changed = applyChange(
+        next,
+        keepBoth && suggestion.find.trim()
+          ? {
+              ...suggestion,
+              replace: [suggestion.find, suggestion.replace].join("\n"),
+            }
+          : suggestion
+      );
       if (!changed) continue;
       next = changed;
       applied.push(suggestion.id);
@@ -470,6 +699,8 @@ export function ProfileEditorProvider({
 
   suggestionHandlers.current = {
     accept: (profileSuggestionId) => acceptSuggestions([profileSuggestionId]),
+    both: (profileSuggestionId) =>
+      acceptSuggestions([profileSuggestionId], { keepBoth: true }),
     reject: (profileSuggestionId) => rejectSuggestions([profileSuggestionId]),
   };
 
@@ -478,6 +709,9 @@ export function ProfileEditorProvider({
     blocks,
     structure,
     findings,
+    ignored,
+    ignoreFinding: (finding) => setIgnored(finding, true),
+    restoreFinding: (finding) => setIgnored(finding, false),
     saveStatus: autosave.status,
     draft,
     markdown: () => serializeBlocks(currentBlocks()),
@@ -486,11 +720,20 @@ export function ProfileEditorProvider({
     resetTo: (next) => {
       autosave.reset(next);
       const nextBlocks = parseBlocks(next.markdown);
-      editor?.commands.setContent(blocksToDoc(nextBlocks), {
-        emitUpdate: false,
-      });
+      if (editor) {
+        const nodes = (blocksToDoc(nextBlocks).content ?? []).map((json) =>
+          editor.schema.nodeFromJSON(json)
+        );
+        editor.view.dispatch(
+          editor.state.tr
+            .replaceWith(0, editor.state.doc.content.size, nodes)
+            .setMeta(allowStructure, true)
+            .setMeta("preventUpdate", true)
+        );
+      }
       setBlocks(nextBlocks);
     },
+    entryOpenerRef,
     insert: (entry) => {
       if (!editor) return;
       const { blocks: next, line } = insertEntry(currentBlocks(), entry);
@@ -516,12 +759,28 @@ export function ProfileEditorProvider({
       );
       if (match) applyBlocks(editor, fixFinding(fresh, match));
     },
+    quickActions: (finding) =>
+      quickActionsFor(finding, blocks, structure.language),
+    applyQuickAction: (action, { goTo = true } = {}) => {
+      if (!editor) return;
+      // The action was computed from the last lint; typing since makes it stale.
+      if (JSON.stringify(currentBlocks()) !== JSON.stringify(blocks)) return;
+      applyBlocks(editor, action.blocks, { scroll: goTo });
+      if (!goTo) return;
+      requestAnimationFrame(() => {
+        goToLine(action.line);
+        // A label waiting for its value gets the space after the colon.
+        if (action.blocks[action.line]?.text.endsWith(":"))
+          editor.commands.insertContent(" ");
+      });
+    },
     suggestions,
     acceptSuggestions,
     rejectSuggestions,
     refreshSuggestions,
+    scrollToLine,
     agentTopic,
-    talkAbout: ({ quote, line, text }) =>
+    talkAbout: ({ quote, line, attachment }) =>
       setAgentTopic({
         id: Date.now(),
         // A long selection is about its start; the agent reads the rest.
@@ -532,11 +791,17 @@ export function ProfileEditorProvider({
           listParts(currentBlocks()).findLast(
             (part) => line >= part.start && line < part.end
           )?.key ?? null,
-        text: text ?? "",
+        attachment: attachment ?? null,
       }),
     clearAgentQuote: () =>
       setAgentTopic((topic) => topic && { ...topic, quote: null, part: null }),
+    clearAgentAttachment: () =>
+      setAgentTopic((topic) => topic && { ...topic, attachment: null }),
     reviewFindings,
+    ignoredReviewFindings,
+    ignoreReviewFinding: (note) => setReviewIgnored(note, true),
+    restoreReviewFinding: (note) => setReviewIgnored(note, false),
+    refreshDismissed,
     applyCompetencyLevel: (name, level) => {
       if (!editor) return;
       applyBlocks(editor, setCompetencyLevel(currentBlocks(), name, level));

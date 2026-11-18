@@ -5,16 +5,28 @@ import {
   type Editor,
 } from "@tiptap/core";
 import { Slice } from "@tiptap/pm/model";
-import { Plugin, PluginKey, TextSelection } from "@tiptap/pm/state";
+import {
+  Plugin,
+  PluginKey,
+  TextSelection,
+  type EditorState,
+} from "@tiptap/pm/state";
 import { Decoration, DecorationSet } from "@tiptap/pm/view";
 import StarterKit from "@tiptap/starter-kit";
 
+import { cn } from "@repo/web/lib/utils";
 import {
   parseBlocks,
   serializeBlocks,
 } from "@repo/api/domains/profile/truth/blocks";
 
-import { blocksToDoc, docToBlocks } from "./editor-doc";
+import { findLinks } from "./find-links";
+import {
+  blocksToDoc,
+  docToBlocks,
+  isLockedNode,
+  sameLockedHeadings,
+} from "./editor-doc";
 
 // Nesting deeper than this is no longer a list the method writes.
 const maxDepth = 4;
@@ -184,13 +196,119 @@ export const ProfileClipboard = Extension.create({
   },
 });
 
+/** Transactions the app makes on purpose carry this meta to pass the lock. */
+export const allowStructure = "allowStructure";
+
+/**
+ * The document's title and the template's sections are fixed: a typed,
+ * deleted or dragged change to them is rejected, unless the app made it
+ * on purpose (paste, undo, fixes, inserts, restores).
+ */
+export const ProfileLockedHeadings = Extension.create({
+  name: "profileLockedHeadings",
+  addProseMirrorPlugins() {
+    return [
+      new Plugin({
+        key: new PluginKey("profileLockedHeadings"),
+        filterTransaction: (tr, state) => {
+          if (!tr.docChanged) return true;
+          if (
+            tr.getMeta(allowStructure) ||
+            tr.getMeta("uiEvent") === "paste" ||
+            tr.getMeta("history$")
+          ) {
+            return true;
+          }
+          return sameLockedHeadings(state.doc, tr.doc);
+        },
+        props: {
+          decorations: (state) => {
+            const decorations: Decoration[] = [];
+            state.doc.forEach((node, offset) => {
+              if (isLockedNode(node)) {
+                decorations.push(
+                  Decoration.node(offset, offset + node.nodeSize, {
+                    class: "profile-locked-heading",
+                  })
+                );
+              }
+            });
+            return DecorationSet.create(state.doc, decorations);
+          },
+        },
+      }),
+    ];
+  },
+});
+
+/** The link the cursor is in (no selection), with its document range. */
+export function linkAtCursor(state: EditorState) {
+  const { selection } = state;
+  if (!selection.empty) return null;
+  const { $from } = selection;
+  if (!$from.parent.isTextblock || isLockedNode($from.parent)) return null;
+  const offset = $from.parentOffset;
+  const link = findLinks($from.parent.textContent).find(
+    (candidate) => offset >= candidate.from && offset <= candidate.to
+  );
+  if (!link) return null;
+  const start = $from.start();
+  return { href: link.href, from: start + link.from, to: start + link.to };
+}
+
+/**
+ * Underlines the links in the text (URLs, e-mails) as decorations: the
+ * stored text stays plain. Ctrl/Cmd+click opens one in a new tab; a plain
+ * click still places the cursor.
+ */
+export const ProfileLinks = Extension.create({
+  name: "profileLinks",
+  addProseMirrorPlugins() {
+    return [
+      new Plugin({
+        key: new PluginKey("profileLinks"),
+        props: {
+          decorations: (state) => {
+            const decorations: Decoration[] = [];
+            state.doc.descendants((node, pos) => {
+              if (!node.isTextblock) return true;
+              if (isLockedNode(node)) return false;
+              for (const link of findLinks(node.textContent)) {
+                decorations.push(
+                  Decoration.inline(pos + 1 + link.from, pos + 1 + link.to, {
+                    // Styled like the app's link Button (shadcn).
+                    class: cn("text-primary underline underline-offset-4"),
+                    "data-href": link.href,
+                  })
+                );
+              }
+              return false;
+            });
+            return DecorationSet.create(state.doc, decorations);
+          },
+          handleClick: (_view, _pos, event) => {
+            if (!(event.metaKey || event.ctrlKey)) return false;
+            const href = (
+              event.target as HTMLElement | null
+            )?.closest<HTMLElement>("[data-href]")?.dataset.href;
+            if (!href) return false;
+            window.open(href, "_blank", "noopener,noreferrer");
+            return true;
+          },
+        },
+      }),
+    ];
+  },
+});
+
 export type EditorDecorationSpec =
   | {
       kind: "inline";
       from: number;
       to: number;
       className: string;
-      title?: string;
+      // Identifies the finding a hover card describes.
+      finding?: string;
       key: string;
     }
   // A whole block (a line a suggestion would replace).
@@ -263,8 +381,8 @@ export function setDecorations(editor: Editor, specs: EditorDecorationSpec[]) {
       ];
     }
     if (spec.from >= spec.to || spec.to > doc.content.size) return [];
-    const attrs = spec.title
-      ? { class: spec.className, title: spec.title }
+    const attrs = spec.finding
+      ? { class: spec.className, "data-finding": spec.finding }
       : { class: spec.className };
     return [Decoration.inline(spec.from, spec.to, attrs, { key: spec.key })];
   });
@@ -299,7 +417,9 @@ export function profileExtensions() {
     ProfileQuote,
     ProfileKeys,
     ProfileClipboard,
+    ProfileLockedHeadings,
     ProfileDecorations,
+    ProfileLinks,
   ];
 }
 
@@ -315,3 +435,13 @@ export function focusNodeEnd(editor: Editor, nodeStart: number) {
   );
   editor.view.focus();
 }
+
+/**
+ * Room the editor keeps around what it scrolls to: the sticky toolbar
+ * covers the top of the scroll area, so a line scrolled to never hides
+ * under it.
+ */
+export const editorScrollMargins = {
+  scrollMargin: { top: 128, bottom: 48, left: 0, right: 0 },
+  scrollThreshold: { top: 128, bottom: 48, left: 0, right: 0 },
+};

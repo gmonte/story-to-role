@@ -54,10 +54,13 @@ const tones: Tone[] = ["your_style", "formal", "direct", "warm", "technical"];
  */
 export function LibraryResumeDialog({
   versionId,
+  documentId,
   defaultTone = "your_style",
   trigger,
 }: {
   versionId?: string;
+  /** A document whose first generation failed, generated again. */
+  documentId?: string;
   /** The tone of the version's last generation, when generating again. */
   defaultTone?: Tone;
   trigger: ReactNode;
@@ -70,6 +73,7 @@ export function LibraryResumeDialog({
         {/* Mounted per opening: the form starts fresh each time. */}
         <LibraryResumeForm
           versionId={versionId}
+          documentId={documentId}
           defaultTone={defaultTone}
           onDone={() => setOpen(false)}
         />
@@ -80,10 +84,12 @@ export function LibraryResumeDialog({
 
 function LibraryResumeForm({
   versionId,
+  documentId: retriedId,
   defaultTone,
   onDone,
 }: {
   versionId?: string;
+  documentId?: string;
   defaultTone: Tone;
   onDone: () => void;
 }) {
@@ -109,7 +115,9 @@ function LibraryResumeForm({
       onSuccess: async ({ documentId }) => {
         await refresh();
         onDone();
-        if (!versionId) router.push(`/app/library/${documentId}`);
+        if (!versionId && !retriedId) {
+          router.push(`/app/library/${documentId}`);
+        }
       },
       onError: (error) => toast.error(error.message),
     })
@@ -119,7 +127,7 @@ function LibraryResumeForm({
     <>
       <DialogHeader>
         <DialogTitle>
-          {versionId
+          {versionId || retriedId
             ? t.formatMessage({ defaultMessage: "Generate again" })
             : t.formatMessage({ defaultMessage: "New resume" })}
         </DialogTitle>
@@ -132,7 +140,7 @@ function LibraryResumeForm({
       </DialogHeader>
       {documentSettings.unpublished && <PublishProfileNotice />}
       <div className="grid gap-4">
-        {!versionId && (
+        {!versionId && !retriedId && (
           <>
             <div className="grid gap-1.5">
               <Label htmlFor="library-focus">
@@ -144,7 +152,8 @@ function LibraryResumeForm({
                 maxLength={80}
                 onChange={(event) => setFocus(event.target.value)}
                 placeholder={t.formatMessage({
-                  defaultMessage: "React Native, Frontend, General…",
+                  defaultMessage:
+                    "Empty for a general resume; or React Native, Frontend…",
                 })}
               />
             </div>
@@ -232,14 +241,15 @@ function LibraryResumeForm({
         <Button
           disabled={
             generate.isPending ||
-            (!versionId && !focus.trim()) ||
             documentSettings.unpublished ||
             documentSettings.invalid
           }
           onClick={() =>
             generate.mutate({
-              focus: versionId ? undefined : focus,
+              focus:
+                versionId || retriedId ? undefined : focus.trim() || undefined,
               versionId,
+              documentId: retriedId,
               language,
               reviewDepth,
               writingLevel,

@@ -2,6 +2,7 @@ import type { JSONContent } from "@tiptap/core";
 import type { Node as ProseMirrorNode } from "@tiptap/pm/model";
 
 import type { ProfileBlock } from "@repo/api/domains/profile/truth/blocks";
+import { sectionKeyOf } from "@repo/api/domains/profile/truth/sections";
 
 const text = (value: string): JSONContent[] =>
   value ? [{ type: "text", text: value }] : [];
@@ -77,4 +78,40 @@ export function blockPositions(doc: ProseMirrorNode) {
     positions.push(offset);
   });
   return positions;
+}
+
+/** The document's `#` title and the template's `##` sections can't be edited. */
+export function isLockedHeading(level: number, text: string) {
+  return level === 1 || (level === 2 && sectionKeyOf(text) !== null);
+}
+
+/** The ordered recognised headings (level and text) of a list of blocks. */
+export function lockedHeadingsOf(blocks: ProfileBlock[]) {
+  return blocks.flatMap((block) =>
+    block.type === "heading" && isLockedHeading(block.level, block.text)
+      ? [`${block.level}:${block.text}`]
+      : []
+  );
+}
+
+export function lockedHeadings(doc: ProseMirrorNode) {
+  return lockedHeadingsOf(docToBlocks(doc));
+}
+
+/** Whether two documents have the same recognised headings, in order. */
+export function sameLockedHeadings(a: ProseMirrorNode, b: ProseMirrorNode) {
+  const first = lockedHeadings(a);
+  const second = lockedHeadings(b);
+  return (
+    first.length === second.length &&
+    first.every((heading, i) => heading === second[i])
+  );
+}
+
+/** Whether a top-level node is one of the locked headings. */
+export function isLockedNode(node: ProseMirrorNode) {
+  return (
+    node.type.name === "heading" &&
+    isLockedHeading(node.attrs.level as number, node.textContent)
+  );
 }

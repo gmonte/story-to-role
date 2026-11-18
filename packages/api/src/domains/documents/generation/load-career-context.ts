@@ -1,3 +1,4 @@
+import type { PublicName } from "@repo/api/domains/profile/rules/public-names";
 import { InstructionsRepository } from "@repo/api/domains/applications/instructions-repository";
 import {
   type LockedField,
@@ -61,7 +62,11 @@ export type CareerContext = {
   instructions: ContextInstruction[];
   // Each fit check passage's evidence lines.
   evidenceOfPassage: Map<string, string[]>;
-  rules: { neverInclude: string[]; neverClaim: string[] };
+  rules: {
+    neverInclude: string[];
+    neverClaim: string[];
+    publicNames: PublicName[];
+  };
   // What the profile says the person lacks: competencies only studied and
   // the known gaps. Never claimed in a document.
   studied: string[];
@@ -147,10 +152,14 @@ export async function loadCareerContext(input: {
       .replace(/\s{2,}/g, " ")
       .replace(/^[\s,–—-]+|[\s,–—-]+$/g, "");
   const confidential = confidentialLabels[input.language ?? "en-US"];
+  // The public names dictionary applies to what code prints by itself (an
+  // employer or title is a field, no sentence to adjust).
+  const publicForm = (value: string) => filter.inPublicForm(value);
   const printed = {
-    employer: (value: string) => (forbidden(value) ? confidential : value),
+    employer: (value: string) =>
+      forbidden(value) ? confidential : publicForm(value),
     title: (value: string) =>
-      forbidden(value) ? without(value) || confidential : value,
+      forbidden(value) ? without(value) || confidential : publicForm(value),
   };
   const positions = (source?.positions ?? []).map((position) => ({
     ...position,
@@ -255,7 +264,11 @@ export async function loadCareerContext(input: {
     projects: [],
     instructions,
     evidenceOfPassage: source?.evidenceOfPassage ?? new Map<string, string[]>(),
-    rules: source?.rules ?? { neverInclude: [], neverClaim: [] },
+    rules: source?.rules ?? {
+      neverInclude: [],
+      neverClaim: [],
+      publicNames: [],
+    },
     studied: source?.studied ?? [],
     gaps: source?.gaps ?? [],
     careerDirection: (source?.careerDirection ?? []).map((line) => ({

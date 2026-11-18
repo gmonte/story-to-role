@@ -36,6 +36,17 @@ const effortByRole = {
   research: "medium",
 } as const;
 
+// The model thinks before it answers, and its thinking counts against
+// max_tokens: a limit sized for the answer alone left long answers cut
+// mid-JSON. Each call keeps its answer budget and gets this much more;
+// tokens are billed as used, so the room costs nothing unspent.
+const thinkingRoom = {
+  classification: 2_000,
+  writing: 8_000,
+  maximum: 16_000,
+  research: 8_000,
+} as const;
+
 function toUsage(model: string, usage: Anthropic.Usage): AiUsage {
   return {
     model,
@@ -83,7 +94,7 @@ async function runTool(
 function toParams(request: AiTextRequest) {
   return {
     model: models[request.role],
-    max_tokens: request.maxTokens,
+    max_tokens: request.maxTokens + thinkingRoom[request.role],
     system: request.system,
     messages: request.messages,
     output_config: { effort: effortByRole[request.role] },

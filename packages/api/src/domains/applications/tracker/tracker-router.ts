@@ -86,6 +86,7 @@ export const trackerRouter = createTRPCRouter({
       applicationInput.extend({
         versionIds: z.array(z.uuid()).min(1).max(10),
         appliedAt: z.coerce.date().optional(),
+        acknowledgeWarnings: z.boolean().optional(),
       })
     )
     .output(okSchema)

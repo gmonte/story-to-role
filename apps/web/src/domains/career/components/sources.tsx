@@ -130,13 +130,6 @@ export function Sources({
           <FileUp />
           {t.formatMessage({ defaultMessage: "Upload files" })}
         </Button>
-        <span className="text-muted-foreground flex items-center gap-1 text-xs">
-          {t.formatMessage({
-            defaultMessage:
-              "Each file is read into suggestions for your profile:",
-          })}
-          <CreditCost credits={credits.data?.estimates.sourceImport} />
-        </span>
         <p className="text-muted-foreground text-xs">
           {t.formatMessage(
             {
@@ -150,6 +143,15 @@ export function Sources({
             }
           )}
         </p>
+        <div className="text-muted-foreground flex flex-col items-center gap-1 text-xs">
+          <span>
+            {t.formatMessage({
+              defaultMessage:
+                "Each file is read into suggestions for your profile.",
+            })}
+          </span>
+          <CreditCost credits={credits.data?.estimates.sourceImport} />
+        </div>
       </div>
       <input
         ref={input}

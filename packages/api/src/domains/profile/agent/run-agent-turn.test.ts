@@ -19,8 +19,11 @@ import {
 } from "@repo/api/test/pglite";
 import type { MisuseGuard } from "@repo/api/tools/misuse-guard";
 import type { RateLimiter } from "@repo/api/tools/rate-limit";
+import { getUserCipher } from "@repo/api/domains/encryption/user-cipher";
 
+import { ProfileRepository } from "../profile-repository";
 import { ProfileService } from "../profile-service";
+import { AgentChatRepository } from "./agent-chat-repository";
 import { AgentChatService } from "./agent-chat-service";
 import { composeAgentMessage } from "./agent-message";
 import { runAgentTurn } from "./run-agent-turn";
@@ -158,6 +161,29 @@ async function setup({ credits }: { credits?: number } = {}) {
     recordBlocked,
   };
   const reported: string[] = [];
+  const reviewResolved = vi.fn();
+  // A completed validation with these findings, as the task leaves it.
+  const seedReport = async (
+    findings: Array<{
+      kind: "noImpact" | "unknown";
+      quote: string;
+      message: string;
+    }>
+  ) => {
+    const repository = new ProfileRepository(db);
+    const document = await repository.findDocument(user.id, "profile");
+    const cipher = await getUserCipher(db, user.id);
+    await repository.insertValidation({
+      documentId: document.id,
+      draftRevision: document.draftRevision,
+      status: "completed",
+      completedAt: new Date(),
+      encryptedReport: cipher.encrypt(
+        JSON.stringify({ findings, competencies: [], reviewed: [] })
+      ),
+    });
+    return { document, cipher };
+  };
   gate = fakeProviderPackage({ object: () => ({ verdict: "on_topic" }) });
 
   async function say(
@@ -174,6 +200,7 @@ async function setup({ credits }: { credits?: number } = {}) {
         streamText,
         model: () => model,
         reportSuggestion: (id) => reported.push(id),
+        reportReviewResolved: reviewResolved,
       },
       { chatId, messages: [...earlier, { role: "user", content: text }] }
     );
@@ -183,7 +210,17 @@ async function setup({ credits }: { credits?: number } = {}) {
     return { text: reply, turn };
   }
 
-  return { db, user, chatId, profiles, recordBlocked, reported, say };
+  return {
+    db,
+    user,
+    chatId,
+    profiles,
+    recordBlocked,
+    reported,
+    reviewResolved,
+    seedReport,
+    say,
+  };
 }
 
 const systemOf = (prompt: unknown) =>
@@ -218,6 +255,21 @@ describe("the profile agent", () => {
     expect(system).toContain("Projeto Fênix");
     // Another part's content stays out until the agent reads it.
     expect(system).not.toContain("Dev backend.");
+  });
+
+  it("tells the agent about the finding attached to the message", async () => {
+    const ctx = await setup();
+    const { model, prompts } = agentModel([], "Anotado.");
+    await ctx.say(
+      composeAgentMessage("Melhorei a performance [sem número].", "", null, {
+        kind: "finding",
+        text: "Falta o resultado.",
+      }),
+      model
+    );
+    const system = systemOf(prompts[0]);
+    expect(system).toContain("A finding or a review being discussed");
+    expect(system).toContain("Melhorei a performance [sem número].");
   });
 
   it("keeps the passage for the answers that follow it", async () => {
@@ -407,6 +459,32 @@ describe("the profile agent", () => {
     expect(await ctx.profiles.listSuggestions(ctx.user.id)).toHaveLength(1);
   });
 
+  it("lists the open review notes and ignores one through its tool", async () => {
+    const ctx = await setup();
+    const { document, cipher } = await ctx.seedReport([
+      { kind: "noImpact", quote: "Dev backend.", message: "O que mudou?" },
+      { kind: "unknown", quote: "Python", message: "Qual o time?" },
+    ]);
+    expect(document).toBeTruthy();
+    expect(cipher).toBeTruthy();
+    const { model, prompts } = agentModel(
+      [[{ name: "resolve_review_note", input: { note: 2, reason: "r" } }]],
+      "Ignorei a nota."
+    );
+    await ctx.say("Já respondi isso no perfil.", model);
+    const system = systemOf(prompts[0]);
+    expect(system).toContain("O que mudou?");
+    expect(system).toContain("Qual o time?");
+    expect(system).toContain("resolve_review_note");
+    expect(ctx.reviewResolved).toHaveBeenCalledTimes(1);
+    const notes = await ctx.profiles.unresolvedReviewNotes(ctx.user.id);
+    expect(notes.map((note) => note.message)).toEqual(["O que mudou?"]);
+    // The next turn no longer lists the ignored one.
+    const next = agentModel([], "Ok.");
+    await ctx.say("Oi", next.model);
+    expect(systemOf(next.prompts[0])).not.toContain("Qual o time?");
+  });
+
   it("replaces a waiting suggestion with a newer one on the same lines", async () => {
     const ctx = await setup();
     const change = {
@@ -489,6 +567,54 @@ describe("the profile agent", () => {
     const { text } = await ctx.say("E na Gama também.", second.model);
     expect(text).toContain("créditos");
     expect(second.prompts).toHaveLength(0);
+  });
+
+  it("starts a new conversation: messages go, suggestions and draft stay", async () => {
+    const ctx = await setup();
+    const { model } = agentModel(
+      [
+        [
+          {
+            name: "suggest_change",
+            input: {
+              part: "experience:beta — backend",
+              find: "Melhorei a performance [sem número].",
+              replace: "Melhorei a performance do checkout [sem número].",
+              reason: "Você disse que foi no checkout.",
+            },
+          },
+        ],
+      ],
+      "Sugeri a mudança; ela espera você no texto."
+    );
+    await ctx.say("Foi a performance do checkout.", model);
+    // The transcript the chat runtime would have stored.
+    await new AgentChatRepository(ctx.db).insertMessage({
+      chatId: ctx.chatId,
+      messageId: "m1",
+      position: 0,
+      encryptedMessage: "ciphertext",
+    });
+    const chats = new AgentChatService(ctx.db);
+
+    const fresh = await chats.startNew(ctx.user.id);
+    expect(fresh.closedChatIds).toEqual([ctx.chatId]);
+    expect(fresh.chatId).not.toBe(ctx.chatId);
+    expect(fresh.messages).toEqual([]);
+    expect((await chats.current(ctx.user.id)).chatId).toBe(fresh.chatId);
+    expect(
+      await new AgentChatRepository(ctx.db).listMessages(ctx.chatId)
+    ).toEqual([]);
+    await expect(
+      chats.requireOwn({ userId: ctx.user.id, chatId: ctx.chatId })
+    ).rejects.toMatchObject({ code: "CONFLICT" });
+
+    expect(await ctx.profiles.listSuggestions(ctx.user.id)).toHaveLength(1);
+    const draft = await ctx.profiles.getDraft({
+      userId: ctx.user.id,
+      language: "pt-BR",
+    });
+    expect(draft.markdown).toBe(profile);
   });
 
   it("opens a conversation only for its owner", async () => {

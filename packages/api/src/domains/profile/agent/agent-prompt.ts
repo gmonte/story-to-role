@@ -13,7 +13,11 @@ export type AgentPromptInput = {
   today: string;
   parts: ProfilePart[];
   gaps: string[];
-  rules: { neverInclude: string[]; neverClaim: string[] };
+  rules: {
+    neverInclude: string[];
+    neverClaim: string[];
+    publicNames: Array<{ original: string; public: string }>;
+  };
   // The passage the user is talking about, and the part it is in.
   quote: {
     text: string;
@@ -22,12 +26,14 @@ export type AgentPromptInput = {
   } | null;
   pending: SuggestionContent[];
   rejected: SuggestionContent[];
+  // The quality-review notes not yet resolved, numbered from 1 in order.
+  reviewNotes: Array<{ message: string; quote: string }>;
 };
 
 const list = (items: string[]) =>
   items.length ? items.map((item) => `- ${item}`).join("\n") : "(none)";
 
-const tagNames = "passage|part|index|gaps|rules|waiting|rejected";
+const tagNames = "passage|part|index|gaps|rules|waiting|rejected|notes";
 
 /**
  * The person's text between tags, as data: a tag of ours written inside it
@@ -66,13 +72,19 @@ export function buildAgentPrompt(input: AgentPromptInput) {
     "- Asked to “interview me”, start from the most recent position in the index (or ask for the most recent job's company, title and dates when there is none) and go position by position.",
     "- When the person has no position yet (a first job, a career change), ask what they want to work with and which notable experiences they have in that area: projects, studies, volunteering, freelance work. Each goes in as an experience, titled by what it was.",
     "",
+    "## A finding or a review being discussed",
+    "- A user message may open with lines starting “~ ”: “~ [finding] …” is a finding of the profile's linter, “~ [review] …” a note of the quality review, and the person is asking about it (their own words, if any, follow). Treat it as the topic, not as something they wrote: say what it means in a sentence, then propose how to resolve it (ask what you need first, if you must). With no words of their own, propose the resolution right away.",
+    "- The quality review's open notes are listed below, numbered. Call resolve_review_note with a note's number when the profile already answers it somewhere (any section; read the part with read_part first if you haven't seen it) or when the person says it doesn't apply, and say in your answer that you ignored (dismissed) the note, and why. Never resolve a note the profile doesn't answer: propose the change that answers it instead. Ignoring a note changes nothing in the profile and the person can restore it.",
+    "",
     "## How the profile changes",
     "- You change nothing yourself. Propose each change with suggest_change: the person sees it in the text as a tracked change and accepts or rejects it. Then say in one sentence what you proposed and that it waits for them in the text. Never say a change was made.",
     "- Propose as soon as the person gave you what a change needs; don't wait for the end of the interview. One call per passage; several small suggestions beat one large one. A new suggestion on lines that already have one waiting replaces it, so to improve a waiting suggestion, propose the whole line again from the profile's current lines.",
     "- Before changing a part you haven't read in this turn, read it with read_part, and copy the lines to change exactly into `find`. Leave `find` empty to add at the end of a part.",
     `- Write in the profile's language and format, like the lines you read. List lines start with “- ”; lines under a label are indented two spaces. A new experience goes to part “experience” with an empty \`find\`: its title “### Company — Title (YYYY-MM ${words.to} YYYY-MM)” (“${words.present}” for the current one), then the labelled lines: ${fields.map((field) => `“- ${field}:”`).join(", ")}.`,
     "- Use the person's own words, in the first person (“Reduzi”, “I reduced”). A figure goes in only as they wrote it: a number they never wrote is refused.",
-    "- Never propose what the communication rules below forbid, nor anything the known gaps deny.",
+    "- The profile may have an “Addenda” section (details remembered later); StoryToRole doesn't read it. Never propose anything under it: when the person asks about its items (or the linter flags them), propose moving each to the section it belongs to and removing it from Addenda.",
+    "- The profile accepts everything the person tells you: the communication rules below govern only the documents made from the profile (resume, cover letter, LinkedIn text), never the profile itself. Record names, figures and details the rules mention as the person says them; never refuse or hide them because of a rule. Never propose anything the known gaps deny.",
+    "- Public names: the rules part may have a “Public names” line (`original → public form`, entries split by `;`) that tells the documents how to write a name publicly. When a name in the profile (a project, company or person) falls under a “never include” category (for example “internal names of repositories and projects”) and has no entry yet, propose adding it to that line as a normal suggestion (keeping the entries it already holds). If you don't know the public form, ask the person what to call it publicly before proposing; never invent one.",
     "",
     "## How you answer",
     "- In the language of the person's last message. Plain text, no Markdown. Short: this is a side panel.",
@@ -96,6 +108,7 @@ export function buildAgentPrompt(input: AgentPromptInput) {
       [
         `Never include: ${input.rules.neverInclude.join("; ") || "(none)"}`,
         `Never claim: ${input.rules.neverClaim.join("; ") || "(none)"}`,
+        `Public names: ${input.rules.publicNames.map((name) => `${name.original} → ${name.public}`).join("; ") || "(none)"}`,
       ].join("\n")
     ),
     "",
@@ -109,6 +122,21 @@ export function buildAgentPrompt(input: AgentPromptInput) {
         )
       )
     ),
+    ...(input.reviewNotes.length
+      ? [
+          "",
+          "## Open quality-review notes (number | note | passage it points at)",
+          data(
+            "notes",
+            input.reviewNotes
+              .map(
+                (note, index) =>
+                  `${index + 1} | ${oneLine(note.message)} | ${oneLine(note.quote)}`
+              )
+              .join("\n")
+          ),
+        ]
+      : []),
     ...(input.rejected.length
       ? [
           "",

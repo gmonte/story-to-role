@@ -1,3 +1,9 @@
+import { splitNeverIncludeItems } from "../rules/never-include-terms";
+import {
+  parsePublicNames,
+  type PublicName,
+  publicNameValues,
+} from "../rules/public-names";
 import type { ProfileBlock } from "./blocks";
 import { splitNames } from "./lint";
 import { findMarks, type FigureMark } from "./marks";
@@ -31,7 +37,11 @@ export type ProfileExtract = {
   competencies: Array<{ name: string; level: CompetencyLevel }>;
   languages: string[];
   gaps: string[];
-  rules: { neverInclude: string[]; neverClaim: string[] };
+  rules: {
+    neverInclude: string[];
+    neverClaim: string[];
+    publicNames: PublicName[];
+  };
   // Each marked figure, with the passage it is in (its ordinal among the
   // version's passages, null when the line isn't one).
   figures: Array<{
@@ -133,18 +143,27 @@ export function extractProfile(blocks: ProfileBlock[]): ProfileExtract {
     }
   }
 
-  const rules = { neverInclude: [] as string[], neverClaim: [] as string[] };
-  for (const line of itemsOf(blocks, sectionOf(structure, "rules"))) {
+  const rules = {
+    neverInclude: [] as string[],
+    neverClaim: [] as string[],
+    publicNames: [] as PublicName[],
+  };
+  const rulesSection = sectionOf(structure, "rules");
+  for (const { value } of rulesSection
+    ? publicNameValues(blocks, rulesSection)
+    : []) {
+    rules.publicNames.push(...parsePublicNames(value).entries);
+  }
+  for (const line of itemsOf(blocks, rulesSection)) {
     const labelled = splitLabel(line);
     if (!labelled) continue;
     const label = normalizeLabel(labelled.label);
-    const names = splitNames(labelled.value, 0, { anyLength: true }).map(
-      (n) => n.name
-    );
     if (label === "nunca incluir" || label === "never include") {
-      rules.neverInclude.push(...names);
+      rules.neverInclude.push(...splitNeverIncludeItems(labelled.value));
     } else if (label === "nunca afirmar" || label === "never claim") {
-      rules.neverClaim.push(...names);
+      rules.neverClaim.push(
+        ...splitNames(labelled.value, 0, { anyLength: true }).map((n) => n.name)
+      );
     }
   }
 
@@ -189,6 +208,8 @@ export function profilePassages(blocks: ProfileBlock[]): ProfilePassage[] {
   const structure = readStructure(blocks);
   const passages: ProfilePassage[] = [];
   for (const section of structure.sections) {
+    // Addenda is no longer read as evidence (the linter asks to move it).
+    if (section.key === "addenda") continue;
     let current: ProfilePassage | null = null;
     for (let line = section.start; line < section.end; line++) {
       const block = blocks[line];

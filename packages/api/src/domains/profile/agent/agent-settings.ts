@@ -9,11 +9,16 @@ export const agentSettings = {
   // settled, a window keeps the interview coherent.
   historyWindow: 16,
   // Model steps per turn: read a part or two, suggest, then answer.
-  maxSteps: 8,
+  maxSteps: 10,
   maxMessageCharacters: 6000,
   // The method's interview asks at most this many questions per message.
   maxQuestionsPerMessage: 3,
-  maxOutputTokens: 2000,
+  // Per model call, thinking included: the model thinks before it answers,
+  // and a tight limit spent on thinking left turns with no answer at all.
+  maxOutputTokens: 8000,
+  // An answer that hasn't started streaming after this long means the run
+  // holding the session is likely dead: the page recovers once, then asks.
+  answerStartTimeoutMs: 30_000,
 };
 
 export const dayMs = 86_400_000;

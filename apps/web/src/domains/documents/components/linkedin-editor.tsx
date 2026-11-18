@@ -25,10 +25,12 @@ import { useTRPC } from "~/tools/trpc/client";
 import { useDocumentLabels } from "../hooks/use-document-labels";
 import { useRefreshDocuments } from "../hooks/use-opening-documents";
 import { useSelectedVersion } from "../hooks/use-selected-version";
+import { WarningsDialog } from "./warnings-dialog";
 import { CoverageReviewBlock } from "./coverage-review";
 import { EditableText } from "./editing";
 import { LinkedinDialog } from "./linkedin-dialog";
 import { type TraceIndex, TracedLine } from "./resume-editor";
+import { hasFindings, hasWarnings } from "../utils/version-checks";
 import { VersionHistorySheet } from "./version-history-sheet";
 
 /**
@@ -88,7 +90,8 @@ export function LinkedinEditor({
       version.instructionTrace.map((row) => [row.instructionId, row.text])
     ),
   };
-  const blocked = (version.coverage?.findings.length ?? 0) > 0;
+  const blocked = hasFindings(version);
+  const warned = hasWarnings(version);
   const copyBlock = blocked
     ? t.formatMessage({
         defaultMessage: "Fix the coverage findings before copying this text.",
@@ -207,6 +210,7 @@ export function LinkedinEditor({
               versionId={version.id}
               section="about"
               blockedBy={copyBlock}
+              warned={warned}
             />
           </div>
           {line(content.about)}
@@ -239,6 +243,7 @@ export function LinkedinEditor({
                 versionId={version.id}
                 section={entry.positionId}
                 blockedBy={copyBlock}
+                warned={warned}
               />
             </div>
             <ul className="flex flex-col gap-1 pl-4">
@@ -310,9 +315,12 @@ function CopySectionButton({
   versionId,
   section,
   blockedBy,
+  warned,
 }: {
   versionId: string;
   section: string;
+  /** Only warnings: copying asks for a confirmation first. */
+  warned: boolean;
   /** Why copying is unavailable, when it is. */
   blockedBy: string | null;
 }) {
@@ -320,11 +328,16 @@ function CopySectionButton({
   const trpc = useTRPC();
   const queryClient = useQueryClient();
   const [pending, setPending] = useState(false);
-  const copy = async () => {
+  const [confirming, setConfirming] = useState(false);
+  const copy = async (acknowledgeWarnings?: boolean) => {
     setPending(true);
     try {
       const { text } = await queryClient.fetchQuery({
-        ...trpc.linkedin.sectionText.queryOptions({ versionId, section }),
+        ...trpc.linkedin.sectionText.queryOptions({
+          versionId,
+          section,
+          acknowledgeWarnings,
+        }),
         staleTime: 0,
       });
       await navigator.clipboard.writeText(text);
@@ -345,13 +358,25 @@ function CopySectionButton({
       size="sm"
       variant="ghost"
       disabled={!!blockedBy || pending}
-      onClick={copy}
+      onClick={() => (warned ? setConfirming(true) : copy())}
     >
       <Copy />
       {t.formatMessage({ defaultMessage: "Copy text" })}
     </Button>
   );
-  if (!blockedBy) return button;
+  if (!blockedBy) {
+    return (
+      <>
+        {button}
+        <WarningsDialog
+          open={confirming}
+          onOpenChange={setConfirming}
+          confirmLabel={t.formatMessage({ defaultMessage: "Copy anyway" })}
+          onConfirm={() => copy(true)}
+        />
+      </>
+    );
+  }
   return (
     <Tooltip>
       <TooltipTrigger asChild>

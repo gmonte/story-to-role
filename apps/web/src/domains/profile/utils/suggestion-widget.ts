@@ -1,11 +1,20 @@
 import type { ProfileSuggestion } from "@repo/api/domains/profile/schemas/profile";
 import { parseFragment } from "@repo/api/domains/profile/truth/suggestions";
+import { buttonVariants } from "@repo/web/components/ui/button";
+import { cn } from "@repo/web/lib/utils";
+
+import { lineDiff } from "./word-diff";
 
 export type SuggestionWidgetLabels = {
   accept: string;
+  // Keep the old lines and add the new ones after them.
+  both: string;
   reject: string;
   removal: string;
 };
+
+// The app's Button, small, as classes: the widget is plain DOM.
+const small = "h-7 px-2.5 text-xs";
 
 function button(label: string, className: string, onClick: () => void) {
   const element = document.createElement("button");
@@ -28,6 +37,7 @@ export function suggestionWidget(
   labels: SuggestionWidgetLabels,
   handlers: {
     accept: (profileSuggestionId: string) => void;
+    both: (profileSuggestionId: string) => void;
     reject: (profileSuggestionId: string) => void;
   }
 ) {
@@ -40,14 +50,31 @@ export function suggestionWidget(
   root.contentEditable = "false";
 
   const lines = parseFragment(suggestion.replace);
-  for (const block of lines) {
+  const diff = lineDiff(
+    parseFragment(suggestion.find).map((block) => block.text),
+    lines.map((block) => block.text)
+  );
+  for (const [index, block] of lines.entries()) {
     const line = document.createElement("div");
     line.className = `profile-suggestion-new profile-suggestion-${block.type}`;
+    if (!diff.fallback) line.classList.add("profile-suggestion-new-diff");
     if (block.type === "item") {
       line.style.marginLeft = `${block.depth * 1.25}rem`;
-      line.textContent = `• ${block.text}`;
+      line.append("• ");
+    }
+    if (diff.fallback) {
+      line.append(block.text);
     } else {
-      line.textContent = block.text;
+      for (const segment of diff.new[index] ?? []) {
+        if (!segment.changed) {
+          line.append(segment.text);
+          continue;
+        }
+        const added = document.createElement("ins");
+        added.className = "profile-suggestion-added";
+        added.textContent = segment.text;
+        line.append(added);
+      }
     }
     root.append(line);
   }
@@ -65,12 +92,24 @@ export function suggestionWidget(
   reason.textContent = suggestion.reason;
   footer.append(
     reason,
-    button(labels.accept, "profile-suggestion-accept", () =>
+    button(labels.accept, cn(buttonVariants(), small), () =>
       handlers.accept(suggestion.id)
     ),
-    button(labels.reject, "profile-suggestion-reject", () =>
-      handlers.reject(suggestion.id)
-    )
+    button(
+      labels.reject,
+      cn(buttonVariants({ variant: "outline" }), small),
+      () => handlers.reject(suggestion.id)
+    ),
+    // Only a suggestion that replaces lines with new ones can keep both.
+    ...(suggestion.find.trim() && suggestion.replace.trim()
+      ? [
+          button(
+            labels.both,
+            cn(buttonVariants({ variant: "link" }), small),
+            () => handlers.both(suggestion.id)
+          ),
+        ]
+      : [])
   );
   root.append(footer);
   return root;

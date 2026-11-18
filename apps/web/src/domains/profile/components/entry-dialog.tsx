@@ -41,16 +41,6 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
   );
 }
 
-/** Today in the user's time zone, as YYYY-MM-DD. */
-function today() {
-  const now = new Date();
-  return [
-    now.getFullYear(),
-    String(now.getMonth() + 1).padStart(2, "0"),
-    String(now.getDate()).padStart(2, "0"),
-  ].join("-");
-}
-
 /**
  * Asks what the insert menu needs for one entry (profile spec, "Insert
  * menu"); the month and status pickers write the text in the template's
@@ -85,7 +75,7 @@ function EntryForm({
     status: "valid",
     level: "master",
     rule: "neverInclude",
-    date: kind === "addendum" ? today() : "",
+    date: "",
   });
   const [current, setCurrent] = useState(false);
   const [inProgress, setInProgress] = useState(false);
@@ -146,13 +136,18 @@ function EntryForm({
       case "gap":
         return { kind, text: v("text") };
       case "rule":
-        return {
-          kind,
-          rule: v("rule") as "neverInclude" | "neverClaim",
-          text: v("text"),
-        };
-      case "addendum":
-        return { kind, date: v("date"), text: v("text") };
+        return v("rule") === "publicName"
+          ? {
+              kind,
+              rule: "publicName",
+              original: v("original"),
+              public: v("public"),
+            }
+          : {
+              kind,
+              rule: v("rule") as "neverInclude" | "neverClaim",
+              text: v("text"),
+            };
     }
   }
 
@@ -264,6 +259,9 @@ function EntryForm({
               <SelectItem value="often">
                 {t.formatMessage({ defaultMessage: "I use it often" })}
               </SelectItem>
+              <SelectItem value="occasional">
+                {t.formatMessage({ defaultMessage: "Occasional experience" })}
+              </SelectItem>
               <SelectItem value="studied">
                 {t.formatMessage({
                   defaultMessage: "Studied, without professional experience",
@@ -292,30 +290,34 @@ function EntryForm({
               <SelectItem value="neverClaim">
                 {t.formatMessage({ defaultMessage: "Never claim" })}
               </SelectItem>
+              <SelectItem value="publicName">
+                {t.formatMessage({ defaultMessage: "Public name" })}
+              </SelectItem>
             </SelectContent>
           </Select>
         </Field>
-        {text(
-          "text",
-          t.formatMessage({
-            defaultMessage: "Name, client, codename, figure or claim",
-          })
-        )}
-      </>
-    ),
-    addendum: (
-      <>
-        <Field label={t.formatMessage({ defaultMessage: "Date" })}>
-          <Input
-            type="date"
-            required
-            value={values.date ?? ""}
-            onChange={(event) => set("date")(event.target.value)}
-          />
-        </Field>
-        {text(
-          "text",
-          t.formatMessage({ defaultMessage: "What you remembered" })
+        {values.rule === "publicName" ? (
+          <>
+            {text(
+              "original",
+              t.formatMessage({
+                defaultMessage: "Real name (project, client, person)",
+              })
+            )}
+            {text(
+              "public",
+              t.formatMessage({
+                defaultMessage: "How public documents write it",
+              })
+            )}
+          </>
+        ) : (
+          text(
+            "text",
+            t.formatMessage({
+              defaultMessage: "Name, client, codename, figure or claim",
+            })
+          )
         )}
       </>
     ),

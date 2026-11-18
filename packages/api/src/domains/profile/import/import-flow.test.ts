@@ -129,19 +129,27 @@ async function setup({ withDraft = true }: { withDraft?: boolean } = {}) {
     ).sourceDocumentId;
 
   /** Runs the import as its task would, the model answering `changes`. */
+  const calls: string[] = [];
   async function run(
     sourceDocumentId: string,
-    changes: Change[],
+    changes: Change[] | ((comparing: string) => Change[]),
     check = { is_career_document: true, has_confidentiality_rules: false }
   ) {
     const { providerPackage } = fakeProviderPackage({
-      object: ({ system }) =>
-        system.startsWith("Decide whether")
-          ? check
-          : {
-              changes: changes.map((change) => ({ reason: "r", ...change })),
-              missing: "Falta dizer o que você não fez na Gama.",
-            },
+      object: (request) => {
+        const { system } = request;
+        const messages = (request as { messages?: Array<{ content: string }> })
+          .messages;
+        if (system.startsWith("Decide whether")) return check;
+        const comparing = messages?.[0]?.content ?? "";
+        calls.push(comparing);
+        const answered =
+          typeof changes === "function" ? changes(comparing) : changes;
+        return {
+          changes: answered.map((change) => ({ reason: "r", ...change })),
+          missing: "Falta dizer o que você não fez na Gama.",
+        };
+      },
     });
     return runImportSource({
       db,
@@ -173,6 +181,7 @@ async function setup({ withDraft = true }: { withDraft?: boolean } = {}) {
     trigger,
     upload,
     run,
+    calls,
     remove,
     timeline,
     suggestions,
@@ -482,5 +491,67 @@ describe("importing a file into the profile", () => {
         language: "en-US",
       })
     ).rejects.toMatchObject({ code: "NOT_FOUND" });
+  });
+
+  it("splits an addition into one suggestion per top-level item", async () => {
+    const ctx = await setup();
+    const source = await ctx.upload();
+    await ctx.run(source, [
+      {
+        part: "certifications",
+        find: "",
+        replace:
+          "- AWS Cloud Practitioner — AWS — concluída\n- Scrum Master — Scrum.org — concluída\n  - Nível um\n- Python Institute PCAP — PI — concluída",
+        reason: "Certificações do arquivo",
+        evidence: "Backend Developer",
+      },
+    ]);
+    const waiting = await ctx.suggestions();
+    expect(waiting.map((suggestion) => suggestion.replace)).toEqual([
+      "- AWS Cloud Practitioner — AWS — concluída",
+      "- Scrum Master — Scrum.org — concluída\n  - Nível um",
+      "- Python Institute PCAP — PI — concluída",
+    ]);
+    expect(waiting.every((s) => s.reason === "Certificações do arquivo")).toBe(
+      true
+    );
+  });
+
+  it("compares a structured file in parts, each seeing only its part", async () => {
+    const ctx = await setup();
+    const experience = (name: string) =>
+      `### ${name} — Dev (2020-01 a 2021-01)\n\n- Contexto: trabalho na ${name}\n- Tecnologias: Go, ${name}Tool\n`;
+    const names = ["Alfa", "Bravo", "Charlie", "Delta", "Echo"];
+    const file = `# Truth\n\n## Identidade profissional\n\n- Dev backend sênior.\n\n## Experiência\n\n${names.map(experience).join("\n")}\n## Formação\n\n- Sistemas de Informação\n`;
+    const source = await ctx.upload(file, "truth.md");
+    const result = await ctx.run(source, (comparing) =>
+      names
+        .filter(
+          (name) =>
+            comparing.includes(`<file>`) &&
+            comparing.split("<file>")[1].includes(`${name} — Dev`)
+        )
+        .map((name) => ({
+          part: "experience",
+          find: "",
+          replace: `### ${name} — Dev (2020-01 a 2021-01)\n- Tecnologias: Go, ${name}Tool`,
+          evidence: `Tecnologias: Go, ${name}Tool`,
+        }))
+    );
+    // The sections, then two batches of up to three positions.
+    expect(ctx.calls).toHaveLength(3);
+    const seen = ctx.calls.map((call) => call.split("<file>")[1]);
+    expect(seen[0]).not.toContain("Alfa");
+    expect(seen[0]).toContain("Sistemas de Informação");
+    expect(seen[1]).toContain("Alfa");
+    expect(seen[1]).toContain("Charlie");
+    expect(seen[1]).not.toContain("Delta");
+    expect(seen[1]).not.toContain("Sistemas de Informação");
+    expect(seen[2]).toContain("Echo");
+    expect(seen[2]).not.toContain("Alfa");
+    expect(result).toMatchObject({ rejected: false, suggested: 5 });
+    expect(
+      (await ctx.suggestions()).map((suggestion) => suggestion.replace)
+    ).toHaveLength(5);
   });
 });

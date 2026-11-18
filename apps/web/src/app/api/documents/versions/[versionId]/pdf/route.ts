@@ -18,7 +18,12 @@ export async function GET(
   if (!userId) return new Response(null, { status: 401 });
   const { versionId } = await params;
   try {
-    const file = await new PdfService(db).read({ userId, versionId });
+    const file = await new PdfService(db).read({
+      userId,
+      versionId,
+      acknowledgeWarnings:
+        request.nextUrl.searchParams.get("acknowledge") === "1",
+    });
     if (!file) return new Response(null, { status: 409 });
     return fileResponse({
       ...file,

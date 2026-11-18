@@ -54,6 +54,7 @@ export const profileMarkdown = `# Perfil
 
 - Domino: Python, SQL
 - Uso com frequência: FastAPI, Django
+- Experiência pontual: PostgreSQL
 - Estudei, sem experiência profissional: Spark
 
 ## Idiomas
@@ -277,10 +278,12 @@ describe("the profile as generation reads it", () => {
       "SQL",
       "FastAPI",
       "Django",
+      "PostgreSQL",
     ]);
     expect(source.rules).toEqual({
       neverInclude: ["Projeto Fênix"],
       neverClaim: ["liderança de pessoas"],
+      publicNames: [],
     });
     // What was only studied and the known gaps are named, so code can
     // refuse a line that claims them.

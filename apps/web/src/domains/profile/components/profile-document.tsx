@@ -25,8 +25,10 @@ import {
 import { cn } from "@repo/web/lib/utils";
 
 import { useProfileLabels } from "../hooks/use-profile-labels";
-import { blockPositions } from "../utils/editor-doc";
+import { blockPositions, isLockedNode } from "../utils/editor-doc";
 import { EntryDialog } from "./entry-dialog";
+import { FindingHoverCard } from "./finding-hover-card";
+import { LinkHoverCard } from "./link-hover-card";
 import { useProfileEditor } from "./profile-editor-context";
 
 export const entryKinds: ProfileEntryKind[] = [
@@ -37,7 +39,6 @@ export const entryKinds: ProfileEntryKind[] = [
   "language",
   "gap",
   "rule",
-  "addendum",
 ];
 
 type BlockKind = "heading2" | "heading3" | "item" | "paragraph";
@@ -80,6 +81,8 @@ function dropIndex(editor: Editor, clientY: number) {
 function moveBlock(editor: Editor, from: number, to: number) {
   if (to === from || to === from + 1) return;
   const node = editor.state.doc.child(from);
+  // The title and the template's sections stay where they are.
+  if (isLockedNode(node)) return;
   const start = nodeStart(editor, from);
   const tr = editor.state.tr.delete(start, start + node.nodeSize);
   const target = nodeStart(editor, to) - (to > from ? node.nodeSize : 0);
@@ -105,8 +108,20 @@ type SlashMenu = { query: string; from: number; left: number; top: number };
  */
 export function ProfileDocument() {
   const t = useTranslation();
-  const { entryLabels } = useProfileLabels();
-  const { editor, insert, talkAbout } = useProfileEditor();
+  const { entryLabels, findingMessage } = useProfileLabels();
+  const {
+    editor,
+    insert,
+    talkAbout,
+    entryOpenerRef,
+    findings,
+    reviewFindings,
+    blocks,
+    structure,
+    fix,
+    ignoreFinding,
+    ignoreReviewFinding,
+  } = useProfileEditor();
   const [selection, setSelection] = useState<{
     text: string;
     line: number;
@@ -121,8 +136,19 @@ export function ProfileDocument() {
     null
   );
   const [blockMenu, setBlockMenu] = useState<number | null>(null);
+  // While a handle's menu is open the handle stays put: the menu is in a
+  // portal, so the pointer leaving the text must not unmount it.
+  const [addMenuOpen, setAddMenuOpen] = useState(false);
   const [dialog, setDialog] = useState<ProfileEntryKind | null>(null);
   const [slash, setSlash] = useState<SlashMenu | null>(null);
+
+  // The "+ Add" buttons at the end of the sections open the same dialog.
+  useEffect(() => {
+    entryOpenerRef.current = setDialog;
+    return () => {
+      entryOpenerRef.current = null;
+    };
+  }, [entryOpenerRef]);
   const [slashIndex, setSlashIndex] = useState(0);
 
   const blockKinds: Array<{ kind: BlockKind; label: string }> = [
@@ -261,8 +287,15 @@ export function ProfileDocument() {
     return () => dom.removeEventListener("keydown", keys, true);
   }, [editor, slash, slashIndex, slashOptions, chooseSlash]);
 
+  // The title and the template's sections have no handle: they don't move.
+  const lockedHovered =
+    !!editor &&
+    !!hovered &&
+    hovered.index < editor.state.doc.childCount &&
+    isLockedNode(editor.state.doc.child(hovered.index));
+
   function track(event: React.MouseEvent) {
-    if (!editor || drag || blockMenu !== null) return;
+    if (!editor || drag || blockMenu !== null || addMenuOpen) return;
     const box = wrapper.current?.getBoundingClientRect();
     const block = blockAt(editor, event.clientY);
     if (!block || !box) return;
@@ -300,14 +333,16 @@ export function ProfileDocument() {
       ref={wrapper}
       className="relative mx-auto w-full max-w-3xl py-8 pr-6 pl-16"
       onMouseMove={track}
-      onMouseLeave={() => !drag && blockMenu === null && setHovered(null)}
+      onMouseLeave={() =>
+        !drag && blockMenu === null && !addMenuOpen && setHovered(null)
+      }
     >
       {hovered && editor && (
         <div
           className="absolute left-4 flex items-center gap-0.5"
           style={{ top: hovered.top }}
         >
-          <DropdownMenu>
+          <DropdownMenu open={addMenuOpen} onOpenChange={setAddMenuOpen}>
             <DropdownMenuTrigger asChild>
               <button
                 type="button"
@@ -330,55 +365,57 @@ export function ProfileDocument() {
               ))}
             </DropdownMenuContent>
           </DropdownMenu>
-          <DropdownMenu
-            open={blockMenu !== null}
-            onOpenChange={(open) => !open && setBlockMenu(null)}
-          >
-            <DropdownMenuTrigger asChild>
-              <button
-                type="button"
-                aria-label={t.formatMessage({
-                  defaultMessage: "Drag to move, click for options",
-                })}
-                className="text-muted-foreground hover:bg-muted flex size-6 cursor-grab touch-none items-center justify-center rounded active:cursor-grabbing"
-                onPointerDown={startDrag}
-                onClick={(event) => event.preventDefault()}
-              >
-                <GripVertical className="size-4" />
-              </button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="start">
-              <DropdownMenuLabel>
-                {t.formatMessage({ defaultMessage: "Turn into" })}
-              </DropdownMenuLabel>
-              {blockKinds.map((block) => (
-                <DropdownMenuItem
-                  key={block.kind}
-                  onSelect={() =>
-                    blockMenu !== null &&
-                    setBlockKind(editor, blockMenu, block.kind)
-                  }
+          {!lockedHovered && (
+            <DropdownMenu
+              open={blockMenu !== null}
+              onOpenChange={(open) => !open && setBlockMenu(null)}
+            >
+              <DropdownMenuTrigger asChild>
+                <button
+                  type="button"
+                  aria-label={t.formatMessage({
+                    defaultMessage: "Drag to move, click for options",
+                  })}
+                  className="text-muted-foreground hover:bg-muted flex size-6 cursor-grab touch-none items-center justify-center rounded active:cursor-grabbing"
+                  onPointerDown={startDrag}
+                  onClick={(event) => event.preventDefault()}
                 >
-                  {block.label}
+                  <GripVertical className="size-4" />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start">
+                <DropdownMenuLabel>
+                  {t.formatMessage({ defaultMessage: "Turn into" })}
+                </DropdownMenuLabel>
+                {blockKinds.map((block) => (
+                  <DropdownMenuItem
+                    key={block.kind}
+                    onSelect={() =>
+                      blockMenu !== null &&
+                      setBlockKind(editor, blockMenu, block.kind)
+                    }
+                  >
+                    {block.label}
+                  </DropdownMenuItem>
+                ))}
+                <DropdownMenuSeparator />
+                <DropdownMenuItem
+                  variant="destructive"
+                  onSelect={() => {
+                    if (blockMenu === null) return;
+                    const start = nodeStart(editor, blockMenu);
+                    const node = editor.state.doc.child(blockMenu);
+                    editor.view.dispatch(
+                      editor.state.tr.delete(start, start + node.nodeSize)
+                    );
+                    setHovered(null);
+                  }}
+                >
+                  {t.formatMessage({ defaultMessage: "Delete" })}
                 </DropdownMenuItem>
-              ))}
-              <DropdownMenuSeparator />
-              <DropdownMenuItem
-                variant="destructive"
-                onSelect={() => {
-                  if (blockMenu === null) return;
-                  const start = nodeStart(editor, blockMenu);
-                  const node = editor.state.doc.child(blockMenu);
-                  editor.view.dispatch(
-                    editor.state.tr.delete(start, start + node.nodeSize)
-                  );
-                  setHovered(null);
-                }}
-              >
-                {t.formatMessage({ defaultMessage: "Delete" })}
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
         </div>
       )}
       {drag?.top !== null && drag?.top !== undefined && (
@@ -404,6 +441,50 @@ export function ProfileDocument() {
         </button>
       )}
       <EditorContent editor={editor} />
+      <LinkHoverCard editor={editor} />
+      <FindingHoverCard
+        editor={editor}
+        describe={(key) => {
+          const [group, number] = key.split("-");
+          const index = Number(number);
+          if (group === "review") {
+            const finding = reviewFindings[index];
+            if (!finding) return null;
+            return {
+              message: finding.message,
+              ignore: () => ignoreReviewFinding(finding),
+              talk: () =>
+                talkAbout({
+                  quote: blocks[finding.line]?.text ?? "",
+                  line: finding.line,
+                  attachment: { kind: "review", text: finding.message },
+                }),
+            };
+          }
+          const finding = findings[index];
+          if (!finding) return null;
+          const message = findingMessage(finding, structure.language);
+          const line = finding.line;
+          return {
+            message,
+            finding,
+            fix: finding.fixable ? () => fix(finding) : undefined,
+            ignore:
+              finding.kind === "content"
+                ? () => ignoreFinding(finding)
+                : undefined,
+            talk:
+              line === null
+                ? undefined
+                : () =>
+                    talkAbout({
+                      quote: blocks[line]?.text ?? "",
+                      line,
+                      attachment: { kind: "finding", text: message },
+                    }),
+          };
+        }}
+      />
       {slash && slashOptions.length > 0 && (
         <div
           className="bg-popover text-popover-foreground absolute z-20 w-64 overflow-hidden rounded-md border p-1 shadow-md"

@@ -12,6 +12,7 @@ import type { UIMessage } from "ai";
 import {
   ArrowUp,
   Loader2,
+  MessageSquarePlus,
   Paperclip,
   Quote,
   Sparkles,
@@ -29,6 +30,15 @@ import { listParts } from "@repo/api/domains/profile/truth/suggestions";
 import { useTranslation } from "@repo/intl/use-translation";
 import { Button } from "@repo/web/components/ui/button";
 import { toast } from "@repo/web/components/ui/sonner";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@repo/web/components/ui/dialog";
+import { cn } from "@repo/web/lib/utils";
 import { Textarea } from "@repo/web/components/ui/textarea";
 
 import { SourceImportStatus } from "~/domains/career/components/source-import-status";
@@ -48,8 +58,19 @@ import { useTRPC } from "~/tools/trpc/client";
 import {
   loadProfileChat,
   mintProfileChatToken,
+  recoverProfileChatRun,
+  startNewProfileChat,
   startProfileChatSession,
 } from "../actions/profile-agent-actions";
+import { useAnswerWatchdog } from "../hooks/use-answer-watchdog";
+import {
+  decideClearKey,
+  initialCommandMenu,
+  isClearCommand,
+  matchingCommands,
+  reduceCommandMenu,
+} from "../utils/chat-command";
+import { topmostNewSuggestion } from "../utils/topmost-new-suggestion";
 import { maxQuoteCharacters, useProfileEditor } from "./profile-editor-context";
 
 type ChatSession = { publicAccessToken: string; lastEventId?: string };
@@ -83,6 +104,8 @@ export function ProfileAgent() {
       chatId={loaded.data.chatId}
       initialMessages={loaded.data.messages}
       session={loaded.data.session}
+      // A chat that replaced another takes the focus: the user was typing.
+      focusOnMount={"replaced" in loaded.data}
     />
   );
 }
@@ -102,10 +125,12 @@ function Conversation({
   chatId,
   initialMessages,
   session,
+  focusOnMount,
 }: {
   chatId: string;
   initialMessages: UIMessage[];
   session: ChatSession | null;
+  focusOnMount: boolean;
 }) {
   const t = useTranslation();
   const trpc = useTRPC();
@@ -116,14 +141,32 @@ function Conversation({
     saveNow,
     agentTopic,
     clearAgentQuote,
+    clearAgentAttachment,
     refreshSuggestions,
+    refreshDismissed,
     suggestions,
     goToLine,
+    scrollToLine,
   } = useProfileEditor();
   const [text, setText] = useState("");
+  const [confirmingNew, setConfirmingNew] = useState(false);
+  // /clear was sent once: a second Enter confirms, any other key cancels.
+  const [clearArmed, setClearArmed] = useState(false);
+  const [menu, setMenu] = useState(initialCommandMenu);
+  const [startingNew, setStartingNew] = useState(false);
+  const [turnDone, setTurnDone] = useState(0);
+  // The suggestions there were when the turn began.
+  const knownIds = useRef<Set<string>>(new Set());
+  const latestSuggestions = useRef(suggestions);
+  latestSuggestions.current = suggestions;
   const bottom = useRef<HTMLDivElement>(null);
   const input = useRef<HTMLTextAreaElement>(null);
+  useEffect(() => {
+    if (focusOnMount) input.current?.focus();
+  }, [focusOnMount]);
   const quote = agentTopic?.quote ?? null;
+  const attachmentLabel = useAttachmentLabel();
+  const attachment = agentTopic?.attachment ?? null;
 
   const transport = useTriggerChatTransport<typeof profileAgent>({
     task: "profile_agent",
@@ -133,21 +176,48 @@ function Conversation({
     // A session under way: reconnect to it instead of starting one.
     sessions: session ? { [chatId]: session } : undefined,
   });
-  const { messages, sendMessage, setMessages, status, error, stop } = useChat({
+  const {
+    messages,
+    sendMessage,
+    regenerate,
+    setMessages,
+    status,
+    error,
+    stop,
+  } = useChat({
     id: chatId,
     messages: initialMessages,
     transport,
     resume: initialMessages.length > 0,
     onData: (part) => {
       // A suggestion was just proposed: it shows in the text at once.
-      if (part.type === "data-suggestion") refreshSuggestions();
+      if (part.type === "data-suggestion") void refreshSuggestions();
+      if (part.type === "data-review-resolved") void refreshDismissed();
     },
     onFinish: () => {
-      refreshSuggestions();
+      // Once the turn's suggestions are loaded, show the first new one.
+      void refreshSuggestions().then(() => setTurnDone((n) => n + 1));
+      void refreshDismissed();
       void queryClient.invalidateQueries({ queryKey: trpc.credits.pathKey() });
     },
   });
   const busy = status === "submitted" || status === "streaming";
+  useEffect(() => {
+    if (busy) {
+      knownIds.current = new Set(latestSuggestions.current.map((s) => s.id));
+    }
+    // Only the start of a turn takes the snapshot.
+  }, [busy]);
+  useEffect(() => {
+    if (!turnDone) return;
+    const first = topmostNewSuggestion(
+      knownIds.current,
+      latestSuggestions.current
+    );
+    if (first) scrollToLine(first.range!.start);
+    // Once per finished turn.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [turnDone]);
   const { sendAction } = useChatActions({ sendMessage });
 
   // Files attached here are sources like any other: each is read into
@@ -197,31 +267,79 @@ function Conversation({
     if (unsaid && !busy) catchUp.current?.();
   }, [unsaid, busy]);
 
-  // A passage or a finding sent here from the document: its words go to the
-  // composer, ready to send.
+  // A passage or a finding sent here from the document: the composer takes
+  // focus, the person's words still to write.
   const topicId = agentTopic?.id;
   useEffect(() => {
     if (!agentTopic) return;
-    if (agentTopic.text) setText(agentTopic.text);
     input.current?.focus();
     // Only when a new topic arrives, not when its quote is cleared.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [topicId]);
 
-  // An answer that never starts (its run waiting for a worker, say) gives
-  // up after a minute instead of thinking forever.
+  // An answer that never starts (the run holding the session died, say):
+  // the run is cancelled and the same message goes again, once; if that is
+  // not answered either, the user is asked instead of looping.
+  const resend = async () => {
+    await recoverProfileChatRun({ chatId });
+    await stop();
+    // Same message, same id: the agent doesn't take it twice.
+    await regenerate();
+  };
+  const watchdog = useAnswerWatchdog({
+    status,
+    timeoutMs: agentSettings.answerStartTimeoutMs,
+    recover: resend,
+  });
+  const failed = watchdog.phase === "failed";
   useEffect(() => {
-    if (status !== "submitted") return;
-    const timer = setTimeout(() => void stop(), 60_000);
-    return () => clearTimeout(timer);
-  }, [status, stop]);
+    if (failed) void stop();
+  }, [failed, stop]);
 
   useEffect(() => {
     bottom.current?.scrollIntoView({ block: "end" });
   }, [messages, status]);
 
+  // The conversation's messages are deleted; the new chat's id remounts
+  // the conversation, so its messages, composer and transport start over.
+  async function startNew() {
+    // Optimistic: the conversation empties at once; the new chat's id comes
+    // right after and remounts it.
+    const previous = messages;
+    setStartingNew(true);
+    setMessages([]);
+    clearAgentQuote();
+    clearAgentAttachment();
+    setText("");
+    setConfirmingNew(false);
+    try {
+      await stop();
+      const fresh = await startNewProfileChat();
+      queryClient.setQueryData(["profile-chat"], {
+        ...fresh,
+        replaced: true,
+      });
+    } catch {
+      setMessages(previous);
+      toast.error(
+        t.formatMessage({
+          defaultMessage: "The conversation couldn't be restarted. Try again.",
+        })
+      );
+    } finally {
+      setStartingNew(false);
+    }
+  }
+
   async function send(words: string) {
-    if (!words.trim() || busy) return;
+    // The command starts a new conversation; the agent never sees it.
+    if (isClearCommand(words)) {
+      setClearArmed(true);
+      return;
+    }
+    // An attachment alone is a question: how to resolve it.
+    if ((!words.trim() && !attachment) || busy) return;
+    watchdog.reset();
     // The agent reads the saved draft: what was just typed goes first.
     if ((await saveNow()) === null) {
       toast.error(
@@ -232,10 +350,11 @@ function Conversation({
       return;
     }
     void sendMessage({
-      text: composeAgentMessage(quote, words, agentTopic?.part),
+      text: composeAgentMessage(quote, words, agentTopic?.part, attachment),
     });
     setText("");
     clearAgentQuote();
+    clearAgentAttachment();
   }
 
   function onSubmit(event: FormEvent) {
@@ -292,8 +411,55 @@ function Conversation({
     last?.role === "assistant" &&
     last.parts.at(-1)?.type === "text";
 
+  const commands = clearArmed ? [] : matchingCommands(text);
+  const menuOpen = commands.length > 0 && !menu.closed;
+  const activeIndex = Math.min(menu.index, Math.max(commands.length - 1, 0));
+  const optionId = (command: string) => `profile-command-${command.slice(1)}`;
+
   return (
     <div className="flex h-full min-h-0 flex-col">
+      {messages.length > 0 && (
+        <div className="flex justify-end border-b px-3 py-1.5">
+          <Button
+            type="button"
+            size="sm"
+            variant="ghost"
+            className="text-muted-foreground"
+            onClick={() => setConfirmingNew(true)}
+          >
+            <MessageSquarePlus />
+            {t.formatMessage({ defaultMessage: "New conversation" })}
+          </Button>
+        </div>
+      )}
+      <Dialog open={confirmingNew} onOpenChange={setConfirmingNew}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>
+              {t.formatMessage({ defaultMessage: "Start a new conversation?" })}
+            </DialogTitle>
+            <DialogDescription>
+              {t.formatMessage({
+                defaultMessage:
+                  "The questions and answers of this conversation will be deleted. Everything already in your profile stays: the accepted changes and the suggestions still waiting for your answer in the text.",
+              })}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              disabled={startingNew}
+              onClick={() => setConfirmingNew(false)}
+            >
+              {t.formatMessage({ defaultMessage: "Cancel" })}
+            </Button>
+            <Button disabled={startingNew} onClick={() => void startNew()}>
+              {startingNew && <Loader2 className="animate-spin" />}
+              {t.formatMessage({ defaultMessage: "New conversation" })}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
       <div className="min-h-0 flex-1 overflow-y-auto">
         <ol className="flex flex-col gap-3 p-4">
           {messages.length === 0 && (
@@ -369,11 +535,36 @@ function Conversation({
             >
               <Sparkles className="text-primary size-4 motion-safe:animate-pulse" />
               <span className="from-foreground via-muted-foreground to-foreground motion-safe:animate-shimmer bg-linear-to-r bg-[length:200%_100%] bg-clip-text text-transparent">
-                {activity}
+                {watchdog.phase === "recovering"
+                  ? t.formatMessage({
+                      defaultMessage: "Reconnecting to the agent…",
+                    })
+                  : activity}
               </span>
             </li>
           )}
-          {error && (
+          {failed && (
+            <li
+              role="alert"
+              className="text-destructive flex flex-col items-start gap-2 self-start text-sm"
+            >
+              {t.formatMessage({
+                defaultMessage:
+                  "The agent didn't answer. Check your connection and try again.",
+              })}
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => {
+                  watchdog.reset();
+                  void resend().catch(() => watchdog.fail());
+                }}
+              >
+                {t.formatMessage({ defaultMessage: "Try again" })}
+              </Button>
+            </li>
+          )}
+          {error && !failed && (
             // The agent's own message is English-only; this one is the
             // user's language.
             <li className="text-destructive self-start text-sm">
@@ -430,7 +621,71 @@ function Conversation({
             </button>
           </div>
         )}
-        <div className="bg-background relative rounded-xl border shadow-sm">
+        {attachment && (
+          <div className="bg-muted/60 mb-2 flex items-start gap-2 rounded-md border px-2.5 py-1.5 text-xs">
+            <Sparkles className="text-muted-foreground mt-0.5 size-3.5 shrink-0" />
+            <span className="min-w-0 flex-1">
+              <span className="text-muted-foreground block font-medium">
+                {attachmentLabel(attachment.kind)}
+              </span>
+              <span className="text-muted-foreground line-clamp-3 whitespace-pre-wrap">
+                {attachment.text}
+              </span>
+            </span>
+            <button
+              type="button"
+              aria-label={t.formatMessage({
+                defaultMessage: "Remove the attachment",
+              })}
+              onClick={clearAgentAttachment}
+              className="text-muted-foreground hover:text-foreground"
+            >
+              <X className="size-3.5" />
+            </button>
+          </div>
+        )}
+        {menuOpen && (
+          <ul
+            id="profile-command-list"
+            role="listbox"
+            className="bg-background mb-2 rounded-md border text-xs shadow-sm"
+          >
+            {commands.map((command, index) => (
+              <li
+                key={command}
+                id={optionId(command)}
+                role="option"
+                aria-selected={index === activeIndex}
+                onMouseEnter={() => setMenu((m) => ({ ...m, index }))}
+                onMouseDown={(event) => event.preventDefault()}
+                onClick={() => {
+                  setText(command);
+                  input.current?.focus();
+                }}
+                className={cn(
+                  "flex w-full cursor-pointer items-baseline gap-2 px-2.5 py-1.5 text-left",
+                  index === activeIndex && "bg-muted"
+                )}
+              >
+                <span className="font-mono font-medium">{command}</span>
+                <span className="text-muted-foreground">
+                  {t.formatMessage({
+                    defaultMessage: "Start a new conversation",
+                  })}
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
+        {clearArmed && (
+          <p className="text-muted-foreground mb-1.5 text-xs">
+            {t.formatMessage({
+              defaultMessage:
+                "Press Enter again to delete this conversation. Any other key cancels.",
+            })}
+          </p>
+        )}
+        <div className="bg-background flex flex-col rounded-xl border shadow-sm">
           <Textarea
             ref={input}
             rows={2}
@@ -439,22 +694,67 @@ function Conversation({
             maxLength={
               agentSettings.maxMessageCharacters - maxQuoteCharacters - 100
             }
-            onChange={(event) => setText(event.target.value)}
+            role="combobox"
+            aria-expanded={menuOpen}
+            aria-controls="profile-command-list"
+            aria-autocomplete="list"
+            aria-activedescendant={
+              menuOpen ? optionId(commands[activeIndex]) : undefined
+            }
+            onChange={(event) => {
+              setClearArmed(false);
+              setMenu(initialCommandMenu);
+              setText(event.target.value);
+            }}
+            onBlur={() => {
+              if (!clearArmed) return;
+              setClearArmed(false);
+              setText("");
+            }}
             onKeyDown={(event) => {
-              if (event.key === "Enter" && !event.shiftKey) onSubmit(event);
+              const nav = reduceCommandMenu(menu, event.key, commands);
+              if (nav.handled) {
+                event.preventDefault();
+                setMenu(nav.state);
+                if (nav.pick) {
+                  setText(nav.pick.command);
+                  if (nav.pick.run) void send(nav.pick.command);
+                }
+                return;
+              }
+              const decision = decideClearKey(
+                clearArmed && isClearCommand(text),
+                event.key,
+                event.shiftKey
+              );
+              if (decision === "confirm") {
+                event.preventDefault();
+                setClearArmed(false);
+                void startNew();
+              } else if (decision === "cancel") {
+                // The key is not swallowed: it types into the emptied box.
+                setClearArmed(false);
+                setText("");
+              } else if (decision === "send") onSubmit(event);
             }}
             placeholder={
-              quote
+              attachment
                 ? t.formatMessage({
-                    defaultMessage: "What about this passage?",
+                    defaultMessage: "What do you want to do about it?",
                   })
-                : t.formatMessage({
-                    defaultMessage: "Tell what you did, or ask where to start",
-                  })
+                : quote
+                  ? t.formatMessage({
+                      defaultMessage: "What about this passage?",
+                    })
+                  : t.formatMessage({
+                      defaultMessage:
+                        "Tell what you did, or ask where to start",
+                    })
             }
-            className="max-h-40 resize-none border-0 pb-10 shadow-none focus-visible:ring-0"
+            className="max-h-40 resize-none border-0 shadow-none focus-visible:ring-0"
           />
-          <div className="absolute right-2 bottom-2 left-3 flex items-center gap-1">
+          {/* Below the text, not over it: a long message scrolls clear of it. */}
+          <div className="flex items-center gap-1 pr-2 pb-2 pl-3">
             <CreditCost credits={credits.data?.estimates.agentMessage} />
             {messages.length > 0 && (
               <button
@@ -513,6 +813,21 @@ function Conversation({
   );
 }
 
+/** What an attachment is called, by its kind. */
+function useAttachmentLabel() {
+  const t = useTranslation();
+  return (kind: "finding" | "review") =>
+    kind === "finding"
+      ? t.formatMessage({
+          defaultMessage: "Finding",
+          description: "Label of a linter finding attached to a chat message",
+        })
+      : t.formatMessage({
+          defaultMessage: "Review",
+          description: "Label of a quality-review note attached to a message",
+        });
+}
+
 /** The user's message: the passage it is about, where from, then their words. */
 function UserMessage({
   message,
@@ -521,11 +836,12 @@ function UserMessage({
   message: UIMessage;
   partTitle: (key: string | undefined) => string;
 }) {
-  const { quote, part, text } = splitAgentMessage(
+  const { quote, part, attachment, text } = splitAgentMessage(
     message.parts
       .flatMap((piece) => (piece.type === "text" ? [piece.text] : []))
       .join("")
   );
+  const attachmentLabel = useAttachmentLabel();
   const from = part ? partTitle(part) : "";
   return (
     <li className="bg-muted max-w-[90%] self-end rounded-2xl px-3.5 py-2 text-sm whitespace-pre-wrap">
@@ -533,6 +849,14 @@ function UserMessage({
         <span className="text-muted-foreground mb-1 block border-l-2 pl-2 text-xs">
           {from && <span className="block font-medium">{from}</span>}
           <span className="line-clamp-3">{quote}</span>
+        </span>
+      )}
+      {attachment && (
+        <span className="text-muted-foreground mb-1 block border-l-2 pl-2 text-xs">
+          <span className="block font-medium">
+            {attachmentLabel(attachment.kind)}
+          </span>
+          <span className="line-clamp-3">{attachment.text}</span>
         </span>
       )}
       {text}

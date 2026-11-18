@@ -44,8 +44,9 @@ const sectionItems: Record<
       "Site ou portfólio:",
     ],
     rules: [
-      "Nunca incluir: documentos de identidade, dados bancários, dados pessoais fora da seção Contato, informações confidenciais de empregadores.",
-      "Nunca afirmar:",
+      "Nunca incluir: documentos de identidade, dados bancários, dados pessoais fora da seção Contato, informações confidenciais de empregadores; nomes de pessoas; motivos de saída, demissões e opiniões sobre ex-empregadores; valores de salário e faturamento; detalhes de vulnerabilidades; nomes internos de repositórios e projetos.",
+      "Nunca afirmar: números que não estejam marcados como [medido] ou [estimado].",
+      "Nomes públicos:",
     ],
   },
   "en-US": {
@@ -62,8 +63,9 @@ const sectionItems: Record<
       "Website or portfolio:",
     ],
     rules: [
-      "Never include: identity documents, bank details, personal data outside the Contact section, employers' confidential information.",
-      "Never claim:",
+      "Never include: identity documents, bank details, personal data outside the Contact section, employers' confidential information; names of people; reasons for leaving, layoffs and opinions about former employers; salary and revenue figures; vulnerability details; internal names of repositories and projects.",
+      "Never claim: figures not marked [measured] or [estimated].",
+      "Public names:",
     ],
   },
 };
@@ -89,9 +91,10 @@ export function profileTemplate(language: ProfileLanguage): ProfileBlock[] {
   return [
     { type: "heading", level: 1, text: title },
     ...quote.map((text) => ({ type: "quote" as const, text })),
-    ...(Object.keys(sectionHeadings[language]) as ProfileSectionKey[]).flatMap(
-      (key) => sectionTemplate(key, language)
-    ),
+    ...(Object.keys(sectionHeadings[language]) as ProfileSectionKey[])
+      // Addenda is no longer read: a new profile doesn't have it.
+      .filter((key) => key !== "addenda")
+      .flatMap((key) => sectionTemplate(key, language)),
   ];
 }
 

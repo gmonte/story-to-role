@@ -12,6 +12,7 @@ import { logger } from "@repo/common/tools/logger";
 import type { CoverageReviewContent } from "../coverage-review/coverage-review";
 import { reviewCoverage } from "../coverage-review/run-coverage-review";
 import { DocumentsRepository } from "../documents-repository";
+import { repairPublicNames } from "../generation/public-names";
 import {
   assembleResume,
   type AssemblyDraft,
@@ -226,7 +227,17 @@ export async function runGenerateLinkedin(deps: {
       linkedinAsResume(assembled.content),
       filter
     );
-    const content = withoutLines(assembled.content, forbidden);
+    // A line still naming something by its real name is rewritten once with
+    // the public form; if it still does, the code checks warn.
+    const repaired = await repairPublicNames({
+      ai,
+      filter,
+      content: assembled.content,
+      role,
+      language: generation.language,
+    });
+    stoppedBy ??= repaired.stoppedBy;
+    const content = withoutLines(repaired.content, forbidden);
     if (
       lockedFactViolations(linkedinAsResume(content), context.positions)
         .length > 0

@@ -35,7 +35,11 @@ import {
 import { toast } from "@repo/web/components/ui/sonner";
 
 import { useDocumentLabels } from "~/domains/documents/hooks/use-document-labels";
-import { hasFindings } from "~/domains/documents/utils/version-checks";
+import { WarningsDialog } from "~/domains/documents/components/warnings-dialog";
+import {
+  hasFindings,
+  hasWarnings,
+} from "~/domains/documents/utils/version-checks";
 import { useOpeningDocuments } from "~/domains/documents/hooks/use-opening-documents";
 import { useTRPC } from "~/tools/trpc/client";
 import { useOpening } from "~/domains/openings/hooks/use-opening";
@@ -324,6 +328,10 @@ function MarkAppliedForm({
   const blocked = versions.some(
     ({ version }) => selected.includes(version.id) && hasFindings(version)
   );
+  const warned = versions.some(
+    ({ version }) => selected.includes(version.id) && hasWarnings(version)
+  );
+  const [confirming, setConfirming] = useState(false);
   const [date, setDate] = useState(today());
   const mark = useMutation(
     trpc.tracker.markApplied.mutationOptions({
@@ -334,6 +342,14 @@ function MarkAppliedForm({
       onError: (error) => toast.error(error.message),
     })
   );
+
+  const send = (acknowledgeWarnings: boolean) =>
+    mark.mutate({
+      applicationId,
+      versionIds: selected,
+      appliedAt: dayToDate(date),
+      acknowledgeWarnings: acknowledgeWarnings || undefined,
+    });
 
   return (
     <>
@@ -404,16 +420,18 @@ function MarkAppliedForm({
                 })
               : undefined
           }
-          onClick={() =>
-            mark.mutate({
-              applicationId,
-              versionIds: selected,
-              appliedAt: dayToDate(date),
-            })
-          }
+          onClick={() => (warned ? setConfirming(true) : send(false))}
         >
           {t.formatMessage({ defaultMessage: "Mark as applied" })}
         </Button>
+        <WarningsDialog
+          open={confirming}
+          onOpenChange={setConfirming}
+          confirmLabel={t.formatMessage({
+            defaultMessage: "Mark as applied anyway",
+          })}
+          onConfirm={() => send(true)}
+        />
       </DialogFooter>
     </>
   );

@@ -14,14 +14,17 @@ import { GripVertical } from "lucide-react";
 const minPreview = 320;
 const minChat = 352;
 const defaultPreview = 560;
+// The side panel's width: a chat needs room, a list less.
+const minPanel = 288;
+const defaultPanel = { flush: 448, padded: 352 };
 
 // The split is a per-viewer convenience: storage may be missing or blocked.
-function readWidth(key: string) {
+function readWidth(key: string, fallback: number) {
   try {
     const stored = Number(window.localStorage.getItem(key));
-    return Number.isFinite(stored) && stored > 0 ? stored : defaultPreview;
+    return Number.isFinite(stored) && stored > 0 ? stored : fallback;
   } catch {
-    return defaultPreview;
+    return fallback;
   }
 }
 
@@ -34,10 +37,10 @@ function saveWidth(key: string, width: number) {
 }
 
 /**
- * The chat, the side panel and, when a file is open, its preview. With a
- * preview open, the dividers on both sides of the side panel can be dragged:
- * the side panel keeps its width, the preview grows or shrinks and the chat
- * takes the rest. The chat is always the first child, so opening or closing a preview
+ * The chat, the side panel and, when a file is open, its preview. The
+ * divider before the side panel resizes the panel; the one before the
+ * preview resizes the preview; the chat takes the rest. Both widths are
+ * remembered per screen. The chat is always the first child, so opening or closing a preview
  * never remounts it (its draft and scroll stay).
  */
 export function WorkspaceBody({
@@ -58,33 +61,47 @@ export function WorkspaceBody({
   previewOpen?: boolean;
 }) {
   const storageKey = `workspace-preview-width:${layoutId}`;
+  const panelKey = `workspace-panel-width:${layoutId}`;
+  const panelFallback = flushPanel ? defaultPanel.flush : defaultPanel.padded;
   const container = useRef<HTMLDivElement>(null);
-  const side = useRef<HTMLElement>(null);
   // Read once on the client; the server never renders an open preview.
   const [width, setWidth] = useState(() =>
-    typeof window === "undefined" ? defaultPreview : readWidth(storageKey)
+    typeof window === "undefined"
+      ? defaultPreview
+      : readWidth(storageKey, defaultPreview)
+  );
+  const [panelWidth, setPanelWidth] = useState(() =>
+    typeof window === "undefined"
+      ? panelFallback
+      : readWidth(panelKey, panelFallback)
   );
 
-  function startDrag(event: ReactPointerEvent<HTMLDivElement>) {
+  /** Drags a divider: leftwards widens the column on its right. */
+  function startDrag(
+    event: ReactPointerEvent<HTMLDivElement>,
+    column: "panel" | "preview"
+  ) {
     event.preventDefault();
     const startX = event.clientX;
-    const startWidth = width;
+    const startWidth = column === "panel" ? panelWidth : width;
     const total = container.current?.clientWidth ?? 0;
-    const panelWidth = side.current?.offsetWidth ?? 0;
+    const others =
+      column === "panel" ? (previewOpen ? width : 0) : panel ? panelWidth : 0;
+    const min = column === "panel" ? minPanel : minPreview;
     let next = startWidth;
 
     const onMove = (move: PointerEvent) => {
-      // Dragging left widens the preview.
       next = Math.min(
-        Math.max(startWidth + startX - move.clientX, minPreview),
-        Math.max(total - panelWidth - minChat, minPreview)
+        Math.max(startWidth + startX - move.clientX, min),
+        Math.max(total - others - minChat, min)
       );
-      setWidth(next);
+      if (column === "panel") setPanelWidth(next);
+      else setWidth(next);
     };
     const onUp = () => {
       window.removeEventListener("pointermove", onMove);
       window.removeEventListener("pointerup", onUp);
-      saveWidth(storageKey, next);
+      saveWidth(column === "panel" ? panelKey : storageKey, next);
     };
     window.addEventListener("pointermove", onMove);
     window.addEventListener("pointerup", onUp);
@@ -92,27 +109,33 @@ export function WorkspaceBody({
 
   return (
     <div ref={container} className="flex min-h-0 flex-1">
-      <main className="flex min-w-0 flex-1 flex-col">{chat}</main>
-      {previewOpen && <Divider onPointerDown={startDrag} />}
+      {/* The main column keeps room to work: the columns beside it give way
+          (down to their minimum) when the screen is too narrow for all. */}
+      <main className="flex min-w-[40rem] flex-1 flex-col">{chat}</main>
+      {panel && (
+        <Divider onPointerDown={(event) => startDrag(event, "panel")} />
+      )}
       {panel && (
         // A panel that renders nothing (My career before the privacy notice)
         // leaves no empty column behind.
         <aside
-          ref={side}
+          style={{ width: panelWidth, minWidth: minPanel }}
           className={
             flushPanel
-              ? "bg-muted/30 hidden w-96 shrink-0 overflow-hidden border-l empty:hidden lg:block xl:w-[28rem]"
-              : "bg-muted/30 hidden w-80 shrink-0 overflow-y-auto border-l p-4 empty:hidden lg:block xl:w-96"
+              ? "bg-muted/30 hidden max-w-[50vw] overflow-hidden empty:hidden lg:block"
+              : "bg-muted/30 hidden max-w-[50vw] overflow-y-auto p-4 empty:hidden lg:block"
           }
         >
           {panel}
         </aside>
       )}
-      {previewOpen && <Divider onPointerDown={startDrag} />}
+      {previewOpen && (
+        <Divider onPointerDown={(event) => startDrag(event, "preview")} />
+      )}
       {previewOpen && (
         <aside
-          style={{ width }}
-          className="bg-background hidden max-w-[60vw] shrink-0 border-l empty:hidden lg:block"
+          style={{ width, minWidth: minPreview }}
+          className="bg-background hidden max-w-[60vw] empty:hidden lg:block"
         >
           {preview}
         </aside>

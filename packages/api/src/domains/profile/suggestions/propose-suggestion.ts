@@ -49,6 +49,38 @@ export type SuggestionRefusal =
  * A pending suggestion whose lines the new one rewrites is superseded by
  * it.
  */
+/** The first written line of a change's new text, to compare additions. */
+function firstNewLine(change: Pick<ProfileChange, "find" | "replace">) {
+  const added = change.find
+    ? change.replace.slice(change.find.length)
+    : change.replace;
+  return (
+    added
+      .split("\n")
+      .map((line) => line.trim().toLowerCase())
+      .find(Boolean) ?? ""
+  );
+}
+
+/**
+ * Waiting additions that start with the same line as this one (the same
+ * new experience, proposed again): an addition has no lines to overlap, so
+ * without this a second version would wait beside the first.
+ */
+export function sameAdditions(
+  pending: Array<Pick<ProfileChange, "find" | "replace"> & { id: string }>,
+  change: Pick<ProfileChange, "find" | "replace">
+) {
+  const isAddition = (other: Pick<ProfileChange, "find" | "replace">) =>
+    !other.find.trim() || other.replace.startsWith(other.find);
+  if (!isAddition(change)) return [];
+  const first = firstNewLine(change);
+  if (!first) return [];
+  return pending
+    .filter((other) => isAddition(other) && firstNewLine(other) === first)
+    .map((other) => other.id);
+}
+
 export async function proposeSuggestion(input: {
   db: DbClient;
   cipher: UserCipher;
@@ -91,6 +123,7 @@ export async function proposeSuggestion(input: {
       );
     })
     .map((other) => other.id)
+    .concat(sameAdditions(input.pending ?? [], change))
     .concat(input.supersedes ?? []);
   const figures = ungivenFigures(change.replace, [
     serializeBlocks(input.draft),

@@ -1,5 +1,7 @@
 import { foldAccents } from "@repo/api/utils/text/fold-accents";
 
+import type { PublicName } from "./public-names";
+
 export type NeverIncludeRule = {
   original: string;
   // Null until the user reviews the item: hidden like an exclusion meanwhile.
@@ -18,7 +20,19 @@ function escapeRegExp(text: string) {
  * code before and after every AI call (principle 4): what goes into a
  * prompt is rewritten, and an output still carrying a generalized or excluded original is rejected.
  */
-export function createNeverIncludeFilter(rules: NeverIncludeRule[]) {
+export function createNeverIncludeFilter(
+  rules: NeverIncludeRule[],
+  // What the profile's communication rules say beyond literal terms:
+  // categories (instructions for the writer, never matched as words) and
+  // the public names dictionary, which is never applied to a prompt: the
+  // writer must know what each name is. Code only detects an original that
+  // is still in an output.
+  extras: { categories?: string[]; publicNames?: PublicName[] } = {}
+) {
+  const categories = extras.categories ?? [];
+  const publicNames = (extras.publicNames ?? []).filter(
+    (name) => name.original.trim() && name.public.trim()
+  );
   // Longest first, so "Banco X Seguros" wins over "Banco X".
   const hidden = rules
     .filter((rule) => rule.choice !== "use" && rule.original.trim())
@@ -66,6 +80,35 @@ export function createNeverIncludeFilter(rules: NeverIncludeRule[]) {
   }
 
   return {
+    categories,
+    publicNames,
+
+    /** The public-names originals an output still carries (never rewritten). */
+    mentionedPublicNames(output: string) {
+      return publicNames.filter((name) =>
+        mentions(output, { original: name.original, choice: "generalize" })
+      );
+    },
+
+    /**
+     * A field printed by code (an employer, a title) in its public form:
+     * the only place code substitutes a public name, since a field has no
+     * sentence around it to adjust.
+     */
+    inPublicForm(field: string) {
+      return publicNames
+        .toSorted((a, b) => b.original.length - a.original.length)
+        .reduce(
+          (current, name) =>
+            replaceAll(
+              current,
+              { original: name.original, choice: "generalize" },
+              name.public
+            ),
+          field
+        );
+    },
+
     /** Rewrites text before it enters a prompt. */
     apply(text: string) {
       return hidden.reduce(

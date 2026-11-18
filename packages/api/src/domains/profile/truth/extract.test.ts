@@ -40,6 +40,7 @@ const profile = `# Perfil
 ## Competências
 
 - Domino: Python, SQL
+- Experiência pontual: Redis
 - Estudei, sem experiência profissional: Spark
 
 ## Idiomas
@@ -54,6 +55,7 @@ const profile = `# Perfil
 
 - Nunca incluir: Projeto Fênix, dados do cliente Alfa
 - Nunca afirmar: liderança de pessoas
+- Nomes públicos: Projeto Fênix → plataforma de pagamentos; Banco X -> banco de varejo
 `;
 
 describe("the published profile's extract", () => {
@@ -82,11 +84,16 @@ describe("the published profile's extract", () => {
     expect(extract.competencies).toEqual([
       { name: "Python", level: "master" },
       { name: "SQL", level: "master" },
+      { name: "Redis", level: "occasional" },
       { name: "Spark", level: "studied" },
     ]);
     expect(extract.rules).toEqual({
       neverInclude: ["Projeto Fênix", "dados do cliente Alfa"],
       neverClaim: ["liderança de pessoas"],
+      publicNames: [
+        { original: "Projeto Fênix", public: "plataforma de pagamentos" },
+        { original: "Banco X", public: "banco de varejo" },
+      ],
     });
     const passages = profilePassages(parseBlocks(profile));
     for (const figure of extract.figures) {
@@ -126,6 +133,7 @@ describe("the published profile's extract", () => {
       "Beta — Backend (2022-03 a atual): O que NÃO fiz: não administrei nuvem; não liderei pessoas.":
         "notDone",
       "Domino: Python, SQL": "evidence",
+      "Experiência pontual: Redis": "evidence",
       "Estudei, sem experiência profissional: Spark": "studied",
       "Spark em produção.": "gap",
       "Nunca incluir: Projeto Fênix, dados do cliente Alfa": "rule",
@@ -157,5 +165,17 @@ describe("what Validate reviews", () => {
     expect(
       changedChunks(parseBlocks(edited), parseBlocks(profile)).map((c) => c.key)
     ).toEqual(["experience:beta — backend", "experience:gama — júnior"]);
+  });
+  it("reads public names written one per sub-item", () => {
+    const blocks = parseBlocks(
+      profile.replace(
+        "- Nomes públicos: Projeto Fênix → plataforma de pagamentos; Banco X -> banco de varejo",
+        "- Nomes públicos:\n  - Projeto Fênix → plataforma de pagamentos\n  - Banco X -> banco de varejo"
+      )
+    );
+    expect(extractProfile(blocks).rules.publicNames).toEqual([
+      { original: "Projeto Fênix", public: "plataforma de pagamentos" },
+      { original: "Banco X", public: "banco de varejo" },
+    ]);
   });
 });

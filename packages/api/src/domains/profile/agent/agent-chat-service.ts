@@ -62,6 +62,21 @@ export class AgentChatService {
   }
 
   /**
+   * Ends the user's conversation: its messages are deleted now and the next
+   * `current()` is a new one. The profile, its suggestions and the findings
+   * are not touched. Returns the ended chats, whose runs the caller cancels.
+   */
+  async startNew(userId: string, now = new Date()) {
+    await this.requireNotice(userId);
+    const closedChatIds = await this.db.transaction(async (tx) => {
+      const chats = new AgentChatRepository(tx);
+      await chats.lockUser(userId);
+      return chats.closeOpenChats(userId, now);
+    });
+    return { closedChatIds, ...(await this.current(userId, now)) };
+  }
+
+  /**
    * The chat, when it's the user's, after the privacy notice and before its
    * session expires; anyone else's is not found.
    */

@@ -139,6 +139,7 @@ export class LinkedinService {
     userId: string;
     versionId: string;
     section: string;
+    acknowledgeWarnings?: boolean;
   }): Promise<{ text: string }> {
     const { version, document, profile } = await requireUserVersion(
       this.db,
@@ -158,6 +159,7 @@ export class LinkedinService {
       version,
       snapshot: latest,
       contexts: new FrozenContexts(this.db, cipher, profile.id),
+      acknowledgeWarnings: input.acknowledgeWarnings,
     });
     const content = decryptDocument(cipher, latest);
     if (content.kind !== "linkedin") throw notFound();

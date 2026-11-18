@@ -34,6 +34,7 @@ import {
   adjustmentDraft,
   relinkReference,
 } from "./adjust-resume";
+import { repairPublicNames } from "./public-names";
 import {
   assembleResume,
   type AssemblyDraft,
@@ -46,6 +47,7 @@ import { loadCareerContext } from "./load-career-context";
 import {
   adjusterPrompt,
   editorPrompt,
+  outputLanguageNames,
   type OpeningBrief,
   purposesOf,
   resumeMaterial,
@@ -396,7 +398,18 @@ export async function runGenerateResume(deps: {
             return candidate.rating > top.rating ? candidate : top;
           })
         : null;
-    const best = bestRound ?? adjusted!;
+    const chosen = bestRound ?? adjusted!;
+    // A line still naming something by its real name is rewritten once
+    // with the public form; if it still does, the code checks warn.
+    const repaired = await repairPublicNames({
+      ai,
+      filter,
+      content: chosen.content,
+      role,
+      language: outputLanguageNames[generation.language],
+    });
+    stoppedBy ??= repaired.stoppedBy;
+    const best = { ...chosen, content: repaired.content };
     // Code has the last word: lines with a forbidden term go, and a resume
     // whose real PDF runs over its pages is shortened in the settings'
     // order, never touching the bullets of recent experiences.

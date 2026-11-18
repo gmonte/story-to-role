@@ -59,7 +59,8 @@ export class PdfService {
     version: Version,
     document: Document,
     latest: Parameters<typeof assertSendable>[0]["snapshot"],
-    contexts?: FrozenContexts
+    contexts?: FrozenContexts,
+    acknowledgeWarnings?: boolean
   ) {
     // LinkedIn text is copied from the interface, never exported as a file.
     if (document.kind === "linkedin")
@@ -72,6 +73,7 @@ export class PdfService {
       version,
       snapshot: latest,
       contexts,
+      acknowledgeWarnings,
     });
   }
 
@@ -81,12 +83,21 @@ export class PdfService {
     userId: string,
     version: Version,
     document: Document,
-    contexts?: FrozenContexts
+    contexts?: FrozenContexts,
+    acknowledgeWarnings?: boolean
   ) {
     const repository = new DocumentsRepository(tx);
     const latest = await repository.latestSnapshot(version.id);
     if (!latest) throw new TRPCError({ code: "NOT_FOUND" });
-    await this.requireSendable(tx, userId, version, document, latest, contexts);
+    await this.requireSendable(
+      tx,
+      userId,
+      version,
+      document,
+      latest,
+      contexts,
+      acknowledgeWarnings
+    );
     if (await repository.findRenderedFile(latest.id, pdfTemplate)) return true;
     if (!(await new TasksRepository(tx).activeTask(latest.id, "render_pdf"))) {
       await this.tasks.start({
@@ -98,7 +109,11 @@ export class PdfService {
     return false;
   }
 
-  async request(input: { userId: string; versionId: string }) {
+  async request(input: {
+    userId: string;
+    versionId: string;
+    acknowledgeWarnings?: boolean;
+  }) {
     const { version, document } = await requireUserVersion(
       this.db,
       input.userId,
@@ -109,7 +124,9 @@ export class PdfService {
         this.db,
         input.userId,
         version,
-        document
+        document,
+        undefined,
+        input.acknowledgeWarnings
       ),
     };
   }
@@ -136,7 +153,11 @@ export class PdfService {
   }
 
   /** Starts what is missing for the application's ZIP; ready when none is. */
-  async prepareApplication(input: { userId: string; openingId: string }) {
+  async prepareApplication(input: {
+    userId: string;
+    openingId: string;
+    acknowledgeWarnings?: boolean;
+  }) {
     const { documents, versions } = await this.applicationVersions(
       input.userId,
       input.openingId
@@ -157,7 +178,8 @@ export class PdfService {
           input.userId,
           version,
           document,
-          contexts
+          contexts,
+          input.acknowledgeWarnings
         )) && ready;
     }
     return { ready };
@@ -167,12 +189,14 @@ export class PdfService {
   private async readVersion(
     cipher: UserCipher,
     version: Version,
-    document: Document
+    document: Document,
+    acknowledgeWarnings?: boolean
   ) {
     const repository = new DocumentsRepository(this.db);
     const latest = await repository.latestSnapshot(version.id);
     if (!latest) return null;
     await assertSendable({
+      acknowledgeWarnings,
       db: this.db,
       cipher,
       profileId: document.profileId,
@@ -193,18 +217,31 @@ export class PdfService {
     };
   }
 
-  async read(input: { userId: string; versionId: string }) {
+  async read(input: {
+    userId: string;
+    versionId: string;
+    acknowledgeWarnings?: boolean;
+  }) {
     const { version, document } = await requireUserVersion(
       this.db,
       input.userId,
       input.versionId
     );
     const cipher = await getUserCipher(this.db, input.userId);
-    return this.readVersion(cipher, version, document);
+    return this.readVersion(
+      cipher,
+      version,
+      document,
+      input.acknowledgeWarnings
+    );
   }
 
   /** `<Company>_<Title>.zip`; null while any version's PDF is missing. */
-  async readApplicationZip(input: { userId: string; openingId: string }) {
+  async readApplicationZip(input: {
+    userId: string;
+    openingId: string;
+    acknowledgeWarnings?: boolean;
+  }) {
     const { opening, documents, versions } = await this.applicationVersions(
       input.userId,
       input.openingId
@@ -213,7 +250,12 @@ export class PdfService {
     const files = [];
     for (const version of versions) {
       const document = documents.find((row) => row.id === version.documentId)!;
-      const file = await this.readVersion(cipher, version, document);
+      const file = await this.readVersion(
+        cipher,
+        version,
+        document,
+        input.acknowledgeWarnings
+      );
       if (!file) return null;
       files.push(file);
     }

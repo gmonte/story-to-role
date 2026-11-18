@@ -61,7 +61,7 @@ export function useProfileLabels() {
       case "competencyLevel":
         return t.formatMessage({
           defaultMessage:
-            "Put each competency under a level: master, use often, or studied without professional experience.",
+            "Put each competency under a level: master, use often, occasional experience, or studied without professional experience.",
         });
       case "markFormat":
         return t.formatMessage({
@@ -113,18 +113,23 @@ export function useProfileLabels() {
           },
           { name: params.name }
         );
+      case "addendumToPlace":
+        return t.formatMessage({
+          defaultMessage:
+            "Move this to its section: StoryToRole doesn't read Addenda.",
+        });
       case "workModelUnknown":
         return t.formatMessage({
           defaultMessage:
             "Say which work models you accept: remote, hybrid, on site.",
         });
-      case "neverInclude":
+      case "publicNameFormat":
         return t.formatMessage(
           {
             defaultMessage:
-              "“{term}” is under “never include” in your communication rules.",
+              "“{entry}” needs both sides: original name → public form.",
           },
-          { term: params.term }
+          { entry: params.entry }
         );
     }
   }
@@ -132,14 +137,14 @@ export function useProfileLabels() {
   const sectionHints: Partial<Record<ProfileSectionKey, string>> = {
     experience: t.formatMessage({
       defaultMessage:
-        "Add each position with + or /: company, title and dates, most recent first.",
+        "Add each position with the “+ Add” button or with /: company, title and dates, most recent first.",
     }),
     education: t.formatMessage({
-      defaultMessage: "Add your courses with + or /.",
+      defaultMessage: "Add your courses with the “+ Add” button or with /.",
     }),
     certifications: t.formatMessage({
       defaultMessage:
-        "Add certifications with + or /, expired ones too, with their date.",
+        "Add certifications with the “+ Add” button or with /, expired ones too, with their date.",
     }),
     languages: t.formatMessage({
       defaultMessage: "Add each language with your real level.",
@@ -147,10 +152,6 @@ export function useProfileLabels() {
     gaps: t.formatMessage({
       defaultMessage:
         "What you don't have or haven't done, stated plainly: it keeps answers from being invented.",
-    }),
-    addenda: t.formatMessage({
-      defaultMessage:
-        "Details remembered later, dated, to fold into the sections.",
     }),
   };
 
@@ -162,7 +163,6 @@ export function useProfileLabels() {
     competency: t.formatMessage({ defaultMessage: "Competency" }),
     gap: t.formatMessage({ defaultMessage: "Known gap" }),
     rule: t.formatMessage({ defaultMessage: "Communication rule" }),
-    addendum: t.formatMessage({ defaultMessage: "Addendum" }),
   };
 
   const reviewKinds: Record<ValidationFindingKind, string> = {
@@ -177,6 +177,7 @@ export function useProfileLabels() {
   const levelLabels: Record<CompetencyLevel, string> = {
     master: t.formatMessage({ defaultMessage: "I master it" }),
     often: t.formatMessage({ defaultMessage: "I use it often" }),
+    occasional: t.formatMessage({ defaultMessage: "Occasional experience" }),
     studied: t.formatMessage({
       defaultMessage: "Studied, without professional experience",
     }),

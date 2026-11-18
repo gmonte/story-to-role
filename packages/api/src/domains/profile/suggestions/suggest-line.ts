@@ -22,7 +22,7 @@ export type SuggestionTarget =
   // A labelled field of one experience, found by the position's derived id.
   | { kind: "experience"; positionId: string; field: ExperienceField }
   // The end of a section.
-  | { kind: "section"; section: "gaps" | "addenda" }
+  | { kind: "section"; section: "gaps" }
   // The career direction line of Professional identity.
   | { kind: "careerDirection" };
 

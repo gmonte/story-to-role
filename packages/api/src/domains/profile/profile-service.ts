@@ -12,6 +12,7 @@ import {
   lintPreferences,
   preferencesTemplate,
 } from "./preferences/preferences";
+import { reviewNoteKey } from "./truth/finding-key";
 import { ProfileRepository } from "./profile-repository";
 import type {
   ProfileDocumentKind,
@@ -30,6 +31,7 @@ import {
   type ProfileBlock,
 } from "./truth/blocks";
 import { changedChunks } from "./truth/chunks";
+import { addOccasionalLevelLine } from "./truth/insert";
 import { extractProfile, profilePassages } from "./truth/extract";
 import {
   hasFormatErrors,
@@ -61,6 +63,9 @@ function versionSummary(version: ProfileVersionSummary): ProfileVersionSummary {
     validatedAt: version.validatedAt,
   };
 }
+
+// A bound, not a limit anyone meets: the oldest keys fall away first.
+const maxDismissedFindings = 500;
 
 /** A stale tab saving over a newer draft (another tab, a restore). */
 const staleDraft = () =>
@@ -95,21 +100,91 @@ export class ProfileService {
         updatedAt: null,
         publishedVersion: null,
         changedSincePublished: true,
+        dismissedFindings: [],
       };
     }
     const cipher = await getUserCipher(this.db, input.userId);
-    const markdown = cipher.decrypt(document.encryptedDraft);
+    let markdown = cipher.decrypt(document.encryptedDraft);
+    let current = document;
+    if (kind === profileKind && !document.occasionalLevelAddedAt) {
+      current = await this.addOccasionalLevel(input.userId, kind, cipher);
+      markdown = cipher.decrypt(current.encryptedDraft);
+    }
     const published = document.publishedVersionId
       ? await repository.findVersion(document.id, document.publishedVersionId)
       : undefined;
     return {
       markdown,
-      revision: document.draftRevision,
-      updatedAt: document.draftUpdatedAt,
+      revision: current.draftRevision,
+      updatedAt: current.draftUpdatedAt,
       publishedVersion: published ? versionSummary(published) : null,
       changedSincePublished:
         !published || cipher.decrypt(published.encryptedMarkdown) !== markdown,
+      dismissedFindings: current.dismissedFindings,
     };
+  }
+
+  /**
+   * Ignores (or brings back) a content finding of the draft by its key. The
+   * key is the finding's own (`findingKey`), so it is only ever a hash; a
+   * format finding has none stored, since the editor never offers it.
+   */
+  async setFindingDismissed(input: {
+    userId: string;
+    findingKey: string;
+    dismissed: boolean;
+    kind?: ProfileDocumentKind;
+  }) {
+    const kind = input.kind ?? profileKind;
+    return this.db.transaction(async (tx) => {
+      const repository = new ProfileRepository(tx);
+      const document = await repository.findDocumentForUpdate(
+        input.userId,
+        kind
+      );
+      if (!document) throw new TRPCError({ code: "NOT_FOUND" });
+      const others = document.dismissedFindings.filter(
+        (key) => key !== input.findingKey
+      );
+      const next = input.dismissed
+        ? [...others, input.findingKey].slice(-maxDismissedFindings)
+        : others;
+      await repository.updateDocument(document.id, {
+        dismissedFindings: next,
+      });
+      return { dismissedFindings: next };
+    });
+  }
+
+  /**
+   * Once per draft: adds the empty “occasional experience” line to a draft
+   * written before that level existed (saved like an edit), and records it,
+   * so deleting the line later keeps it deleted. Published versions stay.
+   */
+  private async addOccasionalLevel(
+    userId: string,
+    kind: ProfileDocumentKind,
+    cipher: Awaited<ReturnType<typeof getUserCipher>>
+  ) {
+    return this.db.transaction(async (tx) => {
+      const repository = new ProfileRepository(tx);
+      const document = await repository.findDocumentForUpdate(userId, kind);
+      if (!document || document.occasionalLevelAddedAt) return document;
+      const blocks = parseBlocks(cipher.decrypt(document.encryptedDraft));
+      const next = addOccasionalLevelLine(blocks);
+      const now = new Date();
+      return repository.updateDocument(
+        document.id,
+        next === blocks
+          ? { occasionalLevelAddedAt: now }
+          : {
+              encryptedDraft: cipher.encrypt(serializeBlocks(next)),
+              draftUpdatedAt: now,
+              draftRevision: document.draftRevision + 1,
+              occasionalLevelAddedAt: now,
+            }
+      );
+    });
   }
 
   /**
@@ -413,6 +488,28 @@ export class ProfileService {
           )
         : null,
     };
+  }
+
+  /**
+   * The quality-review notes of the last completed validation that the
+   * user hasn't resolved, each with its key (`reviewNoteKey`).
+   */
+  async unresolvedReviewNotes(userId: string) {
+    const repository = new ProfileRepository(this.db);
+    const document = await repository.findDocument(userId, profileKind);
+    const validation = document
+      ? await repository.latestValidation(document.id)
+      : undefined;
+    if (!document || validation?.status !== "completed") return [];
+    if (!validation.encryptedReport) return [];
+    const cipher = await getUserCipher(this.db, userId);
+    const report = validationReportSchema.parse(
+      JSON.parse(cipher.decrypt(validation.encryptedReport))
+    );
+    const resolved = new Set(document.dismissedFindings);
+    return report.findings
+      .map((finding) => ({ ...finding, key: reviewNoteKey(finding) }))
+      .filter((note) => !resolved.has(note.key));
   }
 
   async listVersions(userId: string, kind = profileKind) {

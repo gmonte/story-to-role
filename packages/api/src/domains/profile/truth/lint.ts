@@ -1,3 +1,4 @@
+import { parsePublicNames, publicNameValues } from "../rules/public-names";
 import type { ProfileBlock } from "./blocks";
 import { canonicalMonth, readMonth } from "./dates";
 import { canonicalMarkText, findMarks, hasFigure } from "./marks";
@@ -40,7 +41,10 @@ export const findingCodes = {
   competencyMissing: "content",
   competencyUnbacked: "content",
   studiedUsed: "content",
-  neverInclude: "content",
+  // An entry of the public names line missing its original or its public form.
+  publicNameFormat: "content",
+  // An item under Addenda, which is no longer read.
+  addendumToPlace: "content",
   // The job preferences document's own.
   workModelUnknown: "content",
 } as const satisfies Record<string, FindingKind>;
@@ -416,13 +420,6 @@ function readCompetencies(structure: ProfileStructure, blocks: ProfileBlock[]) {
   return { findings, competencies };
 }
 
-function foldCase(text: string) {
-  return text
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase();
-}
-
 function normalizeName(name: string) {
   return normalizeLabel(name).replace(/\s+/g, " ");
 }
@@ -492,7 +489,7 @@ function lintCompetencies(structure: ProfileStructure, blocks: ProfileBlock[]) {
         .join("\n")
     : "";
   for (const competency of competencies) {
-    if (competency.level !== "master" && competency.level !== "often") continue;
+    if (competency.level === "studied") continue;
     if (!mentions(experienceText, competency.name)) {
       findings.push(
         finding("competencyUnbacked", competency.line, competency, {
@@ -504,42 +501,30 @@ function lintCompetencies(structure: ProfileStructure, blocks: ProfileBlock[]) {
   return findings;
 }
 
-const neverIncludeLabels = ["nunca incluir", "never include"];
-
-function lintNeverInclude(structure: ProfileStructure, blocks: ProfileBlock[]) {
+function lintPublicNames(structure: ProfileStructure, blocks: ProfileBlock[]) {
   const findings: ProfileFinding[] = [];
   const rules = sectionOf(structure, "rules");
   if (!rules) return findings;
-  const terms: string[] = [];
-  for (let line = rules.start; line < rules.end; line++) {
-    const labelled = splitLabel(blocks[line].text);
-    if (
-      labelled &&
-      neverIncludeLabels.includes(normalizeLabel(labelled.label))
-    ) {
-      terms.push(
-        ...splitNames(labelled.value, 0, { anyLength: true }).map((n) => n.name)
+  for (const { line, value } of publicNameValues(blocks, rules)) {
+    for (const entry of parsePublicNames(value).malformed) {
+      findings.push(
+        finding("publicNameFormat", line, whole(blocks[line]), {
+          params: { entry },
+        })
       );
     }
   }
-  blocks.forEach((block, line) => {
-    if (line >= rules.heading && line < rules.end) return;
-    // Same length as the text (accents dropped one for one), so offsets hold.
-    const text = foldCase(block.text);
-    for (const term of terms) {
-      const index = text.indexOf(foldCase(term));
-      if (index >= 0 && mentions(block.text, term)) {
-        findings.push(
-          finding(
-            "neverInclude",
-            line,
-            { from: index, to: index + term.length },
-            { params: { term } }
-          )
-        );
-      }
-    }
-  });
+  return findings;
+}
+
+function lintAddenda(structure: ProfileStructure, blocks: ProfileBlock[]) {
+  const findings: ProfileFinding[] = [];
+  const addenda = sectionOf(structure, "addenda");
+  for (let line = addenda?.start ?? 0; addenda && line < addenda.end; line++) {
+    const block = blocks[line];
+    if (block.type === "heading" || !block.text.trim()) continue;
+    findings.push(finding("addendumToPlace", line, whole(block)));
+  }
   return findings;
 }
 
@@ -556,7 +541,8 @@ export function lintProfile(blocks: ProfileBlock[]): ProfileFinding[] {
     ...lintMarks(structure, blocks),
     ...lintCredentials(structure, blocks),
     ...lintCompetencies(structure, blocks),
-    ...lintNeverInclude(structure, blocks),
+    ...lintPublicNames(structure, blocks),
+    ...lintAddenda(structure, blocks),
   ].sort((a, b) => (a.line ?? -1) - (b.line ?? -1) || a.from - b.from);
 }
 

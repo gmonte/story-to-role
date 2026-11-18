@@ -22,4 +22,14 @@ export const importSettings = {
   // What the agent says about what is still missing, at most.
   maxMissingCharacters: 500,
   maxOutputTokens: 32_000,
+  // A file is compared in parts when it holds several positions, or when it
+  // is longer than this (split by size into chunks of about the second).
+  splitAboveCharacters: 24_000,
+  chunkCharacters: 14_000,
+  // Positions compared per call: up to this many, or this much text.
+  experiencesPerCall: 3,
+  experienceCharactersPerCall: 12_000,
+  // The import's credit cap (30) pays for about this many comparisons;
+  // what lies beyond is left out and said in the summary.
+  maxComparisons: 10,
 };

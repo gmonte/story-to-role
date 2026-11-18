@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, gt, lt, max } from "drizzle-orm";
+import { and, asc, desc, eq, gt, inArray, lt, max } from "drizzle-orm";
 
 import { usersTable } from "@repo/api/domains/users/db/users-tables";
 import type { DbClient } from "@repo/api/tools/db-client";
@@ -152,6 +152,37 @@ export class AgentChatRepository {
       .where(lt(profileChatsTable.expiresAt, cutoff))
       .returning({ id: profileChatsTable.id });
     return deleted.length;
+  }
+
+  /**
+   * Ends the user's open conversations: their messages and stream state go
+   * now, and their sessions count as expired, so the next one is new.
+   */
+  async closeOpenChats(userId: string, now: Date) {
+    const open = await this.tx
+      .select({ id: profileChatsTable.id })
+      .from(profileChatsTable)
+      .where(
+        and(
+          eq(profileChatsTable.userId, userId),
+          gt(profileChatsTable.expiresAt, now)
+        )
+      );
+    const ids = open.map((row) => row.id);
+    if (ids.length === 0) return ids;
+    await this.tx
+      .delete(profileChatMessagesTable)
+      .where(inArray(profileChatMessagesTable.chatId, ids));
+    await this.tx
+      .update(profileChatsTable)
+      .set({
+        expiresAt: now,
+        encryptedState: null,
+        lastOutEventId: null,
+        lastInEventId: null,
+      })
+      .where(inArray(profileChatsTable.id, ids));
+    return ids;
   }
 
   /** Every conversation of the user, for account deletion. */

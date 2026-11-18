@@ -28,11 +28,24 @@ export function LibraryDocumentView({ documentId }: { documentId: string }) {
     <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto p-6">
       {running && <GenerationProgress generation={generation} />}
       {generation?.status === "failed" && versions.length === 0 && (
-        <p className="rounded-lg border border-red-500/40 bg-red-500/10 p-2.5 text-xs">
-          {t.formatMessage({
-            defaultMessage: "The last generation failed. Try again.",
-          })}
-        </p>
+        <div className="flex items-center justify-between gap-3 rounded-lg border border-red-500/40 bg-red-500/10 p-2.5 text-xs">
+          <span>
+            {t.formatMessage({
+              defaultMessage: "The last generation failed. Try again.",
+            })}
+          </span>
+          {document.data?.kind === "resume" && (
+            <LibraryResumeDialog
+              documentId={documentId}
+              defaultTone={generation.tone}
+              trigger={
+                <Button size="sm" variant="outline">
+                  {t.formatMessage({ defaultMessage: "Try again" })}
+                </Button>
+              }
+            />
+          )}
+        </div>
       )}
       {versions.length > 0 && document.data?.kind === "linkedin" && (
         <LinkedinEditor versions={versions} defaultTone={generation?.tone} />

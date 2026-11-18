@@ -3,11 +3,13 @@ import type { DateRange } from "./dates";
 import {
   competencyLabels,
   competencyLevelOf,
+  normalizeLabel,
   profileSectionKeys,
   type CompetencyLevel,
   type ProfileLanguage,
   type ProfileSectionKey,
 } from "./sections";
+import { publicNamesLabels } from "../rules/public-names";
 import { splitNames } from "./lint";
 import { readStructure, sectionOf, splitLabel } from "./structure";
 import { experienceTemplate, sectionTemplate } from "./template";
@@ -34,7 +36,8 @@ export type ProfileEntry =
   | { kind: "competency"; name: string; level: CompetencyLevel }
   | { kind: "gap"; text: string }
   | { kind: "rule"; rule: "neverInclude" | "neverClaim"; text: string }
-  | { kind: "addendum"; date: string; text: string };
+  // An entry of the public names dictionary: the real name, its public form.
+  | { kind: "rule"; rule: "publicName"; original: string; public: string };
 
 export type ProfileEntryKind = ProfileEntry["kind"];
 
@@ -46,7 +49,6 @@ const sectionOfEntry: Record<ProfileEntryKind, ProfileSectionKey> = {
   competency: "competencies",
   gap: "gaps",
   rule: "rules",
-  addendum: "addenda",
 };
 
 const words: Record<
@@ -59,6 +61,7 @@ const words: Record<
     renewing: string;
     neverInclude: string;
     neverClaim: string;
+    publicName: string;
   }
 > = {
   "pt-BR": {
@@ -69,6 +72,7 @@ const words: Record<
     renewing: "em renovação",
     neverInclude: "Nunca incluir",
     neverClaim: "Nunca afirmar",
+    publicName: "Nomes públicos",
   },
   "en-US": {
     completed: "completed",
@@ -78,6 +82,7 @@ const words: Record<
     renewing: "renewing",
     neverInclude: "Never include",
     neverClaim: "Never claim",
+    publicName: "Public names",
   },
 };
 
@@ -104,8 +109,6 @@ export function entryLine(entry: ProfileEntry, language: ProfileLanguage) {
       return `${entry.language} — ${entry.level}`;
     case "gap":
       return entry.text;
-    case "addendum":
-      return `${entry.date}: ${entry.text}`;
     default:
       return "";
   }
@@ -173,6 +176,51 @@ export function insertEntry(
     return {
       blocks: insertAt(blocks, at, experienceTemplate(entry, language)),
       line: at,
+    };
+  }
+
+  if (entry.kind === "rule" && entry.rule === "publicName") {
+    const pair = `${entry.original.trim()} → ${entry.public.trim()}`;
+    for (let line = section.start; line < section.end; line++) {
+      const block = blocks[line];
+      if (block.type !== "item" || block.depth) continue;
+      const labelled = splitLabel(block.text);
+      if (
+        !labelled ||
+        !publicNamesLabels.includes(normalizeLabel(labelled.label))
+      ) {
+        continue;
+      }
+      // Written on the line itself: one more “; ” entry.
+      const value = labelled.value.trim().replace(/[.;]$/, "");
+      if (value) {
+        const text = `${block.text.slice(0, block.text.indexOf(":") + 1)} ${value}; ${pair}`;
+        return {
+          blocks: blocks.map((b, i) => (i === line ? { ...b, text } : b)),
+          line,
+        };
+      }
+      // Listed under it: one more sub-item, after the others.
+      let at = line + 1;
+      while (
+        at < section.end &&
+        blocks[at].type === "item" &&
+        (blocks[at] as { depth: number }).depth > 0
+      ) {
+        at++;
+      }
+      return {
+        blocks: insertAt(blocks, at, [{ type: "item", depth: 1, text: pair }]),
+        line: at,
+      };
+    }
+    const at = section.end;
+    return {
+      blocks: insertAt(blocks, at, [
+        { type: "item", depth: 0, text: `${words[language].publicName}:` },
+        { type: "item", depth: 1, text: pair },
+      ]),
+      line: at + 1,
     };
   }
 
@@ -255,4 +303,43 @@ export function setCompetencyLevel(
   });
   return insertEntry(blocks, { kind: "competency", name: name.trim(), level })
     .blocks;
+}
+
+/**
+ * Adds the empty “occasional experience” line right after the “use often”
+ * line of a profile written before that level existed. Does nothing when
+ * the section has no “use often” line or already has an occasional one.
+ */
+export function addOccasionalLevelLine(input: ProfileBlock[]): ProfileBlock[] {
+  const section = sectionOf(readStructure(input), "competencies");
+  if (!section) return input;
+  let often = -1;
+  for (let line = section.start; line < section.end; line++) {
+    const block = input[line];
+    if (block.type !== "item" || block.depth) continue;
+    const labelled = splitLabel(block.text);
+    const level = labelled ? competencyLevelOf(labelled.label) : null;
+    if (level === "occasional") return input;
+    if (level === "often") often = line;
+  }
+  if (often < 0) return input;
+  const language: ProfileLanguage = input[often].text.startsWith(
+    competencyLabels["en-US"].often
+  )
+    ? "en-US"
+    : "pt-BR";
+  let at = often + 1;
+  while (
+    at < section.end &&
+    input[at].type === "item" &&
+    (input[at] as { depth: number }).depth > 0
+  ) {
+    at++;
+  }
+  const line: ProfileBlock = {
+    type: "item",
+    depth: 0,
+    text: `${competencyLabels[language].occasional}:`,
+  };
+  return [...input.slice(0, at), line, ...input.slice(at)];
 }

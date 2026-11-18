@@ -66,7 +66,7 @@ const context: CareerContext = {
     { id: I1, positionId: P1, credentialId: null, text: "Led a team of 5." },
   ],
   evidenceOfPassage: new Map(),
-  rules: { neverInclude: [], neverClaim: [] },
+  rules: { neverInclude: [], neverClaim: [], publicNames: [] },
   studied: [],
   gaps: [],
   careerDirection: [],

@@ -1163,7 +1163,7 @@ describe("resume generation and snapshots", () => {
 
   it("promoting an instruction creates a suggestion in the profile's draft, not a change", async () => {
     const ctx = await setup({
-      markdown: `${profileMarkdown()}\n## Addenda (details remembered later)\n`,
+      markdown: profileMarkdown(),
     });
     const instructions = new InstructionsService(
       ctx.db,
@@ -1257,11 +1257,11 @@ describe("resume generation and snapshots", () => {
         find: lastResult,
         replace: `${lastResult}\n  - I led the Kubernetes migration in 2021`,
       },
-      // No position: Addenda.
+      // No position: Professional identity, under the career direction.
       {
         id: sent[1].profileSuggestionId,
-        part: "addenda",
-        replace: "- I speak at meetups",
+        part: "identity",
+        replace: expect.stringContaining("  - I speak at meetups") as string,
       },
       // A tool, under the position's Tools.
       {
@@ -1302,7 +1302,7 @@ describe("resume generation and snapshots", () => {
 
   it("marks an instruction sent only once its suggestion exists, so a failed send can be retried", async () => {
     const ctx = await setup({
-      markdown: `${profileMarkdown()}\n## Addenda (details remembered later)\n`,
+      markdown: profileMarkdown(),
     });
     const instructions = new InstructionsService(
       ctx.db,

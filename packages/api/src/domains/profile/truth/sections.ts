@@ -96,8 +96,13 @@ export const sectionHeadings: Record<
   },
 };
 
-/** The three competency levels, as the lines under Competencies start. */
-export const competencyLevels = ["master", "often", "studied"] as const;
+/** The four competency levels, as the lines under Competencies start. */
+export const competencyLevels = [
+  "master",
+  "often",
+  "occasional",
+  "studied",
+] as const;
 export type CompetencyLevel = (typeof competencyLevels)[number];
 
 export const competencyLabels: Record<
@@ -107,11 +112,13 @@ export const competencyLabels: Record<
   "pt-BR": {
     master: "Domino",
     often: "Uso com frequência",
+    occasional: "Experiência pontual",
     studied: "Estudei, sem experiência profissional",
   },
   "en-US": {
     master: "I master",
     often: "I use often",
+    occasional: "Occasional experience",
     studied: "Studied, without professional experience",
   },
 };
@@ -119,6 +126,12 @@ export const competencyLabels: Record<
 const competencyAliases: Record<CompetencyLevel, string[]> = {
   master: ["domino", "i master", "master", "expert"],
   often: ["uso com frequencia", "i use often", "use often", "often"],
+  occasional: [
+    "experiencia pontual",
+    "pontual",
+    "occasional experience",
+    "occasional",
+  ],
   studied: [
     "estudei, sem experiencia profissional",
     "estudei",

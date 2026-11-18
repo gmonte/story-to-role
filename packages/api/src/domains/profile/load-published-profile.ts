@@ -39,9 +39,11 @@ export async function loadPublishedProfile(input: {
     versionId: version.id,
     number: version.number,
     markdown: input.cipher.decrypt(version.encryptedMarkdown),
-    extract: JSON.parse(
-      input.cipher.decrypt(extract.encryptedContent)
-    ) as ProfileExtract,
+    extract: withPublicNames(
+      JSON.parse(
+        input.cipher.decrypt(extract.encryptedContent)
+      ) as ProfileExtract
+    ),
     passages: passages.map((passage) => ({
       id: passage.id,
       kind: passage.kind,
@@ -49,6 +51,14 @@ export async function loadPublishedProfile(input: {
       experience: passage.experience,
       text: input.cipher.decrypt(passage.encryptedText),
     })),
+  };
+}
+
+// An extract written before the public names line has none of them.
+function withPublicNames(extract: ProfileExtract): ProfileExtract {
+  return {
+    ...extract,
+    rules: { ...extract.rules, publicNames: extract.rules.publicNames ?? [] },
   };
 }
 

@@ -12,6 +12,7 @@ import {
 } from "../schemas/generation-settings";
 import type { DroppedLine, Purpose, ResumeDraft } from "./assemble-resume";
 import type { CareerContext } from "./load-career-context";
+import { communicationRuleBlock } from "./public-names";
 
 export const outputLanguageNames: Record<OutputLanguage, string> = {
   "en-US": "English (United States conventions)",
@@ -157,6 +158,7 @@ export function resumeMaterial(input: {
       (row) =>
         `- ${row.kind}: ${row.title}${row.level ? ` (${row.level})` : ""}${row.institution ? `, ${row.institution}` : ""}`
     ),
+    ...communicationRuleBlock(context.rules),
     ...(context.rules.neverClaim.length
       ? [
           "",

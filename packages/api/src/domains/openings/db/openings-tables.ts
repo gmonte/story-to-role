@@ -156,6 +156,9 @@ export const fitCheckItemsTable = createTable(
     encryptedGapAnswer: d.text(),
     // Where the answer happened (ids, not career content): positions,
     // projects, or a general story.
+    // The verdict rests on the user's answer for this opening, not on a
+    // profile passage.
+    citesAnswer: d.boolean().notNull().default(false),
     gapLinks: d.jsonb().$type<GapLinks>(),
     answeredAt: d.timestamp({ withTimezone: true }),
     // The user confirmed they really lack it: it was suggested for "what I

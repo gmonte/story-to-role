@@ -220,6 +220,7 @@ export class OpeningsService {
               gapAnswer: open(cipher, item.encryptedGapAnswer),
               gapLack: !!item.lackConfirmedAt,
               gapLinks: item.gapLinks ?? null,
+              citesAnswer: item.citesAnswer,
             };
           }),
           preferenceConflicts: fitCheck.encryptedPreferenceConflicts

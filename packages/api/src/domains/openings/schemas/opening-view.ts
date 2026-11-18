@@ -55,6 +55,8 @@ export const fitCheckItemViewSchema = z.object({
   gapLack: z.boolean(),
   // Where the answer happened, as last saved (null when not answered).
   gapLinks: gapLinksSchema.nullable(),
+  // The verdict rests on the user's answer for this opening.
+  citesAnswer: z.boolean(),
 });
 export type FitCheckItemView = z.infer<typeof fitCheckItemViewSchema>;
 

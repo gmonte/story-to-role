@@ -20,16 +20,21 @@ export type ChangeWidgetLabels = {
 export const replacedBlockClass = (fallback: boolean) =>
   cn(
     "border-destructive/40 bg-destructive/10 my-1.5 rounded-lg border px-3 py-2",
-    fallback && "line-through decoration-destructive/60"
+    // With a word diff the rest of the line is muted, the removed words
+    // struck; without one the whole line is struck.
+    fallback
+      ? "line-through decoration-destructive/60"
+      : "text-muted-foreground"
   );
 
 /** The words a change removes, inside a line it rewrites. */
 export const removedWordsClass = cn(
-  "bg-destructive/20 text-foreground line-through decoration-destructive/70"
+  "bg-destructive/20 text-foreground decoration-destructive/70 rounded-xs line-through"
 );
 
+// As in the profile: tinted and underlined, so the new words read apart.
 const addedWordsClass = cn(
-  "bg-emerald-500/25 no-underline dark:bg-emerald-500/30"
+  "rounded-xs bg-emerald-500/25 underline decoration-emerald-500/70 underline-offset-2 dark:bg-emerald-500/30"
 );
 
 // The app's Button, small, as classes: the widget is plain DOM.

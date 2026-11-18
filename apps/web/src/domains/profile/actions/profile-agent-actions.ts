@@ -1,6 +1,6 @@
 "use server";
 
-import { auth, runs } from "@trigger.dev/sdk";
+import { auth, runs, sessions } from "@trigger.dev/sdk";
 import { chat } from "@trigger.dev/sdk/ai";
 
 import { AgentChatService } from "@repo/api/domains/profile/agent/agent-chat-service";
@@ -89,6 +89,10 @@ export async function recoverProfileChatRun({ chatId }: { chatId: string }) {
     userId: await requireUser(),
     chatId,
   });
+  return cancelChatRuns(chatId);
+}
+
+async function cancelChatRuns(chatId: string) {
   const live = await runs.list({
     tag: `chat:${chatId}`,
     status: ["EXECUTING", "WAITING", "QUEUED", "DEQUEUED"],
@@ -99,4 +103,26 @@ export async function recoverProfileChatRun({ chatId }: { chatId: string }) {
     cancelled += 1;
   }
   return { cancelled };
+}
+
+/**
+ * Ends the user's conversation: its messages are deleted, its live runs
+ * and session end on Trigger.dev, and the next conversation is a new one,
+ * returned. The profile and its suggestions stay.
+ */
+export async function startNewProfileChat() {
+  const started = await new AgentChatService(db).startNew(await requireUser());
+  for (const chatId of started.closedChatIds) {
+    await cancelChatRuns(chatId);
+    // The session is closed when it exists; a conversation never talked in
+    // has none.
+    await sessions.close(chatId).catch(() => undefined);
+  }
+  return {
+    chatId: started.chatId,
+    expiresAt: started.expiresAt,
+    messages: started.messages,
+    lastEventId: started.lastEventId,
+    session: null,
+  };
 }

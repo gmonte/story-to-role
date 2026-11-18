@@ -23,6 +23,7 @@ import { getUserCipher } from "@repo/api/domains/encryption/user-cipher";
 
 import { ProfileRepository } from "../profile-repository";
 import { ProfileService } from "../profile-service";
+import { AgentChatRepository } from "./agent-chat-repository";
 import { AgentChatService } from "./agent-chat-service";
 import { composeAgentMessage } from "./agent-message";
 import { runAgentTurn } from "./run-agent-turn";
@@ -566,6 +567,54 @@ describe("the profile agent", () => {
     const { text } = await ctx.say("E na Gama também.", second.model);
     expect(text).toContain("créditos");
     expect(second.prompts).toHaveLength(0);
+  });
+
+  it("starts a new conversation: messages go, suggestions and draft stay", async () => {
+    const ctx = await setup();
+    const { model } = agentModel(
+      [
+        [
+          {
+            name: "suggest_change",
+            input: {
+              part: "experience:beta — backend",
+              find: "Melhorei a performance [sem número].",
+              replace: "Melhorei a performance do checkout [sem número].",
+              reason: "Você disse que foi no checkout.",
+            },
+          },
+        ],
+      ],
+      "Sugeri a mudança; ela espera você no texto."
+    );
+    await ctx.say("Foi a performance do checkout.", model);
+    // The transcript the chat runtime would have stored.
+    await new AgentChatRepository(ctx.db).insertMessage({
+      chatId: ctx.chatId,
+      messageId: "m1",
+      position: 0,
+      encryptedMessage: "ciphertext",
+    });
+    const chats = new AgentChatService(ctx.db);
+
+    const fresh = await chats.startNew(ctx.user.id);
+    expect(fresh.closedChatIds).toEqual([ctx.chatId]);
+    expect(fresh.chatId).not.toBe(ctx.chatId);
+    expect(fresh.messages).toEqual([]);
+    expect((await chats.current(ctx.user.id)).chatId).toBe(fresh.chatId);
+    expect(
+      await new AgentChatRepository(ctx.db).listMessages(ctx.chatId)
+    ).toEqual([]);
+    await expect(
+      chats.requireOwn({ userId: ctx.user.id, chatId: ctx.chatId })
+    ).rejects.toMatchObject({ code: "CONFLICT" });
+
+    expect(await ctx.profiles.listSuggestions(ctx.user.id)).toHaveLength(1);
+    const draft = await ctx.profiles.getDraft({
+      userId: ctx.user.id,
+      language: "pt-BR",
+    });
+    expect(draft.markdown).toBe(profile);
   });
 
   it("opens a conversation only for its owner", async () => {

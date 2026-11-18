@@ -12,6 +12,7 @@ import type { UIMessage } from "ai";
 import {
   ArrowUp,
   Loader2,
+  MessageSquarePlus,
   Paperclip,
   Quote,
   Sparkles,
@@ -29,6 +30,14 @@ import { listParts } from "@repo/api/domains/profile/truth/suggestions";
 import { useTranslation } from "@repo/intl/use-translation";
 import { Button } from "@repo/web/components/ui/button";
 import { toast } from "@repo/web/components/ui/sonner";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@repo/web/components/ui/dialog";
 import { Textarea } from "@repo/web/components/ui/textarea";
 
 import { SourceImportStatus } from "~/domains/career/components/source-import-status";
@@ -49,9 +58,11 @@ import {
   loadProfileChat,
   mintProfileChatToken,
   recoverProfileChatRun,
+  startNewProfileChat,
   startProfileChatSession,
 } from "../actions/profile-agent-actions";
 import { useAnswerWatchdog } from "../hooks/use-answer-watchdog";
+import { isClearCommand, matchingCommands } from "../utils/chat-command";
 import { topmostNewSuggestion } from "../utils/topmost-new-suggestion";
 import { maxQuoteCharacters, useProfileEditor } from "./profile-editor-context";
 
@@ -127,6 +138,8 @@ function Conversation({
     scrollToLine,
   } = useProfileEditor();
   const [text, setText] = useState("");
+  const [confirmingNew, setConfirmingNew] = useState(false);
+  const [startingNew, setStartingNew] = useState(false);
   const [turnDone, setTurnDone] = useState(0);
   // The suggestions there were when the turn began.
   const knownIds = useRef<Set<string>>(new Set());
@@ -270,7 +283,36 @@ function Conversation({
     bottom.current?.scrollIntoView({ block: "end" });
   }, [messages, status]);
 
+  // The conversation's messages are deleted; the new chat's id remounts
+  // the conversation, so its messages, composer and transport start over.
+  async function startNew() {
+    setStartingNew(true);
+    try {
+      await stop();
+      const fresh = await startNewProfileChat();
+      clearAgentQuote();
+      clearAgentAttachment();
+      setText("");
+      setConfirmingNew(false);
+      queryClient.setQueryData(["profile-chat"], fresh);
+    } catch {
+      toast.error(
+        t.formatMessage({
+          defaultMessage: "The conversation couldn't be restarted. Try again.",
+        })
+      );
+    } finally {
+      setStartingNew(false);
+    }
+  }
+
   async function send(words: string) {
+    // The command starts a new conversation; the agent never sees it.
+    if (isClearCommand(words)) {
+      setText("");
+      setConfirmingNew(true);
+      return;
+    }
     // An attachment alone is a question: how to resolve it.
     if ((!words.trim() && !attachment) || busy) return;
     watchdog.reset();
@@ -345,8 +387,52 @@ function Conversation({
     last?.role === "assistant" &&
     last.parts.at(-1)?.type === "text";
 
+  const commands = matchingCommands(text);
+
   return (
     <div className="flex h-full min-h-0 flex-col">
+      {messages.length > 0 && (
+        <div className="flex justify-end border-b px-3 py-1.5">
+          <Button
+            type="button"
+            size="sm"
+            variant="ghost"
+            className="text-muted-foreground"
+            onClick={() => setConfirmingNew(true)}
+          >
+            <MessageSquarePlus />
+            {t.formatMessage({ defaultMessage: "New conversation" })}
+          </Button>
+        </div>
+      )}
+      <Dialog open={confirmingNew} onOpenChange={setConfirmingNew}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>
+              {t.formatMessage({ defaultMessage: "Start a new conversation?" })}
+            </DialogTitle>
+            <DialogDescription>
+              {t.formatMessage({
+                defaultMessage:
+                  "The questions and answers of this conversation will be deleted. Everything already in your profile stays: the accepted changes and the suggestions still waiting for your answer in the text.",
+              })}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              disabled={startingNew}
+              onClick={() => setConfirmingNew(false)}
+            >
+              {t.formatMessage({ defaultMessage: "Cancel" })}
+            </Button>
+            <Button disabled={startingNew} onClick={() => void startNew()}>
+              {startingNew && <Loader2 className="animate-spin" />}
+              {t.formatMessage({ defaultMessage: "New conversation" })}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
       <div className="min-h-0 flex-1 overflow-y-auto">
         <ol className="flex flex-col gap-3 p-4">
           {messages.length === 0 && (
@@ -530,6 +616,29 @@ function Conversation({
               <X className="size-3.5" />
             </button>
           </div>
+        )}
+        {commands.length > 0 && (
+          <ul className="bg-background mb-2 rounded-md border text-xs shadow-sm">
+            {commands.map((command) => (
+              <li key={command}>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setText("");
+                    setConfirmingNew(true);
+                  }}
+                  className="hover:bg-muted flex w-full items-baseline gap-2 px-2.5 py-1.5 text-left"
+                >
+                  <span className="font-mono font-medium">{command}</span>
+                  <span className="text-muted-foreground">
+                    {t.formatMessage({
+                      defaultMessage: "Start a new conversation",
+                    })}
+                  </span>
+                </button>
+              </li>
+            ))}
+          </ul>
         )}
         <div className="bg-background flex flex-col rounded-xl border shadow-sm">
           <Textarea

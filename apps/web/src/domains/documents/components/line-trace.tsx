@@ -17,7 +17,43 @@ import {
 } from "@repo/web/components/ui/tooltip";
 import { cn } from "@repo/web/lib/utils";
 
+import { floatingCardStyle } from "~/tools/floating-card";
+
 import { originTone } from "./editing";
+
+/**
+ * A quote clamped to a few lines, with “Show more” when it is longer; it
+ * expands within the card, which scrolls.
+ */
+function ClampedQuote({ text }: { text: string }) {
+  const t = useTranslation();
+  const [expanded, setExpanded] = useState(false);
+  const [clamped, setClamped] = useState(false);
+  const ref = useRef<HTMLSpanElement>(null);
+  useEffect(() => {
+    const element = ref.current;
+    if (!element || expanded) return;
+    setClamped(element.scrollHeight > element.clientHeight + 1);
+  }, [text, expanded]);
+  return (
+    <>
+      <span ref={ref} className={cn(!expanded && "line-clamp-6")}>
+        {t.formatMessage({ defaultMessage: "“{quote}”" }, { quote: text })}
+      </span>
+      {(clamped || expanded) && (
+        <button
+          type="button"
+          className="self-start font-medium underline-offset-2 hover:underline"
+          onClick={() => setExpanded(!expanded)}
+        >
+          {expanded
+            ? t.formatMessage({ defaultMessage: "Show less" })
+            : t.formatMessage({ defaultMessage: "Show more" })}
+        </button>
+      )}
+    </>
+  );
+}
 
 /**
  * A passage of the profile a line rests on (resume spec, "Trace in the
@@ -27,12 +63,7 @@ export function ProfilePassage({ passage }: { passage: EvidenceTrace }) {
   const t = useTranslation();
   return (
     <div className="flex flex-col gap-0.5">
-      <span>
-        {t.formatMessage(
-          { defaultMessage: "“{quote}”" },
-          { quote: passage.text }
-        )}
-      </span>
+      <ClampedQuote text={passage.text} />
       <span className="opacity-70">
         {passage.source
           ? t.formatMessage(
@@ -250,8 +281,7 @@ export function TraceHoverCard({
 }) {
   const [card, setCard] = useState<{
     element: HTMLElement;
-    left: number;
-    top: number;
+    anchor: DOMRect;
   } | null>(null);
   const openTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
   const closeTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
@@ -278,8 +308,7 @@ export function TraceHoverCard({
       clearTimeout(closeTimer.current);
       clearTimeout(openTimer.current);
       openTimer.current = setTimeout(() => {
-        const rect = element.getBoundingClientRect();
-        setCard({ element, left: rect.left, top: rect.bottom + 4 });
+        setCard({ element, anchor: element.getBoundingClientRect() });
       }, openDelayMs);
     };
     const out = (event: MouseEvent) => {
@@ -312,11 +341,10 @@ export function TraceHoverCard({
   return (
     <div
       role="tooltip"
-      className="bg-popover text-popover-foreground fixed z-50 max-w-sm rounded-md border p-2.5 text-xs shadow-md"
-      style={{
-        left: Math.min(card.left, window.innerWidth - 400),
-        top: card.top,
-      }}
+      // Kept inside the viewport: capped to the room it has, scrolling,
+      // above the line when there is more room there.
+      className="bg-popover text-popover-foreground fixed z-50 max-w-sm overflow-y-auto rounded-md border p-2.5 text-xs shadow-md"
+      style={floatingCardStyle(card.anchor, 384)}
       onMouseDown={(event) => event.preventDefault()}
       onMouseEnter={() => clearTimeout(closeTimer.current)}
       onMouseLeave={() => {

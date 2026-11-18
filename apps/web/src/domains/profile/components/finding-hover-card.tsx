@@ -15,6 +15,8 @@ import { useTranslation } from "@repo/intl/use-translation";
 import type { ProfileFinding } from "@repo/api/domains/profile/truth/lint";
 import { Button } from "@repo/web/components/ui/button";
 
+import { floatingCardStyle } from "~/tools/floating-card";
+
 import { FindingQuickActions } from "./finding-quick-actions";
 
 export type FindingCardInfo = {
@@ -49,11 +51,9 @@ export function FindingHoverCard({
   describe: (key: string) => FindingCardInfo | null;
 }) {
   const t = useTranslation();
-  const [card, setCard] = useState<{
-    key: string;
-    left: number;
-    top: number;
-  } | null>(null);
+  const [card, setCard] = useState<{ key: string; anchor: DOMRect } | null>(
+    null
+  );
   const openTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
   const closeTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
   const describeRef = useRef(describe);
@@ -81,8 +81,7 @@ export function FindingHoverCard({
       const key = element.dataset.finding!;
       clearTimeout(openTimer.current);
       openTimer.current = setTimeout(() => {
-        const rect = element.getBoundingClientRect();
-        setCard({ key, left: rect.left, top: rect.bottom + 4 });
+        setCard({ key, anchor: element.getBoundingClientRect() });
       }, openDelayMs);
     };
     const out = (event: MouseEvent) => {
@@ -122,11 +121,10 @@ export function FindingHoverCard({
   return (
     <div
       role="tooltip"
-      className="bg-popover text-popover-foreground fixed z-50 max-w-xs space-y-2 rounded-md border p-2.5 text-xs shadow-md"
-      style={{
-        left: Math.min(card.left, window.innerWidth - 328),
-        top: card.top,
-      }}
+      // Kept inside the viewport: capped to the room it has, scrolling,
+      // above the text when there is more room there.
+      className="bg-popover text-popover-foreground fixed z-50 max-w-xs space-y-2 overflow-y-auto rounded-md border p-2.5 text-xs shadow-md"
+      style={floatingCardStyle(card.anchor, 320)}
       // Pressing inside never moves the editor's selection or focus.
       onMouseDown={(event) => event.preventDefault()}
       onMouseEnter={() => clearTimeout(closeTimer.current)}

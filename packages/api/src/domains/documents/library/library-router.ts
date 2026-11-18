@@ -67,6 +67,7 @@ export const libraryRouter = createTRPCRouter({
       z.object({
         focus: z.string().trim().min(1).max(80).optional(),
         versionId: z.uuid().optional(),
+        documentId: z.uuid().optional(),
         language: outputLanguageSchema,
         reviewDepth: reviewDepthSchema,
         writingLevel: writingLevelSchema,

@@ -7,12 +7,14 @@ import { usePathname } from "next/navigation";
 import { closedStatuses } from "@repo/api/domains/applications/schemas/application";
 import type { OpeningSummary } from "@repo/api/domains/openings/schemas/opening-view";
 import { useTranslation } from "@repo/intl/use-translation";
+import { cn } from "@repo/web/lib/utils";
 import {
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
 } from "@repo/web/components/ui/sidebar";
 
+import { useOpeningLabels } from "~/domains/openings/hooks/use-opening-labels";
 import { useTRPC } from "~/tools/trpc/client";
 
 /**
@@ -20,9 +22,17 @@ import { useTRPC } from "~/tools/trpc/client";
  * preparation, applied, in process, closed; the tracker's status places
  * an opening once it has an application.
  */
+
+const bandDot = {
+  high: "bg-emerald-500",
+  medium: "bg-amber-500",
+  low: "bg-destructive",
+} as const;
+
 export function OpeningsByStatus() {
   const t = useTranslation();
   const trpc = useTRPC();
+  const openingLabels = useOpeningLabels();
   const pathname = usePathname();
   const openings = useQuery(trpc.openings.list.queryOptions({}));
 
@@ -98,6 +108,19 @@ export function OpeningsByStatus() {
                       isActive={pathname === href}
                     >
                       <Link href={href}>
+                        {/* The fit check's band at a glance; the label is
+                            the dot's accessible name and tooltip. */}
+                        {opening.band && (
+                          <span
+                            role="img"
+                            aria-label={openingLabels.band(opening.band)}
+                            title={openingLabels.band(opening.band)}
+                            className={cn(
+                              "size-2 shrink-0 rounded-full",
+                              bandDot[opening.band]
+                            )}
+                          />
+                        )}
                         <span
                           className={
                             opening.status === "processing"

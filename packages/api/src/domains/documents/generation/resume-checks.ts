@@ -223,7 +223,7 @@ export function lockedFactViolations(
 }
 
 /** Lines of 9.5pt Helvetica on an A4 page in the specified layout. */
-const LINES_PER_PAGE = 58;
+const LINES_PER_PAGE = 64;
 const CHARACTERS_PER_LINE = 110;
 
 /**

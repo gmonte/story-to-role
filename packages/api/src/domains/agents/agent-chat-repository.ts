@@ -215,6 +215,15 @@ export class AgentChatRepository {
     return ids;
   }
 
+  /** Every conversation about a document, for its deletion. */
+  async listChatIdsOfDocument(documentId: string) {
+    const rows = await this.tx
+      .select({ id: agentChatsTable.id })
+      .from(agentChatsTable)
+      .where(eq(agentChatsTable.documentId, documentId));
+    return rows.map((row) => row.id);
+  }
+
   /** Every conversation of the user, for account deletion. */
   async listChatIds(userId: string) {
     const rows = await this.tx

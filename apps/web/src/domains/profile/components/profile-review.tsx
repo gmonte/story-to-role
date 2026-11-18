@@ -51,12 +51,12 @@ export function ProfileReview() {
   return (
     <section className="space-y-2">
       <p className="text-muted-foreground flex items-center gap-1.5 text-xs font-medium uppercase">
-        {reviewFindings.length > 0 && (
-          <CircleAlert className="size-3.5 text-amber-600" />
-        )}
         {t.formatMessage(
           { defaultMessage: "Quality review ({count, number})" },
           { count: reviewFindings.length }
+        )}
+        {reviewFindings.length > 0 && (
+          <CircleAlert className="size-3.5 text-amber-600" />
         )}
       </p>
       {reviewFindings.length === 0 && (

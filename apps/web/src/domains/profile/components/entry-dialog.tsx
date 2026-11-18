@@ -351,7 +351,7 @@ function EntryForm({
           </>
         ) : values.rule === "translation" ? (
           <>
-            <Field label={t.formatMessage({ defaultMessage: "Documents in" })}>
+            <Field label={t.formatMessage({ defaultMessage: "Translate to" })}>
               <Select
                 value={values.language ?? "en-US"}
                 onValueChange={set("language")}
@@ -373,15 +373,30 @@ function EntryForm({
               "original",
               t.formatMessage({
                 defaultMessage:
-                  "As the profile writes it (employer, degree, certification, city)",
+                  "Original text, as in your profile (employer, degree, certification, city)",
               })
             )}
             {text(
               "translation",
-              t.formatMessage({
-                defaultMessage: "How documents in that language write it",
-              })
+              (values.language ?? "en-US") === "pt-BR"
+                ? t.formatMessage({
+                    defaultMessage: "Translation into Portuguese",
+                  })
+                : t.formatMessage({
+                    defaultMessage: "Translation into English",
+                  })
             )}
+            <p className="text-muted-foreground text-xs">
+              {(values.language ?? "en-US") === "pt-BR"
+                ? t.formatMessage({
+                    defaultMessage:
+                      "Resumes and cover letters written in Portuguese use the translation in place of the original.",
+                  })
+                : t.formatMessage({
+                    defaultMessage:
+                      "Resumes and cover letters written in English use the translation in place of the original.",
+                  })}
+            </p>
           </>
         ) : (
           text(

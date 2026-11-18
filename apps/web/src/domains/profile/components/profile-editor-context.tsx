@@ -49,6 +49,8 @@ import type {
   ProfileDraft,
   ProfileSuggestion,
 } from "@repo/api/domains/profile/schemas/profile";
+import { buttonVariants } from "@repo/web/components/ui/button";
+import { cn } from "@repo/web/lib/utils";
 import { toast } from "@repo/web/components/ui/sonner";
 
 import { useTRPC } from "~/tools/trpc/client";
@@ -405,6 +407,11 @@ export function ProfileEditorProvider({
           element.contentEditable = "false";
           const button = document.createElement("button");
           button.type = "button";
+          // The app's secondary Button, small, as classes: plain DOM here.
+          button.className = cn(
+            buttonVariants({ variant: "secondary" }),
+            "h-7 px-2.5 text-xs"
+          );
           button.textContent = `+ ${label}`;
           button.addEventListener("mousedown", (event) =>
             event.preventDefault()

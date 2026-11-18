@@ -1,5 +1,7 @@
 import type { ProfileSuggestion } from "@repo/api/domains/profile/schemas/profile";
 import { parseFragment } from "@repo/api/domains/profile/truth/suggestions";
+import { buttonVariants } from "@repo/web/components/ui/button";
+import { cn } from "@repo/web/lib/utils";
 
 export type SuggestionWidgetLabels = {
   accept: string;
@@ -8,6 +10,9 @@ export type SuggestionWidgetLabels = {
   reject: string;
   removal: string;
 };
+
+// The app's Button, small, as classes: the widget is plain DOM.
+const small = "h-7 px-2.5 text-xs";
 
 function button(label: string, className: string, onClick: () => void) {
   const element = document.createElement("button");
@@ -68,17 +73,21 @@ export function suggestionWidget(
   reason.textContent = suggestion.reason;
   footer.append(
     reason,
-    button(labels.accept, "profile-suggestion-accept", () =>
+    button(labels.accept, cn(buttonVariants(), small), () =>
       handlers.accept(suggestion.id)
     ),
-    button(labels.reject, "profile-suggestion-reject", () =>
-      handlers.reject(suggestion.id)
+    button(
+      labels.reject,
+      cn(buttonVariants({ variant: "outline" }), small),
+      () => handlers.reject(suggestion.id)
     ),
     // Only a suggestion that replaces lines with new ones can keep both.
     ...(suggestion.find.trim() && suggestion.replace.trim()
       ? [
-          button(labels.both, "profile-suggestion-both", () =>
-            handlers.both(suggestion.id)
+          button(
+            labels.both,
+            cn(buttonVariants({ variant: "link" }), small),
+            () => handlers.both(suggestion.id)
           ),
         ]
       : [])

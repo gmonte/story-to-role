@@ -134,50 +134,8 @@
   flex: 1 1 12rem;
   color: var(--muted-foreground);
 }
-.profile-editor .profile-suggestion-accept,
-.profile-editor .profile-suggestion-reject {
-  padding: 0.125rem 0.625rem;
-  border: 1px solid var(--border);
-  border-radius: 0.375rem;
-  background: var(--background);
-  font-weight: 500;
-  cursor: pointer;
-}
-.profile-editor .profile-suggestion-accept {
-  border-color: transparent;
-  background: var(--primary);
-  color: var(--primary-foreground);
-}
-/* A third way out, set apart from Accept and Reject: a quiet link. */
-.profile-editor .profile-suggestion-both {
-  padding: 0.125rem 0.25rem;
-  color: var(--muted-foreground);
-  font-weight: 500;
-  text-decoration: underline;
-  text-underline-offset: 3px;
-  cursor: pointer;
-}
-.profile-editor .profile-suggestion-both:hover {
-  color: var(--foreground);
-}
 .profile-editor .profile-add-entry {
   margin: 0.25rem 0;
-}
-.profile-editor .profile-add-entry button {
-  /* The app's secondary button, small. */
-  display: inline-flex;
-  align-items: center;
-  gap: 0.25rem;
-  height: 1.75rem;
-  padding: 0 0.625rem;
-  border-radius: calc(var(--radius) - 2px);
-  background: var(--secondary);
-  color: var(--secondary-foreground);
-  font-size: 0.75rem;
-  font-weight: 500;
-}
-.profile-editor .profile-add-entry button:hover {
-  background: color-mix(in oklab, var(--secondary) 80%, transparent);
 }
 .profile-editor .profile-locked-heading {
   cursor: default;

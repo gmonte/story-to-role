@@ -61,6 +61,9 @@ export class PdfService {
     latest: Parameters<typeof assertSendable>[0]["snapshot"],
     contexts?: FrozenContexts
   ) {
+    // LinkedIn text is copied from the interface, never exported as a file.
+    if (document.kind === "linkedin")
+      throw new TRPCError({ code: "BAD_REQUEST" });
     await assertSendable({
       db: tx,
       cipher: await getUserCipher(tx, userId),

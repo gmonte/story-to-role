@@ -2048,8 +2048,11 @@ describe("resume generation and snapshots", () => {
       versionId: version.id,
       baseSnapshotId: version.snapshot.id,
       content: {
-        ...version.content,
-        header: { ...version.content.header, titleLine: "Platform Engineer" },
+        ...resumeOf(version.content),
+        header: {
+          ...resumeOf(version.content).header,
+          titleLine: "Platform Engineer",
+        },
       },
     });
     const edited = await view();
@@ -2470,7 +2473,7 @@ describe("resume generation and snapshots", () => {
         baseSnapshotId: current.snapshot.id,
         content: {
           ...resumeOf(current.content),
-          header: { ...current.content.header, titleLine: title },
+          header: { ...resumeOf(current.content).header, titleLine: title },
         },
       });
     };
@@ -2911,8 +2914,11 @@ describe("resume generation and snapshots", () => {
       versionId: version.id,
       baseSnapshotId: generated,
       content: {
-        ...version.content,
-        header: { ...version.content.header, titleLine: "Platform Engineer" },
+        ...resumeOf(version.content),
+        header: {
+          ...resumeOf(version.content).header,
+          titleLine: "Platform Engineer",
+        },
       },
     });
     const [edited] = await load();

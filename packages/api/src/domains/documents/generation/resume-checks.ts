@@ -2,6 +2,8 @@ import type { SensitiveFilter } from "@repo/api/domains/evidence/sensitive/sensi
 
 import type { CoverLetterContent } from "../schemas/cover-letter-content";
 import type { Line, LineOrigin } from "../schemas/document";
+import { linkedinAsResume } from "../linkedin/linkedin-resume";
+import type { LinkedinContent } from "../schemas/linkedin-content";
 import type { ExperienceAge } from "../schemas/generation-settings";
 import type { ResumeContent, ResumeSection } from "../schemas/resume-content";
 import type { ContextPosition } from "./load-career-context";
@@ -69,8 +71,10 @@ export type WrittenLine = {
 };
 
 export function writtenLines(
-  content: ResumeContent | CoverLetterContent
+  content: ResumeContent | CoverLetterContent | LinkedinContent
 ): WrittenLine[] {
+  if (content.kind === "linkedin")
+    return writtenLines(linkedinAsResume(content));
   // A letter's written text is its paragraphs: the greeting and the close
   // hold no fact, and code prints them.
   if (content.kind === "cover_letter") {

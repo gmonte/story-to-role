@@ -10,6 +10,7 @@ import { getStorage } from "@repo/api/tools/storage/storage";
 import { refreshVersionVectors } from "../similar/embed-versions";
 import { DocumentsRepository } from "../documents-repository";
 import { runGenerateResume } from "../generation/run-generate-resume";
+import { runGenerateLinkedin } from "../linkedin/run-generate-linkedin";
 import { runGenerateLetter } from "../letter/run-generate-letter";
 import { runUpdateLetter } from "../letter/run-update-letter";
 
@@ -42,6 +43,8 @@ export const generateDocumentTask = task({
           generation && (await repository.findDocument(generation.documentId));
         if (generation?.kind === "letter_update") {
           await runUpdateLetter(run);
+        } else if (document?.kind === "linkedin") {
+          await runGenerateLinkedin({ ...run, reportProgress });
         } else if (document?.kind === "cover_letter") {
           await runGenerateLetter({
             ...run,

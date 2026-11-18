@@ -6,7 +6,11 @@ import { interviewLanguageSchema } from "@repo/api/domains/career/schemas/career
 export const outputLanguageSchema = interviewLanguageSchema;
 export type OutputLanguage = z.infer<typeof outputLanguageSchema>;
 
-export const documentKindSchema = z.enum(["resume", "cover_letter"]);
+export const documentKindSchema = z.enum([
+  "resume",
+  "cover_letter",
+  "linkedin",
+]);
 export type DocumentKind = z.infer<typeof documentKindSchema>;
 
 /** How a snapshot came to be; the interface calls snapshots "changes". */

@@ -41,6 +41,7 @@ import { proposalDiff } from "./adaptation/three-way-merge";
 import { fileNamer } from "./rendering/file-namer";
 import { pdfTemplate } from "./rendering/pdf-template";
 import { requireUserVersion } from "./require-version";
+import { applyLinkedinEdit } from "./linkedin/apply-linkedin-edit";
 import { applyLetterEdit, estimateLetterPages } from "./letter/assemble-letter";
 import type { CoverLetterContent } from "./schemas/cover-letter-content";
 import type { DocumentContent } from "./schemas/document-content";
@@ -321,6 +322,7 @@ export class DocumentsService {
         pdfTemplate
       );
       const isResume = content.kind === "resume";
+      const isLetter = content.kind === "cover_letter";
       const written = await repository.latestWrittenGeneration(version.id);
       const coverage = await snapshotCoverage({
         db: tx,
@@ -352,13 +354,17 @@ export class DocumentsService {
         // The rendered PDF's real length once it exists; an estimate before.
         pages:
           rendered?.pages ??
-          (isResume ? estimatePages(content) : estimateLetterPages(content)),
+          (isResume
+            ? estimatePages(content)
+            : isLetter
+              ? estimateLetterPages(content)
+              : 1),
         // The page limit this version was written under.
-        maxPages: isResume
-          ? ((written?.settings ?? documentSettings)?.resumeMaxPages ??
-            defaultGenerationSettings.resumeMaxPages)
-          : ((written?.settings ?? documentSettings)?.letterMaxPages ??
-            defaultGenerationSettings.letterMaxPages),
+        maxPages: isLetter
+          ? ((written?.settings ?? documentSettings)?.letterMaxPages ??
+            defaultGenerationSettings.letterMaxPages)
+          : ((written?.settings ?? documentSettings)?.resumeMaxPages ??
+            defaultGenerationSettings.resumeMaxPages),
         pdf: {
           ready: !!rendered,
           rendering:
@@ -391,8 +397,8 @@ export class DocumentsService {
         titleProposals: isResume
           ? trace.titleProposalsFor(content, version.language)
           : [],
-        letterTrace: isResume ? null : await trace.letterSources(),
-        letter: isResume ? null : await this.letterStatus(tx, version, latest),
+        letterTrace: isLetter ? await trace.letterSources() : null,
+        letter: isLetter ? await this.letterStatus(tx, version, latest) : null,
       });
     }
     const pending = await repository.pendingProposal(document.id);
@@ -727,10 +733,12 @@ export class DocumentsService {
         content =
           previous.kind === "resume" && input.content.kind === "resume"
             ? applyUserEdit(previous, input.content)
-            : applyLetterEdit(
-                previous as CoverLetterContent,
-                input.content as CoverLetterContent
-              );
+            : previous.kind === "linkedin" && input.content.kind === "linkedin"
+              ? applyLinkedinEdit(previous, input.content)
+              : applyLetterEdit(
+                  previous as CoverLetterContent,
+                  input.content as CoverLetterContent
+                );
       } catch (error) {
         if (error instanceof LockedFactEditError) {
           throw new TRPCError({ code: "BAD_REQUEST" });

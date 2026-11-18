@@ -1,5 +1,6 @@
 import { z } from "zod";
 
+import { linkedinAsResume } from "../linkedin/linkedin-resume";
 import type { Line } from "../schemas/document";
 import type { DocumentContent } from "../schemas/document-content";
 import type { ResumeContent, ResumeSection } from "../schemas/resume-content";
@@ -17,6 +18,8 @@ function placedLines(content: DocumentContent): Map<string, Placed> {
     put("letter", content.paragraphs);
     return placed;
   }
+  if (content.kind === "linkedin")
+    return placedLines(linkedinAsResume(content));
   for (const section of content.sections) {
     switch (section.kind) {
       case "summary":

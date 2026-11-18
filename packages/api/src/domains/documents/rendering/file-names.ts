@@ -8,6 +8,7 @@ const fixedWords: Record<DocumentKind, Record<OutputLanguage, string>> = {
     "en-US": "Cover_Letter",
     "pt-BR": "Carta_de_Apresentacao",
   },
+  linkedin: { "en-US": "LinkedIn", "pt-BR": "LinkedIn" },
 };
 
 /**

@@ -8,6 +8,9 @@ export function renderDocumentPdf(input: {
   content: DocumentContent;
   language: OutputLanguage;
 }) {
+  if (input.content.kind === "linkedin") {
+    throw new Error("LinkedIn text has no PDF: it is copied, never exported");
+  }
   return input.content.kind === "resume"
     ? renderResumePdf({ content: input.content, language: input.language })
     : renderLetterPdf(input.content);

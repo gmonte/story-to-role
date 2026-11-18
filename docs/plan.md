@@ -174,7 +174,17 @@ Acceptance:
 
 ### P10: LinkedIn
 
-- The method's step 09, built like a general library document: a LinkedIn profile (headline, about, experiences) generated from the published profile, with the same rules and coverage review. Specified before it starts.
+- The method's step 09, built like a general library document: the LinkedIn "About" and each experience's text, generated from the published profile with the same rules and coverage review, charged as a generation (resume spec, "LinkedIn").
+
+Acceptance:
+- [x] The LinkedIn text uses only the frozen profile: a figure the profile doesn't mark `[medido]` is blocked, and every experience keeps its locked facts.
+- [x] Each section has a copy action; nothing is changed on LinkedIn by StoryToRole.
+
+Notes:
+- A `linkedin` document kind (one per user, library-style, a version per language) whose content is `{about: Line, experiences: [{positionId, employer, title, startDate, endDate, lines}]}`; the About is one line with its paragraphs separated by a blank line. No migration: `documents.kind` is text.
+- No second rule set: code views the text as a resume (About as summary, experiences as the experience section) and reuses `assembleResume`, `checkDocument`, `keepReview` and the coverage review. Very old experiences under “relevant only” are left out, since a general text has no requirement to justify them.
+- One writer call and the coverage review against the focus “career as the profile states it”; charged as `generate_document` priced like a cover letter (20 × level).
+- Copying is gated on the server (`linkedin.sectionText` refuses while the official snapshot has findings); no PDF or other export exists for it.
 
 ## Final pass
 

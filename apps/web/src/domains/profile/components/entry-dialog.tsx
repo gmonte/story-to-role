@@ -136,11 +136,18 @@ function EntryForm({
       case "gap":
         return { kind, text: v("text") };
       case "rule":
-        return {
-          kind,
-          rule: v("rule") as "neverInclude" | "neverClaim",
-          text: v("text"),
-        };
+        return v("rule") === "publicName"
+          ? {
+              kind,
+              rule: "publicName",
+              original: v("original"),
+              public: v("public"),
+            }
+          : {
+              kind,
+              rule: v("rule") as "neverInclude" | "neverClaim",
+              text: v("text"),
+            };
     }
   }
 
@@ -283,14 +290,34 @@ function EntryForm({
               <SelectItem value="neverClaim">
                 {t.formatMessage({ defaultMessage: "Never claim" })}
               </SelectItem>
+              <SelectItem value="publicName">
+                {t.formatMessage({ defaultMessage: "Public name" })}
+              </SelectItem>
             </SelectContent>
           </Select>
         </Field>
-        {text(
-          "text",
-          t.formatMessage({
-            defaultMessage: "Name, client, codename, figure or claim",
-          })
+        {values.rule === "publicName" ? (
+          <>
+            {text(
+              "original",
+              t.formatMessage({
+                defaultMessage: "Real name (project, client, person)",
+              })
+            )}
+            {text(
+              "public",
+              t.formatMessage({
+                defaultMessage: "How public documents write it",
+              })
+            )}
+          </>
+        ) : (
+          text(
+            "text",
+            t.formatMessage({
+              defaultMessage: "Name, client, codename, figure or claim",
+            })
+          )
         )}
       </>
     ),

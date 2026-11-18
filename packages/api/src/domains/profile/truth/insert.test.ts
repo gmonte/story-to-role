@@ -120,4 +120,34 @@ describe("the insert menu", () => {
     expect(out).toContain("- Uso com frequência: SQL\n");
     expect(out).toContain("- Experiência pontual: Docker");
   });
+  it("adds a public name to the dictionary, inline or as a sub-item", () => {
+    const base = `# Perfil\n\n## Regras de comunicação\n\n- Nunca afirmar: liderança`;
+    const created = insert(base, {
+      kind: "rule",
+      rule: "publicName",
+      original: "Instabov",
+      public: "plataforma de gado",
+    });
+    expect(created).toContain(
+      "- Nomes públicos:\n  - Instabov → plataforma de gado"
+    );
+    const listed = insert(created, {
+      kind: "rule",
+      rule: "publicName",
+      original: "Chief",
+      public: "chat de IA",
+    });
+    expect(listed).toContain(
+      "  - Instabov → plataforma de gado\n  - Chief → chat de IA"
+    );
+    const inline = insert(`${base}\n- Nomes públicos: Banco X → banco`, {
+      kind: "rule",
+      rule: "publicName",
+      original: "Chief",
+      public: "chat de IA",
+    });
+    expect(inline).toContain(
+      "- Nomes públicos: Banco X → banco; Chief → chat de IA"
+    );
+  });
 });

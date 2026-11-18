@@ -3,11 +3,13 @@ import type { DateRange } from "./dates";
 import {
   competencyLabels,
   competencyLevelOf,
+  normalizeLabel,
   profileSectionKeys,
   type CompetencyLevel,
   type ProfileLanguage,
   type ProfileSectionKey,
 } from "./sections";
+import { publicNamesLabels } from "../rules/public-names";
 import { splitNames } from "./lint";
 import { readStructure, sectionOf, splitLabel } from "./structure";
 import { experienceTemplate, sectionTemplate } from "./template";
@@ -33,7 +35,9 @@ export type ProfileEntry =
   | { kind: "language"; language: string; level: string }
   | { kind: "competency"; name: string; level: CompetencyLevel }
   | { kind: "gap"; text: string }
-  | { kind: "rule"; rule: "neverInclude" | "neverClaim"; text: string };
+  | { kind: "rule"; rule: "neverInclude" | "neverClaim"; text: string }
+  // An entry of the public names dictionary: the real name, its public form.
+  | { kind: "rule"; rule: "publicName"; original: string; public: string };
 
 export type ProfileEntryKind = ProfileEntry["kind"];
 
@@ -57,6 +61,7 @@ const words: Record<
     renewing: string;
     neverInclude: string;
     neverClaim: string;
+    publicName: string;
   }
 > = {
   "pt-BR": {
@@ -67,6 +72,7 @@ const words: Record<
     renewing: "em renovação",
     neverInclude: "Nunca incluir",
     neverClaim: "Nunca afirmar",
+    publicName: "Nomes públicos",
   },
   "en-US": {
     completed: "completed",
@@ -76,6 +82,7 @@ const words: Record<
     renewing: "renewing",
     neverInclude: "Never include",
     neverClaim: "Never claim",
+    publicName: "Public names",
   },
 };
 
@@ -169,6 +176,51 @@ export function insertEntry(
     return {
       blocks: insertAt(blocks, at, experienceTemplate(entry, language)),
       line: at,
+    };
+  }
+
+  if (entry.kind === "rule" && entry.rule === "publicName") {
+    const pair = `${entry.original.trim()} → ${entry.public.trim()}`;
+    for (let line = section.start; line < section.end; line++) {
+      const block = blocks[line];
+      if (block.type !== "item" || block.depth) continue;
+      const labelled = splitLabel(block.text);
+      if (
+        !labelled ||
+        !publicNamesLabels.includes(normalizeLabel(labelled.label))
+      ) {
+        continue;
+      }
+      // Written on the line itself: one more “; ” entry.
+      const value = labelled.value.trim().replace(/[.;]$/, "");
+      if (value) {
+        const text = `${block.text.slice(0, block.text.indexOf(":") + 1)} ${value}; ${pair}`;
+        return {
+          blocks: blocks.map((b, i) => (i === line ? { ...b, text } : b)),
+          line,
+        };
+      }
+      // Listed under it: one more sub-item, after the others.
+      let at = line + 1;
+      while (
+        at < section.end &&
+        blocks[at].type === "item" &&
+        (blocks[at] as { depth: number }).depth > 0
+      ) {
+        at++;
+      }
+      return {
+        blocks: insertAt(blocks, at, [{ type: "item", depth: 1, text: pair }]),
+        line: at,
+      };
+    }
+    const at = section.end;
+    return {
+      blocks: insertAt(blocks, at, [
+        { type: "item", depth: 0, text: `${words[language].publicName}:` },
+        { type: "item", depth: 1, text: pair },
+      ]),
+      line: at + 1,
     };
   }
 

@@ -12,8 +12,9 @@ const openDelayMs = 300;
 const closeDelayMs = 150;
 
 /**
- * The small card over a link in the text: its address and a button to open
- * it in a new tab. A link under a finding shows the finding's card instead.
+ * A small button at the top right of a link in the text that opens it in a
+ * new tab (Ctrl/⌘ + click does too). A link under a finding shows the
+ * finding's card instead.
  */
 export function LinkHoverCard({ editor }: { editor: Editor | null }) {
   const t = useTranslation();
@@ -48,8 +49,8 @@ export function LinkHoverCard({ editor }: { editor: Editor | null }) {
         const rect = element.getBoundingClientRect();
         setCard({
           href: element.dataset.href!,
-          left: rect.left,
-          top: rect.bottom + 4,
+          left: rect.right,
+          top: rect.top,
         });
       }, openDelayMs);
     };
@@ -76,38 +77,29 @@ export function LinkHoverCard({ editor }: { editor: Editor | null }) {
   }, [editor, close]);
 
   if (!card) return null;
+  const label = t.formatMessage({ defaultMessage: "Open in a new tab" });
   return (
-    <div
-      role="tooltip"
-      className="bg-popover text-popover-foreground fixed z-50 max-w-xs space-y-1.5 rounded-md border p-2.5 text-xs shadow-md"
+    <Button
+      size="icon"
+      variant="outline"
+      className="fixed z-50 size-6 -translate-y-full shadow-sm"
       style={{
-        left: Math.max(8, Math.min(card.left, window.innerWidth - 328)),
+        left: Math.min(card.left, window.innerWidth - 32),
         top: card.top,
       }}
+      title={label}
+      aria-label={label}
       onMouseDown={(event) => event.preventDefault()}
       onMouseEnter={() => clearTimeout(closeTimer.current)}
       onMouseLeave={() => {
         closeTimer.current = setTimeout(() => setCard(null), closeDelayMs);
       }}
+      onClick={() => {
+        window.open(card.href, "_blank", "noopener,noreferrer");
+        close();
+      }}
     >
-      <p className="break-all">{card.href.replace(/^mailto:/, "")}</p>
-      <div className="flex items-center gap-2">
-        <Button
-          size="sm"
-          variant="outline"
-          className="h-6 px-2 text-xs"
-          onClick={() => {
-            window.open(card.href, "_blank", "noopener,noreferrer");
-            close();
-          }}
-        >
-          <ExternalLink className="size-3" />
-          {t.formatMessage({ defaultMessage: "Open in a new tab" })}
-        </Button>
-        <span className="text-muted-foreground">
-          {t.formatMessage({ defaultMessage: "Ctrl/⌘ + click" })}
-        </span>
-      </div>
-    </div>
+      <ExternalLink className="size-3" />
+    </Button>
   );
 }

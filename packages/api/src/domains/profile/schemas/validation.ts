@@ -23,7 +23,9 @@ export const validationAnswerSchema = z.object({
         kind: validationFindingKindSchema,
         quote: z
           .string()
-          .describe("The passage, copied word for word from the profile"),
+          .describe(
+            "The passage, copied word for word from the profile: the shortest one that pins the point, a sentence at most"
+          ),
         message: z
           .string()
           .describe(

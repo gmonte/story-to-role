@@ -65,7 +65,9 @@ export async function runValidateProfile(deps: {
   const { object } = await deps.ai.generateObject({
     purpose: "profile_validation",
     role: "writing",
-    maxTokens: 4096,
+    // Up to 30 findings and 40 competency levels, after the model thinks: a
+    // whole profile overran 4,096 and the answer came back cut.
+    maxTokens: 16000,
     schema: validationAnswerSchema,
     system: [
       "You review one person's career profile (their profile_truth.md, the long and true master version of their career) for quality, following the meu-emprego-novo method. You never rewrite it and never invent: you point at passages for the person to look at.",

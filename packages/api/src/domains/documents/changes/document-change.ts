@@ -1,7 +1,11 @@
 import type { Line, LineOrigin } from "../schemas/document";
 import type { DocumentChangeContent } from "../schemas/document-change";
 import type { CoverLetterContent } from "../schemas/cover-letter-content";
-import type { ResumeContent, ResumeSection } from "../schemas/resume-content";
+import type {
+  ResumeContent,
+  ResumeSection,
+  SkillGroup,
+} from "../schemas/resume-content";
 
 /** The content a change can target: a resume or a cover letter. */
 export type ChangeableContent = ResumeContent | CoverLetterContent;
@@ -21,9 +25,11 @@ export type DocumentChange = Pick<
  * editor groups them, and the facts the document prints (the header, a
  * position's employer, title and context, a letter's greeting and
  * closing), which belong to the user too. `fixed` parts hold a set number
- * of lines (one summary, one line per skills group, the header's lines):
- * their lines change, never come or go. Only the section titles and the
- * credentials are locked.
+ * of lines (the header's, a position's facts): their lines change, never
+ * come or go. The summary (one paragraph: an addition appends to it) and
+ * the skills (one line per group: an addition is a new group) take
+ * additions when asked, but are never emptied, and a skills label stays.
+ * Only the section titles and the credentials are locked.
  */
 export type DocumentPart = {
   key: string;
@@ -167,7 +173,7 @@ export function listDocumentParts(content: ChangeableContent): DocumentPart[] {
         parts.push({
           key: summaryPart,
           title: "summary",
-          fixed: true,
+          fixed: false,
           lines: [section.line],
         });
         break;
@@ -175,7 +181,7 @@ export function listDocumentParts(content: ChangeableContent): DocumentPart[] {
         parts.push({
           key: skillsPart,
           title: "skills",
-          fixed: true,
+          fixed: false,
           lines: section.groups.map((group) => ({
             ...group,
             text: skillLine(group),
@@ -348,6 +354,55 @@ export function changedLineOrigin(
     : { kind: "manual" };
 }
 
+/** A skills line split into its label and items, or null without both. */
+const splitSkillLine = (line: string) => {
+  const colon = line.indexOf(":");
+  if (colon < 0) return null;
+  const label = line.slice(0, colon).trim();
+  const text = line.slice(colon + 1).trim();
+  return label && text ? { label, text } : null;
+};
+
+type SkillPlan = Array<{
+  /** The index among the replaced groups it keeps, or null for a new one. */
+  kept: number | null;
+  label: string;
+  text: string;
+}>;
+
+/**
+ * How written skills lines map onto the groups they replace: a line that
+ * keeps the next replaced group's label is that group; any other is a new
+ * group (`Label: items`). "locked" when a replaced label is dropped,
+ * "malformed" when a new line isn't `Label: items`.
+ */
+function planSkills(
+  labels: string[],
+  written: string[]
+): SkillPlan | "locked" | "malformed" {
+  const plan: SkillPlan = [];
+  let next = 0;
+  for (const line of written) {
+    const label = labels[next];
+    if (
+      label !== undefined &&
+      line.toLowerCase().startsWith(`${label.toLowerCase()}:`)
+    ) {
+      plan.push({
+        kept: next,
+        label,
+        text: line.slice(label.length + 1).trim(),
+      });
+      next++;
+      continue;
+    }
+    const added = splitSkillLine(line);
+    if (!added) return "malformed";
+    plan.push({ kept: null, ...added });
+  }
+  return next < labels.length ? "locked" : plan;
+}
+
 /** The part's lines with the change written, keeping replaced lines' ids. */
 function rewriteLines(
   lines: Line[],
@@ -394,6 +449,7 @@ export function applyDocumentChange(
   const { part, start, end } = located;
   const written = splitChangeLines(change.replace);
   if (part.fixed && written.length !== end - start) return null;
+  if (part.key === summaryPart && !written.length) return null;
   const origin = changedLineOrigin(content.kind, evidenceIds, part.key);
   if (part.key === headerPart) {
     const lines = writtenById(part, located, written);
@@ -433,25 +489,46 @@ export function applyDocumentChange(
           return part.key === summaryPart
             ? {
                 ...section,
-                line: { ...section.line, text: written[0], origin },
+                line: {
+                  ...section.line,
+                  // One paragraph: an addition appends to it.
+                  text: (end > start
+                    ? written
+                    : [section.line.text, ...written]
+                  ).join(" "),
+                  origin,
+                },
               }
             : section;
         case "skills":
           if (part.key !== skillsPart) return section;
-          return {
-            ...section,
-            groups: section.groups.map((group, index) => {
-              if (index < start || index >= end) return group;
-              const line = written[index - start];
-              const prefix = `${group.label}:`;
-              // The label is the group's own: a line that drops it is
-              // refused before it gets here.
-              const text = line.startsWith(prefix)
-                ? line.slice(prefix.length).trim()
-                : line;
-              return { ...group, text, origin };
-            }),
-          };
+          {
+            const plan = planSkills(
+              section.groups.slice(start, end).map((group) => group.label),
+              written
+            );
+            if (typeof plan === "string") return section;
+            return {
+              ...section,
+              groups: [
+                ...section.groups.slice(0, start),
+                ...plan.map((item): SkillGroup => {
+                  const group =
+                    item.kept === null
+                      ? null
+                      : section.groups[start + item.kept];
+                  if (group?.text === item.text) return group;
+                  return {
+                    id: group?.id ?? newChangeLineId(),
+                    label: item.label,
+                    text: item.text,
+                    origin,
+                  };
+                }),
+                ...section.groups.slice(end),
+              ],
+            };
+          }
         case "experience":
           return {
             ...section,
@@ -508,14 +585,14 @@ export function changeViolation(
   const { part, start, end } = located;
   const written = splitChangeLines(change.replace);
   if (part.fixed && written.length !== end - start) return "fixedLines";
+  if (part.key === summaryPart && !written.length) return "fixedLines";
   if (part.key === skillsPart) {
-    const labels = part.lines
-      .slice(start, end)
-      .map((line) => line.text.split(":")[0]);
-    const kept = written.every((line, index) =>
-      line.toLowerCase().startsWith(`${labels[index].toLowerCase()}:`)
+    const plan = planSkills(
+      part.lines.slice(start, end).map((line) => line.text.split(":")[0]),
+      written
     );
-    if (!kept) return "locked";
+    if (plan === "locked") return "locked";
+    if (plan === "malformed") return "fixedLines";
   }
   return null;
 }

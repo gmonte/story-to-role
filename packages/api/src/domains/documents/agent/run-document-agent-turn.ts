@@ -46,7 +46,7 @@ function refusalText(refusal: ChangeRefusal) {
     case "unchanged":
       return "The new line is the same as the one it replaces.";
     case "fixedLines":
-      return "The summary and the skills lines are replaced one for one: give exactly as many lines as you replace, never add or remove one there.";
+      return "The summary and the skills are never emptied, a skills line keeps its label, and a new skills line is written “Label: item, item”. Give each header or facts line exactly as replaced, one for one.";
     case "ungivenFigures":
       return `Refused: neither the profile nor the person gave ${refusal.figures.join(", ")}. Write the figure exactly as they did, or ask them for it; never supply a number yourself.`;
   }

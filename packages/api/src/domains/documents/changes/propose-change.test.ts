@@ -414,8 +414,15 @@ describe("proposed changes", () => {
       })
     ).toBe("fixedLines");
     expect(
-      await refusal({ part: "skills", find: "", replace: "Cloud: AWS" })
+      await refusal({ part: "skills", find: "", replace: "just a word" })
     ).toBe("fixedLines");
+    expect(
+      await refusal({
+        part: "skills",
+        find: "Core: Kubernetes, Terraform",
+        replace: "",
+      })
+    ).toBe("locked");
     expect(await ctx.listPending()).toHaveLength(0);
   });
 
@@ -462,6 +469,62 @@ describe("proposed changes", () => {
     expect(entry.lines[0].id).toBe("exp1");
     expect(entry.lines[1].id).not.toBe("exp2");
     expect(entry.lines[2].id).toBe("exp2");
+  });
+
+  it("adds a skills group and appends to the summary, applied on accept", async () => {
+    const ctx = await setup();
+    const group = await ctx.propose({
+      part: "skills",
+      find: "",
+      replace: "Cloud: AWS, GCP",
+    });
+    const after = await ctx.propose({
+      part: "skills",
+      find: "Core: Kubernetes, Terraform",
+      replace: "Core: Kubernetes, Terraform\nTools: Git",
+    });
+    const sentence = await ctx.propose({
+      part: "summary",
+      find: "",
+      replace: "Mentors junior engineers.",
+    });
+    if (!group.ok || !after.ok || !sentence.ok) throw new Error("refused");
+    const result = (change: Parameters<typeof applyDocumentChange>[1]) => {
+      const content = applyDocumentChange(ctx.content, change, []);
+      if (content?.kind !== "resume") throw new Error("not applied");
+      return content.sections;
+    };
+    const groups = (sections: ReturnType<typeof result>) => {
+      const skills = sections.find((section) => section.kind === "skills");
+      return skills?.kind === "skills"
+        ? skills.groups.map((row) => [row.id, row.label, row.text])
+        : [];
+    };
+    expect(groups(result(group.change))).toEqual([
+      ["sk1", "Core", "Kubernetes, Terraform"],
+      [expect.any(String), "Cloud", "AWS, GCP"],
+    ]);
+    expect(groups(result(after.change))[0]).toEqual([
+      "sk1",
+      "Core",
+      "Kubernetes, Terraform",
+    ]);
+    expect(groups(result(after.change))[1].slice(1)).toEqual(["Tools", "Git"]);
+    const summary = result(sentence.change)[0];
+    expect(summary.kind === "summary" && summary.line.text).toBe(
+      "Engineer who cut deploy time by 40%. Mentors junior engineers."
+    );
+    const accepted = await ctx.changes.acceptChanges({
+      userId: ctx.user.id,
+      versionId: ctx.version.id,
+      baseSnapshotId: ctx.snapshot.id,
+    });
+    expect(accepted.accepted).toHaveLength(3);
+    const content = await ctx.latest();
+    if (content.kind !== "resume") throw new Error("not a resume");
+    expect(content.sections[0]).toMatchObject({
+      line: { id: "sum1" },
+    });
   });
 
   it("changes a locked fact only when the person asked for it in this conversation", async () => {

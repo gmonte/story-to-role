@@ -81,7 +81,6 @@ export function LinkHoverCard({ editor }: { editor: Editor | null }) {
   return (
     <Button
       size="icon"
-      variant="outline"
       className="fixed z-50 size-6 -translate-y-full shadow-sm"
       style={{
         left: Math.min(card.left, window.innerWidth - 32),

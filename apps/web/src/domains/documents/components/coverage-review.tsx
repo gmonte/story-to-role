@@ -253,6 +253,33 @@ function findingText(
           position: oldestWithBullets(version) ?? "none",
         }
       );
+    case "bulletShape": {
+      const problems = str("problems").split(",");
+      const reasons = [
+        problems.includes("techList")
+          ? t.formatMessage({
+              defaultMessage: "it is only a list of technologies",
+            })
+          : null,
+        problems.includes("tooLong")
+          ? t.formatMessage({
+              defaultMessage: "it is longer than about three lines",
+            })
+          : null,
+        problems.includes("opening")
+          ? t.formatMessage({
+              defaultMessage: "it doesn't open with an action verb",
+            })
+          : null,
+      ].filter(Boolean);
+      return t.formatMessage(
+        {
+          defaultMessage:
+            "“{text}” could follow the action, result, how format better: {reasons}.",
+        },
+        { text, reasons: reasons.join("; ") }
+      );
+    }
     case "veryOld":
       return t.formatMessage(
         {

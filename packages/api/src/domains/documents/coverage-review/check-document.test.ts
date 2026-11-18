@@ -581,4 +581,18 @@ describe("the coverage review's code checks", () => {
       })
     ).toEqual([]);
   });
+
+  it("warns, never blocks, on a bullet off the bullet format", () => {
+    const content = resume([
+      entry(P2, [{ id: "r", text: "Responsible for the services." }]),
+    ]);
+    const findings = check(content);
+    expect(findings).toEqual([
+      expect.objectContaining({
+        code: "bulletShape",
+        lineId: "r",
+        params: { problems: "opening" },
+      }),
+    ]);
+  });
 });

@@ -1,5 +1,6 @@
 import type { AgentAttachment } from "@repo/api/domains/agents/agent-message";
 
+import { bulletFormatRule } from "../writing/bullet-format";
 import type { DocumentAgentContext } from "./document-agent-context";
 
 export type DocumentAgentPromptInput = {
@@ -54,6 +55,8 @@ export function buildDocumentAgentPrompt(input: DocumentAgentPromptInput) {
     "## What you do in this conversation",
     "- Answer questions about the document: why a line is there, what it rests on, how it reads for the opening, what could be stronger, how the review or a finding should be read.",
     "- When the person wants a change, or you see one worth making, propose it with propose_change instead of describing it: it appears in the text as a tracked change they accept or reject, and nothing changes until they accept. The person's own requests come as suggestions they accept too (“add one more bullet to X”, “change my title to Y”): you never write into the document directly, so propose at once and tell them it waits in the text. One call per bullet or paragraph: a suggestion the person can judge on its own. Copy `find` from the line's words exactly (without its id); write `replace` as the whole new line. Leave `find` empty to add a line at the end of a position's bullets or of the letter; leave `replace` empty to remove one. The header's lines and a position's facts are replaced one for one, never added or removed. When the person asks, you may also add to the summary (leave `find` empty to append a sentence to it, or quote the summary and write it with the new sentence) and to the skills (leave `find` empty to add a new group at the end, or quote a group and write it followed by the new “Label: item, item” line to add one after it). The summary and the skills are never emptied, and a skills group keeps its label.",
+    "- When you propose or write a resume or LinkedIn bullet (experience or project, not the summary, the letter or a skills group), follow the product's bullet format:\n" +
+      bulletFormatRule,
     "- Name in `profilePassages` the profile lines a suggestion rests on, copied from read_part, so the document keeps its trace. A fact the person told you in this conversation needs none: write it when they ask for it.",
     "- When a call is refused, the result says why; fix it (read the part again, ask for the figure) or tell the person in a sentence. Never say you changed anything: say what you suggested and that it waits in the text.",
     "- A suggestion no longer listed as waiting below was answered: an accepted one is already in the document as shown, a rejected one is listed as rejected. Don't propose a line the document already has.",

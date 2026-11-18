@@ -1,5 +1,6 @@
 import type { Tone } from "@repo/api/domains/openings/schemas/opening";
 
+import { bulletFormatRule } from "../writing/bullet-format";
 import type { OutputLanguage } from "../schemas/document";
 import { openingTermLines } from "./opening-terms";
 import type {
@@ -215,6 +216,7 @@ function writingRules(settings: GenerationSettings) {
     "- Never write employers, titles or dates: code prints them. context is null, unless the position needs a note of a few words such as “parallel project” or “contract”: never its sector, tools, team or a summary, which belong in bullets.",
     "- Invent nothing: no technology, figure, certification or responsibility the profile doesn't state. Never claim what a position says the person did not do, nor a requirement the fit check marks as a gap. A field with no information stays empty.",
     "- Bullets are reordered and rewritten to put first what the opening asks for; use the opening's vocabulary only where it is true of the person, spelled as the opening spells it.",
+    bulletFormatRule,
     ...lengthRules(settings),
     "- title_line: for an opening, the main technologies only, separated by commas, for example “React Native, Expo, TypeScript”: code prints the opening's title before them. For a library resume, the target role the focus points to, a “|”, then the technologies, for example “Mobile Engineer | React Native, Expo, TypeScript”; the role claims no seniority the profile doesn't show and no number.",
     "- emphasis: up to five short lines, in the output language, saying what this document brings forward and what it leaves in the background.",
@@ -244,6 +246,8 @@ export function reviewerPrompt(input: {
     "You review a resume's coverage of its purpose (the opening's requirements, or the focus) against the profile it was written from.",
     "- coverage: one entry per requirement of the opening, named as written (for a focus, the aspects of it worth judging). strong: the resume shows it with a line the profile proves. partial: it touches it only indirectly. not_proven: the resume does not prove it, whether or not the profile could.",
     "- inconsistencies: any fact, date or figure in the draft that doesn't match the profile's lines (at most 8). None is the usual answer.",
+    "- bullet format: advice also names each bullet (experience or project) that is off the format below (action, then impact, then how), saying what it lacks, only by rewording what the profile states.",
+    bulletFormatRule,
     "- advice: what an editor can do to cover better what the profile already states, only by reordering and rewording (at most 8). Never suggest covering a gap, adding a fact, or claiming what the profile doesn't state.",
     `Estimated length: ${input.pages} pages (at most ${input.maxPages}).`,
     "",
@@ -311,6 +315,7 @@ export function adjusterPrompt(input: {
     "Rules, enforced by code after you answer:",
     "- experience: for each position, bullet_ids lists the existing bullets' ids in the new order, first the ones that answer the purpose; code keeps the first ones within the limits below and never rewrites a bullet.",
     "- added: at most one new bullet per position, only when the fact is in the profile's lines and the purpose asks for it; it cites, in evidence_ids, lines of its own position, and carries no number those lines don't show. Usually empty.",
+    bulletFormatRule,
     "- skills: the existing groups by id, each with its items in the new order, first the ones the purpose asks for. No new item.",
     "- summary: rewritten for the purpose in 3 to 4 lines, citing the profile lines it rests on.",
     "- Never try to cover a gap: a requirement the fit check marks as a gap stays uncovered. Invent nothing.",

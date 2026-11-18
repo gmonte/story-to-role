@@ -33,7 +33,7 @@ export async function fileNamer(
     documentFileName({
       kind: document.kind,
       language: version.language,
-      name: content.header.name,
+      name: "header" in content ? content.header.name : "",
       title,
     });
 }

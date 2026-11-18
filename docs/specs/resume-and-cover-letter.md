@@ -128,6 +128,15 @@ A cover letter follows its own methodology and draws on two inputs a resume does
 
 Rules: about one page; personal, honest and enthusiastic; every sentence earns its place; no template phrasing ("hiring managers can sniff a template from a mile away"); no embellishment. The story comes only from the frozen profile and the user's own words, and company facts only from approved research, so the letter invents nothing; its figures follow the same rules as a resume's. Its length follows the generation settings (at most 4 paragraphs and 1 page by default), and its tone the output language's conventions in the tested language list. It gets the same coverage review as a resume.
 
+## LinkedIn
+
+The method's step 09, decided with the owner: StoryToRole writes the user's LinkedIn text from the published profile; it does not read or compare the current LinkedIn profile, and it never changes anything on LinkedIn (the user copies what they approve).
+
+- **What it writes:** the "About" section (3 to 5 short paragraphs, natural, as the user would speak) and, for each experience, its text as bullet points, leaner than on a resume (the generation settings' bullets per recent and older experience apply; very old experiences follow the same rule). No headline, no keyword lists.
+- **Like a library document:** one LinkedIn document per user, with versions per output language, snapshots, undo and edits like any document; generating again makes a new snapshot. Each section has a **Copy text** action.
+- **Same rules:** the frozen profile version is the only source of facts; locked facts are printed by code; figures only when marked `[medido]`; communication rules and "what I did not do" apply; it gets the coverage review (code checks that block copying, and the AI review against a general purpose: the person's career as the profile states it).
+- **Cost:** charged as a generation, estimated before running, the review included.
+
 ## Cover letter and its resume
 
 - A cover letter can be generated without a resume, but it is more accurate when generated from one.

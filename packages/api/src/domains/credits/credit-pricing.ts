@@ -57,7 +57,7 @@ export type CapHints = {
   positions?: number;
   thorough?: boolean;
   maximum?: boolean;
-  documentKind?: "resume" | "cover_letter";
+  documentKind?: "resume" | "cover_letter" | "linkedin";
   // The profile parts a validation reviews.
   parts?: number;
 };
@@ -84,7 +84,13 @@ export function creditCap(type: TaskType, hints: CapHints = {}): number {
     case "adapt_document":
       return 10 * level;
     case "generate_document": {
-      if (hints.documentKind === "cover_letter") return 20 * level;
+      // A LinkedIn text is priced like a cover letter: one writer call and
+      // the coverage review.
+      if (
+        hints.documentKind === "cover_letter" ||
+        hints.documentKind === "linkedin"
+      )
+        return 20 * level;
       // About 37 to 55 for Quick at the standard level, by career length.
       const base = Math.min(110, 30 + 5 * (hints.positions ?? 5));
       return base * level * (hints.thorough ? 2 : 1);

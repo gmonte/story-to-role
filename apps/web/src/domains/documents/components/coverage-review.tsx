@@ -53,7 +53,7 @@ export function CoverageReviewBlock({ version }: { version: VersionView }) {
           <p className="flex items-center gap-1.5 font-medium">
             <AlertTriangle className="size-3.5 shrink-0 text-red-600 dark:text-red-400" />
             {t.formatMessage({
-              defaultMessage: "Fix before downloading or sending",
+              defaultMessage: "Fix before downloading, sending or copying",
             })}
           </p>
           <ul className="flex flex-col gap-1">
@@ -280,7 +280,11 @@ function ReviewSections({
   const { sources } = review;
   const purpose =
     sources.purpose.kind === "focus"
-      ? sources.purpose.focus
+      ? version.content.kind === "linkedin"
+        ? t.formatMessage({
+            defaultMessage: "Your career as your profile states it",
+          })
+        : sources.purpose.focus
       : sources.purpose.title && sources.purpose.company
         ? t.formatMessage(
             { defaultMessage: "{title} at {company}" },

@@ -19,6 +19,12 @@ export const resumeCredits = (
     levelFactor(choice.writingLevel) *
     (choice.reviewDepth === "thorough" ? 2 : 1);
 
+/** A LinkedIn text's cap: priced like a cover letter. */
+export const linkedinCredits = (
+  estimates: Estimates,
+  writingLevel: WritingLevel
+) => estimates && estimates.linkedin * levelFactor(writingLevel);
+
 export const letterCredits = (
   estimates: Estimates,
   writingLevel: WritingLevel

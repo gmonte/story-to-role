@@ -30,6 +30,7 @@ export async function reviewCoverage(input: {
   brief: OpeningBrief;
   purposes: Purpose[];
   language: OutputLanguage;
+  documentName?: string;
 }): Promise<CoverageReviewContent> {
   const { object } = await input.ai.generateObject({
     purpose: "coverage_review",
@@ -42,7 +43,7 @@ export async function reviewCoverage(input: {
         role: "user",
         content:
           input.content.kind === "resume"
-            ? "Review the resume's coverage."
+            ? `Review the ${input.documentName ?? "resume"}'s coverage.`
             : "Review the cover letter's coverage.",
       },
     ],

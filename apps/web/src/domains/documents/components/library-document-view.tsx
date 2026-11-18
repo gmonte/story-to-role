@@ -10,6 +10,8 @@ import { useSelectedVersion } from "../hooks/use-selected-version";
 import { AdaptVersionDialog } from "./adapt-version-dialog";
 import { GenerationProgress, VersionChecks } from "./documents-panel";
 import { OutdatedNotice, SyncProposal } from "./language-sync";
+import { LinkedinDialog } from "./linkedin-dialog";
+import { LinkedinEditor } from "./linkedin-editor";
 import { LibraryResumeDialog } from "./library-resume-dialog";
 import { ResumeEditor } from "./resume-editor";
 
@@ -32,7 +34,10 @@ export function LibraryDocumentView({ documentId }: { documentId: string }) {
           })}
         </p>
       )}
-      {versions.length > 0 && (
+      {versions.length > 0 && document.data?.kind === "linkedin" && (
+        <LinkedinEditor versions={versions} defaultTone={generation?.tone} />
+      )}
+      {versions.length > 0 && document.data?.kind === "resume" && (
         <ResumeEditor
           versions={versions}
           generateAgain={(version, trigger) => (
@@ -55,6 +60,29 @@ export function LibraryDocumentPanel({ documentId }: { documentId: string }) {
   const versions = document.data?.versions ?? [];
   const { selected } = useSelectedVersion(versions);
   if (!document.data || versions.length === 0) return null;
+
+  // LinkedIn text: a new version is a generation in another language; the
+  // coverage review sits beside the text, in the editor.
+  if (document.data.kind === "linkedin") {
+    return (
+      <section className="flex flex-col gap-2">
+        <div className="flex items-center justify-between">
+          <h3 className="text-sm font-medium">
+            {t.formatMessage({ defaultMessage: "Versions" })}
+          </h3>
+          <LinkedinDialog
+            defaultTone={document.data.generation?.tone}
+            trigger={
+              <Button size="sm" variant="ghost">
+                <Plus />
+                {t.formatMessage({ defaultMessage: "New version" })}
+              </Button>
+            }
+          />
+        </div>
+      </section>
+    );
+  }
 
   return (
     <section className="flex flex-col gap-2">

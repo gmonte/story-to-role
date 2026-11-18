@@ -515,13 +515,13 @@ function SectionBody({
 }
 
 /** Where lines come from: evidence by id and instruction points' text. */
-type TraceIndex = {
+export type TraceIndex = {
   evidence: Map<string, EvidenceTrace>;
   instructions: Map<string, string>;
 };
 
 /** A line with its origin on hover, colored by origin in trace mode. */
-function TracedLine({
+export function TracedLine({
   lineId,
   origin,
   trace,

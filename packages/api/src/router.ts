@@ -14,6 +14,7 @@ import { adaptationRouter } from "./domains/documents/adaptation/adaptation-rout
 import { creditsRouter } from "./domains/credits/credits-router";
 import { documentsRouter } from "./domains/documents/documents-router";
 import { letterRouter } from "./domains/documents/letter/letter-router";
+import { linkedinRouter } from "./domains/documents/linkedin/linkedin-router";
 import { libraryRouter } from "./domains/documents/library/library-router";
 import { writingRouter } from "./domains/documents/writing/writing-router";
 import { profileRouter } from "./domains/profile/profile-router";
@@ -31,6 +32,7 @@ export const appRouter = createTRPCRouter({
   documents: documentsRouter,
   instructions: instructionsRouter,
   letters: letterRouter,
+  linkedin: linkedinRouter,
   library: libraryRouter,
   motivation: motivationRouter,
   openings: openingsRouter,

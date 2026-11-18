@@ -60,6 +60,9 @@ export class CreditsService {
           coverLetter: creditCap("generate_document", {
             documentKind: "cover_letter",
           }),
+          linkedin: creditCap("generate_document", {
+            documentKind: "linkedin",
+          }),
           fitCheck: creditCap("analyze_opening"),
           adaptation: creditCap("adapt_document"),
           research: creditCap("research_company"),

@@ -21,6 +21,7 @@ import {
 import type { OutputLanguage } from "../schemas/document";
 import { loadLetterOwnSources } from "../letter/letter-own-sources";
 import { decryptDocument } from "../snapshot-content";
+import { linkedinAsResume } from "../linkedin/linkedin-resume";
 import { checkDocument } from "./check-document";
 import { checkLetter } from "./check-letter";
 
@@ -188,28 +189,41 @@ export async function snapshotCoverage(input: {
     input.written
   );
   const findings =
-    content.kind === "cover_letter"
-      ? checkLetter({
-          content,
-          context,
-          settings,
-          ownSources: await loadLetterOwnSources({
-            db: input.db,
-            cipher,
-            openingId,
-            content,
-          }),
-          pages: rendered?.pages ?? null,
-        })
-      : checkDocument({
-          content,
+    content.kind === "linkedin"
+      ? // The resume's checks on LinkedIn's view as a resume. A LinkedIn
+        // text has no requirement to justify a very old experience, and no
+        // page limit.
+        checkDocument({
+          content: linkedinAsResume(content),
           context,
           settings,
           today: input.today ?? new Date().toISOString().slice(0, 7),
-          purposes,
-          targetTitle: brief.focus ? null : brief.title,
-          pages: rendered?.pages ?? null,
-        });
+          purposes: [],
+          targetTitle: null,
+          pages: null,
+        })
+      : content.kind === "cover_letter"
+        ? checkLetter({
+            content,
+            context,
+            settings,
+            ownSources: await loadLetterOwnSources({
+              db: input.db,
+              cipher,
+              openingId,
+              content,
+            }),
+            pages: rendered?.pages ?? null,
+          })
+        : checkDocument({
+            content,
+            context,
+            settings,
+            today: input.today ?? new Date().toISOString().slice(0, 7),
+            purposes,
+            targetTitle: brief.focus ? null : brief.title,
+            pages: rendered?.pages ?? null,
+          });
   return { context, findings };
 }
 

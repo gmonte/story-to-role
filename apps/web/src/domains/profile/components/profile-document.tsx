@@ -25,7 +25,7 @@ import {
 import { cn } from "@repo/web/lib/utils";
 
 import { useProfileLabels } from "../hooks/use-profile-labels";
-import { blockPositions } from "../utils/editor-doc";
+import { blockPositions, isLockedNode } from "../utils/editor-doc";
 import { EntryDialog } from "./entry-dialog";
 import { useProfileEditor } from "./profile-editor-context";
 
@@ -80,6 +80,8 @@ function dropIndex(editor: Editor, clientY: number) {
 function moveBlock(editor: Editor, from: number, to: number) {
   if (to === from || to === from + 1) return;
   const node = editor.state.doc.child(from);
+  // The title and the template's sections stay where they are.
+  if (isLockedNode(node)) return;
   const start = nodeStart(editor, from);
   const tr = editor.state.tr.delete(start, start + node.nodeSize);
   const target = nodeStart(editor, to) - (to > from ? node.nodeSize : 0);
@@ -106,7 +108,7 @@ type SlashMenu = { query: string; from: number; left: number; top: number };
 export function ProfileDocument() {
   const t = useTranslation();
   const { entryLabels } = useProfileLabels();
-  const { editor, insert, talkAbout } = useProfileEditor();
+  const { editor, insert, talkAbout, entryOpenerRef } = useProfileEditor();
   const [selection, setSelection] = useState<{
     text: string;
     line: number;
@@ -123,6 +125,14 @@ export function ProfileDocument() {
   const [blockMenu, setBlockMenu] = useState<number | null>(null);
   const [dialog, setDialog] = useState<ProfileEntryKind | null>(null);
   const [slash, setSlash] = useState<SlashMenu | null>(null);
+
+  // The "+ Add" buttons at the end of the sections open the same dialog.
+  useEffect(() => {
+    entryOpenerRef.current = setDialog;
+    return () => {
+      entryOpenerRef.current = null;
+    };
+  }, [entryOpenerRef]);
   const [slashIndex, setSlashIndex] = useState(0);
 
   const blockKinds: Array<{ kind: BlockKind; label: string }> = [
@@ -261,6 +271,13 @@ export function ProfileDocument() {
     return () => dom.removeEventListener("keydown", keys, true);
   }, [editor, slash, slashIndex, slashOptions, chooseSlash]);
 
+  // The title and the template's sections have no handle: they don't move.
+  const lockedHovered =
+    !!editor &&
+    !!hovered &&
+    hovered.index < editor.state.doc.childCount &&
+    isLockedNode(editor.state.doc.child(hovered.index));
+
   function track(event: React.MouseEvent) {
     if (!editor || drag || blockMenu !== null) return;
     const box = wrapper.current?.getBoundingClientRect();
@@ -330,55 +347,57 @@ export function ProfileDocument() {
               ))}
             </DropdownMenuContent>
           </DropdownMenu>
-          <DropdownMenu
-            open={blockMenu !== null}
-            onOpenChange={(open) => !open && setBlockMenu(null)}
-          >
-            <DropdownMenuTrigger asChild>
-              <button
-                type="button"
-                aria-label={t.formatMessage({
-                  defaultMessage: "Drag to move, click for options",
-                })}
-                className="text-muted-foreground hover:bg-muted flex size-6 cursor-grab touch-none items-center justify-center rounded active:cursor-grabbing"
-                onPointerDown={startDrag}
-                onClick={(event) => event.preventDefault()}
-              >
-                <GripVertical className="size-4" />
-              </button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="start">
-              <DropdownMenuLabel>
-                {t.formatMessage({ defaultMessage: "Turn into" })}
-              </DropdownMenuLabel>
-              {blockKinds.map((block) => (
-                <DropdownMenuItem
-                  key={block.kind}
-                  onSelect={() =>
-                    blockMenu !== null &&
-                    setBlockKind(editor, blockMenu, block.kind)
-                  }
+          {!lockedHovered && (
+            <DropdownMenu
+              open={blockMenu !== null}
+              onOpenChange={(open) => !open && setBlockMenu(null)}
+            >
+              <DropdownMenuTrigger asChild>
+                <button
+                  type="button"
+                  aria-label={t.formatMessage({
+                    defaultMessage: "Drag to move, click for options",
+                  })}
+                  className="text-muted-foreground hover:bg-muted flex size-6 cursor-grab touch-none items-center justify-center rounded active:cursor-grabbing"
+                  onPointerDown={startDrag}
+                  onClick={(event) => event.preventDefault()}
                 >
-                  {block.label}
+                  <GripVertical className="size-4" />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start">
+                <DropdownMenuLabel>
+                  {t.formatMessage({ defaultMessage: "Turn into" })}
+                </DropdownMenuLabel>
+                {blockKinds.map((block) => (
+                  <DropdownMenuItem
+                    key={block.kind}
+                    onSelect={() =>
+                      blockMenu !== null &&
+                      setBlockKind(editor, blockMenu, block.kind)
+                    }
+                  >
+                    {block.label}
+                  </DropdownMenuItem>
+                ))}
+                <DropdownMenuSeparator />
+                <DropdownMenuItem
+                  variant="destructive"
+                  onSelect={() => {
+                    if (blockMenu === null) return;
+                    const start = nodeStart(editor, blockMenu);
+                    const node = editor.state.doc.child(blockMenu);
+                    editor.view.dispatch(
+                      editor.state.tr.delete(start, start + node.nodeSize)
+                    );
+                    setHovered(null);
+                  }}
+                >
+                  {t.formatMessage({ defaultMessage: "Delete" })}
                 </DropdownMenuItem>
-              ))}
-              <DropdownMenuSeparator />
-              <DropdownMenuItem
-                variant="destructive"
-                onSelect={() => {
-                  if (blockMenu === null) return;
-                  const start = nodeStart(editor, blockMenu);
-                  const node = editor.state.doc.child(blockMenu);
-                  editor.view.dispatch(
-                    editor.state.tr.delete(start, start + node.nodeSize)
-                  );
-                  setHovered(null);
-                }}
-              >
-                {t.formatMessage({ defaultMessage: "Delete" })}
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
         </div>
       )}
       {drag?.top !== null && drag?.top !== undefined && (

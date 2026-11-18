@@ -132,14 +132,14 @@ export function useProfileLabels() {
   const sectionHints: Partial<Record<ProfileSectionKey, string>> = {
     experience: t.formatMessage({
       defaultMessage:
-        "Add each position with + or /: company, title and dates, most recent first.",
+        "Add each position with the “+ Add” button or with /: company, title and dates, most recent first.",
     }),
     education: t.formatMessage({
-      defaultMessage: "Add your courses with + or /.",
+      defaultMessage: "Add your courses with the “+ Add” button or with /.",
     }),
     certifications: t.formatMessage({
       defaultMessage:
-        "Add certifications with + or /, expired ones too, with their date.",
+        "Add certifications with the “+ Add” button or with /, expired ones too, with their date.",
     }),
     languages: t.formatMessage({
       defaultMessage: "Add each language with your real level.",

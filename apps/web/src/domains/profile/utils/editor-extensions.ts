@@ -14,7 +14,12 @@ import {
   serializeBlocks,
 } from "@repo/api/domains/profile/truth/blocks";
 
-import { blocksToDoc, docToBlocks } from "./editor-doc";
+import {
+  blocksToDoc,
+  docToBlocks,
+  isLockedNode,
+  sameLockedHeadings,
+} from "./editor-doc";
 
 // Nesting deeper than this is no longer a list the method writes.
 const maxDepth = 4;
@@ -184,6 +189,51 @@ export const ProfileClipboard = Extension.create({
   },
 });
 
+/** Transactions the app makes on purpose carry this meta to pass the lock. */
+export const allowStructure = "allowStructure";
+
+/**
+ * The document's title and the template's sections are fixed: a typed,
+ * deleted or dragged change to them is rejected, unless the app made it
+ * on purpose (paste, undo, fixes, inserts, restores).
+ */
+export const ProfileLockedHeadings = Extension.create({
+  name: "profileLockedHeadings",
+  addProseMirrorPlugins() {
+    return [
+      new Plugin({
+        key: new PluginKey("profileLockedHeadings"),
+        filterTransaction: (tr, state) => {
+          if (!tr.docChanged) return true;
+          if (
+            tr.getMeta(allowStructure) ||
+            tr.getMeta("uiEvent") === "paste" ||
+            tr.getMeta("history$")
+          ) {
+            return true;
+          }
+          return sameLockedHeadings(state.doc, tr.doc);
+        },
+        props: {
+          decorations: (state) => {
+            const decorations: Decoration[] = [];
+            state.doc.forEach((node, offset) => {
+              if (isLockedNode(node)) {
+                decorations.push(
+                  Decoration.node(offset, offset + node.nodeSize, {
+                    class: "profile-locked-heading",
+                  })
+                );
+              }
+            });
+            return DecorationSet.create(state.doc, decorations);
+          },
+        },
+      }),
+    ];
+  },
+});
+
 export type EditorDecorationSpec =
   | {
       kind: "inline";
@@ -299,6 +349,7 @@ export function profileExtensions() {
     ProfileQuote,
     ProfileKeys,
     ProfileClipboard,
+    ProfileLockedHeadings,
     ProfileDecorations,
   ];
 }

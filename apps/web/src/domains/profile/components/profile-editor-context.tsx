@@ -9,6 +9,7 @@ import {
   useRef,
   useState,
   type ReactNode,
+  type RefObject,
 } from "react";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -25,12 +26,16 @@ import {
   insertEntry,
   setCompetencyLevel,
   type ProfileEntry,
+  type ProfileEntryKind,
 } from "@repo/api/domains/profile/truth/insert";
 import {
   lintProfile,
   type ProfileFinding,
 } from "@repo/api/domains/profile/truth/lint";
-import type { CompetencyLevel } from "@repo/api/domains/profile/truth/sections";
+import type {
+  CompetencyLevel,
+  ProfileSectionKey,
+} from "@repo/api/domains/profile/truth/sections";
 import {
   readStructure,
   type ProfileStructure,
@@ -57,6 +62,7 @@ import {
 } from "../hooks/use-profile-validation";
 import { blockPositions, blocksToDoc, docToBlocks } from "../utils/editor-doc";
 import {
+  allowStructure,
   focusNodeEnd,
   profileExtensions,
   setDecorations,
@@ -83,6 +89,8 @@ type ProfileEditorState = {
   revision: () => number;
   resetTo: (next: { markdown: string; revision: number }) => void;
   insert: (entry: ProfileEntry) => void;
+  // Set by the document: opens its dialog to write an entry of that kind.
+  entryOpenerRef: RefObject<((kind: ProfileEntryKind) => void) | null>;
   fix: (finding: ProfileFinding) => void;
   fixWholeFormat: () => void;
   goToLine: (line: number, range?: { from: number; to: number }) => void;
@@ -165,7 +173,10 @@ function applyBlocks(editor: Editor, next: ProfileBlock[]) {
       editor.schema.nodeFromJSON(json)
     );
     editor.view.dispatch(
-      editor.state.tr.replaceWith(0, doc.content.size, nodes).scrollIntoView()
+      editor.state.tr
+        .replaceWith(0, doc.content.size, nodes)
+        .setMeta(allowStructure, true)
+        .scrollIntoView()
     );
     return;
   }
@@ -179,9 +190,23 @@ function applyBlocks(editor: Editor, next: ProfileBlock[]) {
     ? nodes.map((json) => editor.schema.nodeFromJSON(json))
     : [];
   editor.view.dispatch(
-    editor.state.tr.replaceWith(from, to, fragment).scrollIntoView()
+    editor.state.tr
+      .replaceWith(from, to, fragment)
+      .setMeta(allowStructure, true)
+      .scrollIntoView()
   );
 }
+
+const entryOfSection: Partial<Record<ProfileSectionKey, ProfileEntryKind>> = {
+  experience: "experience",
+  education: "education",
+  certifications: "certification",
+  languages: "language",
+  competencies: "competency",
+  gaps: "gap",
+  rules: "rule",
+  addenda: "addendum",
+};
 
 const labelHint = /^([^:(]*)(\([^)]*\))\s*:/;
 
@@ -195,7 +220,10 @@ export function ProfileEditorProvider({
   const t = useTranslation();
   const trpc = useTRPC();
   const queryClient = useQueryClient();
-  const { findingMessage, sectionHints } = useProfileLabels();
+  const { findingMessage, sectionHints, entryLabels } = useProfileLabels();
+  const entryOpenerRef = useRef<((kind: ProfileEntryKind) => void) | null>(
+    null
+  );
   const autosave = useDraftAutosave(draft);
   const [blocks, setBlocks] = useState(() => parseBlocks(draft.markdown));
   const lintTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
@@ -348,6 +376,41 @@ export function ProfileEditorProvider({
         key: `hint-${section.heading}-${hint}`,
       });
     }
+    // A quiet button closing each section that holds entries.
+    for (const section of structure.sections) {
+      const kind = section.key && entryOfSection[section.key];
+      if (!kind) continue;
+      const label = t.formatMessage(
+        { defaultMessage: "Add {entry}" },
+        { entry: entryLabels[kind].toLocaleLowerCase() }
+      );
+      specs.push({
+        kind: "widget",
+        at:
+          section.end < positions.length
+            ? positions[section.end]
+            : doc.content.size,
+        interactive: true,
+        element: () => {
+          const element = document.createElement("div");
+          element.className = "profile-add-entry";
+          element.setAttribute("data-profile-aside", "");
+          element.contentEditable = "false";
+          const button = document.createElement("button");
+          button.type = "button";
+          button.textContent = `+ ${label}`;
+          button.addEventListener("mousedown", (event) =>
+            event.preventDefault()
+          );
+          button.addEventListener("click", () =>
+            entryOpenerRef.current?.(kind)
+          );
+          element.append(button);
+          return element;
+        },
+        key: `add-${section.heading}-${label}`,
+      });
+    }
     setDecorations(editor, specs);
     // findingMessage and sectionHints change with the interface language only.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -486,11 +549,20 @@ export function ProfileEditorProvider({
     resetTo: (next) => {
       autosave.reset(next);
       const nextBlocks = parseBlocks(next.markdown);
-      editor?.commands.setContent(blocksToDoc(nextBlocks), {
-        emitUpdate: false,
-      });
+      if (editor) {
+        const nodes = (blocksToDoc(nextBlocks).content ?? []).map((json) =>
+          editor.schema.nodeFromJSON(json)
+        );
+        editor.view.dispatch(
+          editor.state.tr
+            .replaceWith(0, editor.state.doc.content.size, nodes)
+            .setMeta(allowStructure, true)
+            .setMeta("preventUpdate", true)
+        );
+      }
       setBlocks(nextBlocks);
     },
+    entryOpenerRef,
     insert: (entry) => {
       if (!editor) return;
       const { blocks: next, line } = insertEntry(currentBlocks(), entry);

@@ -25,7 +25,11 @@ export function DocumentSwitch({ current }: { current: ProfileDocumentKind }) {
     {
       kind: "preferences",
       href: "/app/career?document=preferences",
-      label: t.formatMessage({ defaultMessage: "Job preferences" }),
+      // Short, so the two fit side by side in the index's width.
+      label: t.formatMessage({
+        defaultMessage: "Preferences",
+        description: "Short tab label for the job preferences document",
+      }),
     },
   ];
   return (
@@ -36,7 +40,7 @@ export function DocumentSwitch({ current }: { current: ProfileDocumentKind }) {
           href={document.href}
           aria-current={document.kind === current ? "page" : undefined}
           className={cn(
-            "flex-1 rounded px-2 py-1 text-center",
+            "flex-1 truncate rounded px-2 py-1 text-center whitespace-nowrap",
             document.kind === current
               ? "bg-background font-medium shadow-xs"
               : "text-muted-foreground hover:text-foreground"

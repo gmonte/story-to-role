@@ -63,7 +63,16 @@ function OpeningPanel({ openingId }: { openingId: string }) {
     documents.data?.application?.tone ?? data?.suggestedTone ?? "your_style";
   const tracker = <ApplicationTracker openingId={openingId} />;
 
-  if (analyzed && view === "resume" && resume && resumeSelection.selected) {
+  const resumeGenerating =
+    resume?.generation?.status === "pending" ||
+    resume?.generation?.status === "running";
+  if (
+    analyzed &&
+    view === "resume" &&
+    resume &&
+    resumeSelection.selected &&
+    !resumeGenerating
+  ) {
     return (
       <div className="flex h-full flex-col gap-6">
         <DocumentSidePanel

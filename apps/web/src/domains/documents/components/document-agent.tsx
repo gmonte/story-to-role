@@ -13,6 +13,7 @@ import type { VersionView } from "@repo/api/domains/documents/schemas/document-v
 import { useTranslation } from "@repo/intl/use-translation";
 import { toast } from "@repo/web/components/ui/sonner";
 
+import { topmostNewSuggestion } from "~/domains/profile/utils/topmost-new-suggestion";
 import { loadAgentChat } from "~/domains/agents/actions/agent-chat-actions";
 import {
   ActivityRow,
@@ -86,7 +87,12 @@ export function DocumentAgent({
   );
 }
 
-type ToolPart = { type: string; state?: string; input?: { part?: string } };
+type ToolPart = {
+  type: string;
+  state?: string;
+  input?: { part?: string; reason?: string };
+  output?: { error?: string; proposed?: boolean; documentChangeId?: string };
+};
 
 /** A tool call of the agent among a message's parts, read loosely. */
 const toolPart = (part: { type: string }) =>
@@ -123,6 +129,13 @@ function Conversation({
   useEffect(() => {
     if (focusOnMount) input.current?.focus();
   }, [focusOnMount]);
+  // The changes waiting in the text, to say which suggestion was answered.
+  const waiting = useQuery(trpc.documents.changes.queryOptions({ versionId }));
+  const waitingIds = new Set((waiting.data ?? []).map((change) => change.id));
+  // The changes there were when the turn began: the first new one is
+  // shown once the turn ends.
+  const knownIds = useRef<Set<string>>(new Set());
+  const [turnDone, setTurnDone] = useState(0);
 
   const {
     messages,
@@ -145,10 +158,34 @@ function Conversation({
     chatId,
     initialMessages,
     session,
+    onData: (part) => {
+      // A change was just proposed: it shows in the text at once.
+      if (part.type === "data-change")
+        void agent?.changeHooks.current?.refresh();
+    },
     onFinish: () => {
       void queryClient.invalidateQueries({ queryKey: trpc.credits.pathKey() });
+      setTurnDone((n) => n + 1);
     },
   });
+  useEffect(() => {
+    if (busy) {
+      knownIds.current = new Set(agent?.changeHooks.current?.pendingIds());
+    }
+    // Only the start of a turn takes the snapshot.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [busy]);
+  useEffect(() => {
+    if (!turnDone) return;
+    const hooks = agent?.changeHooks.current;
+    if (!hooks) return;
+    void hooks.refresh().then((located) => {
+      const first = topmostNewSuggestion(knownIds.current, located);
+      if (first) hooks.show(first.id);
+    });
+    // Once per finished turn.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [turnDone]);
 
   // A passage or a finding sent here from the document: the composer takes
   // focus, the person's words still to write.
@@ -204,7 +241,9 @@ function Conversation({
           )
       : undefined;
   const activity = running
-    ? t.formatMessage({ defaultMessage: "Reading your profile…" })
+    ? running.type === "tool-propose_change"
+      ? t.formatMessage({ defaultMessage: "Writing a suggestion…" })
+      : t.formatMessage({ defaultMessage: "Reading your profile…" })
     : t.formatMessage({ defaultMessage: "Thinking…" });
 
   return (
@@ -226,13 +265,47 @@ function Conversation({
               <UserMessage key={message.id} message={message} />
             ) : message.parts.length === 0 ? null : (
               <li key={message.id} className="flex flex-col gap-2 self-start">
-                {message.parts.map((part, index) =>
-                  part.type === "text" && part.text ? (
-                    <p key={index} className="text-sm whitespace-pre-wrap">
-                      {withoutLineIds(part.text)}
-                    </p>
-                  ) : null
-                )}
+                {message.parts.map((part, index) => {
+                  if (part.type === "text" && part.text) {
+                    return (
+                      <p key={index} className="text-sm whitespace-pre-wrap">
+                        {withoutLineIds(part.text)}
+                      </p>
+                    );
+                  }
+                  const call = toolPart(part);
+                  const proposed = call?.output?.documentChangeId;
+                  if (call?.type !== "tool-propose_change" || !proposed) {
+                    return null;
+                  }
+                  const stillWaiting = waitingIds.has(proposed);
+                  return (
+                    <button
+                      key={index}
+                      type="button"
+                      disabled={!stillWaiting}
+                      onClick={() => agent?.changeHooks.current?.show(proposed)}
+                      className="bg-primary/5 hover:bg-primary/10 flex items-start gap-2 rounded-md border px-2.5 py-1.5 text-left text-xs disabled:opacity-60"
+                    >
+                      <Sparkles className="text-primary mt-0.5 size-3.5 shrink-0" />
+                      <span>
+                        <span className="block font-medium">
+                          {stillWaiting
+                            ? t.formatMessage({
+                                defaultMessage:
+                                  "Suggestion waiting in the text",
+                              })
+                            : t.formatMessage({
+                                defaultMessage: "Suggestion answered",
+                              })}
+                        </span>
+                        <span className="text-muted-foreground">
+                          {call.input?.reason}
+                        </span>
+                      </span>
+                    </button>
+                  );
+                })}
               </li>
             )
           )}

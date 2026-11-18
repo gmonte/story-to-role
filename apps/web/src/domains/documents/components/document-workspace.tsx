@@ -16,6 +16,7 @@ import { useTRPC } from "~/tools/trpc/client";
 
 import { useDocumentLabels } from "../hooks/use-document-labels";
 import { useRefreshDocuments } from "../hooks/use-opening-documents";
+import { DocumentChangesBar } from "./document-changes-bar";
 import { DocumentEditor } from "./document-editor";
 import {
   DocumentEditorProvider,
@@ -51,6 +52,7 @@ export function DocumentWorkspace({
         </aside>
         <div className="min-w-0 flex-1 overflow-y-auto">
           <DocumentToolbar versions={versions} select={select} />
+          <DocumentChangesBar />
           {notices && (
             <div className="mx-auto flex w-full max-w-[52rem] flex-col gap-2 px-6 pt-4">
               {notices}

@@ -166,4 +166,16 @@ describe("what Validate reviews", () => {
       changedChunks(parseBlocks(edited), parseBlocks(profile)).map((c) => c.key)
     ).toEqual(["experience:beta — backend", "experience:gama — júnior"]);
   });
+  it("reads public names written one per sub-item", () => {
+    const blocks = parseBlocks(
+      profile.replace(
+        "- Nomes públicos: Projeto Fênix → plataforma de pagamentos; Banco X -> banco de varejo",
+        "- Nomes públicos:\n  - Projeto Fênix → plataforma de pagamentos\n  - Banco X -> banco de varejo"
+      )
+    );
+    expect(extractProfile(blocks).rules.publicNames).toEqual([
+      { original: "Projeto Fênix", public: "plataforma de pagamentos" },
+      { original: "Banco X", public: "banco de varejo" },
+    ]);
+  });
 });

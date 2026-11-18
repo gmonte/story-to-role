@@ -1,8 +1,8 @@
 import { splitNeverIncludeItems } from "../rules/never-include-terms";
 import {
   parsePublicNames,
-  publicNamesLabels,
   type PublicName,
+  publicNameValues,
 } from "../rules/public-names";
 import type { ProfileBlock } from "./blocks";
 import { splitNames } from "./lint";
@@ -148,14 +148,18 @@ export function extractProfile(blocks: ProfileBlock[]): ProfileExtract {
     neverClaim: [] as string[],
     publicNames: [] as PublicName[],
   };
-  for (const line of itemsOf(blocks, sectionOf(structure, "rules"))) {
+  const rulesSection = sectionOf(structure, "rules");
+  for (const { value } of rulesSection
+    ? publicNameValues(blocks, rulesSection)
+    : []) {
+    rules.publicNames.push(...parsePublicNames(value).entries);
+  }
+  for (const line of itemsOf(blocks, rulesSection)) {
     const labelled = splitLabel(line);
     if (!labelled) continue;
     const label = normalizeLabel(labelled.label);
     if (label === "nunca incluir" || label === "never include") {
       rules.neverInclude.push(...splitNeverIncludeItems(labelled.value));
-    } else if (publicNamesLabels.includes(label)) {
-      rules.publicNames.push(...parsePublicNames(labelled.value).entries);
     } else if (label === "nunca afirmar" || label === "never claim") {
       rules.neverClaim.push(
         ...splitNames(labelled.value, 0, { anyLength: true }).map((n) => n.name)

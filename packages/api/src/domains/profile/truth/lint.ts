@@ -1,4 +1,4 @@
-import { parsePublicNames, publicNamesLabels } from "../rules/public-names";
+import { parsePublicNames, publicNameValues } from "../rules/public-names";
 import type { ProfileBlock } from "./blocks";
 import { canonicalMonth, readMonth } from "./dates";
 import { canonicalMarkText, findMarks, hasFigure } from "./marks";
@@ -505,15 +505,8 @@ function lintPublicNames(structure: ProfileStructure, blocks: ProfileBlock[]) {
   const findings: ProfileFinding[] = [];
   const rules = sectionOf(structure, "rules");
   if (!rules) return findings;
-  for (let line = rules.start; line < rules.end; line++) {
-    const labelled = splitLabel(blocks[line].text);
-    if (
-      !labelled ||
-      !publicNamesLabels.includes(normalizeLabel(labelled.label))
-    ) {
-      continue;
-    }
-    for (const entry of parsePublicNames(labelled.value).malformed) {
+  for (const { line, value } of publicNameValues(blocks, rules)) {
+    for (const entry of parsePublicNames(value).malformed) {
       findings.push(
         finding("publicNameFormat", line, whole(blocks[line]), {
           params: { entry },

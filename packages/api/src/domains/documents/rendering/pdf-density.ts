@@ -3,65 +3,86 @@
  * next step tightens only vertical spacing (line height, gaps, top and
  * bottom margins), never font sizes or side margins, so a document that
  * runs a few lines over its page limit fits without looking different.
+ * The steps are small and many: a document one line over takes the step
+ * that just fits, not one that leaves half a page empty.
  */
-export type DensityStep = 0 | 1 | 2 | 3;
+export type DensityStep = number;
 
-const steps: DensityStep[] = [0, 1, 2, 3];
+/** The tightest step; steps go from 0 to it, evenly. */
+export const maxDensityStep = 10;
 
-export const resumeDensity = {
-  0: {
-    lineHeight: 1.25,
-    margin: 28,
-    sectionGap: 8,
-    titleGap: 3,
-    entryGap: 4,
-    bulletGap: 1,
-  },
-  1: {
-    lineHeight: 1.21,
-    margin: 24,
-    sectionGap: 6,
-    titleGap: 2.5,
-    entryGap: 3,
-    bulletGap: 0.75,
-  },
-  2: {
-    lineHeight: 1.18,
-    margin: 20,
-    sectionGap: 5,
-    titleGap: 2,
-    entryGap: 2.5,
-    bulletGap: 0.5,
-  },
-  3: {
-    lineHeight: 1.15,
-    margin: 18,
-    sectionGap: 4,
-    titleGap: 1.5,
-    entryGap: 2,
-    bulletGap: 0.25,
-  },
-} as const;
+type Spacing = Record<string, number>;
 
-export const letterDensity = {
-  0: { lineHeight: 1.45, margin: 40, bodyGap: 24, paragraphGap: 10 },
-  1: { lineHeight: 1.4, margin: 36, bodyGap: 20, paragraphGap: 9 },
-  2: { lineHeight: 1.35, margin: 32, bodyGap: 16, paragraphGap: 8 },
-  3: { lineHeight: 1.3, margin: 28, bodyGap: 14, paragraphGap: 7 },
-} as const;
+/** The spacing `step` tenths of the way from `loose` to `tight`. */
+function between<T extends Spacing>(loose: T, tight: T, step: DensityStep) {
+  const t = Math.min(Math.max(step, 0), maxDensityStep) / maxDensityStep;
+  return Object.fromEntries(
+    Object.entries(loose).map(([key, value]) => [
+      key,
+      Math.round((value + ((tight[key] ?? value) - value) * t) * 1000) / 1000,
+    ])
+  ) as T;
+}
+
+const resumeLoose = {
+  lineHeight: 1.25,
+  margin: 28,
+  sectionGap: 8,
+  titleGap: 3,
+  entryGap: 4,
+  bulletGap: 1,
+};
+const resumeTight = {
+  lineHeight: 1.15,
+  margin: 18,
+  sectionGap: 4,
+  titleGap: 1.5,
+  entryGap: 2,
+  bulletGap: 0.25,
+};
+
+export const resumeDensity = (step: DensityStep) =>
+  between(resumeLoose, resumeTight, step);
+
+const letterLoose = {
+  lineHeight: 1.45,
+  margin: 40,
+  bodyGap: 24,
+  paragraphGap: 10,
+};
+const letterTight = {
+  lineHeight: 1.3,
+  margin: 28,
+  bodyGap: 14,
+  paragraphGap: 7,
+};
+
+export const letterDensity = (step: DensityStep) =>
+  between(letterLoose, letterTight, step);
 
 /**
- * Renders at step 0 and, over `maxPages`, retries each tighter step,
- * returning the first render that fits; when none does, the step 0 one.
+ * Renders at step 0 and, over `maxPages`, finds the loosest step that fits
+ * (pages only fall as steps tighten, so a binary search over the steps);
+ * when even the tightest doesn't fit, the step 0 render.
  */
 export async function renderFitted<
   T extends { pages: number; step: DensityStep },
 >(render: (step: DensityStep) => Promise<T>, maxPages: number) {
   const first = await render(0);
   if (first.pages <= maxPages) return first;
-  for (const step of steps.slice(1)) {
-    const rendered = await render(step);
-    if (rendered.pages <= maxPages) return rendered;
+  let fits = await render(maxDensityStep);
+  if (fits.pages > maxPages) return first;
+  let low = 0;
+  let high = maxDensityStep;
+  while (high - low > 1) {
+    const middle = Math.floor((low + high) / 2);
+    const rendered = await render(middle);
+    if (rendered.pages <= maxPages) {
+      fits = rendered;
+      high = middle;
+    } else {
+      low = middle;
+    }
   }
-  return first;
+  return fits;
 }

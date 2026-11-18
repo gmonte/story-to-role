@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 
 import type { ResumeContent } from "../schemas/resume-content";
 import { fitToPages } from "./fit-to-pages";
-import { renderResumePdf } from "./resume-pdf";
+import { renderResumeFitted, renderResumePdf } from "./resume-pdf";
 
 const P1 = "00000000-0000-4000-8000-000000000001";
 
@@ -140,7 +140,7 @@ describe("rendering a resume PDF", () => {
   });
 
   it("leaves a resume too long as it is when only recent experiences are left", async () => {
-    const content = resume(120);
+    const content = resume(200);
     const fitted = await fitToPages({
       content,
       language: "en-US",
@@ -151,4 +151,36 @@ describe("rendering a resume PDF", () => {
     expect(fitted.pages).toBeGreaterThan(2);
     expect(fitted.content).toEqual(content);
   });
+
+  it("tightens spacing to fit a small overflow, and leaves the rest alone", async () => {
+    const fits = await renderResumeFitted({
+      content: resume(3),
+      language: "en-US",
+      maxPages: 2,
+    });
+    expect(fits.step).toBe(0);
+    expect(fits.pages).toBe(1);
+    // The first length that runs to a third page at the normal spacing.
+    let bullets = 40;
+    while (
+      (await renderResumePdf({ content: resume(bullets), language: "en-US" }))
+        .pages <= 2
+    ) {
+      bullets += 1;
+    }
+    const slight = await renderResumeFitted({
+      content: resume(bullets),
+      language: "en-US",
+      maxPages: 2,
+    });
+    expect(slight.pages).toBe(2);
+    expect(slight.step).toBeGreaterThan(0);
+    const long = await renderResumeFitted({
+      content: resume(bullets * 2),
+      language: "en-US",
+      maxPages: 2,
+    });
+    expect(long.step).toBe(0);
+    expect(long.pages).toBeGreaterThan(2);
+  }, 60_000);
 });

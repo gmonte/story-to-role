@@ -9,8 +9,9 @@ import type { DbClient } from "@repo/api/tools/db-client";
 import type { Storage } from "@repo/api/tools/storage/storage";
 
 import { DocumentsRepository } from "../documents-repository";
-import { renderResumePdf } from "../rendering/resume-pdf";
+import { renderResumeFitted } from "../rendering/resume-pdf";
 import { storeRenderedPdf } from "../rendering/store-rendered-pdf";
+import { writtenMaxPages } from "../rendering/written-max-pages";
 import { reviewLoopSettings } from "../generation/review-loop-settings";
 import { loadCareerContext } from "../generation/load-career-context";
 import { reprintFields } from "../translation/reprint-fields";
@@ -144,9 +145,15 @@ export async function runAdaptDocument(deps: {
     // line of its source, so it is never trimmed to the page limit (the
     // user sees the length warning instead). Its PDF is only measured.
     const { content } = adapted;
-    const rendered = await renderResumePdf({
+    const rendered = await renderResumeFitted({
       content,
       language: generation.language,
+      maxPages: (
+        await writtenMaxPages(documents, {
+          documentId: generation.documentId,
+          versionId: generation.versionId,
+        })
+      ).resumeMaxPages,
     });
     await deps.reportProgress?.({ step: 2, totalSteps: 2, label: "saving" });
     const snapshotId = await db.transaction(async (tx) => {

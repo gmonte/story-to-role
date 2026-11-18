@@ -7,6 +7,7 @@ import { decryptDocument } from "../snapshot-content";
 import { DocumentsRepository } from "../documents-repository";
 import { pdfTemplate } from "./pdf-template";
 import { renderDocumentPdf } from "./render-document-pdf";
+import { writtenMaxPages } from "./written-max-pages";
 import { storeRenderedPdf } from "./store-rendered-pdf";
 
 /**
@@ -40,6 +41,10 @@ export async function runRenderPdf(deps: {
   const { bytes, pages } = await renderDocumentPdf({
     content: decryptDocument(cipher, snapshot),
     language: version.language,
+    maxPages: await writtenMaxPages(documents, {
+      documentId: version.documentId,
+      versionId: version.id,
+    }),
   });
   await storeRenderedPdf({
     db,

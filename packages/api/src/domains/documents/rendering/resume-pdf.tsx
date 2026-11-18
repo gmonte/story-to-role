@@ -21,53 +21,63 @@ import {
   positionTitleLine,
   sectionTitles,
 } from "./output-conventions";
+import { renderFitted, resumeDensity, type DensityStep } from "./pdf-density";
 
 const navy = "#1f3a68";
 const grey = "#666666";
 
-const styles = StyleSheet.create({
-  page: {
-    paddingTop: 28,
-    paddingBottom: 28,
-    paddingHorizontal: 36,
-    fontFamily: "Helvetica",
-    fontSize: 9.5,
-    lineHeight: 1.25,
-    color: "#1a1a1a",
-  },
-  name: {
-    fontFamily: "Helvetica-Bold",
-    fontSize: 18,
-    // Its own line height: the page's would be too short for this size.
-    lineHeight: 1.2,
-    color: navy,
-    marginBottom: 4,
-  },
-  titleLine: { fontFamily: "Helvetica-Bold", fontSize: 10.5, marginBottom: 2 },
-  contacts: { color: grey, fontSize: 8.5 },
-  section: { marginTop: 8 },
-  sectionTitle: {
-    fontFamily: "Helvetica-Bold",
-    fontSize: 10,
-    color: navy,
-    textTransform: "uppercase",
-    borderBottomWidth: 0.6,
-    borderBottomColor: navy,
-    paddingBottom: 2,
-    marginBottom: 3,
-  },
-  justified: { textAlign: "justify" },
-  bold: { fontFamily: "Helvetica-Bold" },
-  italic: { fontFamily: "Helvetica-Oblique" },
-  entry: { marginBottom: 4 },
-  entryHeader: { flexDirection: "row", justifyContent: "space-between" },
-  period: { color: grey, fontSize: 8.5 },
-  bullet: { flexDirection: "row", marginTop: 1 },
-  bulletMark: { width: 10 },
-  bulletText: { flex: 1 },
-});
+const createStyles = (step: DensityStep) => {
+  const d = resumeDensity[step];
+  return StyleSheet.create({
+    page: {
+      paddingTop: d.margin,
+      paddingBottom: d.margin,
+      paddingHorizontal: 36,
+      fontFamily: "Helvetica",
+      fontSize: 9.5,
+      lineHeight: d.lineHeight,
+      color: "#1a1a1a",
+    },
+    name: {
+      fontFamily: "Helvetica-Bold",
+      fontSize: 18,
+      // Its own line height: the page's would be too short for this size.
+      lineHeight: 1.2,
+      color: navy,
+      marginBottom: 4,
+    },
+    titleLine: {
+      fontFamily: "Helvetica-Bold",
+      fontSize: 10.5,
+      marginBottom: 2,
+    },
+    contacts: { color: grey, fontSize: 8.5 },
+    section: { marginTop: d.sectionGap },
+    sectionTitle: {
+      fontFamily: "Helvetica-Bold",
+      fontSize: 10,
+      color: navy,
+      textTransform: "uppercase",
+      borderBottomWidth: 0.6,
+      borderBottomColor: navy,
+      paddingBottom: 2,
+      marginBottom: d.titleGap,
+    },
+    justified: { textAlign: "justify" },
+    bold: { fontFamily: "Helvetica-Bold" },
+    italic: { fontFamily: "Helvetica-Oblique" },
+    entry: { marginBottom: d.entryGap },
+    entryHeader: { flexDirection: "row", justifyContent: "space-between" },
+    period: { color: grey, fontSize: 8.5 },
+    bullet: { flexDirection: "row", marginTop: d.bulletGap },
+    bulletMark: { width: 10 },
+    bulletText: { flex: 1 },
+  });
+};
 
-function Bullet({ text }: { text: string }) {
+type Styles = ReturnType<typeof createStyles>;
+
+function Bullet({ text, styles }: { text: string; styles: Styles }) {
   // A hanging indent: the mark in its own column, the text wrapping beside it.
   return (
     <View style={styles.bullet} wrap={false}>
@@ -77,7 +87,11 @@ function Bullet({ text }: { text: string }) {
   );
 }
 
-function credential(entry: CredentialEntry, language: OutputLanguage) {
+function credential(
+  entry: CredentialEntry,
+  language: OutputLanguage,
+  styles: Styles
+) {
   const title = entry.level ? `${entry.title} (${entry.level})` : entry.title;
   const period =
     entry.startDate || entry.endDate
@@ -97,9 +111,11 @@ function credential(entry: CredentialEntry, language: OutputLanguage) {
 function SectionBody({
   section,
   language,
+  styles,
 }: {
   section: ResumeSection;
   language: OutputLanguage;
+  styles: Styles;
 }) {
   switch (section.kind) {
     case "summary":
@@ -125,11 +141,11 @@ function SectionBody({
             </View>
             <Text style={styles.italic}>{positionTitleLine(entry)}</Text>
             {entry.lines.slice(0, 1).map((line) => (
-              <Bullet key={line.id} text={line.text} />
+              <Bullet key={line.id} text={line.text} styles={styles} />
             ))}
           </View>
           {entry.lines.slice(1).map((line) => (
-            <Bullet key={line.id} text={line.text} />
+            <Bullet key={line.id} text={line.text} styles={styles} />
           ))}
         </View>
       ));
@@ -150,16 +166,18 @@ function SectionBody({
             {entry.role && <Text style={styles.italic}>{entry.role}</Text>}
             {entry.link && <Text style={styles.period}>{entry.link}</Text>}
             {entry.lines.slice(0, 1).map((line) => (
-              <Bullet key={line.id} text={line.text} />
+              <Bullet key={line.id} text={line.text} styles={styles} />
             ))}
           </View>
           {entry.lines.slice(1).map((line) => (
-            <Bullet key={line.id} text={line.text} />
+            <Bullet key={line.id} text={line.text} styles={styles} />
           ))}
         </View>
       ));
     default:
-      return section.entries.map((entry) => credential(entry, language));
+      return section.entries.map((entry) =>
+        credential(entry, language, styles)
+      );
   }
 }
 
@@ -171,10 +189,13 @@ function SectionBody({
 export function ResumeDocument({
   content,
   language,
+  step = 0,
 }: {
   content: ResumeContent;
   language: OutputLanguage;
+  step?: DensityStep;
 }) {
+  const styles = createStyles(step);
   const { header } = content;
   return (
     <Document title={header.name} author={header.name}>
@@ -192,7 +213,11 @@ export function ResumeDocument({
             <Text style={styles.sectionTitle} minPresenceAhead={60}>
               {sectionTitles[language][section.kind]}
             </Text>
-            <SectionBody section={section} language={language} />
+            <SectionBody
+              section={section}
+              language={language}
+              styles={styles}
+            />
           </View>
         ))}
       </Page>
@@ -200,15 +225,36 @@ export function ResumeDocument({
   );
 }
 
-/** Renders the resume and reads its real length from the PDF itself. */
+/** Renders the resume at one density step and reads its real length. */
 export async function renderResumePdf(input: {
   content: ResumeContent;
   language: OutputLanguage;
+  step?: DensityStep;
 }) {
+  const step = input.step ?? 0;
   const bytes = await renderToBuffer(
-    <ResumeDocument content={input.content} language={input.language} />
+    <ResumeDocument
+      content={input.content}
+      language={input.language}
+      step={step}
+    />
   );
-  return { bytes, pages: countPdfPages(bytes) };
+  return { bytes, pages: countPdfPages(bytes), step };
+}
+
+/**
+ * Renders the resume at the first density step that fits `maxPages`; when
+ * none does, at step 0 (the length warning stays as it is).
+ */
+export async function renderResumeFitted(input: {
+  content: ResumeContent;
+  language: OutputLanguage;
+  maxPages: number;
+}) {
+  return renderFitted(
+    (step) => renderResumePdf({ ...input, step }),
+    input.maxPages
+  );
 }
 
 /** Pages in a PDF: its page objects ("/Type /Page", not "/Pages"). */

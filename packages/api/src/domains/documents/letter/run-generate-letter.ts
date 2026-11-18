@@ -32,7 +32,7 @@ import {
   purposesOf,
 } from "../generation/resume-prompts";
 import { loadOpeningBrief } from "../generation/run-generate-resume";
-import { renderLetterPdf } from "../rendering/letter-pdf";
+import { renderLetterFitted } from "../rendering/letter-pdf";
 import { storeRenderedPdf } from "../rendering/store-rendered-pdf";
 import type { OutputLanguage } from "../schemas/document";
 import type { CoverLetterContent } from "../schemas/cover-letter-content";
@@ -396,7 +396,10 @@ export async function runGenerateLetter(deps: {
 
     // The settings' length, as rendered: a letter over its paragraphs or
     // pages is rewritten to fit (resume spec, "Generation settings").
-    let rendered = await renderLetterPdf(result.content);
+    let rendered = await renderLetterFitted(
+      result.content,
+      settings.letterMaxPages
+    );
     const overrun = (content: CoverLetterContent, pages: number) =>
       Math.max(0, content.paragraphs.length - settings.letterMaxParagraphs) +
       Math.max(0, pages - settings.letterMaxPages);
@@ -417,7 +420,10 @@ export async function runGenerateLetter(deps: {
         )
       );
       if (shorter.content.paragraphs.length === 0) continue;
-      const measured = await renderLetterPdf(shorter.content);
+      const measured = await renderLetterFitted(
+        shorter.content,
+        settings.letterMaxPages
+      );
       if (
         overrun(shorter.content, measured.pages) <=
         overrun(result.content, rendered.pages)
@@ -437,7 +443,8 @@ export async function runGenerateLetter(deps: {
     });
     stoppedBy ??= repaired.stoppedBy;
     const content = repaired.content;
-    if (content !== result.content) rendered = await renderLetterPdf(content);
+    if (content !== result.content)
+      rendered = await renderLetterFitted(content, settings.letterMaxPages);
 
     // The coverage review, once, on the final letter. It never costs the
     // letter: if it fails, the letter is saved without one, and the code

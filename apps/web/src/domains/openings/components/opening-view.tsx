@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useId } from "react";
 
 import { useMutation } from "@tanstack/react-query";
 import { ExternalLink } from "lucide-react";
@@ -361,6 +361,9 @@ function GapQuestion({
   const [mode, setMode] = useState<"have" | "lack">("have");
   // The user changed their mind after confirming they lack it.
   const [reopened, setReopened] = useState(false);
+  // A checkbox wrapped in its label toggled twice per click (the label
+  // clicks it again): each gets an id its label points at instead.
+  const gapId = useId();
   const [positionIds, setPositionIds] = useState<string[]>([]);
   const [projectIds, setProjectIds] = useState<string[]>([]);
   const [notTied, setNotTied] = useState(false);
@@ -459,40 +462,63 @@ function GapQuestion({
                 {t.formatMessage({ defaultMessage: "Where did you do it?" })}
               </Label>
               {positions.map((position) => (
-                <Label key={position.positionId} className="gap-2 font-normal">
+                <div
+                  key={position.positionId}
+                  className="flex items-center gap-2"
+                >
                   <Checkbox
+                    id={`${gapId}-${position.positionId}`}
                     checked={positionIds.includes(position.positionId)}
                     onCheckedChange={() =>
                       setPositionIds(toggle(positionIds, position.positionId))
                     }
                   />
-                  {t.formatMessage(
-                    { defaultMessage: "{title} at {employer}" },
-                    { title: position.title, employer: position.employer }
-                  )}
-                </Label>
+                  <Label
+                    htmlFor={`${gapId}-${position.positionId}`}
+                    className="font-normal"
+                  >
+                    {t.formatMessage(
+                      { defaultMessage: "{title} at {employer}" },
+                      { title: position.title, employer: position.employer }
+                    )}
+                  </Label>
+                </div>
               ))}
               {projects.map((project) => (
-                <Label key={project.projectId} className="gap-2 font-normal">
+                <div
+                  key={project.projectId}
+                  className="flex items-center gap-2"
+                >
                   <Checkbox
+                    id={`${gapId}-${project.projectId}`}
                     checked={projectIds.includes(project.projectId)}
                     onCheckedChange={() =>
                       setProjectIds(toggle(projectIds, project.projectId))
                     }
                   />
-                  {t.formatMessage(
-                    { defaultMessage: "{name} (project)" },
-                    { name: project.name }
-                  )}
-                </Label>
+                  <Label
+                    htmlFor={`${gapId}-${project.projectId}`}
+                    className="font-normal"
+                  >
+                    {t.formatMessage(
+                      { defaultMessage: "{name} (project)" },
+                      { name: project.name }
+                    )}
+                  </Label>
+                </div>
               ))}
-              <Label className="gap-2 font-normal">
+              <div className="flex items-center gap-2">
                 <Checkbox
+                  id={`${gapId}-not-tied`}
                   checked={notTied}
                   onCheckedChange={(checked) => setNotTied(checked === true)}
                 />
-                {t.formatMessage({ defaultMessage: "Not tied to a position" })}
-              </Label>
+                <Label htmlFor={`${gapId}-not-tied`} className="font-normal">
+                  {t.formatMessage({
+                    defaultMessage: "Not tied to a position",
+                  })}
+                </Label>
+              </div>
               <p className="text-muted-foreground text-xs">
                 {t.formatMessage({
                   defaultMessage:

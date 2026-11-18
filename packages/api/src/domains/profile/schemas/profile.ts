@@ -52,6 +52,9 @@ export const profileSuggestionOriginSchema = z.enum([
   "import",
   "validation",
   "application",
+  // A document line the user added to the profile (resume spec, "Document
+  // workspace").
+  "document",
 ]);
 export type ProfileSuggestionOrigin = z.infer<
   typeof profileSuggestionOriginSchema

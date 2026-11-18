@@ -4,7 +4,6 @@ import { useEffect, useState, type ReactNode } from "react";
 
 import { useMutation } from "@tanstack/react-query";
 import {
-  AlertTriangle,
   CopyPlus,
   Languages,
   Loader2,
@@ -44,7 +43,7 @@ import { useTRPC } from "~/tools/trpc/client";
 import { useDocumentLabels } from "../hooks/use-document-labels";
 import { useDocumentAgent } from "./document-agent-context";
 import { useRefreshDocuments } from "../hooks/use-opening-documents";
-import { hasFindings, hasWarnings } from "../utils/version-checks";
+import { hasWarnings } from "../utils/version-checks";
 import { AdaptVersionDialog } from "./adapt-version-dialog";
 import { VersionChecks } from "./documents-panel";
 import { DownloadPdfDialog } from "./download-pdf-dialog";
@@ -119,8 +118,8 @@ export function DocumentSidePanel({
 
 /**
  * The PDF of the latest snapshot, rendered on demand and shown in place;
- * it refreshes with every saved change. A document with findings to fix
- * has no PDF; warnings ask once for "Generate PDF anyway".
+ * it refreshes with every saved change. Open findings ask once for
+ * "Generate PDF anyway".
  */
 export function PdfPreview({ version }: { version: VersionView }) {
   const t = useTranslation();
@@ -134,11 +133,10 @@ export function PdfPreview({ version }: { version: VersionView }) {
       onError: (error) => toast.error(error.message),
     })
   );
-  const blocked = hasFindings(version);
   const warned = hasWarnings(version) && !acknowledged;
   const { ready, rendering } = version.pdf;
   const snapshotId = version.snapshot.id;
-  const canRender = !blocked && !warned;
+  const canRender = !warned;
   const { mutate } = request;
 
   // Each new snapshot is rendered as soon as the preview is open.
@@ -152,17 +150,6 @@ export function PdfPreview({ version }: { version: VersionView }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [snapshotId, canRender, ready, rendering]);
 
-  if (blocked) {
-    return (
-      <p className="flex items-start gap-2 rounded-lg border border-red-500/40 bg-red-500/10 p-2.5 text-xs">
-        <AlertTriangle className="size-3.5 shrink-0 text-red-600 dark:text-red-400" />
-        {t.formatMessage({
-          defaultMessage:
-            "Fix the findings before the PDF can be rendered. They are listed beside the document.",
-        })}
-      </p>
-    );
-  }
   if (warned) {
     return (
       <>
@@ -178,7 +165,7 @@ export function PdfPreview({ version }: { version: VersionView }) {
           <p>
             {t.formatMessage({
               defaultMessage:
-                "The document has warnings beside it. You can generate the PDF anyway.",
+                "The document has open findings beside it. You can generate the PDF anyway.",
             })}
           </p>
           <Button

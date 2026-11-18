@@ -133,14 +133,14 @@ Acceptance:
 
 ### P7: Coverage review
 
-- Every generated document gets the method's coverage review against its frozen profile, in its price: code checks that block (locked facts, counts and pages per the form, `[medido]` figures, communication rules, what the user did not do, very old experiences) and the AI part (strong and partial coverage with passages, gaps not invented, inconsistencies, the final statement); an omitted true fact becomes a profile suggestion.
+- Every generated document gets the method's coverage review against its frozen profile, in its price: code checks (locked facts, counts and pages per the form, `[medido]` figures, communication rules, what the user did not do, very old experiences; since D4 they point out and never block) and the AI part (strong and partial coverage with passages, gaps not invented, inconsistencies, the final statement); an omitted true fact becomes a profile suggestion.
 
 - Note: the code checks are not stored: they run live on each resume version's official snapshot, against the profile version that snapshot froze (the one published now when it carries none), the settings of the generation that wrote the version and the opening's requirements (or the focus), so a user edit that adds an unmarked figure shows a finding at once. A rendered PDF's measured pages count when the file exists; the estimate before. Every finding blocks the document from leaving the platform (the PDF download, the application's ZIP and marking the application as sent refuse it); the editor's preview is not blocked. "What I did not do" is checked by the names the profile knows (competencies, studied competencies and the tools of every experience), never on free text, and only for lines of that position.
 - Note: the AI part runs once per generation (a new version or an adjustment), on the final content, in the generation's price, and is not run again after edits: the view says which snapshot it reviewed and whether that is the official one. It sees the resume with its line ids, the requirements with the fit check, the profile lines the document cites plus the fit check's, and the instructions, never the whole profile. Code keeps a strong item only when its line is in the document and its profile line is of the frozen version and cited by that line or tied by the fit check to that requirement (else it is partial, "no evidence in the profile"); every requirement left is a gap; a suggestion naming a gap, or a reorder asking to add or claim anything, is dropped; a "profile" suggestion is kept only for a bullet resting on the user's own words (an instruction or a manual edit). Code writes the sources, what was preserved and the final statement.
 - Note: "send to my profile" takes a kept "profile" suggestion and proposes the bullet under the Results of its experience in the current draft (origin `application`); the experience is found by the position's derived id, so a renamed one is refused rather than guessed. The cover letter's review comes with P8; the trace in the editor now reads the frozen version's lines.
 
 Acceptance:
-- [x] A document with a figure the profile doesn't mark `[medido]` is blocked.
+- [x] A document with a figure the profile doesn't mark `[medido]` is pointed out (blocked until D4, which made every check a warning).
 - [x] The review never suggests covering a gap and ends with the method's statement.
 
 ### P8: Cover letter, instructions and gap answers
@@ -149,7 +149,7 @@ Acceptance:
 - Application instructions stay per application; "send to my profile" and gap-question answers become profile suggestions; a confirmed gap goes to "what I did not do" or Known gaps.
 
 - Note: the cover letter freezes, when it is asked for, the profile version (its resume's, when it has one, so the lines they cite are the same; else the one published now; nothing is generated before a profile is published) and the settings of the form, and reads that version through the same context as a resume: its facts come only from the frozen profile's lines (the chosen story, those its resume and the fit check cite, the career direction), the application's instructions, the motivation points and the approved company facts. A paragraph cites its sources, carries only figures those sources show (a profile line's figures count only where it marks them measured, as in a resume; no mark or placeholder) and names nothing the rules forbid or a position says the person did not do; code refuses it otherwise. After rendering, a letter over `letterMaxParagraphs` or `letterMaxPages` is rewritten to fit (two rounds; if it still runs over, the live check blocks it). The snapshot carries `profileVersionId`.
-- Note: the letter's coverage review is the resume's: the code checks run live on the official snapshot (paragraphs and pages per the settings, figures, communication rules, what the user did not do) and block the download, the ZIP and marking as applied; the AI review runs once per generation, in its price, through the same `keepReview`, adapted to paragraphs. A `profile` suggestion is kept only for a paragraph resting on an instruction with a position, and "send to my profile" proposes that instruction's statement (never the paragraph) under that position's Results.
+- Note: the letter's coverage review is the resume's: the code checks run live on the official snapshot (paragraphs and pages per the settings, figures, communication rules, what the user did not do) and ask for a confirmation before the download, the ZIP and marking as applied (they blocked until D4); the AI review runs once per generation, in its price, through the same `keepReview`, adapted to paragraphs. A `profile` suggestion is kept only for a paragraph resting on an instruction with a position, and "send to my profile" proposes that instruction's statement (never the paragraph) under that position's Results.
 - Note: the story choice ranks the profile's results lines by the similarity of their passages to the opening's vector (in profile order when a passage isn't embedded yet) and offers the top three with the requirements each answers (the fit check's, then those its words name); the pick is `storyLineId`, validated against the version published now and found again by its words in the resume's version. The motivation interview takes it too, to ask about its turning point.
 - Note: nothing from the user reaches the profile except as a suggestion in its draft (origin `application`), found by the position's derived id: a saved motivation point about the user goes under the career direction line of Professional identity, a saved detail of the story under its position's Results, an instruction sent to the profile under its position's field (results, responsibilities or tools by its kind) or, with no position, under the career direction line of Professional identity, and a gap the user confirms lacking under the chosen position's "what I did not do" or Known gaps (a gap has no passage of the profile, so the user names the position or leaves it to Known gaps). A line the draft refuses (it has it already, or no longer has the place) stays in the application. The career goals table is no longer read or written; dropping it waits for the final cleanup.
 
@@ -177,14 +177,14 @@ Acceptance:
 - The method's step 09, built like a general library document: the LinkedIn "About" and each experience's text, generated from the published profile with the same rules and coverage review, charged as a generation (resume spec, "LinkedIn").
 
 Acceptance:
-- [x] The LinkedIn text uses only the frozen profile: a figure the profile doesn't mark `[medido]` is blocked, and every experience keeps its locked facts.
+- [x] The LinkedIn text uses only the frozen profile: a figure the profile doesn't mark `[medido]` is pointed out (blocked until D4), and every experience keeps its locked facts.
 - [x] Each section has a copy action; nothing is changed on LinkedIn by StoryToRole.
 
 Notes:
 - A `linkedin` document kind (one per user, library-style, a version per language) whose content is `{about: Line, experiences: [{positionId, employer, title, startDate, endDate, lines}]}`; the About is one line with its paragraphs separated by a blank line. No migration: `documents.kind` is text.
 - No second rule set: code views the text as a resume (About as summary, experiences as the experience section) and reuses `assembleResume`, `checkDocument`, `keepReview` and the coverage review. Very old experiences under “relevant only” are left out, since a general text has no requirement to justify them.
 - One writer call and the coverage review against the focus “career as the profile states it”; charged as `generate_document` priced like a cover letter (20 × level).
-- Copying is gated on the server (`linkedin.sectionText` refuses while the official snapshot has findings); no PDF or other export exists for it.
+- Copying is gated on the server (`linkedin.sectionText` asks for a confirmation while the official snapshot has open findings; it refused them until D4); no PDF or other export exists for it.
 
 ## Final pass
 
@@ -236,7 +236,7 @@ Acceptance:
 - “Profile version N is newer than this document's” with Use version N: the document freezes the newer version; traces and findings rerun against it.
 
 Acceptance:
-- [ ] A line the user types that the profile doesn't back is pointed out, and Add to the profile creates a profile suggestion; after publishing and Use version N, it is no longer pointed out.
+- [x] A line the user types that the profile doesn't back is pointed out, and Add to the profile creates a profile suggestion; after publishing and Use version N, it is no longer pointed out.
 
 ## Not in the MVP
 

@@ -13,7 +13,7 @@ import { toast } from "@repo/web/components/ui/sonner";
 import { useTRPC } from "~/tools/trpc/client";
 
 import { useRefreshDocuments } from "../hooks/use-opening-documents";
-import { hasFindings, hasWarnings } from "../utils/version-checks";
+import { hasWarnings } from "../utils/version-checks";
 import { WarningsDialog } from "./warnings-dialog";
 
 /** The application as one ZIP: every version's PDF, named after the opening. */
@@ -35,17 +35,12 @@ export function DownloadZipButton({
   );
   const ready = versions.every((version) => version.pdf.ready);
   const rendering = versions.some((version) => version.pdf.rendering);
-  // One document with coverage findings holds the whole ZIP (resume spec,
-  // "Coverage review"); the server refuses it too.
-  const blocked = versions.some(hasFindings);
+  // One document with open findings asks for a confirmation for the whole
+  // ZIP (resume spec, "Document workspace"); the server asks too.
   const warned = versions.some(hasWarnings);
   const [confirming, setConfirming] = useState<"download" | "prepare" | null>(
     null
   );
-  const blockedTitle = t.formatMessage({
-    defaultMessage: "Fix the coverage findings before downloading.",
-  });
-
   const confirmDialog = (
     <WarningsDialog
       open={confirming !== null}
@@ -63,18 +58,7 @@ export function DownloadZipButton({
     />
   );
 
-  return blocked ? (
-    <Button
-      size="sm"
-      variant="outline"
-      className="self-start"
-      disabled
-      title={blockedTitle}
-    >
-      <Download />
-      {t.formatMessage({ defaultMessage: "Download all (ZIP)" })}
-    </Button>
-  ) : ready && warned ? (
+  return ready && warned ? (
     <>
       {confirmDialog}
       <Button

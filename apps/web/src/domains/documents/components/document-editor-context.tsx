@@ -16,10 +16,8 @@ import { useEditor, type Editor } from "@tiptap/react";
 
 import {
   coverageFindingKey,
-  isIgnorable,
   reviewNoteKey,
 } from "@repo/api/domains/documents/coverage-review/finding-key";
-import { isWarningFinding } from "@repo/api/domains/documents/coverage-review/warning-codes";
 import type { DocumentChange } from "@repo/api/domains/documents/schemas/document-change";
 import type {
   CoverageView,
@@ -83,6 +81,14 @@ export type ReviewNote = {
 
 export type SaveStatus = "saved" | "pending" | "saving" | "error";
 
+/**
+ * What a "not in your profile" finding offers: adding the line to the
+ * profile's draft, or, once sent, where it stands there.
+ */
+export type ProfileAction =
+  | { kind: "add"; run: () => void; pending: boolean }
+  | { kind: "sent"; status: "pending" | "accepted" };
+
 type DocumentEditorState = {
   editor: Editor | null;
   version: VersionView;
@@ -91,19 +97,19 @@ type DocumentEditorState = {
   saveStatus: SaveStatus;
   trace: boolean;
   setTrace: (trace: boolean) => void;
-  /** The code checks that count: ignored warnings are left out. */
+  /** The code checks that count: ignored findings are left out. */
   findings: DocumentFinding[];
   ignoredFindings: DocumentFinding[];
   notes: ReviewNote[];
   ignoredNotes: ReviewNote[];
-  /** Whether a finding may be ignored (only one that doesn't block). */
-  canIgnore: (finding: DocumentFinding) => boolean;
   ignoreFinding: (finding: DocumentFinding) => void;
   restoreFinding: (finding: DocumentFinding) => void;
   ignoreNote: (note: ReviewNote) => void;
   restoreNote: (note: ReviewNote) => void;
   /** The one-click fix of a finding, when code has one. */
   fixFor: (finding: DocumentFinding) => (() => void) | null;
+  /** "Add to the profile" of a "not in your profile" finding. */
+  profileActionFor: (finding: DocumentFinding) => ProfileAction | null;
   goToBlock: (index: number) => void;
   goToLine: (lineId: string) => void;
   goToOwner: (ownerId: string) => void;
@@ -360,7 +366,7 @@ export function DocumentEditorProvider({
       ),
     ];
     const ignoredFinding = (finding: DocumentFinding) =>
-      isIgnorable(finding) && hidden.has(coverageFindingKey(finding));
+      hidden.has(coverageFindingKey(finding));
     const ignoredNote = (note: ReviewNote) => hidden.has(reviewNoteKey(note));
     return {
       findings: all.filter((finding) => !ignoredFinding(finding)),
@@ -525,6 +531,47 @@ export function DocumentEditorProvider({
     [blocks, editor, indexOfLine]
   );
 
+  // "Add to the profile": the line becomes a suggestion in the profile's
+  // draft; the view then shows it as sent.
+  const addToProfile = useMutation(
+    trpc.documents.addLineToProfile.mutationOptions({
+      onSuccess: () => {
+        toast.success(
+          t.formatMessage({
+            defaultMessage:
+              "Sent to your profile: accept it in My career, then publish.",
+          })
+        );
+        void refresh();
+      },
+      onError: (error) =>
+        toast.error(
+          error.data?.code === "CONFLICT"
+            ? t.formatMessage({
+                defaultMessage: "Your profile already has this line.",
+              })
+            : t.formatMessage({
+                defaultMessage: "This line couldn't be sent to your profile.",
+              })
+        ),
+    })
+  );
+  const { mutate: sendLine, isPending: sending } = addToProfile;
+  const profileActionFor = useCallback(
+    (finding: DocumentFinding): ProfileAction | null => {
+      const lineId = finding.lineId;
+      if (finding.code !== "notInProfile" || !lineId) return null;
+      const sent = version.sentToProfile.find((row) => row.lineId === lineId);
+      if (sent) return { kind: "sent", status: sent.status };
+      return {
+        kind: "add",
+        pending: sending,
+        run: () => sendLine({ versionId: version.id, lineId }),
+      };
+    },
+    [sendLine, sending, version.id, version.sentToProfile]
+  );
+
   // What is drawn over the text: the trace colors, the findings' underlines
   // and the review's notes, placed again after every read of the blocks.
   useEffect(() => {
@@ -559,11 +606,8 @@ export function DocumentEditorProvider({
     }
     findings.forEach((finding, index) => {
       const key = `finding-${index}`;
-      const blocking = !isWarningFinding(finding);
-      const underline = cn(
-        "underline decoration-wavy underline-offset-4",
-        blocking ? "decoration-destructive" : "decoration-amber-500"
-      );
+      const underline =
+        "underline decoration-amber-500 decoration-wavy underline-offset-4";
       if (finding.lineId) {
         const at = indexOfLine(finding.lineId);
         const range = nodeOf(at);
@@ -592,10 +636,7 @@ export function DocumentEditorProvider({
           kind: "node",
           from: range.from,
           to: range.to,
-          className: cn(
-            "-mx-2 rounded-sm px-2 ring-1",
-            blocking ? "ring-destructive/50" : "ring-amber-500/50"
-          ),
+          className: "-mx-2 rounded-sm px-2 ring-1 ring-amber-500/50",
           finding: key,
           key,
         });
@@ -742,14 +783,14 @@ export function DocumentEditorProvider({
     ignoredFindings,
     notes,
     ignoredNotes,
-    canIgnore: isIgnorable,
     ignoreFinding: (finding) =>
-      isIgnorable(finding) && setKeyIgnored(coverageFindingKey(finding), true),
+      setKeyIgnored(coverageFindingKey(finding), true),
     restoreFinding: (finding) =>
       setKeyIgnored(coverageFindingKey(finding), false),
     ignoreNote: (note) => setKeyIgnored(reviewNoteKey(note), true),
     restoreNote: (note) => setKeyIgnored(reviewNoteKey(note), false),
     fixFor,
+    profileActionFor,
     goToBlock,
     goToLine: (lineId) => goToBlock(indexOfLine(lineId)),
     goToOwner: (ownerId) => goToBlock(indexOfOwner(ownerId)),

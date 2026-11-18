@@ -11,6 +11,7 @@ import { FindingHoverCard } from "~/domains/profile/components/finding-hover-car
 
 import { linesById } from "../utils/document-blocks";
 import { useFindingLabel } from "./coverage-review";
+import { ProfileActionButton } from "./document-findings";
 import { useDocumentAgent } from "./document-agent-context";
 import { useDocumentEditor } from "./document-editor-context";
 import { TraceContent, TraceHoverCard } from "./line-trace";
@@ -39,7 +40,7 @@ export function DocumentEditor() {
     findings,
     notes,
     fixFor,
-    canIgnore,
+    profileActionFor,
     ignoreFinding,
     ignoreNote,
   } = useDocumentEditor();
@@ -159,6 +160,7 @@ export function DocumentEditor() {
           return {
             message,
             fix: fixFor(finding) ?? undefined,
+            extra: <ProfileActionButton action={profileActionFor(finding)} />,
             talk: agent
               ? () =>
                   agent.talkAbout({
@@ -168,9 +170,7 @@ export function DocumentEditor() {
                     attachment: { kind: "finding", text: message },
                   })
               : undefined,
-            ignore: canIgnore(finding)
-              ? () => ignoreFinding(finding)
-              : undefined,
+            ignore: () => ignoreFinding(finding),
           };
         }}
       />

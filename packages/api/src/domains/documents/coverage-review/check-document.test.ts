@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
 
-import { isWarningFinding } from "./warning-codes";
 import type { CareerContext } from "../generation/load-career-context";
 import { withheld } from "../generation/profile-source";
 import { defaultGenerationSettings } from "../schemas/generation-settings";
@@ -16,6 +15,8 @@ const E3 = "00000000-0000-4000-8000-0000000000e3";
 const E5 = "00000000-0000-4000-8000-0000000000e5";
 const E4 = "00000000-0000-4000-8000-0000000000e4";
 const I1 = "00000000-0000-4000-8000-0000000000a1";
+// A profile line of another version: this one has no such passage.
+const E9 = "00000000-0000-4000-8000-0000000000e9";
 
 const today = "2026-11";
 
@@ -143,7 +144,11 @@ const resume = (
   sections: [
     {
       kind: "summary",
-      line: { id: "sum", text: summary, origin: { kind: "manual" } },
+      line: {
+        id: "sum",
+        text: summary,
+        origin: { kind: "evidence", evidenceIds: [E1] },
+      },
     },
     { kind: "experience", entries },
   ],
@@ -166,6 +171,31 @@ const codes = (findings: CoverageFinding[]) =>
   findings.map((finding) => finding.code);
 
 describe("the coverage review's code checks", () => {
+  it("points out a line that doesn't trace to the frozen profile version", () => {
+    const content = resume([
+      entry(P1, [
+        { id: "typed", text: "Mentored two interns." },
+        { id: "gone", text: "Wrote the on-call runbook." },
+        { id: "told", text: "Ran the migration." },
+      ]),
+    ]);
+    const lines = (content.sections[1] as { entries: ExperienceEntry[] })
+      .entries[0].lines;
+    lines[0].origin = { kind: "manual" };
+    // Cites a passage this version doesn't hold.
+    lines[1].origin = { kind: "evidence", evidenceIds: [E9] };
+    // Rests on an instruction: the person's own words, kept.
+    lines[2].origin = {
+      kind: "instruction",
+      instructionIds: [I1],
+      evidenceIds: [],
+    };
+    expect(check(content)).toMatchObject([
+      { code: "notInProfile", lineId: "typed", text: "Mentored two interns." },
+      { code: "notInProfile", lineId: "gone" },
+    ]);
+  });
+
   it("passes a resume that rests on the profile within its settings", () => {
     const content = resume([
       entry(P1, [
@@ -465,7 +495,6 @@ describe("the coverage review's code checks", () => {
         params: { term: "Projeto Fênix", publicName: "a payments platform" },
       },
     ]);
-    expect(isWarningFinding(findings[0])).toBe(true);
   });
 
   it("finds a known name claimed where the position says it was not done", () => {

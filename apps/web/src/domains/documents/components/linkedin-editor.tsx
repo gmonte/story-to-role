@@ -30,7 +30,7 @@ import { CoverageReviewBlock } from "./coverage-review";
 import { EditableText } from "./editing";
 import { LinkedinDialog } from "./linkedin-dialog";
 import { type TraceIndex, TracedLine } from "./line-trace";
-import { hasFindings, hasWarnings } from "../utils/version-checks";
+import { hasWarnings } from "../utils/version-checks";
 import { VersionHistorySheet } from "./version-history-sheet";
 
 /**
@@ -90,17 +90,12 @@ export function LinkedinEditor({
       version.instructionTrace.map((row) => [row.instructionId, row.text])
     ),
   };
-  const blocked = hasFindings(version);
   const warned = hasWarnings(version);
-  const copyBlock = blocked
+  const copyBlock = draft
     ? t.formatMessage({
-        defaultMessage: "Fix the coverage findings before copying this text.",
+        defaultMessage: "Save your changes before copying this text.",
       })
-    : draft
-      ? t.formatMessage({
-          defaultMessage: "Save your changes before copying this text.",
-        })
-      : null;
+    : null;
   const updateLine = (lineId: string, text: string) =>
     edit({
       ...content,

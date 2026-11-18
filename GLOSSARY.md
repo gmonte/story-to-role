@@ -101,7 +101,7 @@ The method's screening, run automatically when an opening is added and shown as 
 _Avoid_: Fit score, match, assessment
 
 **Coverage review**:
-The report that comes with every generated document, checked against the profile version it froze: code checks that block, then strong and partial coverage, gaps not invented and inconsistencies.
+The report that comes with every generated document, checked against the profile version it froze: code checks that point out and never block (the PDF asks for “Generate PDF anyway”), then strong and partial coverage, gaps not invented and inconsistencies.
 _Avoid_: Quality report, score, audit
 
 **Generation settings**:

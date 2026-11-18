@@ -1,6 +1,12 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 
 import type { Editor } from "@tiptap/core";
 import { EyeOff, Sparkles, Wand2 } from "lucide-react";
@@ -21,6 +27,8 @@ export type FindingCardInfo = {
   ignore?: () => void;
   /** Starts a talk with the agent; absent where there is no agent. */
   talk?: () => void;
+  /** What else the finding offers (a document's "Add to the profile"). */
+  extra?: ReactNode;
 };
 
 const openDelayMs = 150;
@@ -127,8 +135,9 @@ export function FindingHoverCard({
       }}
     >
       <p>{info.message}</p>
-      {(info.fix ?? info.talk ?? info.finding ?? info.ignore) && (
+      {(info.fix ?? info.talk ?? info.finding ?? info.ignore ?? info.extra) && (
         <div className="flex flex-wrap items-center gap-1">
+          {info.extra}
           {info.finding && (
             <FindingQuickActions
               finding={info.finding}

@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 
 import { useMutation } from "@tanstack/react-query";
 import { Highlighter, RotateCcw } from "lucide-react";
+import Link from "next/link";
 
 import type { VersionView } from "@repo/api/domains/documents/schemas/document-view";
 import { useTranslation } from "@repo/intl/use-translation";
@@ -53,15 +54,74 @@ export function DocumentWorkspace({
         <div className="min-w-0 flex-1 overflow-y-auto">
           <DocumentToolbar versions={versions} select={select} />
           <DocumentChangesBar />
-          {notices && (
-            <div className="mx-auto flex w-full max-w-[52rem] flex-col gap-2 px-6 pt-4">
-              {notices}
-            </div>
-          )}
+          <div className="mx-auto flex w-full max-w-[52rem] flex-col gap-2 px-6 pt-4 empty:hidden">
+            <NewerProfileNotice />
+            {notices}
+          </div>
           <DocumentEditor />
         </div>
       </div>
     </DocumentEditorProvider>
+  );
+}
+
+/**
+ * "Profile version N is newer than this document's" (resume spec,
+ * "Document workspace"): Use version N moves the version to it, tracing
+ * its lines again; no model is called.
+ */
+function NewerProfileNotice() {
+  const t = useTranslation();
+  const trpc = useTRPC();
+  const refresh = useRefreshDocuments();
+  const { version, saveStatus } = useDocumentEditor();
+  const use = useMutation(
+    trpc.documents.useProfileVersion.mutationOptions({
+      onSuccess: async ({ profileVersionNumber }) => {
+        await refresh();
+        toast.success(
+          t.formatMessage(
+            {
+              defaultMessage:
+                "The document now reads profile version {number}: its traces and checks were run again.",
+            },
+            { number: profileVersionNumber }
+          )
+        );
+      },
+      onError: (error) => toast.error(error.message),
+    })
+  );
+  const newer = version.profile.newer;
+  if (!newer) return null;
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-amber-500/40 bg-amber-500/10 p-2.5 text-xs">
+      <span>
+        {t.formatMessage(
+          {
+            defaultMessage:
+              "Profile version {number} is newer than this document's{current, select, none {} other { (version {current})}}.",
+          },
+          {
+            number: newer.number,
+            current: version.profile.versionNumber ?? "none",
+          }
+        )}
+        <Link href="/app/career" className="ml-1 underline underline-offset-2">
+          {t.formatMessage({ defaultMessage: "Open My career" })}
+        </Link>
+      </span>
+      <Button
+        size="sm"
+        disabled={use.isPending || saveStatus !== "saved"}
+        onClick={() => use.mutate({ versionId: version.id })}
+      >
+        {t.formatMessage(
+          { defaultMessage: "Use version {number}" },
+          { number: newer.number }
+        )}
+      </Button>
+    </div>
   );
 }
 

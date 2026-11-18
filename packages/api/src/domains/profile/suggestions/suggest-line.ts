@@ -14,6 +14,7 @@ import {
   type ProfileLanguage,
 } from "../truth/sections";
 import { readStructure, sectionOf, splitLabel } from "../truth/structure";
+import type { ProfileSuggestionOrigin } from "../schemas/profile";
 import type { ProfileChange } from "../truth/suggestions";
 import { proposeSuggestion, readSuggestionContent } from "./propose-suggestion";
 
@@ -21,8 +22,8 @@ import { proposeSuggestion, readSuggestionContent } from "./propose-suggestion";
 export type SuggestionTarget =
   // A labelled field of one experience, found by the position's derived id.
   | { kind: "experience"; positionId: string; field: ExperienceField }
-  // The end of a section.
-  | { kind: "section"; section: "gaps" }
+  // The end of a section (its known gaps, its competencies).
+  | { kind: "section"; section: "gaps" | "competencies" }
   // The career direction line of Professional identity.
   | { kind: "careerDirection" };
 
@@ -37,9 +38,10 @@ const depthOf = (block: ProfileBlock) =>
 
 /**
  * Proposes a line the user stated (an application's instruction, a
- * motivation answer, a confirmed gap) as a suggestion in the current draft
- * of their profile (profile spec, "Suggestions"; origin `application`):
- * never a change, the user accepts it there. The line goes after the last
+ * motivation answer, a confirmed gap, a document line) as a suggestion in
+ * the current draft of their profile (profile spec, "Suggestions"; origin
+ * `application`, or `document` for a line of a document): never a change,
+ * the user accepts it there. The line goes after the last
  * item of its target, or opens the target when it has none; an experience
  * is found by the position's derived id, so a renamed one is refused (or
  * goes to `fallback`) rather than guessed. Refusals are the caller's bad
@@ -56,6 +58,7 @@ export async function suggestLine(input: {
   text: string;
   // In the draft's language when it is given per language.
   reason: string | Record<ProfileLanguage, string>;
+  origin?: ProfileSuggestionOrigin;
 }): Promise<{ profileSuggestionId: string }> {
   const repository = new ProfileRepository(input.db);
   const document = await repository.findDocument(input.userId, "profile");
@@ -186,7 +189,7 @@ export async function suggestLine(input: {
     cipher: input.cipher,
     documentId: document.id,
     draft: blocks,
-    origin: "application",
+    origin: input.origin ?? "application",
     change,
     reason:
       typeof input.reason === "string" ? input.reason : input.reason[language],

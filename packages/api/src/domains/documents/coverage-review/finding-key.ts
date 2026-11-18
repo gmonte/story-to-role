@@ -1,7 +1,5 @@
 import { sha256Hex } from "@repo/api/domains/profile/truth/finding-key";
 
-import { isWarningFinding } from "./warning-codes";
-
 type FindingLike = {
   code: string;
   text: string;
@@ -33,20 +31,14 @@ export function reviewNoteKey(note: {
 }
 
 /**
- * Whether a finding may be ignored: only one that doesn't block the
- * document (a warning). A check that blocks is fixed, never hidden.
+ * The findings that still count once the ignored ones are left out. Every
+ * finding may be ignored: none blocks the document (resume spec, "Document
+ * workspace").
  */
-export const isIgnorable = (finding: { code: string }) =>
-  isWarningFinding(finding);
-
-/** The findings that still count once the ignored ones are left out. */
 export function withoutDismissedFindings<T extends FindingLike>(
   findings: T[],
   dismissed: readonly string[]
 ) {
   const hidden = new Set(dismissed);
-  return findings.filter(
-    (finding) =>
-      !isIgnorable(finding) || !hidden.has(coverageFindingKey(finding))
-  );
+  return findings.filter((finding) => !hidden.has(coverageFindingKey(finding)));
 }

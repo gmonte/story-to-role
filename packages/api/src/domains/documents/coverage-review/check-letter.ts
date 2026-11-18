@@ -11,6 +11,7 @@ import {
   type CoverageFinding,
   type CoverageFindingCode,
   deniedNamesOf,
+  tracesToProfile,
 } from "./check-document";
 
 /**
@@ -169,6 +170,9 @@ export function checkLetter(input: {
       text: line.text,
       params,
     });
+    if (!tracesToProfile(line.origin, context)) {
+      findings.push(finding("notInProfile", {}));
+    }
     const placeholders = [
       ...(line.text.includes(withheld) ? [withheld] : []),
       ...findMarks(line.text).map((mark) =>

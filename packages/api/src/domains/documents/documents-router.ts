@@ -327,6 +327,47 @@ export const documentsRouter = createTRPCRouter({
       new DocumentsService(db).sendToProfile({ userId: ctx.userId, ...input })
     ),
 
+  addLineToProfile: userProcedure
+    .meta(
+      openApiMeta(
+        "documents",
+        "POST",
+        "/document-versions/by-id/{versionId}/lines/by-id/{lineId}/profile-suggestion",
+        "Proposes a line the profile doesn't back as a suggestion in the profile's draft"
+      )
+    )
+    .input(z.object({ versionId: z.uuid(), lineId: z.string().min(1) }))
+    .output(z.object({ profileSuggestionId: z.uuid() }))
+    .mutation(({ ctx, input }) =>
+      new DocumentsService(db).addLineToProfile({
+        userId: ctx.userId,
+        ...input,
+      })
+    ),
+
+  useProfileVersion: userProcedure
+    .meta(
+      openApiMeta(
+        "documents",
+        "POST",
+        "/document-versions/by-id/{versionId}/profile-version",
+        "Moves the version to the profile version published now, tracing its lines again"
+      )
+    )
+    .input(z.object({ versionId: z.uuid() }))
+    .output(
+      z.object({
+        snapshotId: z.uuid(),
+        profileVersionNumber: z.number().int(),
+      })
+    )
+    .mutation(({ ctx, input }) =>
+      new DocumentsService(db).useProfileVersion({
+        userId: ctx.userId,
+        ...input,
+      })
+    ),
+
   requestPdf: userProcedure
     .use(rateLimited("taskStart"))
     .meta(

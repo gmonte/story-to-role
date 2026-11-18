@@ -219,6 +219,7 @@ export class OpeningsService {
               gapQuestion: open(cipher, item.encryptedGapQuestion),
               gapAnswer: open(cipher, item.encryptedGapAnswer),
               gapLack: !!item.lackConfirmedAt,
+              gapLinks: item.gapLinks ?? null,
             };
           }),
           preferenceConflicts: fitCheck.encryptedPreferenceConflicts
@@ -496,6 +497,7 @@ export class OpeningsService {
         await openings.answerFitCheckItem({
           fitCheckItemId: found.item.id,
           encryptedGapAnswer: cipher.encrypt(answer!),
+          gapLinks: { positionIds, projectIds, notTied: !!input.notTied },
           lackConfirmedAt: null,
         });
       }

@@ -701,6 +701,7 @@ async function screenOpening(
               ? cipher.encrypt(questions.get(item.term.id)!)
               : null),
           encryptedGapAnswer: kept?.encryptedGapAnswer ?? null,
+          gapLinks: kept?.gapLinks ?? null,
           lackConfirmedAt: kept?.lackConfirmedAt ?? null,
         };
       }),

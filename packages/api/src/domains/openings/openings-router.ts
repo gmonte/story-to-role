@@ -226,22 +226,24 @@ export const openingsRouter = createTRPCRouter({
         "openings",
         "PUT",
         "/fit-check-items/by-id/{fitCheckItemId}/answer",
-        "Answers a gap question with a story, or confirms the user lacks it"
+        "Answers a gap question with a story tied to positions or projects, or confirms the user lacks it"
       )
     )
     .input(
       z.object({
         fitCheckItemId: z.uuid(),
-        // A story (an instruction for the application); required unless
-        // the user confirms they lack it.
+        // “I have it”: the story (an instruction for the application),
+        // plus where it happened. “I don't have it” (`lacks`): the answer
+        // is optional and no position is involved.
         answer: z.string().trim().min(1).max(4000).optional(),
         lacks: z.boolean().default(false),
-        // With `lacks`: the position whose “what I did not do” gets it;
-        // without one, Known gaps.
-        positionId: z.uuid().optional(),
+        positionIds: z.array(z.uuid()).max(50).default([]),
+        projectIds: z.array(z.uuid()).max(50).default([]),
+        // A general story, tied to no position or project.
+        notTied: z.boolean().default(false),
       })
     )
-    .output(z.object({ profileSuggestionId: z.uuid().nullable() }))
+    .output(z.object({ profileSuggestionIds: z.array(z.uuid()) }))
     .mutation(({ ctx, input }) =>
       new OpeningsService(db).answerGapQuestion({
         userId: ctx.userId,

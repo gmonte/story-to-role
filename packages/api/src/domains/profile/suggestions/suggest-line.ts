@@ -1,15 +1,19 @@
 import { TRPCError } from "@trpc/server";
 
-import { positionIdOf } from "@repo/api/domains/documents/generation/profile-source";
+import {
+  positionIdOf,
+  projectIdOf,
+} from "@repo/api/domains/documents/generation/profile-source";
 import type { UserCipher } from "@repo/api/domains/encryption/user-cipher";
 import type { DbClient } from "@repo/api/tools/db-client";
 
 import { ProfileRepository } from "../profile-repository";
 import { blockToLine, parseBlocks, type ProfileBlock } from "../truth/blocks";
-import { experienceKeys } from "../truth/chunks";
+import { experienceKeys, projectKeys } from "../truth/chunks";
 import {
   experienceFieldLabels,
   normalizeLabel,
+  projectFieldLabels,
   type ExperienceField,
   type ProfileLanguage,
   translationLanguageOf,
@@ -24,10 +28,15 @@ import { proposeSuggestion, readSuggestionContent } from "./propose-suggestion";
 export type SuggestionTarget =
   // A labelled field of one experience, found by the position's derived id.
   | { kind: "experience"; positionId: string; field: ExperienceField }
+  // A labelled field of one project, found by the project's derived id.
+  | { kind: "project"; projectId: string; field: ExperienceField }
   // The end of a section (its known gaps, its competencies).
   | { kind: "section"; section: "gaps" | "competencies" }
   // The career direction line of Professional identity.
   | { kind: "careerDirection" }
+  // The seniority and areas line of Professional identity: a general
+  // strength not tied to any position.
+  | { kind: "identityAreas" }
   // The translations dictionary line for one language, under
   // Communication rules; the text is an entry (`original → translation`).
   | { kind: "translation"; language: ProfileLanguage };
@@ -37,6 +46,11 @@ const careerDirectionLabels: Record<ProfileLanguage, string> = {
   "en-US": "Career direction (what I look for)",
 };
 const careerDirectionAliases = ["career direction", "direcao de carreira"];
+const identityAreasLabels: Record<ProfileLanguage, string> = {
+  "pt-BR": "Senioridade e áreas",
+  "en-US": "Seniority and areas",
+};
+const identityAreasAliases = ["seniority and areas", "senioridade e areas"];
 
 const depthOf = (block: ProfileBlock) =>
   block.type === "item" ? block.depth : 0;
@@ -60,7 +74,8 @@ export async function suggestLine(input: {
   target: SuggestionTarget;
   // Where it goes when the target's experience is no longer in the draft.
   fallback?: SuggestionTarget;
-  text: string;
+  // In the draft's language when it is given per language.
+  text: string | Record<ProfileLanguage, string>;
   // In the draft's language when it is given per language.
   reason: string | Record<ProfileLanguage, string>;
   origin?: ProfileSuggestionOrigin;
@@ -71,7 +86,9 @@ export async function suggestLine(input: {
   const blocks = parseBlocks(input.cipher.decrypt(document.encryptedDraft));
   const structure = readStructure(blocks);
   const language = structure.language;
-  const text = input.text.trim();
+  const text = (
+    typeof input.text === "string" ? input.text : input.text[language]
+  ).trim();
   const added = (depth: number): ProfileBlock => ({
     type: "item",
     depth,
@@ -82,18 +99,32 @@ export async function suggestLine(input: {
 
   /** The change for a target, or null when the draft lacks its place. */
   const changeFor = (target: SuggestionTarget): ProfileChange | null => {
-    if (target.kind === "experience") {
-      const index = structure.experiences.findIndex(
-        (experience) =>
-          experience.parsed &&
-          positionIdOf(input.careerProfileId, experience.parsed) ===
-            target.positionId
-      );
+    if (target.kind === "experience" || target.kind === "project") {
+      const isProject = target.kind === "project";
+      const index = isProject
+        ? structure.projects.findIndex(
+            (project) =>
+              project.parsed &&
+              projectIdOf(input.careerProfileId, project.parsed) ===
+                target.projectId
+          )
+        : structure.experiences.findIndex(
+            (experience) =>
+              experience.parsed &&
+              positionIdOf(input.careerProfileId, experience.parsed) ===
+                target.positionId
+          );
       if (index < 0) return null;
-      const part = experienceKeys(structure)[index];
-      const field = structure.experiences[index].fields[target.field];
+      const part = (
+        isProject ? projectKeys(structure) : experienceKeys(structure)
+      )[index];
+      const entry = isProject
+        ? structure.projects[index]
+        : structure.experiences[index];
+      const field = entry.fields[target.field];
+      const labels = isProject ? projectFieldLabels : experienceFieldLabels;
       // After the field's last item, or under the field itself when it has
-      // none; a draft without the field gets it at the end of the experience.
+      // none; a draft without the field gets it at the end of the entry.
       const last = field?.children.at(-1);
       const anchor =
         last !== undefined ? blocks[last] : field ? blocks[field.line] : null;
@@ -102,7 +133,7 @@ export async function suggestLine(input: {
           part,
           find: "",
           replace: [
-            `- ${experienceFieldLabels[language][target.field]}:`,
+            `- ${labels[language][target.field]}:`,
             blockToLine(added(1)),
           ].join("\n"),
         };
@@ -186,6 +217,11 @@ export async function suggestLine(input: {
     }
     const section = sectionOf(structure, "identity");
     if (!section) return null;
+    const areas = target.kind === "identityAreas";
+    const aliases = areas ? identityAreasAliases : careerDirectionAliases;
+    const missingLabel = areas
+      ? identityAreasLabels[language]
+      : careerDirectionLabels[language];
     let label = -1;
     for (let line = section.start; line < section.end; line++) {
       const block = blocks[line];
@@ -193,10 +229,7 @@ export async function suggestLine(input: {
         block.type === "item" && block.depth === 0
           ? splitLabel(block.text)
           : null;
-      if (
-        labelled &&
-        careerDirectionAliases.includes(normalizeLabel(labelled.label))
-      ) {
+      if (labelled && aliases.includes(normalizeLabel(labelled.label))) {
         label = line;
         break;
       }
@@ -209,7 +242,7 @@ export async function suggestLine(input: {
           blockToLine({
             type: "item",
             depth: 0,
-            text: `${careerDirectionLabels[language]}:`,
+            text: `${missingLabel}:`,
           }),
           blockToLine(added(1)),
         ].join("\n"),
@@ -249,8 +282,10 @@ export async function suggestLine(input: {
     (row) => ({ id: row.id, ...readSuggestionContent(input.cipher, row) })
   );
   // Sent already and still waiting: the same suggestion, not a second one.
-  const waiting = pending.find((row) =>
-    row.replace.split("\n").some((line) => line.includes(text))
+  const waiting = pending.find(
+    (row) =>
+      row.part === change.part &&
+      row.replace.split("\n").some((line) => line.includes(text))
   );
   if (waiting) return { profileSuggestionId: waiting.id };
   const proposed = await proposeSuggestion({

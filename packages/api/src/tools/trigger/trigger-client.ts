@@ -29,8 +29,19 @@ export const triggerClient = {
    * There is no delete: its streams age out with the retention window
    * (ADR 0007).
    */
-  async closeSession(chatId: string) {
-    await sessions.close(chatId, { reason: "account deleted" });
+  async closeSession(chatId: string, reason = "account deleted") {
+    await sessions.close(chatId, { reason });
+  },
+
+  /** Stops the live runs of an agent chat (its document is being deleted). */
+  async cancelChatRuns(chatId: string) {
+    const live = await runs.list({
+      tag: `chat:${chatId}`,
+      status: ["EXECUTING", "WAITING", "QUEUED", "DEQUEUED"],
+    });
+    for await (const run of live) {
+      await runs.cancel(run.id);
+    }
   },
 
   /** Inside a run: mirrors progress to the browser through Realtime. */

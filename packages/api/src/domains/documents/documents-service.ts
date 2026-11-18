@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 
+import { AgentChatRepository } from "@repo/api/domains/agents/agent-chat-repository";
 import { InstructionsRepository } from "@repo/api/domains/applications/instructions-repository";
 import { CareerRepository } from "@repo/api/domains/career/career-repository";
 import {
@@ -20,6 +21,7 @@ import { TasksRepository } from "@repo/api/domains/tasks/tasks-repository";
 import { TasksService } from "@repo/api/domains/tasks/tasks-service";
 import type { DbClient } from "@repo/api/tools/db-client";
 import { getStorage, type Storage } from "@repo/api/tools/storage/storage";
+import { triggerClient } from "@repo/api/tools/trigger/trigger-client";
 import { MotivationRepository } from "@repo/api/domains/applications/motivation/motivation-repository";
 import { ResearchRepository } from "@repo/api/domains/applications/research/research-repository";
 
@@ -1197,6 +1199,37 @@ export class DocumentsService {
         encryptedLabel: label ? cipher.encrypt(label) : null,
       });
     });
+  }
+
+  /**
+   * Deletes a whole document of the user's: its versions, snapshots, change
+   * history, generations, conversations and cached PDFs. Final, so the UI
+   * confirms. An application stays; the tracker shows "sent version deleted"
+   * where a sent snapshot went. The agent's runs and sessions end on
+   * Trigger.dev afterwards, best effort.
+   */
+  async deleteDocument(input: { userId: string; documentId: string }) {
+    const { renderedKeys, chatIds } = await this.db.transaction(async (tx) => {
+      const profile = await this.requireProfile(input.userId, tx);
+      const repository = new DocumentsRepository(tx);
+      const document = await repository.findDocument(input.documentId);
+      if (document?.profileId !== profile.id) throw notFound();
+      const keys = await repository.renderedKeysOfDocument(document.id);
+      const chats = await new AgentChatRepository(tx).listChatIdsOfDocument(
+        document.id
+      );
+      await repository.deleteDocument(document.id);
+      return { renderedKeys: keys, chatIds: chats };
+    });
+    await this.deleteFiles(renderedKeys);
+    await Promise.all(
+      chatIds.map(async (chatId) => {
+        await triggerClient.cancelChatRuns(chatId).catch(() => undefined);
+        await triggerClient
+          .closeSession(chatId, "document deleted")
+          .catch(() => undefined);
+      })
+    );
   }
 
   /** Deletes a version and all its snapshots; final, so the UI confirms. */

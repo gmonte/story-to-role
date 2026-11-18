@@ -199,6 +199,13 @@ export class DocumentsRepository {
       .where(eq(documentVersionsTable.id, versionId));
   }
 
+  /** Deletes the document; versions, snapshots, generations, changes and chats cascade. */
+  async deleteDocument(documentId: string) {
+    await this.tx
+      .delete(documentsTable)
+      .where(eq(documentsTable.id, documentId));
+  }
+
   /** Newest first: the first one is the official snapshot. */
   listSnapshots(versionId: string) {
     return this.tx
@@ -638,6 +645,23 @@ export class DocumentsRepository {
       .select({ storageKey: renderedFilesTable.storageKey })
       .from(renderedFilesTable)
       .where(eq(renderedFilesTable.snapshotId, snapshotId));
+    return rows.map((row) => row.storageKey);
+  }
+
+  /** Storage keys of the files rendered from any snapshot of a document. */
+  async renderedKeysOfDocument(documentId: string) {
+    const rows = await this.tx
+      .select({ storageKey: renderedFilesTable.storageKey })
+      .from(renderedFilesTable)
+      .innerJoin(
+        documentSnapshotsTable,
+        eq(documentSnapshotsTable.id, renderedFilesTable.snapshotId)
+      )
+      .innerJoin(
+        documentVersionsTable,
+        eq(documentVersionsTable.id, documentSnapshotsTable.versionId)
+      )
+      .where(eq(documentVersionsTable.documentId, documentId));
     return rows.map((row) => row.storageKey);
   }
 

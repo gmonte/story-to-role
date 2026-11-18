@@ -2403,6 +2403,86 @@ describe("resume generation and snapshots", () => {
     await rm(rootDir, { recursive: true, force: true });
   });
 
+  it("deletes a library document with its versions and cached PDFs, and nothing else", async () => {
+    const ctx = await setup();
+    const line = {
+      text: "Led a team of 5 engineers.",
+      evidence_ids: [ctx.evidence[1].id],
+    };
+    await ctx.generate("quick", {
+      drafts: [ctx.draft([line]), ctx.draft([line])],
+      ratings: [8, 5],
+    });
+    const tasks = new TasksService(ctx.db, ctx.trigger);
+    const library = new LibraryService(ctx.db, tasks);
+    const created = await library.generateResume({
+      userId: ctx.user.id,
+      focus: "Platform",
+      language: "en-US",
+      reviewDepth: "quick",
+      writingLevel: "standard",
+      tone: "direct",
+    });
+    await ctx.runScripted(created.generationId, {
+      drafts: [ctx.draft([line]), ctx.draft([line])],
+      ratings: [8, 5],
+    });
+    const rootDir = await mkdtemp(path.join(tmpdir(), "pdfs-"));
+    const storage = createLocalStorage({ rootDir });
+    const deleteSpy = vi.spyOn(storage, "delete");
+    const documents = new DocumentsService(ctx.db, tasks, storage);
+    const view = await documents.libraryDocument({
+      userId: ctx.user.id,
+      documentId: created.documentId,
+    });
+    await runRenderPdf({
+      db: ctx.db,
+      cipher: ctx.cipher,
+      storage,
+      userId: ctx.user.id,
+      snapshotId: view.versions[0].snapshot.id,
+    });
+    expect(
+      await readdir(path.join(rootDir, "users", ctx.user.id, "pdfs"))
+    ).toHaveLength(1);
+
+    const stranger = await createTestUser("eve@example.com");
+    await new CareerService(ctx.db).getOrCreateProfile({
+      userId: stranger.id,
+      defaultLanguage: "en-US",
+    });
+    await expect(
+      documents.deleteDocument({
+        userId: stranger.id,
+        documentId: created.documentId,
+      })
+    ).rejects.toMatchObject({ code: "NOT_FOUND" });
+    expect(deleteSpy).not.toHaveBeenCalled();
+
+    await documents.deleteDocument({
+      userId: ctx.user.id,
+      documentId: created.documentId,
+    });
+    expect(deleteSpy).toHaveBeenCalledTimes(1);
+    expect(
+      await readdir(path.join(rootDir, "users", ctx.user.id, "pdfs"))
+    ).toHaveLength(0);
+    expect(await library.list({ userId: ctx.user.id })).toEqual([]);
+    await expect(
+      documents.libraryDocument({
+        userId: ctx.user.id,
+        documentId: created.documentId,
+      })
+    ).rejects.toMatchObject({ code: "NOT_FOUND" });
+    // The application and its resume are untouched.
+    const opening = await documents.forOpening({
+      userId: ctx.user.id,
+      openingId: ctx.opening.id,
+    });
+    expect(opening.documents[0].versions).toHaveLength(1);
+    await rm(rootDir, { recursive: true, force: true });
+  });
+
   it("keeps library documents by focus and suggests similar ones to reuse", async () => {
     const ctx = await setup();
     const line = {

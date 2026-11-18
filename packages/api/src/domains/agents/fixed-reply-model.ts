@@ -7,8 +7,8 @@ const noUsage = {
 const stop = { unified: "stop", raw: "stop" } as const;
 
 /**
- * A "model" that streams a fixed text and calls no provider: the profile
- * agent's answers decided by code (off topic, cooling down, out of credits)
+ * A "model" that streams a fixed text and calls no provider: an agent's
+ * answers decided by code (off topic, cooling down, out of credits)
  * go through the same stream and transcript as the model's, at no cost.
  */
 export function fixedReplyModel(text: string): LanguageModel {

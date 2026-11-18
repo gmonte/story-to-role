@@ -14,10 +14,11 @@ import type { DbClient } from "@repo/api/tools/db-client";
 import { AgentChatRepository } from "./agent-chat-repository";
 
 /**
- * The agent conversation's transcript in our own tables, each message
- * encrypted with the user's data key, so Trigger.dev keeps no copy of its
- * own (ADR 0007). The chat id leads to its user; nothing the browser sends
- * decides whose cipher opens it.
+ * An agent conversation's transcript in our own tables (the profile
+ * agent's or a document agent's), each message encrypted with the user's
+ * data key, so Trigger.dev keeps no copy of its own (ADR 0007, ADR 0009).
+ * The chat id leads to its user; nothing the browser sends decides whose
+ * cipher opens it.
  */
 export function createAgentTranscriptStorage(db: DbClient): TranscriptStorage {
   async function open(chatId: string) {
@@ -71,7 +72,7 @@ export function createAgentTranscriptStorage(db: DbClient): TranscriptStorage {
     async save({ chatId }, changeset) {
       const opened = await open(chatId);
       // The row is made before the session starts (AgentChatService).
-      if (!opened) throw new Error("Unknown profile chat");
+      if (!opened) throw new Error("Unknown agent chat");
       const { cipher } = opened;
 
       await db.transaction(async (tx) => {

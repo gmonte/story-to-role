@@ -1,4 +1,6 @@
-import type { ProfileLanguage } from "../truth/sections";
+import type { ProfileLanguage } from "@repo/api/domains/profile/truth/sections";
+
+import type { AgentChatSubjectKind } from "./db/agents-tables";
 
 export type FixedReplyKind =
   | "off_topic"
@@ -44,6 +46,43 @@ const replies: Record<ProfileLanguage, Record<FixedReplyKind, string>> = {
   },
 };
 
-export function fixedReply(kind: FixedReplyKind, language: ProfileLanguage) {
-  return replies[language][kind];
+/**
+ * What a document agent says instead where the profile agent's words
+ * would steer the person to the wrong place.
+ */
+const documentReplies: Record<
+  ProfileLanguage,
+  Partial<Record<FixedReplyKind, string>>
+> = {
+  "en-US": {
+    off_topic:
+      "I can only help with this document here. Select a passage of it, or a finding, to talk about it.",
+    blocked_override:
+      "I can't change how I work. Let's get back to your document.",
+    too_long:
+      "That message is too long for me to read at once. Send it in smaller parts, one passage at a time.",
+    out_of_credits:
+      "You're out of credits for the agent right now. Subscribe for monthly credits or buy a pack, then come back to this message. Editing the document stays free.",
+  },
+  "pt-BR": {
+    off_topic:
+      "Aqui eu só posso ajudar com este documento. Selecione um trecho dele, ou um apontamento, para conversarmos.",
+    blocked_override:
+      "Não posso mudar a forma como trabalho. Vamos voltar ao seu documento.",
+    too_long:
+      "Essa mensagem é longa demais para eu ler de uma vez. Envie em partes menores, um trecho por vez.",
+    out_of_credits:
+      "Seus créditos para o agente acabaram por agora. Assine para ter créditos todo mês ou compre um pacote, e volte a esta mensagem. Editar o documento continua gratuito.",
+  },
+};
+
+export function fixedReply(
+  kind: FixedReplyKind,
+  language: ProfileLanguage,
+  subject: AgentChatSubjectKind = "profile"
+) {
+  return (
+    (subject === "document" ? documentReplies[language][kind] : undefined) ??
+    replies[language][kind]
+  );
 }

@@ -1,8 +1,7 @@
 import { CareerRepository } from "@repo/api/domains/career/career-repository";
 import { getUserCipher } from "@repo/api/domains/encryption/user-cipher";
 import type { DbClient } from "@repo/api/tools/db-client";
-
-import { AgentChatRepository } from "./agent-chat-repository";
+import { AgentChatRepository } from "@repo/api/domains/agents/agent-chat-repository";
 
 /**
  * What the agent has yet to say about the user's finished imports (profile

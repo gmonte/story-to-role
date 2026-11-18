@@ -25,6 +25,7 @@ async function newChat(email = "ada@example.com") {
   const user = await createTestUser(email);
   const chat = await new AgentChatRepository(db).insertChat({
     userId: user.id,
+    subject: "profile",
     expiresAt: new Date(Date.now() + 86_400_000),
   });
   return { db, chatId: chat.id };

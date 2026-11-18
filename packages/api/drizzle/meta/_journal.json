@@ -113,6 +113,20 @@
       "when": 1794993102660,
       "tag": "0015_add_version_dismissed_findings",
       "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1794996041843,
+      "tag": "0016_add_agent_chats",
+      "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1794996067567,
+      "tag": "0017_drop_profile_chats",
+      "breakpoints": true
     }
   ]
 }

@@ -1,24 +1,22 @@
-import { TRPCError } from "@trpc/server";
-import {
-  stepCountIs,
-  tool,
-  type LanguageModel,
-  type ModelMessage,
-  type streamText as streamTextFn,
-} from "ai";
+import { stepCountIs, tool, type ModelMessage } from "ai";
 import { z } from "zod";
 
-import type { AiFunding } from "@repo/api/domains/ai/ai-funding";
-import { createTaskAi } from "@repo/api/domains/ai/create-task-ai";
-import { anthropicModels } from "@repo/api/domains/ai/providers/anthropic-package";
-import { checkTopic } from "@repo/api/domains/ai/topic-gate";
+import { AgentChatRepository } from "@repo/api/domains/agents/agent-chat-repository";
+import { splitAgentMessage } from "@repo/api/domains/agents/agent-message";
+import { agentSettings } from "@repo/api/domains/agents/agent-settings";
+import {
+  guardAgentTurn,
+  type AgentTurnDeps as SharedTurnDeps,
+  type OpenTurn,
+} from "@repo/api/domains/agents/agent-turn";
+import {
+  lastText,
+  startingWithUser,
+  withoutReasoning,
+} from "@repo/api/domains/agents/chat-history";
+import { detectLanguage } from "@repo/api/domains/agents/detect-language";
+import { limitQuestions } from "@repo/api/domains/agents/question-limit";
 import { getUserCipher } from "@repo/api/domains/encryption/user-cipher";
-import { finishTask } from "@repo/api/domains/tasks/run-task";
-import { TasksRepository } from "@repo/api/domains/tasks/tasks-repository";
-import { TasksService } from "@repo/api/domains/tasks/tasks-service";
-import type { DbClient } from "@repo/api/tools/db-client";
-import type { MisuseGuard } from "@repo/api/tools/misuse-guard";
-import type { RateLimiter } from "@repo/api/tools/rate-limit";
 import { findQuote } from "@repo/api/utils/text/verify-quote";
 
 import { ProfileRepository } from "../profile-repository";
@@ -32,31 +30,11 @@ import { parseBlocks, type ProfileBlock } from "../truth/blocks";
 import { extractProfile } from "../truth/extract";
 import { readStructure } from "../truth/structure";
 import { listParts, partText, type ProfilePart } from "../truth/suggestions";
-import { AgentChatRepository } from "./agent-chat-repository";
-import { splitAgentMessage } from "./agent-message";
 import { buildAgentPrompt } from "./agent-prompt";
-import { agentSettings } from "./agent-settings";
-import { lastText, startingWithUser, withoutReasoning } from "./chat-history";
-import { detectLanguage } from "./detect-language";
-import { fixedReply } from "./fixed-replies";
-import { fixedReplyModel } from "./fixed-reply-model";
-import { limitQuestions } from "./question-limit";
 
-/** What the turn left open, for the agent to settle when it completes. */
-export type OpenTurn = {
-  taskId: string;
-  userId: string;
-  funding: AiFunding;
-  model: string;
-};
+export type { OpenTurn };
 
-export type AgentTurnDeps = {
-  db: DbClient;
-  misuse: MisuseGuard;
-  rateLimiter: RateLimiter;
-  streamText: typeof streamTextFn;
-  // The agent's model instead of the turn's own (tests pass a mock).
-  model?: (modelId: string) => LanguageModel;
+export type AgentTurnDeps = SharedTurnDeps & {
   // A suggestion was just proposed: the page shows it in the text at once.
   reportSuggestion: (profileSuggestionId: string) => void;
   // A review note was just resolved: the page refreshes the draft's keys.
@@ -161,75 +139,23 @@ export async function runAgentTurn(
   const blocks = parseBlocks(cipher.decrypt(document.encryptedDraft));
 
   const message = lastText(input.messages, "user")?.trim() ?? "";
-  // Fixed replies follow the user's message; the profile's language decides
-  // when the message doesn't say.
-  const replyLanguage =
-    detectLanguage(splitAgentMessage(message).text) ??
-    readStructure(blocks).language;
-  const fixed = (text: string) => ({
-    result: deps.streamText({
-      model: fixedReplyModel(text),
-      messages: startingWithUser(input.messages),
-      // No spans here either: they would carry the conversation (ADR 0007).
-      experimental_telemetry: { isEnabled: false },
-    }),
-    turn: null as OpenTurn | null,
+  const guarded = await guardAgentTurn(deps, {
+    chat,
+    taskType: "profile_agent_turn",
+    topic: "profile",
+    messages: input.messages,
+    // Fixed replies follow the user's message; the profile's language
+    // decides when the message doesn't say.
+    replyLanguage:
+      detectLanguage(splitAgentMessage(message).text) ??
+      readStructure(blocks).language,
   });
-
-  if (!message) return fixed(fixedReply("off_topic", replyLanguage));
-  if (message.length > agentSettings.maxMessageCharacters) {
-    return fixed(fixedReply("too_long", replyLanguage));
+  if (guarded.kind === "fixed") {
+    return { result: guarded.result, turn: guarded.turn };
   }
-  // Messages per minute and per day (AI platform spec, guardrail 7).
-  const allowed = await Promise.all([
-    deps.rateLimiter.allow("chatMessage", userId),
-    deps.rateLimiter.allow("chatMessagesPerDay", userId),
-  ]);
-  if (allowed.includes(false)) {
-    return fixed(fixedReply("too_many", replyLanguage));
-  }
+  const { model, turn } = guarded;
 
-  let task;
   try {
-    task = await new TasksService(db).reserve({
-      userId,
-      type: "profile_agent_turn",
-      subjectId: chat.id,
-    });
-  } catch (error) {
-    if (error instanceof TRPCError && error.code === "PAYMENT_REQUIRED") {
-      return fixed(fixedReply("out_of_credits", replyLanguage));
-    }
-    throw error;
-  }
-
-  // From here the reservation is open: anything that fails before the
-  // stream exists settles it as failed (and marks a dead key).
-  try {
-    const { ai, funding, languageModel } = await createTaskAi({
-      db,
-      userId,
-      taskId: task.id,
-      applyCommunicationRules: false,
-    });
-    const modelId = anthropicModels.writing;
-    const turn: OpenTurn = { taskId: task.id, userId, funding, model: modelId };
-
-    if (await deps.misuse.isCoolingDown(userId)) {
-      return { ...fixed(fixedReply("cooldown", replyLanguage)), turn };
-    }
-    const verdict = await checkTopic({
-      ai,
-      context: "profile",
-      message,
-      previousQuestion: lastText(input.messages, "assistant"),
-    });
-    if (verdict !== "on_topic") {
-      await deps.misuse.recordBlocked(userId);
-      const kind = verdict === "override" ? "blocked_override" : "off_topic";
-      return { ...fixed(fixedReply(kind, replyLanguage)), turn };
-    }
-
     const repository = new ProfileRepository(db);
     const pending = (await repository.listPendingSuggestions(document.id)).map(
       (row) => ({ id: row.id, ...readSuggestionContent(cipher, row) })
@@ -350,7 +276,7 @@ export async function runAgentTurn(
 
     return {
       result: deps.streamText({
-        model: (deps.model ?? languageModel)(modelId),
+        model,
         system: buildAgentPrompt({
           language: readStructure(blocks).language,
           today: new Date().toISOString().slice(0, 10),
@@ -387,14 +313,6 @@ export async function runAgentTurn(
       turn,
     };
   } catch (error) {
-    const owner = await new TasksRepository(db).findOwner(task.id);
-    await finishTask({
-      db,
-      taskId: task.id,
-      userId,
-      funding: owner?.funding ?? "credits",
-      error,
-    });
-    throw error;
+    return guarded.fail(error);
   }
 }

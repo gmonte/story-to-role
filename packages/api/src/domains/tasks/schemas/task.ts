@@ -13,6 +13,7 @@ export const taskTypes = [
   "validate_profile",
   "embed_profile",
   "profile_agent_turn",
+  "document_agent_turn",
   "import_document",
 ] as const;
 export const taskTypeSchema = z.enum(taskTypes);

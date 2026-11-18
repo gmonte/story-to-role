@@ -15,8 +15,8 @@ import {
   getTestDatabase,
 } from "@repo/api/test/pglite";
 import type { Storage } from "@repo/api/tools/storage/storage";
+import { AgentChatService } from "@repo/api/domains/agents/agent-chat-service";
 
-import { AgentChatService } from "../agent/agent-chat-service";
 import {
   markImportSummariesSaid,
   pendingImportSummaries,

@@ -9,7 +9,8 @@ import { TrackerService } from "@repo/api/domains/applications/tracker/tracker-s
 import { AiKeysRepository } from "@repo/api/domains/ai/ai-keys-repository";
 import { CareerRepository } from "@repo/api/domains/career/career-repository";
 import { getUserCipher } from "@repo/api/domains/encryption/user-cipher";
-import { AgentChatRepository } from "@repo/api/domains/profile/agent/agent-chat-repository";
+import { AgentChatRepository } from "@repo/api/domains/agents/agent-chat-repository";
+import { DocumentsRepository } from "@repo/api/domains/documents/documents-repository";
 import { createTestUser } from "@repo/api/test/create-test-user";
 import {
   clearTestDatabase,
@@ -68,10 +69,22 @@ async function setup() {
     cancelRun,
     closeChatSession,
   });
-  // A conversation with the profile agent, whose session lives on
-  // Trigger.dev.
+  // A conversation with the profile agent and one with a document's
+  // agent, whose sessions live on Trigger.dev.
   const chat = await new AgentChatRepository(db).insertChat({
     userId: user.id,
+    subject: "profile",
+    expiresAt: new Date(Date.now() + 86_400_000),
+  });
+  const libraryDocument = await new DocumentsRepository(db).insertDocument({
+    profileId: profile.id,
+    kind: "resume",
+    encryptedFocus: cipher.encrypt("Platform roles"),
+  });
+  const documentChat = await new AgentChatRepository(db).insertChat({
+    userId: user.id,
+    subject: "document",
+    documentId: libraryDocument.id,
     expiresAt: new Date(Date.now() + 86_400_000),
   });
 
@@ -119,6 +132,7 @@ async function setup() {
     deleteClerkUser,
     closeChatSession,
     chat,
+    documentChat,
     account,
   };
 }
@@ -179,6 +193,7 @@ describe("account", () => {
     expect(ctx.billing.removeForDeletion).toHaveBeenCalledWith(ctx.user.id);
     expect(ctx.deleteClerkUser).toHaveBeenCalledWith(ctx.user.clerkUserId);
     expect(ctx.closeChatSession).toHaveBeenCalledWith(ctx.chat.id);
+    expect(ctx.closeChatSession).toHaveBeenCalledWith(ctx.documentChat.id);
     expect(ctx.storage.keys()).toEqual([]);
     for (const table of [
       "users",
@@ -190,7 +205,7 @@ describe("account", () => {
       "ai_keys",
       "credit_lots",
       "source_documents",
-      "profile_chats",
+      "agent_chats",
     ]) {
       const result = await ctx.db.execute<{ count: number }>(
         sql.raw(`select count(*)::int as count from ${table}`)

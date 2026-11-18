@@ -1,22 +1,22 @@
 import { chat } from "@trigger.dev/sdk/ai";
-import { APICallError, type LanguageModelUsage } from "ai";
 import { z } from "zod";
 
-import { AiUsageRepository } from "@repo/api/domains/ai/ai-usage-repository";
-import { KeyUnusableError } from "@repo/api/domains/ai/providers/provider-package";
-import { finishTask } from "@repo/api/domains/tasks/run-task";
+import { createAgentTranscriptStorage } from "@repo/api/domains/agents/agent-transcript-storage";
+import {
+  settleAgentTurn,
+  type OpenTurn,
+} from "@repo/api/domains/agents/agent-turn";
+import { startingWithUser } from "@repo/api/domains/agents/chat-history";
+import { fixedReplyModel } from "@repo/api/domains/agents/fixed-reply-model";
 import { db } from "@repo/api/tools/db";
 import { redisMisuseGuard } from "@repo/api/tools/misuse-guard";
 import { upstashRateLimiter } from "@repo/api/tools/rate-limit";
 
-import { createAgentTranscriptStorage } from "../agent/agent-transcript-storage";
-import { startingWithUser } from "../agent/chat-history";
-import { fixedReplyModel } from "../agent/fixed-reply-model";
 import {
   markImportSummariesSaid,
   pendingImportSummaries,
 } from "../agent/import-summaries";
-import { runAgentTurn, type OpenTurn } from "../agent/run-agent-turn";
+import { runAgentTurn } from "../agent/run-agent-turn";
 
 // The turn each chat has open in this run, settled when it completes.
 const openTurns = new Map<string, OpenTurn>();
@@ -26,34 +26,6 @@ const summaries = new Map<
   string,
   { sourceDocumentIds: string[]; text: string; said?: boolean }
 >();
-
-/** A provider refusal of the user's own key, as the task ledger knows it. */
-function keyFailure(error: unknown) {
-  if (!APICallError.isInstance(error)) return error;
-  if (error.statusCode === 401 || error.statusCode === 403) {
-    return new KeyUnusableError("refused");
-  }
-  if (/credit balance|billing/i.test(error.responseBody ?? "")) {
-    return new KeyUnusableError("out_of_credit");
-  }
-  return error;
-}
-
-async function recordUsage(turn: OpenTurn, usage: LanguageModelUsage) {
-  await new AiUsageRepository(db).record({
-    userId: turn.userId,
-    taskId: turn.taskId,
-    purpose: "profile_agent",
-    funding: turn.funding,
-    provider: "anthropic",
-    role: "writing",
-    model: turn.model,
-    inputTokens: usage.inputTokens ?? 0,
-    outputTokens: usage.outputTokens ?? 0,
-    cacheReadTokens: usage.inputTokenDetails?.cacheReadTokens ?? 0,
-    cacheWriteTokens: usage.inputTokenDetails?.cacheWriteTokens ?? 0,
-  });
-}
 
 /**
  * The profile agent (ADR 0007): one durable run per conversation that
@@ -130,23 +102,13 @@ export const profileAgent = chat.agent({
     const turn = openTurns.get(chatId);
     if (!turn) return;
     openTurns.delete(chatId);
-    try {
-      if (usage) await recordUsage(turn, usage);
-    } finally {
-      // Settled whatever happens to the usage record.
-      await finishTask({
-        db,
-        taskId: turn.taskId,
-        userId: turn.userId,
-        funding: turn.funding,
-        // A provider error mid-stream ends the turn without throwing.
-        error:
-          error !== undefined
-            ? keyFailure(error)
-            : finishReason === "error"
-              ? new Error("The turn ended with a stream error")
-              : undefined,
-      });
-    }
+    await settleAgentTurn({
+      db,
+      turn,
+      purpose: "profile_agent",
+      usage,
+      error,
+      finishReason,
+    });
   },
 });

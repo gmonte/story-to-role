@@ -57,10 +57,11 @@ export async function creditReserve(db: DbClient, userId: string, now: Date) {
 
 /**
  * Working on the profile never spends what the reserve keeps (billing
- * spec, "Credit meter"): the agent's messages, validation and imports.
+ * spec, "Credit meter"): the agents' messages, validation and imports.
  */
 export const keepsReserve = (type: TaskType) =>
   type === "profile_agent_turn" ||
+  type === "document_agent_turn" ||
   type === "validate_profile" ||
   type === "import_document";
 

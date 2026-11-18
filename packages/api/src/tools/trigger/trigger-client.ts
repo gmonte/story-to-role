@@ -25,7 +25,7 @@ export const triggerClient = {
   },
 
   /**
-   * Closes a profile agent chat's session (its account is being deleted).
+   * Closes an agent chat's session (its account is being deleted).
    * There is no delete: its streams age out with the retention window
    * (ADR 0007).
    */

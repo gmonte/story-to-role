@@ -9,6 +9,7 @@ import { Plugin, PluginKey, TextSelection } from "@tiptap/pm/state";
 import { Decoration, DecorationSet } from "@tiptap/pm/view";
 import StarterKit from "@tiptap/starter-kit";
 
+import { cn } from "@repo/web/lib/utils";
 import {
   parseBlocks,
   serializeBlocks,
@@ -256,7 +257,7 @@ export const ProfileLinks = Extension.create({
                 decorations.push(
                   Decoration.inline(pos + 1 + link.from, pos + 1 + link.to, {
                     // Styled like the app's link Button (shadcn).
-                    class: "text-primary underline underline-offset-4",
+                    class: cn("text-primary underline underline-offset-4"),
                     "data-href": link.href,
                   })
                 );

@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 
-import { Check, EyeOff, MessageSquare, X } from "lucide-react";
+import { Check, CircleAlert, EyeOff, MessageSquare, X } from "lucide-react";
 
 import { useTranslation } from "@repo/intl/use-translation";
 import { extractProfile } from "@repo/api/domains/profile/truth/extract";
@@ -50,7 +50,10 @@ export function ProfileReview() {
 
   return (
     <section className="space-y-2">
-      <p className="text-muted-foreground text-xs font-medium uppercase">
+      <p className="text-muted-foreground flex items-center gap-1.5 text-xs font-medium uppercase">
+        {reviewFindings.length > 0 && (
+          <CircleAlert className="size-3.5 text-amber-600" />
+        )}
         {t.formatMessage(
           { defaultMessage: "Quality review ({count, number})" },
           { count: reviewFindings.length }

@@ -1,0 +1,1 @@
+ALTER TABLE "document_versions" ADD COLUMN IF NOT EXISTS "dismissedFindings" jsonb DEFAULT '[]'::jsonb NOT NULL;

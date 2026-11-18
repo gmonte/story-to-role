@@ -77,6 +77,10 @@ export const documentVersionsTable = createTable(
     // A cover letter's outdated notice the user dismissed, for that resume
     // snapshot.
     dismissedResumeSnapshotId: d.uuid(),
+    // Keys of the findings the user chose to ignore in this version (see
+    // `coverageFindingKey`): warnings and review notes, never a check that
+    // blocks the document. Changing the finding's text brings it back.
+    dismissedFindings: d.jsonb().$type<string[]>().notNull().default([]),
   }),
   (t) => [index("document_versions_document_id_idx").on(t.documentId)]
 );

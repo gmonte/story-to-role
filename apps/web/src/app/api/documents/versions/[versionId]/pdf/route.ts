@@ -30,6 +30,7 @@ export async function GET(
       requested: request.nextUrl.searchParams.get("name"),
       contentType: "application/pdf",
       extension: "pdf",
+      inline: request.nextUrl.searchParams.get("inline") === "1",
     });
   } catch (error) {
     // Not the user's, or unreadable: never say which to the client.

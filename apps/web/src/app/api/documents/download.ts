@@ -24,6 +24,8 @@ export function fileResponse(input: {
   requested: string | null;
   contentType: string;
   extension: string;
+  // Shown in the page (the editor's preview) instead of saved.
+  inline?: boolean;
 }) {
   const requested = input.requested
     ? asciiName(
@@ -36,7 +38,7 @@ export function fileResponse(input: {
   return new Response(new Uint8Array(input.bytes), {
     headers: {
       "Content-Type": input.contentType,
-      "Content-Disposition": `attachment; filename="${fileName}"`,
+      "Content-Disposition": `${input.inline ? "inline" : "attachment"}; filename="${fileName}"`,
       "Cache-Control": "private, no-store",
     },
   });

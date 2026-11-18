@@ -80,7 +80,7 @@ export function ProfileReview() {
                 talkAbout({
                   quote: finding.quote,
                   line: finding.line,
-                  text: finding.message,
+                  attachment: { kind: "review", text: finding.message },
                 })
               }
             >

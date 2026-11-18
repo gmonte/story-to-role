@@ -220,6 +220,21 @@ describe("the profile agent", () => {
     expect(system).not.toContain("Dev backend.");
   });
 
+  it("tells the agent about the finding attached to the message", async () => {
+    const ctx = await setup();
+    const { model, prompts } = agentModel([], "Anotado.");
+    await ctx.say(
+      composeAgentMessage("Melhorei a performance [sem número].", "", null, {
+        kind: "finding",
+        text: "Falta o resultado.",
+      }),
+      model
+    );
+    const system = systemOf(prompts[0]);
+    expect(system).toContain("A finding or a review being discussed");
+    expect(system).toContain("Melhorei a performance [sem número].");
+  });
+
   it("keeps the passage for the answers that follow it", async () => {
     const ctx = await setup();
     const { model, prompts } = agentModel([], "Anotado.");

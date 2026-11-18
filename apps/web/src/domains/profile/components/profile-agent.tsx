@@ -119,6 +119,7 @@ function Conversation({
     saveNow,
     agentTopic,
     clearAgentQuote,
+    clearAgentAttachment,
     refreshSuggestions,
     suggestions,
     goToLine,
@@ -133,6 +134,8 @@ function Conversation({
   const bottom = useRef<HTMLDivElement>(null);
   const input = useRef<HTMLTextAreaElement>(null);
   const quote = agentTopic?.quote ?? null;
+  const attachmentLabel = useAttachmentLabel();
+  const attachment = agentTopic?.attachment ?? null;
 
   const transport = useTriggerChatTransport<typeof profileAgent>({
     task: "profile_agent",
@@ -231,12 +234,11 @@ function Conversation({
     if (unsaid && !busy) catchUp.current?.();
   }, [unsaid, busy]);
 
-  // A passage or a finding sent here from the document: its words go to the
-  // composer, ready to send.
+  // A passage or a finding sent here from the document: the composer takes
+  // focus, the person's words still to write.
   const topicId = agentTopic?.id;
   useEffect(() => {
     if (!agentTopic) return;
-    if (agentTopic.text) setText(agentTopic.text);
     input.current?.focus();
     // Only when a new topic arrives, not when its quote is cleared.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -266,7 +268,8 @@ function Conversation({
   }, [messages, status]);
 
   async function send(words: string) {
-    if (!words.trim() || busy) return;
+    // An attachment alone is a question: how to resolve it.
+    if ((!words.trim() && !attachment) || busy) return;
     watchdog.reset();
     // The agent reads the saved draft: what was just typed goes first.
     if ((await saveNow()) === null) {
@@ -278,10 +281,11 @@ function Conversation({
       return;
     }
     void sendMessage({
-      text: composeAgentMessage(quote, words, agentTopic?.part),
+      text: composeAgentMessage(quote, words, agentTopic?.part, attachment),
     });
     setText("");
     clearAgentQuote();
+    clearAgentAttachment();
   }
 
   function onSubmit(event: FormEvent) {
@@ -501,6 +505,29 @@ function Conversation({
             </button>
           </div>
         )}
+        {attachment && (
+          <div className="bg-muted/60 mb-2 flex items-start gap-2 rounded-md border px-2.5 py-1.5 text-xs">
+            <Sparkles className="text-muted-foreground mt-0.5 size-3.5 shrink-0" />
+            <span className="min-w-0 flex-1">
+              <span className="text-muted-foreground block font-medium">
+                {attachmentLabel(attachment.kind)}
+              </span>
+              <span className="text-muted-foreground line-clamp-3 whitespace-pre-wrap">
+                {attachment.text}
+              </span>
+            </span>
+            <button
+              type="button"
+              aria-label={t.formatMessage({
+                defaultMessage: "Remove the attachment",
+              })}
+              onClick={clearAgentAttachment}
+              className="text-muted-foreground hover:text-foreground"
+            >
+              <X className="size-3.5" />
+            </button>
+          </div>
+        )}
         <div className="bg-background flex flex-col rounded-xl border shadow-sm">
           <Textarea
             ref={input}
@@ -515,13 +542,18 @@ function Conversation({
               if (event.key === "Enter" && !event.shiftKey) onSubmit(event);
             }}
             placeholder={
-              quote
+              attachment
                 ? t.formatMessage({
-                    defaultMessage: "What about this passage?",
+                    defaultMessage: "What do you want to do about it?",
                   })
-                : t.formatMessage({
-                    defaultMessage: "Tell what you did, or ask where to start",
-                  })
+                : quote
+                  ? t.formatMessage({
+                      defaultMessage: "What about this passage?",
+                    })
+                  : t.formatMessage({
+                      defaultMessage:
+                        "Tell what you did, or ask where to start",
+                    })
             }
             className="max-h-40 resize-none border-0 shadow-none focus-visible:ring-0"
           />
@@ -585,6 +617,21 @@ function Conversation({
   );
 }
 
+/** What an attachment is called, by its kind. */
+function useAttachmentLabel() {
+  const t = useTranslation();
+  return (kind: "finding" | "review") =>
+    kind === "finding"
+      ? t.formatMessage({
+          defaultMessage: "Finding",
+          description: "Label of a linter finding attached to a chat message",
+        })
+      : t.formatMessage({
+          defaultMessage: "Review",
+          description: "Label of a quality-review note attached to a message",
+        });
+}
+
 /** The user's message: the passage it is about, where from, then their words. */
 function UserMessage({
   message,
@@ -593,11 +640,12 @@ function UserMessage({
   message: UIMessage;
   partTitle: (key: string | undefined) => string;
 }) {
-  const { quote, part, text } = splitAgentMessage(
+  const { quote, part, attachment, text } = splitAgentMessage(
     message.parts
       .flatMap((piece) => (piece.type === "text" ? [piece.text] : []))
       .join("")
   );
+  const attachmentLabel = useAttachmentLabel();
   const from = part ? partTitle(part) : "";
   return (
     <li className="bg-muted max-w-[90%] self-end rounded-2xl px-3.5 py-2 text-sm whitespace-pre-wrap">
@@ -605,6 +653,14 @@ function UserMessage({
         <span className="text-muted-foreground mb-1 block border-l-2 pl-2 text-xs">
           {from && <span className="block font-medium">{from}</span>}
           <span className="line-clamp-3">{quote}</span>
+        </span>
+      )}
+      {attachment && (
+        <span className="text-muted-foreground mb-1 block border-l-2 pl-2 text-xs">
+          <span className="block font-medium">
+            {attachmentLabel(attachment.kind)}
+          </span>
+          <span className="line-clamp-3">{attachment.text}</span>
         </span>
       )}
       {text}

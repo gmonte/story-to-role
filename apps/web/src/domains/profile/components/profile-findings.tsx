@@ -150,7 +150,10 @@ export function ProfileFindings() {
               talkAbout({
                 quote: blocks[finding.line].text,
                 line: finding.line,
-                text: findingMessage(finding, structure.language),
+                attachment: {
+                  kind: "finding",
+                  text: findingMessage(finding, structure.language),
+                },
               })
             }
           >

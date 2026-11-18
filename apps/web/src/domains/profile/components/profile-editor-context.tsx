@@ -15,6 +15,7 @@ import {
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEditor, type Editor } from "@tiptap/react";
 
+import type { AgentAttachment } from "@repo/api/domains/profile/agent/agent-message";
 import { useTranslation } from "@repo/intl/use-translation";
 import {
   parseBlocks,
@@ -133,11 +134,16 @@ type ProfileEditorState = {
   // Smoothly scrolls a line into view without moving the cursor or focus;
   // skipped while the user is typing in the editor.
   scrollToLine: (line: number) => void;
-  // What the agent's composer is about: a passage, and words to start from.
+  // What the agent's composer is about: a passage, and a finding or review.
   agentTopic: AgentTopic | null;
   // `line` is where the passage starts, which tells its part.
-  talkAbout: (topic: { quote: string; line: number; text?: string }) => void;
+  talkAbout: (topic: {
+    quote: string;
+    line: number;
+    attachment?: AgentAttachment;
+  }) => void;
   clearAgentQuote: () => void;
+  clearAgentAttachment: () => void;
 };
 
 export type LocatedSuggestion = ProfileSuggestion & {
@@ -150,7 +156,8 @@ export type AgentTopic = {
   quote: string | null;
   // The key of the part of the profile the passage is in.
   part: string | null;
-  text: string;
+  // The finding or review being discussed, shown apart from the words.
+  attachment: AgentAttachment | null;
 };
 
 const ProfileEditorContext = createContext<ProfileEditorState | null>(null);
@@ -742,7 +749,7 @@ export function ProfileEditorProvider({
     refreshSuggestions,
     scrollToLine,
     agentTopic,
-    talkAbout: ({ quote, line, text }) =>
+    talkAbout: ({ quote, line, attachment }) =>
       setAgentTopic({
         id: Date.now(),
         // A long selection is about its start; the agent reads the rest.
@@ -753,10 +760,12 @@ export function ProfileEditorProvider({
           listParts(currentBlocks()).findLast(
             (part) => line >= part.start && line < part.end
           )?.key ?? null,
-        text: text ?? "",
+        attachment: attachment ?? null,
       }),
     clearAgentQuote: () =>
       setAgentTopic((topic) => topic && { ...topic, quote: null, part: null }),
+    clearAgentAttachment: () =>
+      setAgentTopic((topic) => topic && { ...topic, attachment: null }),
     reviewFindings,
     applyCompetencyLevel: (name, level) => {
       if (!editor) return;

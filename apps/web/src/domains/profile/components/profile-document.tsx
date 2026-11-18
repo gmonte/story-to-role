@@ -448,7 +448,7 @@ export function ProfileDocument() {
                 talkAbout({
                   quote: blocks[finding.line]?.text ?? "",
                   line: finding.line,
-                  text: finding.message,
+                  attachment: { kind: "review", text: finding.message },
                 }),
             };
           }
@@ -471,7 +471,7 @@ export function ProfileDocument() {
                     talkAbout({
                       quote: blocks[line]?.text ?? "",
                       line,
-                      text: message,
+                      attachment: { kind: "finding", text: message },
                     }),
           };
         }}

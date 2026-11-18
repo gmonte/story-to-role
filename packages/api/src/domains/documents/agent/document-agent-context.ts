@@ -15,7 +15,15 @@ import {
 import type { DbClient } from "@repo/api/tools/db-client";
 
 import { readChangeContent } from "../changes/propose-change";
-import type { ChangeableContent } from "../changes/document-change";
+import {
+  closingPart,
+  factsLines,
+  factsPart,
+  greetingPart,
+  headerLines,
+  headerPart,
+  type ChangeableContent,
+} from "../changes/document-change";
 import type { DocumentChangeContent } from "../schemas/document-change";
 import { coverageReviewContentSchema } from "../coverage-review/coverage-review";
 import {
@@ -113,11 +121,13 @@ function traceOf(
   if (origin.kind === "manual") return "written by the person";
   if (origin.kind === "credential") return "a credential, locked";
   const parts: string[] = [];
+  if (origin.kind === "edited") parts.push("reworded by the person");
   const evidenceIds =
     origin.kind === "skill" ||
     origin.kind === "evidence" ||
     origin.kind === "instruction" ||
-    origin.kind === "letter"
+    origin.kind === "letter" ||
+    origin.kind === "edited"
       ? origin.evidenceIds
       : [];
   for (const id of evidenceIds) {
@@ -128,14 +138,16 @@ function traceOf(
     );
   }
   const instructionIds =
-    origin.kind === "instruction" || origin.kind === "letter"
+    origin.kind === "instruction" ||
+    origin.kind === "letter" ||
+    origin.kind === "edited"
       ? origin.instructionIds
       : [];
   for (const id of instructionIds) {
     const text = sources.instructions.get(id);
     if (text) parts.push(`application instruction: “${shorten(text)}”`);
   }
-  if (origin.kind === "letter") {
+  if (origin.kind === "letter" || origin.kind === "edited") {
     for (const id of origin.companyFactIds) {
       const text = sources.facts.get(id);
       if (text) parts.push(`company research: “${shorten(text)}”`);
@@ -153,10 +165,14 @@ type Sources = Parameters<typeof traceOf>[1];
 const tracedLine = (line: Line, sources: Sources) =>
   `[${line.id}] ${line.text}\n    ← ${traceOf(line, sources)}`;
 
+/** The header's lines with their ids, as a part the agent may change. */
+const headerText = (content: ResumeContent | CoverLetterContent) => [
+  `## header [part: ${headerPart}]`,
+  ...headerLines(content.header).map((line) => `[${line.id}] ${line.text}`),
+];
+
 function resumeText(content: ResumeContent, sources: Sources) {
-  const out: string[] = [
-    `Header (locked): ${content.header.name} | ${content.header.titleLine}`,
-  ];
+  const out: string[] = headerText(content);
   for (const section of content.sections) {
     const part =
       section.kind === "summary" || section.kind === "skills"
@@ -180,7 +196,9 @@ function resumeText(content: ResumeContent, sources: Sources) {
       case "experience":
         for (const entry of section.entries) {
           out.push(
-            `### ${entry.employer} — ${entry.title} (${entry.startDate ?? "?"} – ${entry.endDate ?? "present"})${entry.context ? ` (${entry.context})` : ""} [locked facts] [part: experience:${entry.positionId}]`
+            `### ${entry.employer} — ${entry.title} (${entry.startDate ?? "?"} – ${entry.endDate ?? "present"})${entry.context ? ` (${entry.context})` : ""} [part: ${factsPart(entry.positionId)}]`,
+            ...factsLines(entry).map((line) => `[${line.id}] ${line.text}`),
+            `Bullets [part: experience:${entry.positionId}]`
           );
           for (const line of entry.lines) out.push(tracedLine(line, sources));
         }
@@ -204,14 +222,16 @@ function resumeText(content: ResumeContent, sources: Sources) {
 
 function letterText(content: CoverLetterContent, sources: Sources) {
   return [
-    `Header (locked): ${content.header.name} | ${content.header.titleLine}`,
+    ...headerText(content),
     "",
-    `Greeting (locked): ${content.greeting}`,
+    `## greeting [part: ${greetingPart}]`,
+    `[${greetingPart}] ${content.greeting}`,
     "",
     "## paragraphs [part: letter]",
     ...content.paragraphs.flatMap((line) => ["", tracedLine(line, sources)]),
     "",
-    `Closing (locked): ${content.closing}`,
+    `## closing [part: ${closingPart}]`,
+    `[${closingPart}] ${content.closing}`,
   ].join("\n");
 }
 

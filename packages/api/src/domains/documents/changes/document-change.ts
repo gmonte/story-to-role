@@ -18,11 +18,12 @@ export type DocumentChange = Pick<
 
 /**
  * A part the agent may change: the lines the user writes, grouped as the
- * editor groups them. `fixed` parts hold a set number of lines (one
- * summary, one line per skills group): their lines change, never come or
- * go. Everything outside these parts (the header, the section titles, a
- * position's facts, the credentials, a letter's greeting and closing) is
- * locked.
+ * editor groups them, and the facts the document prints (the header, a
+ * position's employer, title and context, a letter's greeting and
+ * closing), which belong to the user too. `fixed` parts hold a set number
+ * of lines (one summary, one line per skills group, the header's lines):
+ * their lines change, never come or go. Only the section titles and the
+ * credentials are locked.
  */
 export type DocumentPart = {
   key: string;
@@ -34,18 +35,78 @@ export type DocumentPart = {
 export const summaryPart = "summary";
 export const skillsPart = "skills";
 export const letterPart = "letter";
+export const headerPart = "header";
+export const greetingPart = "greeting";
+export const closingPart = "closing";
+/** The key of a position's facts (employer, title, context). */
+export const factsPart = (positionId: string) => `facts:${positionId}`;
+
+/** The ids the header's lines go by, in their order. */
+export const headerLineIds = {
+  name: "name",
+  titleLine: "title_line",
+  contacts: "contacts",
+  city: "city",
+} as const;
+
+/** What separates the contacts on their line. */
+export const contactsSeparator = " | ";
+
+// The text code prints has no origin of its own; the part's lines need one.
+const printed: LineOrigin = { kind: "manual" };
+
+/** The header as a fixed part: its name, title line, contacts and city. */
+export function headerLines(header: {
+  name: string;
+  titleLine: string;
+  contacts: string[];
+  city: string | null;
+}): Line[] {
+  return [
+    { id: headerLineIds.name, text: header.name, origin: printed },
+    { id: headerLineIds.titleLine, text: header.titleLine, origin: printed },
+    {
+      id: headerLineIds.contacts,
+      text: header.contacts.join(contactsSeparator),
+      origin: printed,
+    },
+    ...(header.city === null
+      ? []
+      : [{ id: headerLineIds.city, text: header.city, origin: printed }]),
+  ];
+}
+
+/** A position's facts as a fixed part: employer, title and context. */
+export function factsLines(entry: {
+  positionId: string;
+  employer: string;
+  title: string;
+  context: string | null;
+}): Line[] {
+  return [
+    {
+      id: `employer:${entry.positionId}`,
+      text: entry.employer,
+      origin: printed,
+    },
+    { id: `title:${entry.positionId}`, text: entry.title, origin: printed },
+    ...(entry.context === null
+      ? []
+      : [
+          {
+            id: `context:${entry.positionId}`,
+            text: entry.context,
+            origin: printed,
+          },
+        ]),
+  ];
+}
 
 /** A skills group as one line: its label, then its text. */
 export const skillLine = (group: { label: string; text: string }) =>
   `${group.label}: ${group.text}`;
 
 const lockedParts = new Set([
-  "header",
-  "name",
-  "title_line",
-  "contacts",
-  "greeting",
-  "closing",
   "education",
   "languages",
   "certifications",
@@ -59,18 +120,47 @@ const lockedParts = new Set([
 export const isLockedPart = (key: string) =>
   lockedParts.has(key.trim().toLowerCase());
 
+/**
+ * Whether a part holds locked facts (the header, a position's employer,
+ * title and context): the person may change them, and the agent may
+ * suggest changing one only when the person asked for that change.
+ */
+export const isLockedFactPart = (key: string) => {
+  const trimmed = key.trim();
+  return trimmed === headerPart || trimmed.startsWith("facts:");
+};
+
 export function listDocumentParts(content: ChangeableContent): DocumentPart[] {
+  const header: DocumentPart = {
+    key: headerPart,
+    title: "the header",
+    fixed: true,
+    lines: headerLines(content.header),
+  };
   if (content.kind === "cover_letter") {
     return [
+      header,
+      {
+        key: greetingPart,
+        title: "the greeting",
+        fixed: true,
+        lines: [{ id: greetingPart, text: content.greeting, origin: printed }],
+      },
       {
         key: letterPart,
         title: "the letter's paragraphs",
         fixed: false,
         lines: content.paragraphs,
       },
+      {
+        key: closingPart,
+        title: "the closing",
+        fixed: true,
+        lines: [{ id: closingPart, text: content.closing, origin: printed }],
+      },
     ];
   }
-  const parts: DocumentPart[] = [];
+  const parts: DocumentPart[] = [header];
   for (const section of content.sections) {
     switch (section.kind) {
       case "summary":
@@ -94,12 +184,20 @@ export function listDocumentParts(content: ChangeableContent): DocumentPart[] {
         break;
       case "experience":
         for (const entry of section.entries) {
-          parts.push({
-            key: `experience:${entry.positionId}`,
-            title: `${entry.employer} — ${entry.title}`,
-            fixed: false,
-            lines: entry.lines,
-          });
+          parts.push(
+            {
+              key: factsPart(entry.positionId),
+              title: `the facts of ${entry.employer} — ${entry.title}`,
+              fixed: true,
+              lines: factsLines(entry),
+            },
+            {
+              key: `experience:${entry.positionId}`,
+              title: `${entry.employer} — ${entry.title}`,
+              fixed: false,
+              lines: entry.lines,
+            }
+          );
         }
         break;
       case "projects":
@@ -213,6 +311,13 @@ export const rangesOverlap = (
   b: { start: number; end: number }
 ) => a.end > a.start && b.end > b.start && a.start < b.end && b.start < a.end;
 
+/** The contacts line split back into its contacts. */
+export const splitContacts = (text: string) =>
+  text
+    .split(/\s*\|\s*/)
+    .map((contact) => contact.trim())
+    .filter(Boolean);
+
 /** A fresh line id for a line a change adds. */
 export const newChangeLineId = () => crypto.randomUUID().slice(0, 8);
 
@@ -261,6 +366,19 @@ function rewriteLines(
   return [...lines.slice(0, range.start), ...next, ...lines.slice(range.end)];
 }
 
+/** The fixed lines of a part with the change written, by line id. */
+function writtenById(
+  part: DocumentPart,
+  range: { start: number; end: number },
+  written: string[]
+) {
+  return new Map(
+    part.lines
+      .slice(range.start, range.end)
+      .map((line, index) => [line.id, written[index]] as const)
+  );
+}
+
 /**
  * The content with the change applied, or null when it is stale, touches
  * a locked fact or changes the line count of a fixed part. Replaced lines
@@ -277,7 +395,31 @@ export function applyDocumentChange(
   const written = splitChangeLines(change.replace);
   if (part.fixed && written.length !== end - start) return null;
   const origin = changedLineOrigin(content.kind, evidenceIds, part.key);
+  if (part.key === headerPart) {
+    const lines = writtenById(part, located, written);
+    const contacts = lines.get(headerLineIds.contacts);
+    return {
+      ...content,
+      header: {
+        ...content.header,
+        name: lines.get(headerLineIds.name) ?? content.header.name,
+        titleLine:
+          lines.get(headerLineIds.titleLine) ?? content.header.titleLine,
+        contacts:
+          contacts === undefined
+            ? content.header.contacts
+            : splitContacts(contacts),
+        city: lines.get(headerLineIds.city) ?? content.header.city,
+      },
+    };
+  }
   if (content.kind === "cover_letter") {
+    if (part.key === greetingPart) {
+      return { ...content, greeting: written[0] };
+    }
+    if (part.key === closingPart) {
+      return { ...content, closing: written[0] };
+    }
     return {
       ...content,
       paragraphs: rewriteLines(content.paragraphs, located, written, origin),
@@ -313,14 +455,25 @@ export function applyDocumentChange(
         case "experience":
           return {
             ...section,
-            entries: section.entries.map((entry) =>
-              part.key === `experience:${entry.positionId}`
+            entries: section.entries.map((entry) => {
+              if (part.key === factsPart(entry.positionId)) {
+                const lines = writtenById(part, located, written);
+                return {
+                  ...entry,
+                  employer:
+                    lines.get(`employer:${entry.positionId}`) ?? entry.employer,
+                  title: lines.get(`title:${entry.positionId}`) ?? entry.title,
+                  context:
+                    lines.get(`context:${entry.positionId}`) ?? entry.context,
+                };
+              }
+              return part.key === `experience:${entry.positionId}`
                 ? {
                     ...entry,
                     lines: rewriteLines(entry.lines, located, written, origin),
                   }
-                : entry
-            ),
+                : entry;
+            }),
           };
         case "projects":
           return {

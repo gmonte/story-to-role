@@ -92,6 +92,15 @@ export const lineOriginSchema = z.discriminatedUnion("kind", [
   }),
   z.object({ kind: z.literal("credential"), credentialId: z.uuid() }),
   z.object({ kind: z.literal("skill"), evidenceIds: z.array(z.uuid()) }),
+  // A traced line the user reworded in the editor: it keeps the sources
+  // of the line it came from (resume spec, "Trace in the editor").
+  z.object({
+    kind: z.literal("edited"),
+    evidenceIds: z.array(z.uuid()),
+    instructionIds: z.array(z.uuid()).default([]),
+    companyFactIds: z.array(z.uuid()).default([]),
+    motivationPointIds: z.array(z.uuid()).default([]),
+  }),
 ]);
 export type LineOrigin = z.infer<typeof lineOriginSchema>;
 

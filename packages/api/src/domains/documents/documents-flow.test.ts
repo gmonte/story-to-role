@@ -1070,10 +1070,11 @@ describe("resume generation and snapshots", () => {
     const [version] = await load();
     const first = version.snapshot.id;
 
-    // An edited line becomes "written by you"; untouched lines keep their origin.
+    // A reworded line keeps its sources as "edited"; untouched lines keep
+    // their origin.
     const edited = structuredClone(resumeOf(version.content));
-    experienceOf(edited).lines[0].text =
-      "Led and mentored a team of 5 engineers.";
+    const [reworded] = experienceOf(edited).lines;
+    reworded.text = "Led and mentored a team of 5 engineers.";
     await ctx.documents.saveEdit({
       userId: ctx.user.id,
       versionId: version.id,
@@ -1086,14 +1087,15 @@ describe("resume generation and snapshots", () => {
       origin: "edited",
       author: "user",
     });
-    expect(experienceOf(current.content).lines[0].origin).toEqual({
-      kind: "manual",
+    expect(experienceOf(current.content).lines[0].origin).toMatchObject({
+      kind: "edited",
+      evidenceIds: (reworded.origin as { evidenceIds: string[] }).evidenceIds,
     });
     expect(resumeOf(current.content).sections[0]).toMatchObject({
       line: { origin: { kind: "instruction" } },
     });
 
-    // A stale base is refused; so is editing a locked fact.
+    // A stale base is refused.
     await expect(
       ctx.documents.saveEdit({
         userId: ctx.user.id,
@@ -1102,18 +1104,21 @@ describe("resume generation and snapshots", () => {
         content: edited,
       })
     ).rejects.toMatchObject({ code: "CONFLICT" });
-    const tampered = structuredClone(resumeOf(current.content));
-    experienceOf(tampered).title = "CTO";
-    await expect(
-      ctx.documents.saveEdit({
-        userId: ctx.user.id,
-        versionId: version.id,
-        baseSnapshotId: current.snapshot.id,
-        content: tampered,
-      })
-    ).rejects.toMatchObject({ code: "BAD_REQUEST" });
+    // A position's title is the user's to change: saved, then pointed out
+    // by the checks rather than refused.
+    const retitled = structuredClone(resumeOf(current.content));
+    experienceOf(retitled).title = "CTO";
+    await ctx.documents.saveEdit({
+      userId: ctx.user.id,
+      versionId: version.id,
+      baseSnapshotId: current.snapshot.id,
+      content: retitled,
+    });
+    [current] = await load();
+    expect(experienceOf(current.content).title).toBe("CTO");
 
     // Undo removes only the latest; the official snapshot is always the latest.
+    await ctx.documents.undo({ userId: ctx.user.id, versionId: version.id });
     await ctx.documents.undo({ userId: ctx.user.id, versionId: version.id });
     [current] = await load();
     expect(current.snapshot.id).toBe(first);
@@ -1335,6 +1340,9 @@ describe("resume generation and snapshots", () => {
     const skills = content.sections.find((row) => row.kind === "skills")!;
     if (summary.kind !== "summary" || skills.kind !== "skills")
       throw new Error();
+    // Typed anew (a reworded line would keep its trace): lines of their own.
+    const typedSummary = "typed-summary";
+    const typedSkills = "typed-skills";
     await ctx.documents.saveEdit({
       userId,
       versionId: clean.id,
@@ -1347,13 +1355,20 @@ describe("resume generation and snapshots", () => {
                 ...section,
                 line: {
                   ...section.line,
+                  id: typedSummary,
                   text: "Engineer who loves platforms.",
                 },
               }
             : section.kind === "skills"
               ? {
                   ...section,
-                  groups: [{ ...section.groups[0], text: "Kubernetes, Helm" }],
+                  groups: [
+                    {
+                      ...section.groups[0],
+                      id: typedSkills,
+                      text: "Kubernetes, Helm",
+                    },
+                  ],
                 }
               : section
         ),
@@ -1361,18 +1376,18 @@ describe("resume generation and snapshots", () => {
     });
     const edited = await view();
     expect(edited.coverage?.findings.map((row) => row.lineId)).toEqual([
-      summary.line.id,
-      skills.groups[0].id,
+      typedSummary,
+      typedSkills,
     ]);
     await ctx.documents.addLineToProfile({
       userId,
       versionId: clean.id,
-      lineId: summary.line.id,
+      lineId: typedSummary,
     });
     await ctx.documents.addLineToProfile({
       userId,
       versionId: clean.id,
-      lineId: skills.groups[0].id,
+      lineId: typedSkills,
     });
     const suggestions = await profiles.listSuggestions(userId);
     expect(suggestions.map((row) => [row.origin, row.part])).toEqual([
@@ -1382,8 +1397,8 @@ describe("resume generation and snapshots", () => {
     expect(suggestions[0].replace).toContain("Engineer who loves platforms.");
     expect(suggestions[1].replace).toContain("Core: Kubernetes, Helm");
     expect((await view()).sentToProfile.map((row) => row.lineId)).toEqual([
-      summary.line.id,
-      skills.groups[0].id,
+      typedSummary,
+      typedSkills,
     ]);
   });
 
@@ -2861,7 +2876,7 @@ describe("resume generation and snapshots", () => {
     const copy = (await letterDocument()).versions.find((v) => v.id === copyId);
     expect(copy?.letter?.resumeVersionId).toBe(resumeVersion.id);
 
-    // The user's edit makes a paragraph their own words.
+    // The user's edit of a paragraph keeps its sources, as edited.
     letter = (await letterDocument()).versions.find((v) => v.id === letter.id)!;
     const edited = letter.content as CoverLetterContent;
     await ctx.documents.saveEdit({
@@ -2880,7 +2895,7 @@ describe("resume generation and snapshots", () => {
     )!;
     expect((after.content as CoverLetterContent).paragraphs[2]).toMatchObject({
       text: "Let's talk soon.",
-      origin: { kind: "manual" },
+      origin: { kind: "edited" },
     });
   });
   it("adjusts an existing resume: only the order, the summary and bullets the profile has", async () => {
@@ -4239,17 +4254,18 @@ describe("resume generation and snapshots", () => {
     expect(JSON.stringify(version.content)).not.toMatch(
       /\[omitted\]|Globex|Phoenix|Initrode|Klingon/
     );
-    // The locked facts stay locked as printed.
-    const tampered = structuredClone(resumeOf(version.content));
-    experienceOf(tampered).employer = "Globex";
+    // The employer is the user's to write, even the real name: saved, and
+    // pointed out by the checks rather than refused.
+    const retyped = structuredClone(resumeOf(version.content));
+    experienceOf(retyped).employer = "Globex";
     await expect(
       ctx.documents.saveEdit({
         userId: ctx.user.id,
         versionId: version.id,
         baseSnapshotId: version.snapshot.id,
-        content: tampered,
+        content: retyped,
       })
-    ).rejects.toMatchObject({ code: "BAD_REQUEST" });
+    ).resolves.toHaveProperty("snapshotId");
   });
 
   it("never prints “[omitted]” in a locked-fact override's value", async () => {

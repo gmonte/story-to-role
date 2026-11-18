@@ -6,10 +6,11 @@ It is not the generation itself continued: a generation is a fixed pipeline (dra
 
 The document belongs to the user: they may write anything in it, and the agent writes what the profile supports plus what the user asks for in the conversation. StoryToRole points, it doesn't forbid:
 
-- The agent changes the document only through **suggestions** shown in place (accept or reject, word-level diff); an accepted one becomes a new snapshot, authored by the AI and accepted by the user.
+- The agent changes the document only through **suggestions** shown in place (accept or reject, word-level diff), including when the user asked for the change: it never writes into the document directly; an accepted one becomes a new snapshot, authored by the AI and accepted by the user.
 - The agent grounds a suggestion on the frozen profile version and on the user's own words in the conversation; it never invents. A figure must come from one of the two, as the profile agent's figure rule already enforces in code.
 - Lines that don't trace to the profile version, whether the user typed them or accepted them from the agent, are **pointed out** as findings (“not in your profile”), with “Add to the profile” (a suggestion in the profile's draft, origin `document`) and Ignore. So are figures not marked `[medido]`, never-include terms and originals with a public name. Like the generation's warnings, they don't block the PDF: they ask for “Generate PDF anyway”.
-- Locked facts (employer, title, dates) still change only through the profile.
+- The user edits everything except the section titles, the header and a position's employer, title and dates included: a fact that then differs from the profile is pointed out (`lockedFact`), never refused. The agent suggests changing a locked fact only when the user asked for that change in the conversation, never on its own judgement; code enforces it.
+- A line the user rewords keeps its trace (origin `edited`); only an untraced line is “not in your profile”.
 
 ## Consequences
 

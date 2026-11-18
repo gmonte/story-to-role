@@ -36,7 +36,9 @@ function refusalText(refusal: ChangeRefusal) {
     case "empty":
       return "Nothing to change: give the line to replace, the new line, or both.";
     case "locked":
-      return "Refused: that is a locked fact (the header, a position's employer, title or dates, a credential, the greeting, the closing, a skills label). It changes only through the profile; tell the person so.";
+      return "Refused: that is locked (a credential, a section title, a skills label, the dates). It changes only through the profile; tell the person so.";
+    case "notRequested":
+      return "Refused: that is a locked fact (the header, a position's employer, title or context). Propose changing it only when the person asked for that change in this conversation: pass `requestedBy` with their exact words asking for it, and only in the turn where they ask. They didn't ask for this one, so ask them first instead of proposing it.";
     case "noSuchPart":
       return "No such part: use a part key from the document (“[part: …]”).";
     case "notFound":
@@ -150,7 +152,7 @@ export async function runDocumentAgentTurn(
       }),
       propose_change: tool({
         description:
-          "Propose one change to the document: one line replaced, added or removed in one part. It is shown in the text as a tracked change the person accepts or rejects; nothing changes until they accept.",
+          "Propose one change to the document: one line replaced, added or removed in one part (a bullet, a paragraph, the summary, a skills line, a header line, a position's employer, title or context). It is shown in the text as a tracked change the person accepts or rejects; nothing changes until they accept. A locked fact (the header, a position's employer, title or context) only when the person asked for that change: then `requestedBy` quotes their words.",
         inputSchema: z.object({
           part: z
             .string()
@@ -178,8 +180,21 @@ export async function runDocumentAgentTurn(
             .describe(
               "The profile lines the change rests on, copied exactly from read_part; none for a fact the person gave in this conversation"
             ),
+          requestedBy: z
+            .string()
+            .optional()
+            .describe(
+              "For a locked fact (the header, a position's employer, title or context): the person's exact words asking for this change, copied from their message in this conversation"
+            ),
         }),
-        execute: ({ part, find, replace, reason, profilePassages }) => {
+        execute: ({
+          part,
+          find,
+          replace,
+          reason,
+          profilePassages,
+          requestedBy,
+        }) => {
           // One at a time: calls of the same step run together, and each
           // must see what the one before it left waiting.
           const result = proposing.then(async () => {
@@ -196,6 +211,13 @@ export async function runDocumentAgentTurn(
               evidence: context.evidence,
               profileText: context.profileText,
               sources,
+              requestedBy,
+              request: {
+                said: sources,
+                latest: [last?.text, last?.quote, last?.attachment?.text]
+                  .filter(Boolean)
+                  .join("\n"),
+              },
               pending: waiting,
             });
             if (!proposed.ok) return { error: refusalText(proposed.refusal) };

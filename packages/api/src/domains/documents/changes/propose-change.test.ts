@@ -197,6 +197,8 @@ async function setup() {
       profilePassages?: string[];
       base?: ResumeContent;
       reason?: string;
+      requestedBy?: string;
+      request?: { said: string[]; latest: string };
     } = {}
   ) =>
     proposeChange({
@@ -212,6 +214,8 @@ async function setup() {
       evidence: context.evidence.map((row) => ({ id: row.id, text: row.text })),
       profileText: profileMarkdown,
       sources: options.sources ?? [],
+      requestedBy: options.requestedBy,
+      request: options.request,
       pending: (await listPending()).map((row) => ({
         id: row.id,
         ...readChangeContent(cipher, row),
@@ -229,6 +233,7 @@ async function setup() {
     snapshot,
     content,
     experience,
+    position,
     deploy,
     team,
     propose,
@@ -278,13 +283,22 @@ describe("proposed changes", () => {
   it("lists the parts the agent may change", async () => {
     const ctx = await setup();
     expect(listDocumentParts(ctx.content).map((part) => part.key)).toEqual([
+      "header",
       "summary",
       "skills",
+      `facts:${ctx.position.id}`,
       ctx.experience,
     ]);
-    expect(listDocumentParts(ctx.content)[1].lines[0].text).toBe(
+    expect(listDocumentParts(ctx.content)[2].lines[0].text).toBe(
       "Core: Kubernetes, Terraform"
     );
+    expect(
+      listDocumentParts(ctx.content)[0].lines.map((line) => line.text)
+    ).toEqual([
+      "Ada Lovelace",
+      "Platform Engineer | Kubernetes",
+      "ada@example.com",
+    ]);
   });
 
   it("proposes a change that waits, encrypted, with the passages it rests on", async () => {
@@ -381,7 +395,10 @@ describe("proposed changes", () => {
     );
     expect(
       await refusal({ part: "header", find: "Ada Lovelace", replace: "Ada L." })
-    ).toBe("locked");
+    ).toBe("notRequested");
+    expect(await refusal({ part: "education", find: "x", replace: "y" })).toBe(
+      "locked"
+    );
     expect(
       await refusal({
         part: "skills",
@@ -400,6 +417,116 @@ describe("proposed changes", () => {
       await refusal({ part: "skills", find: "", replace: "Cloud: AWS" })
     ).toBe("fixedLines");
     expect(await ctx.listPending()).toHaveLength(0);
+  });
+
+  it("adds a line at the end of a part, or after an anchor line", async () => {
+    const ctx = await setup();
+    const appended = await ctx.propose({
+      part: ctx.experience,
+      find: "",
+      replace: "Led a team of 5 engineers.",
+    });
+    expect(appended.ok).toBe(true);
+    const inserted = await ctx.propose({
+      part: ctx.experience,
+      find: "Was responsible for cutting deploy time by 40% with Kubernetes.",
+      replace:
+        "Was responsible for cutting deploy time by 40% with Kubernetes.\nLed a team of 5 engineers.",
+    });
+    expect(inserted.ok).toBe(true);
+    if (!appended.ok || !inserted.ok) return;
+    const lines = (content: ResumeContent) =>
+      content.sections.flatMap((section) =>
+        section.kind === "experience"
+          ? section.entries[0].lines.map((line) => line.text)
+          : []
+      );
+    const applied = (change: Parameters<typeof applyDocumentChange>[1]) =>
+      applyDocumentChange(ctx.content, change, []) as ResumeContent;
+    expect(lines(applied(appended.change))).toEqual([
+      "Was responsible for cutting deploy time by 40% with Kubernetes.",
+      "Mentored two interns.",
+      "Led a team of 5 engineers.",
+    ]);
+    expect(lines(applied(inserted.change))).toEqual([
+      "Was responsible for cutting deploy time by 40% with Kubernetes.",
+      "Led a team of 5 engineers.",
+      "Mentored two interns.",
+    ]);
+    // The anchor keeps its id; the new line gets one of its own.
+    const entry = (
+      applied(inserted.change).sections[2] as {
+        entries: Array<{ lines: Array<{ id: string }> }>;
+      }
+    ).entries[0];
+    expect(entry.lines[0].id).toBe("exp1");
+    expect(entry.lines[1].id).not.toBe("exp2");
+    expect(entry.lines[2].id).toBe("exp2");
+  });
+
+  it("changes a locked fact only when the person asked for it in this conversation", async () => {
+    const ctx = await setup();
+    const change = {
+      part: `facts:${ctx.position.id}`,
+      find: ctx.position.title,
+      replace: "Staff Engineer",
+    };
+    const asked = "Change my title at Globex to Staff Engineer";
+    // No quote of the person's words: refused.
+    const unasked = await ctx.propose(change, {
+      request: { said: ["Improve the resume"], latest: "Improve the resume" },
+    });
+    expect(unasked.ok ? null : unasked.refusal.kind).toBe("notRequested");
+    // A quote the person never wrote: refused.
+    const invented = await ctx.propose(change, {
+      requestedBy: asked,
+      request: { said: ["Improve the resume"], latest: "Improve the resume" },
+    });
+    expect(invented.ok ? null : invented.refusal.kind).toBe("notRequested");
+    // Asked earlier, but this turn is about something else: refused.
+    const stale = await ctx.propose(change, {
+      requestedBy: asked,
+      request: {
+        said: [asked, "Now shorten the summary"],
+        latest: "Now shorten the summary",
+      },
+    });
+    expect(stale.ok ? null : stale.refusal.kind).toBe("notRequested");
+    // Asked in this turn, quoted loosely (case and accents aside): accepted.
+    const requested = await ctx.propose(change, {
+      requestedBy: "change my title at globex to staff engineer",
+      request: { said: ["Hi", asked], latest: asked },
+    });
+    expect(requested.ok).toBe(true);
+    if (!requested.ok) return;
+    const applied = applyDocumentChange(
+      ctx.content,
+      requested.change,
+      []
+    ) as ResumeContent;
+    expect(
+      applied.sections.flatMap((section) =>
+        section.kind === "experience"
+          ? section.entries.map((entry) => entry.title)
+          : []
+      )
+    ).toEqual(["Staff Engineer"]);
+    // The header too, when the latest message is about it.
+    const header = await ctx.propose(
+      { part: "header", find: "Ada Lovelace", replace: "Ada King Lovelace" },
+      {
+        requestedBy: "use my full name, Ada King Lovelace",
+        request: {
+          said: ["Use my full name, Ada King Lovelace."],
+          latest: "Use my full name, Ada King Lovelace.",
+        },
+      }
+    );
+    expect(header.ok).toBe(true);
+    if (!header.ok) return;
+    expect(
+      applyDocumentChange(ctx.content, header.change, [])!.header.name
+    ).toBe("Ada King Lovelace");
   });
 
   it("refuses a figure found neither in the profile nor in the person's words, and takes one they gave", async () => {

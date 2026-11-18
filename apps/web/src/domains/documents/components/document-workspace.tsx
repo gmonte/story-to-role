@@ -3,7 +3,7 @@
 import type { ReactNode } from "react";
 
 import { useMutation } from "@tanstack/react-query";
-import { Highlighter, RotateCcw } from "lucide-react";
+import { RotateCcw } from "lucide-react";
 import Link from "next/link";
 
 import type { VersionView } from "@repo/api/domains/documents/schemas/document-view";
@@ -125,7 +125,7 @@ function NewerProfileNotice() {
   );
 }
 
-/** The versions' tabs, the save status, trace mode and undo. */
+/** The versions' tabs, the save status and undo. */
 function DocumentToolbar({
   versions,
   select,
@@ -137,7 +137,7 @@ function DocumentToolbar({
   const labels = useDocumentLabels();
   const trpc = useTRPC();
   const refresh = useRefreshDocuments();
-  const { version, saveStatus, trace, setTrace } = useDocumentEditor();
+  const { version, saveStatus } = useDocumentEditor();
   const undo = useMutation(
     trpc.documents.undo.mutationOptions({
       onSuccess: refresh,
@@ -179,14 +179,6 @@ function DocumentToolbar({
           </span>
           <Button
             size="sm"
-            variant={trace ? "secondary" : "ghost"}
-            onClick={() => setTrace(!trace)}
-          >
-            <Highlighter />
-            {t.formatMessage({ defaultMessage: "Trace mode" })}
-          </Button>
-          <Button
-            size="sm"
             variant="ghost"
             disabled={
               version.snapshotCount < 2 ||
@@ -200,34 +192,6 @@ function DocumentToolbar({
           </Button>
         </div>
       </div>
-      {trace && (
-        <div className="text-muted-foreground flex flex-wrap gap-3 text-xs">
-          <Legend className="bg-emerald-500">
-            {t.formatMessage({ defaultMessage: "Your profile" })}
-          </Legend>
-          <Legend className="bg-sky-500">
-            {t.formatMessage({ defaultMessage: "Application instruction" })}
-          </Legend>
-          <Legend className="bg-amber-500">
-            {t.formatMessage({ defaultMessage: "Written by you" })}
-          </Legend>
-        </div>
-      )}
     </div>
-  );
-}
-
-function Legend({
-  className,
-  children,
-}: {
-  className: string;
-  children: ReactNode;
-}) {
-  return (
-    <span className="flex items-center gap-1.5">
-      <span className={cn("size-2.5 rounded-sm", className)} />
-      {children}
-    </span>
   );
 }

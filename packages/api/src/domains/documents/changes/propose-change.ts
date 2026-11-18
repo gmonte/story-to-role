@@ -15,6 +15,7 @@ import {
 } from "../schemas/document-change";
 import {
   changeViolation,
+  isLockedFactPart,
   isLockedPart,
   listDocumentParts,
   locateDocumentChange,
@@ -24,6 +25,7 @@ import {
   type ChangeableContent,
   type DocumentChange as ProposedChange,
 } from "./document-change";
+import { userRequested, type UserRequest } from "./requested-change";
 
 export function readChangeContent(
   cipher: UserCipher,
@@ -37,6 +39,9 @@ export function readChangeContent(
 export type ChangeRefusal =
   | { kind: "empty" }
   | { kind: "locked" }
+  // A locked fact (the header, a position's employer, title or context)
+  // the person didn't ask to change.
+  | { kind: "notRequested" }
   | { kind: "noSuchPart" }
   | { kind: "notFound" }
   | { kind: "unchanged" }
@@ -87,12 +92,14 @@ export function resolvePassages(
 /**
  * Proposes a change to a document version as a pending suggestion (ADR
  * 0009): nothing reaches the document until the user accepts it. Refused
- * when it names a locked part, doesn't apply to the content as it is,
- * changes nothing, changes a fixed part's line count, or writes a figure
- * found neither in the frozen profile version, nor in the document, nor
- * in `sources` (the person's own words): the agent never supplies a
- * number nobody gave. A pending change whose lines the new one rewrites
- * is superseded by it.
+ * when it names a locked part, touches a locked fact the person didn't
+ * ask to change (`requestedBy` must quote their request, found in their
+ * messages, with the latest one about it), doesn't apply to the content
+ * as it is, changes nothing, changes a fixed part's line count, or writes
+ * a figure found neither in the frozen profile version, nor in the
+ * document, nor in `sources` (the person's own words): the agent never
+ * supplies a number nobody gave. A pending change whose lines the new
+ * one rewrites is superseded by it.
  */
 export async function proposeChange(input: {
   db: DbClient;
@@ -110,6 +117,10 @@ export async function proposeChange(input: {
   // The frozen profile version's text: figures may come from it.
   profileText: string | null;
   sources: string[];
+  // The person's words asking for this change, when it touches a locked
+  // fact; `request` is what they said, to check it against.
+  requestedBy?: string;
+  request?: UserRequest;
   // The changes already waiting: two can't rewrite the same lines, so the
   // new one takes the place of those it overlaps.
   pending?: Array<DocumentChangeContent & { id: string }>;
@@ -143,6 +154,19 @@ export async function proposeChange(input: {
   if (change.find === change.replace) return refuse({ kind: "unchanged" });
   const violation = changeViolation(input.content, change);
   if (violation) return refuse({ kind: violation });
+  if (
+    isLockedFactPart(key) &&
+    !userRequested(
+      input.request ?? {
+        said: input.sources,
+        latest: input.sources.at(-1) ?? "",
+      },
+      input.requestedBy,
+      change
+    )
+  ) {
+    return refuse({ kind: "notRequested" });
+  }
 
   const located = locateDocumentChange(input.content, change)!;
   const supersededIds = (input.pending ?? [])

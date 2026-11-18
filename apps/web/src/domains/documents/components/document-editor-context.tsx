@@ -58,9 +58,10 @@ import {
   replaceBlockText,
   resetDocument,
   scrollToBlock,
+  selectBlock,
 } from "../utils/document-editor-extensions";
 import { useDocumentAgent } from "./document-agent-context";
-import { originTone } from "./editing";
+import { originMarker } from "./editing";
 
 export type DocumentFinding = CoverageView["findings"][number];
 
@@ -95,13 +96,23 @@ type DocumentEditorState = {
   content: EditableContent;
   blocks: DocumentBlock[];
   saveStatus: SaveStatus;
-  trace: boolean;
-  setTrace: (trace: boolean) => void;
   /** The code checks that count: ignored findings are left out. */
   findings: DocumentFinding[];
   ignoredFindings: DocumentFinding[];
   notes: ReviewNote[];
   ignoredNotes: ReviewNote[];
+  /** The key the text marks a finding or a note with (`data-finding`). */
+  findingKey: (finding: DocumentFinding) => string;
+  noteKey: (note: ReviewNote) => string;
+  /** The finding under the pointer in the text, or the last one opened. */
+  activeFinding: string | null;
+  /** The finding whose row the pointer is on: its passage lights up. */
+  hoverFinding: (key: string | null) => void;
+  /** The passage a finding or a note points at, as the line's text. */
+  passageOf: (target: {
+    lineId: string | null;
+    positionId?: string | null;
+  }) => string | null;
   ignoreFinding: (finding: DocumentFinding) => void;
   restoreFinding: (finding: DocumentFinding) => void;
   ignoreNote: (note: ReviewNote) => void;
@@ -110,9 +121,13 @@ type DocumentEditorState = {
   fixFor: (finding: DocumentFinding) => (() => void) | null;
   /** "Add to the profile" of a "not in your profile" finding. */
   profileActionFor: (finding: DocumentFinding) => ProfileAction | null;
-  goToBlock: (index: number) => void;
-  goToLine: (lineId: string) => void;
+  /** Scrolls to a block and selects its text (or the given span of it). */
+  goToBlock: (index: number, range?: { from: number; to: number }) => void;
+  goToLine: (lineId: string, range?: { from: number; to: number }) => void;
   goToOwner: (ownerId: string) => void;
+  /** Opens a finding or a note: its passage selected, its row active. */
+  goToFinding: (finding: DocumentFinding) => void;
+  goToNote: (note: ReviewNote) => void;
   addBullet: (ownerId: string) => void;
   /** The agent's changes waiting in the text (ADR 0009). */
   changes: LocatedChange[];
@@ -161,8 +176,8 @@ function editableContent(version: VersionView): EditableContent {
 /**
  * Holds the document's editor (resume spec, "Document workspace"): the
  * snapshot as blocks, edits saved as snapshots after a pause, the findings
- * drawn over the text and the ones the user ignored, the trace mode. Keyed
- * by version: another version is another editor.
+ * drawn over the text and the ones the user ignored, every line's origin
+ * marked. Keyed by version: another version is another editor.
  */
 export function DocumentEditorProvider({
   version,
@@ -184,7 +199,8 @@ export function DocumentEditorProvider({
   );
   const [blocks, setBlocks] = useState(initial);
   const [saveStatus, setSaveStatus] = useState<SaveStatus>("saved");
-  const [trace, setTrace] = useState(false);
+  const [activeFinding, setActiveFinding] = useState<string | null>(null);
+  const [hoveredFinding, setHoveredFinding] = useState<string | null>(null);
   // The snapshot the editor's text is written over.
   const base = useRef({
     snapshotId: version.snapshot.id,
@@ -200,14 +216,7 @@ export function DocumentEditorProvider({
     trpc.documents.saveEdit.mutationOptions()
   );
 
-  const noteLabel = useCallback(
-    (requirement: string) =>
-      t.formatMessage(
-        { defaultMessage: "Included for: {requirement}" },
-        { requirement }
-      ),
-    [t]
-  );
+  const notePrefix = t.formatMessage({ defaultMessage: "Included for:" });
 
   /** Saves until what is saved is the latest text. */
   const flush = useCallback(async () => {
@@ -255,7 +264,7 @@ export function DocumentEditorProvider({
   }, [refresh, saveEdit, t, version.id]);
 
   const editor = useEditor({
-    extensions: documentExtensions({ noteLabel }),
+    extensions: documentExtensions({ notePrefix }),
     content: blocksToDoc(initial),
     immediatelyRender: false,
     editorProps: {
@@ -393,11 +402,66 @@ export function DocumentEditorProvider({
   );
 
   const goToBlock = useCallback(
-    (index: number) => {
-      if (editor && index >= 0) scrollToBlock(editor, index);
+    (index: number, range?: { from: number; to: number }) => {
+      if (editor && index >= 0) selectBlock(editor, index, range);
     },
     [editor]
   );
+  const findingKey = useCallback(
+    (finding: DocumentFinding) => `finding-${findings.indexOf(finding)}`,
+    [findings]
+  );
+  const noteKey = useCallback(
+    (note: ReviewNote) => `note-${notes.indexOf(note)}`,
+    [notes]
+  );
+  const passageOf = useCallback(
+    (target: { lineId: string | null; positionId?: string | null }) => {
+      if (target.lineId) return lines.get(target.lineId)?.text ?? null;
+      const entry = blocks.find(
+        (block) => block.type === "entry" && block.ownerId === target.positionId
+      );
+      return entry && "text" in entry ? entry.text : null;
+    },
+    [blocks, lines]
+  );
+  const goToFinding = useCallback(
+    (finding: DocumentFinding) => {
+      setActiveFinding(findingKey(finding));
+      if (finding.lineId) {
+        const at = indexOfLine(finding.lineId);
+        const block = blocks[at];
+        const span =
+          block && "text" in block ? spanOf(block.text, finding) : null;
+        goToBlock(at, span ?? undefined);
+      } else if (finding.positionId) {
+        goToBlock(indexOfOwner(finding.positionId));
+      }
+    },
+    [blocks, findingKey, goToBlock, indexOfLine, indexOfOwner]
+  );
+  const goToNote = useCallback(
+    (note: ReviewNote) => {
+      setActiveFinding(noteKey(note));
+      if (note.lineId) goToBlock(indexOfLine(note.lineId));
+    },
+    [goToBlock, indexOfLine, noteKey]
+  );
+
+  // The finding under the pointer in the text becomes the active one, so
+  // the list shows which row the underline belongs to.
+  useEffect(() => {
+    if (!editor || editor.isDestroyed) return;
+    const dom = editor.view.dom;
+    const over = (event: MouseEvent) => {
+      const element = (
+        event.target as HTMLElement | null
+      )?.closest<HTMLElement>("[data-finding]");
+      if (element?.dataset.finding) setActiveFinding(element.dataset.finding);
+    };
+    dom.addEventListener("mouseover", over);
+    return () => dom.removeEventListener("mouseover", over);
+  }, [editor]);
 
   // The changes the agent proposed, each located in the text as it is now.
   const changesQuery = useQuery(
@@ -572,8 +636,9 @@ export function DocumentEditorProvider({
     [sendLine, sending, version.id, version.sentToProfile]
   );
 
-  // What is drawn over the text: the trace colors, the findings' underlines
-  // and the review's notes, placed again after every read of the blocks.
+  // What is drawn over the text: the origin markers, the findings'
+  // underlines and the review's notes, placed again after every read of
+  // the blocks. The finding whose row is hovered lights its passage up.
   useEffect(() => {
     if (!editor || editor.isDestroyed) return;
     const { doc } = editor.state;
@@ -586,28 +651,27 @@ export function DocumentEditorProvider({
       const node = from === undefined ? null : doc.nodeAt(from);
       return node ? { from, to: from + node.nodeSize, node } : null;
     };
-    if (trace) {
-      blocks.forEach((block, index) => {
-        if (!("lineId" in block)) return;
-        const origin = lines.get(block.lineId)?.origin ?? { kind: "manual" };
-        const range = nodeOf(index);
-        if (!range) return;
-        specs.push({
-          kind: "node",
-          from: range.from,
-          to: range.to,
-          className: cn(
-            "-ml-2 rounded-sm border-l-2 pl-1.5",
-            originTone[origin.kind]
-          ),
-          key: `trace-${index}`,
-        });
+    blocks.forEach((block, index) => {
+      if (!("lineId" in block)) return;
+      const origin = lines.get(block.lineId)?.origin ?? { kind: "manual" };
+      const range = nodeOf(index);
+      if (!range) return;
+      specs.push({
+        kind: "node",
+        from: range.from,
+        to: range.to,
+        className: cn("-ml-2 border-l-2 pl-1.5", originMarker[origin.kind]),
+        key: `trace-${index}`,
       });
-    }
+    });
+    const lit = (key: string) =>
+      key === hoveredFinding ? "bg-amber-500/20 rounded-sm" : "";
     findings.forEach((finding, index) => {
       const key = `finding-${index}`;
-      const underline =
-        "underline decoration-amber-500 decoration-wavy underline-offset-4";
+      const underline = cn(
+        "underline decoration-amber-500 decoration-wavy underline-offset-4",
+        lit(key)
+      );
       if (finding.lineId) {
         const at = indexOfLine(finding.lineId);
         const range = nodeOf(at);
@@ -636,7 +700,10 @@ export function DocumentEditorProvider({
           kind: "node",
           from: range.from,
           to: range.to,
-          className: "-mx-2 rounded-sm px-2 ring-1 ring-amber-500/50",
+          className: cn(
+            "-mx-2 rounded-sm px-2 ring-1 ring-amber-500/50",
+            lit(key)
+          ),
           finding: key,
           key,
         });
@@ -719,7 +786,7 @@ export function DocumentEditorProvider({
         kind: "inline",
         from: range.from + 1,
         to: range.from + 1 + block.text.length,
-        className: cn("bg-primary/10 rounded-sm"),
+        className: cn("bg-primary/10 rounded-sm", lit(key)),
         finding: key,
         key,
       });
@@ -733,7 +800,7 @@ export function DocumentEditorProvider({
     findings,
     notes,
     changes,
-    trace,
+    hoveredFinding,
     lines,
     indexOfLine,
     indexOfOwner,
@@ -777,12 +844,15 @@ export function DocumentEditorProvider({
     content,
     blocks,
     saveStatus,
-    trace,
-    setTrace,
     findings,
     ignoredFindings,
     notes,
     ignoredNotes,
+    findingKey,
+    noteKey,
+    activeFinding,
+    hoverFinding: setHoveredFinding,
+    passageOf,
     ignoreFinding: (finding) =>
       setKeyIgnored(coverageFindingKey(finding), true),
     restoreFinding: (finding) =>
@@ -792,8 +862,10 @@ export function DocumentEditorProvider({
     fixFor,
     profileActionFor,
     goToBlock,
-    goToLine: (lineId) => goToBlock(indexOfLine(lineId)),
+    goToLine: (lineId, range) => goToBlock(indexOfLine(lineId), range),
     goToOwner: (ownerId) => goToBlock(indexOfOwner(ownerId)),
+    goToFinding,
+    goToNote,
     addBullet: (ownerId) => editor && appendBullet(editor, ownerId),
     changes,
     acceptChanges: (documentChangeIds) => void acceptChanges(documentChangeIds),

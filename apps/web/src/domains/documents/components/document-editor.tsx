@@ -18,10 +18,11 @@ import { TraceContent, TraceHoverCard } from "./line-trace";
 
 /**
  * The document in its PDF look (resume spec, "Document workspace"), a page
- * in the middle of the screen: every line the user wrote is editable in
- * place, a line's trace shows on hover, and a finding's card opens over
- * its underline with Fix, Talk to the agent and Ignore. Selected text gets
- * a floating button that sends the passage to the agent.
+ * in the middle of the screen: everything but the section titles and the
+ * credentials is editable in place, every line shows its origin and its
+ * trace on hover, and a finding's card opens over its underline with Fix,
+ * Talk to the agent and Ignore. Selected text gets a floating button that
+ * sends the passage to the agent.
  */
 export function DocumentEditor() {
   const t = useTranslation();
@@ -70,26 +71,18 @@ export function DocumentEditor() {
     };
   }, [editor, agent]);
 
+  // Only the section titles, the credentials and a very old experience's
+  // note aren't the user's to type over.
   const lockedNotes: Record<string, string> = {
-    name: t.formatMessage({
-      defaultMessage: "Your header comes from your published profile.",
-    }),
-    titleLine: t.formatMessage({
-      defaultMessage:
-        "The target title and main technologies, from your published profile.",
-    }),
-    contacts: t.formatMessage({
-      defaultMessage: "Your header comes from your published profile.",
-    }),
     sectionTitle: t.formatMessage({
       defaultMessage: "Section titles follow your template.",
     }),
-    entry: t.formatMessage({
-      defaultMessage:
-        "Employer, title and dates: locked facts, as your profile states them.",
-    }),
     credential: t.formatMessage({
       defaultMessage: "A credential, as your profile states it.",
+    }),
+    entryNote: t.formatMessage({
+      defaultMessage:
+        "The requirement this experience was kept for; change it in the settings.",
     }),
   };
 

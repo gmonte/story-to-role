@@ -121,18 +121,22 @@ const letter: CoverLetterContent = {
 };
 
 describe("contentToBlocks", () => {
-  it("prints a resume as the PDF does: header, sections, locked facts", () => {
+  it("prints a resume as the PDF does: header, sections, each position's facts", () => {
     const blocks = contentToBlocks(resume, "en-US");
     expect(blocks.map((block) => block.type)).toEqual([
       "name",
       "titleLine",
       "contacts",
+      "city",
       "sectionTitle",
       "summary",
       "sectionTitle",
       "skill",
       "sectionTitle",
+      "entryPeriod",
       "entry",
+      "entryTitle",
+      "entryContext",
       "bullet",
       "bullet",
       "sectionTitle",
@@ -143,22 +147,21 @@ describe("contentToBlocks", () => {
     ]);
     expect(blocks[2]).toEqual({
       type: "contacts",
-      text: "ada@example.com | +55 31 99999-0000 | Belo Horizonte, MG",
+      text: "ada@example.com | +55 31 99999-0000",
     });
-    expect(blocks[7]).toEqual({
+    expect(blocks[3]).toEqual({ type: "city", text: "Belo Horizonte, MG" });
+    expect(blocks[8]).toEqual({
       type: "sectionTitle",
       kind: "experience",
       text: "Professional experience",
     });
-    expect(blocks[8]).toEqual({
-      type: "entry",
-      ownerId: positionId,
-      title: "Globex",
-      subtitle: "Tech Lead (parallel project)",
-      period: "Mar/2021 – Present",
-      note: null,
-    });
-    expect(blocks[15]).toEqual({
+    expect(blocks.slice(9, 13)).toEqual([
+      { type: "entryPeriod", ownerId: positionId, text: "Mar/2021 – Present" },
+      { type: "entry", ownerId: positionId, text: "Globex" },
+      { type: "entryTitle", ownerId: positionId, text: "Tech Lead" },
+      { type: "entryContext", ownerId: positionId, text: "parallel project" },
+    ]);
+    expect(blocks[19]).toEqual({
       type: "credential",
       credentialId,
       text: "UFMG · Computer Science (BSc) Feb/2010 – Dec/2014",
@@ -167,8 +170,8 @@ describe("contentToBlocks", () => {
 
   it("names sections and dates in the output language", () => {
     const blocks = contentToBlocks(resume, "pt-BR");
-    expect(blocks[7]).toMatchObject({ text: "Experiência profissional" });
-    expect(blocks[8]).toMatchObject({ period: "mar/2021 – atual" });
+    expect(blocks[8]).toMatchObject({ text: "Experiência profissional" });
+    expect(blocks[9]).toMatchObject({ text: "mar/2021 – atual" });
   });
 
   it("prints a letter: header, greeting, paragraphs, closing", () => {
@@ -177,6 +180,7 @@ describe("contentToBlocks", () => {
       "name",
       "titleLine",
       "contacts",
+      "city",
       "greeting",
       "paragraph",
       "paragraph",
@@ -184,16 +188,17 @@ describe("contentToBlocks", () => {
     ]);
   });
 
-  it("only lines the user writes are editable", () => {
-    const editable = contentToBlocks(resume, "en-US")
-      .filter(isEditableBlock)
+  it("everything is editable but the section titles and the credentials", () => {
+    const locked = contentToBlocks(resume, "en-US")
+      .filter((block) => !isEditableBlock(block))
       .map((block) => block.type);
-    expect(editable).toEqual([
-      "summary",
-      "skill",
-      "bullet",
-      "bullet",
-      "bullet",
+    expect(locked).toEqual([
+      "sectionTitle",
+      "sectionTitle",
+      "sectionTitle",
+      "sectionTitle",
+      "sectionTitle",
+      "credential",
     ]);
   });
 });
@@ -257,18 +262,94 @@ describe("blocksToContent", () => {
     });
   });
 
-  it("ignores changes to locked blocks: header, titles, facts, credentials", () => {
+  it("writes the header and a position's facts both ways, as the user typed them", () => {
     const blocks: DocumentBlock[] = contentToBlocks(resume, "en-US").map(
       (block): DocumentBlock => {
         switch (block.type) {
           case "name":
-            return { ...block, text: "Mallory" };
+            return { ...block, text: "Ada King" };
           case "titleLine":
-            return { ...block, text: "CEO" };
+            return { ...block, text: "Staff Engineer | Kubernetes" };
+          case "contacts":
+            return { ...block, text: "ada@example.org | linkedin.com/in/ada" };
+          case "city":
+            return { ...block, text: "São Paulo, SP" };
+          case "entry":
+            return block.ownerId === positionId
+              ? { ...block, text: "Globex Corporation" }
+              : { ...block, text: "Side project, renamed" };
+          case "entryTitle":
+            return { ...block, text: "Staff Engineer" };
+          case "entryContext":
+            return { ...block, text: "platform team" };
+          case "entryPeriod":
+            return { ...block, text: "Jan/2020 – Dec/2023" };
+          default:
+            return block;
+        }
+      }
+    );
+    const next = blocksToContent(resume, blocks);
+    expect(next.header).toEqual({
+      name: "Ada King",
+      titleLine: "Staff Engineer | Kubernetes",
+      contacts: ["ada@example.org", "linkedin.com/in/ada"],
+      city: "São Paulo, SP",
+    });
+    const experience = next.sections.find((row) => row.kind === "experience");
+    expect(
+      experience?.kind === "experience" && experience.entries[0]
+    ).toMatchObject({
+      employer: "Globex Corporation",
+      title: "Staff Engineer",
+      context: "platform team",
+      startDate: "2020-01",
+      endDate: "2023-12",
+      lines:
+        resume.sections[2].kind === "experience" &&
+        resume.sections[2].entries[0].lines,
+    });
+    const projects = next.sections.find((row) => row.kind === "projects");
+    expect(projects?.kind === "projects" && projects.entries[0].name).toBe(
+      "Side project, renamed"
+    );
+    // Printed again, the blocks read as typed: the round trip holds.
+    expect(contentToBlocks(next, "en-US")).toEqual(blocks);
+  });
+
+  it("keeps the dates when the typed period doesn't read as one, and reads the output language's", () => {
+    const typed = (text: string) =>
+      blocksToContent(
+        resume,
+        contentToBlocks(resume, "pt-BR").map((block) =>
+          block.type === "entryPeriod" ? { ...block, text } : block
+        )
+      ).sections.find((row) => row.kind === "experience");
+    const dates = (section: ReturnType<typeof typed>) =>
+      section?.kind === "experience" && {
+        startDate: section.entries[0].startDate,
+        endDate: section.entries[0].endDate,
+      };
+    expect(dates(typed("mar/2021 – atual"))).toEqual({
+      startDate: "2021-03",
+      endDate: null,
+    });
+    expect(dates(typed("2019-06 – 2021-02"))).toEqual({
+      startDate: "2019-06",
+      endDate: "2021-02",
+    });
+    expect(dates(typed("whenever"))).toEqual({
+      startDate: "2021-03",
+      endDate: null,
+    });
+  });
+
+  it("ignores changes to locked blocks: section titles and credentials", () => {
+    const blocks: DocumentBlock[] = contentToBlocks(resume, "en-US").map(
+      (block): DocumentBlock => {
+        switch (block.type) {
           case "sectionTitle":
             return { ...block, text: "Whatever" };
-          case "entry":
-            return { ...block, title: "Initech", period: "1999" };
           case "credential":
             return { ...block, text: "PhD" };
           default:
@@ -286,12 +367,12 @@ describe("blocksToContent", () => {
     ).toEqual(resume);
   });
 
-  it("keeps a letter's header while writing its greeting, paragraphs and closing", () => {
+  it("writes a letter's header, greeting, paragraphs and closing", () => {
     const blocks = contentToBlocks(letter, "en-US").flatMap(
       (block): DocumentBlock[] => {
         switch (block.type) {
           case "name":
-            return [{ ...block, text: "Mallory" }];
+            return [{ ...block, text: "Ada King" }];
           case "greeting":
             return [{ ...block, text: "Hello," }];
           case "paragraph":
@@ -307,6 +388,7 @@ describe("blocksToContent", () => {
     );
     expect(blocksToContent(letter, blocks)).toEqual({
       ...letter,
+      header: { ...letter.header, name: "Ada King" },
       greeting: "Hello,",
       paragraphs: [
         letter.paragraphs[0],

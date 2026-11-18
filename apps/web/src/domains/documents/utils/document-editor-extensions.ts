@@ -26,9 +26,6 @@ type BlockAttrs = {
   ownerId: string | null;
   label: string | null;
   kind: string | null;
-  subtitle: string | null;
-  period: string | null;
-  note: string | null;
   credentialId: string | null;
 };
 
@@ -39,15 +36,12 @@ const emptyAttrs: BlockAttrs = {
   ownerId: null,
   label: null,
   kind: null,
-  subtitle: null,
-  period: null,
-  note: null,
   credentialId: null,
 };
 
 /** The editor's node for a block, with the block's fields as attributes. */
 export function blockToNode(block: DocumentBlock): JSONContent {
-  const text = block.type === "entry" ? block.title : block.text;
+  const { text } = block;
   const attrs: BlockAttrs = {
     ...emptyAttrs,
     type: block.type,
@@ -56,9 +50,6 @@ export function blockToNode(block: DocumentBlock): JSONContent {
     ownerId: "ownerId" in block ? block.ownerId : null,
     label: block.type === "skill" ? block.label : null,
     kind: block.type === "sectionTitle" ? block.kind : null,
-    subtitle: block.type === "entry" ? block.subtitle : null,
-    period: block.type === "entry" ? block.period : null,
-    note: block.type === "entry" ? block.note : null,
     credentialId: block.type === "credential" ? block.credentialId : null,
   };
   return {
@@ -96,14 +87,11 @@ export function nodeToBlock(node: ProseMirrorNode): DocumentBlock {
         text,
       };
     case "entry":
-      return {
-        type: "entry",
-        ownerId: attrs.ownerId ?? "",
-        title: text,
-        subtitle: attrs.subtitle,
-        period: attrs.period,
-        note: attrs.note,
-      };
+    case "entryPeriod":
+    case "entryTitle":
+    case "entryContext":
+    case "entryNote":
+      return { type: attrs.type, ownerId: attrs.ownerId ?? "", text };
     case "bullet":
       return {
         type: "bullet",
@@ -122,6 +110,7 @@ export function nodeToBlock(node: ProseMirrorNode): DocumentBlock {
     case "name":
     case "titleLine":
     case "contacts":
+    case "city":
     case "greeting":
     case "closing":
       return { type: attrs.type, text };
@@ -172,18 +161,19 @@ const attribute = (name: keyof BlockAttrs) => ({
  * One block of the document in its PDF look (resume spec, "Layout"): the
  * header in the accent color, uppercase section titles over a rule, the
  * employer bold with the period aligned right and the title in italics,
- * bullets with a hanging indent. Facts code prints are not editable.
+ * bullets with a hanging indent. Only the section titles, the credentials
+ * and a very old experience's note are not editable.
  */
 export const DocumentBlockNode = Node.create<{
-  // "Included for: {requirement}", in the interface's language.
-  noteLabel: (requirement: string) => string;
+  // "Included for:", before a very old experience's requirement.
+  notePrefix: string;
 }>({
   name: blockNodeName,
   group: "block",
   content: "text*",
   defining: true,
   addOptions() {
-    return { noteLabel: (requirement: string) => requirement };
+    return { notePrefix: "" };
   },
   addAttributes() {
     return Object.fromEntries(
@@ -221,6 +211,7 @@ export const DocumentBlockNode = Node.create<{
       case "titleLine":
         return block(cn("mt-1 font-semibold"), 0);
       case "contacts":
+      case "city":
         return block(cn("text-muted-foreground text-xs"), 0);
       case "sectionTitle":
         return block(
@@ -231,57 +222,37 @@ export const DocumentBlockNode = Node.create<{
         );
       case "summary":
         return block(cn("text-justify"), 0);
+      // The label runs inline with the text, as the PDF prints it, so a
+      // wrapped line starts at the left margin rather than under the text.
       case "skill":
         return block(
-          cn("flex gap-1.5"),
+          cn("text-justify"),
           [
             "span",
-            { class: cn("shrink-0 font-semibold"), contenteditable: "false" },
-            `${attrs.label ?? ""}:`,
+            { class: cn("font-semibold"), contenteditable: "false" },
+            `${attrs.label ?? ""}: `,
           ],
-          [
-            "span",
-            { class: cn("min-w-0 flex-1") },
-            0,
-          ] as unknown as DOMOutputSpec
+          ["span", {}, 0] as unknown as DOMOutputSpec
         );
-      case "entry": {
-        const children: DOMOutputSpec[] = [
-          [
-            "div",
-            { class: cn("flex items-baseline justify-between gap-2") },
-            ["span", { class: cn("font-bold") }, 0] as unknown as DOMOutputSpec,
-            ...(attrs.period
-              ? [
-                  [
-                    "span",
-                    { class: cn("text-muted-foreground shrink-0 text-xs") },
-                    attrs.period,
-                  ] as DOMOutputSpec,
-                ]
-              : []),
-          ],
-          ...(attrs.subtitle
-            ? [
-                [
-                  "div",
-                  { class: cn("italic") },
-                  attrs.subtitle,
-                ] as DOMOutputSpec,
-              ]
-            : []),
-          ...(attrs.note
-            ? [
-                [
-                  "div",
-                  { class: cn("text-muted-foreground text-xs") },
-                  this.options.noteLabel(attrs.note),
-                ] as DOMOutputSpec,
-              ]
-            : []),
-        ];
-        return block(cn("mt-2.5 flex flex-col"), ...children);
-      }
+      // The period floats right of the employer's line: it comes first
+      // in the document, so the employer's block flows beside it.
+      case "entryPeriod":
+        return block(
+          cn("text-muted-foreground float-right mt-2.5 ml-2 pt-0.5 text-xs"),
+          0
+        );
+      case "entry":
+        return block(cn("mt-2.5 font-bold"), 0);
+      case "entryTitle":
+        return block(cn("italic"), 0);
+      case "entryContext":
+        return block(cn("text-muted-foreground text-xs italic"), 0);
+      case "entryNote":
+        return block(
+          cn("text-muted-foreground text-xs"),
+          ["span", { contenteditable: "false" }, `${this.options.notePrefix} `],
+          ["span", {}, 0] as unknown as DOMOutputSpec
+        );
       case "bullet":
         return block(
           cn(
@@ -412,9 +383,9 @@ export const DocumentClipboard = Extension.create({
 });
 
 /**
- * The header, the section titles, each position's facts and the
- * credentials are locked: a change to them is rejected, unless the app
- * made it on purpose (a reset from the server, a fix, undo).
+ * The section titles, the credentials and a very old experience's note
+ * are locked: a change to them is rejected, unless the app made it on
+ * purpose (a reset from the server, a fix, undo).
  */
 export const DocumentLocked = Extension.create({
   name: "documentLocked",
@@ -434,9 +405,7 @@ export const DocumentLocked = Extension.create({
   },
 });
 
-export function documentExtensions(options: {
-  noteLabel: (requirement: string) => string;
-}) {
+export function documentExtensions(options: { notePrefix: string }) {
   return [
     StarterKit.configure({
       blockquote: false,
@@ -527,4 +496,27 @@ export function scrollToBlock(editor: Editor, index: number) {
   if (dom instanceof HTMLElement) {
     dom.scrollIntoView({ behavior: "smooth", block: "center" });
   }
+}
+
+/**
+ * Goes to a block: scrolls it into view and selects its text (the given
+ * span of it, or all of it), as the profile editor does for a finding.
+ */
+export function selectBlock(
+  editor: Editor,
+  index: number,
+  range?: { from: number; to: number }
+) {
+  const start = blockPositions(editor.state.doc)[index];
+  const node = start === undefined ? null : editor.state.doc.nodeAt(start);
+  if (start === undefined || !node) return;
+  const size = node.content.size;
+  const from = start + 1 + Math.min(range?.from ?? 0, size);
+  const to = start + 1 + Math.min(range?.to ?? size, size);
+  editor
+    .chain()
+    .setTextSelection({ from, to })
+    .focus(undefined, { scrollIntoView: false })
+    .run();
+  scrollToBlock(editor, index);
 }

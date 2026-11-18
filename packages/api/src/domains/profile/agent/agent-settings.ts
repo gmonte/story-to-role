@@ -9,7 +9,7 @@ export const agentSettings = {
   // settled, a window keeps the interview coherent.
   historyWindow: 16,
   // Model steps per turn: read a part or two, suggest, then answer.
-  maxSteps: 8,
+  maxSteps: 10,
   maxMessageCharacters: 6000,
   // The method's interview asks at most this many questions per message.
   maxQuestionsPerMessage: 3,

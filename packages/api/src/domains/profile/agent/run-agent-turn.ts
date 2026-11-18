@@ -338,6 +338,12 @@ export async function runAgentTurn(
         ),
         tools,
         stopWhen: stepCountIs(agentSettings.maxSteps),
+        // The last step answers in words: a turn spent reading and
+        // suggesting would otherwise end without a reply to the user.
+        prepareStep: ({ stepNumber }) =>
+          stepNumber >= agentSettings.maxSteps - 1
+            ? { toolChoice: "none" as const }
+            : undefined,
         maxOutputTokens: agentSettings.maxOutputTokens,
         abortSignal: input.signal,
         experimental_transform: limitQuestions(

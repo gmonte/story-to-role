@@ -305,6 +305,7 @@
   "IVeUG5": "Você disse que não tem. Uma sugestão foi enviada para Minha carreira.",
   "IWdmYg": "Nomes e números podem ficar fora dos seus documentos com as regras de comunicação do seu perfil.",
   "IcCcVj": "Pode melhorar com sua motivação",
+  "IcWYWq": "Vazio para um currículo geral; ou React Native, Frontend…",
   "IewO3F": "Você se candidatou para {company} há {days, plural, =0 {# dias} one {# dia} other {# dias}} e não teve resposta. Registrar um follow-up?",
   "Inc354": "Torna este rascunho o que as análises de aderência leem.",
   "IygN7D": "{version, select, none {Seu perfil} other {Perfil versão {version}}} · {purpose} · {instructions, plural, =0 {nenhuma instrução} one {# instrução} other {# instruções}}",

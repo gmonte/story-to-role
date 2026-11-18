@@ -122,15 +122,17 @@ export class LibraryService {
       // Only a library resume: a LinkedIn text has its own generation.
       if (existing?.document.applicationId) throw notFound();
       if (existing && existing.document.kind !== "resume") throw notFound();
-      const focus = input.focus?.trim();
-      if (!existing && !focus) throw new TRPCError({ code: "BAD_REQUEST" });
+      // No focus is the general resume: the whole career, at its best.
+      // The router trims the focus and refuses an empty one.
+      const focus =
+        input.focus ?? (input.language === "en-US" ? "General" : "Geral");
       const cipher = await getUserCipher(tx, input.userId);
       const document =
         existing?.document ??
         (await repository.insertDocument({
           profileId: profile.id,
           kind: "resume",
-          encryptedFocus: cipher.encrypt(focus!),
+          encryptedFocus: cipher.encrypt(focus),
         }));
       return repository.insertGeneration({
         profileId: profile.id,

@@ -144,7 +144,8 @@ function LibraryResumeForm({
                 maxLength={80}
                 onChange={(event) => setFocus(event.target.value)}
                 placeholder={t.formatMessage({
-                  defaultMessage: "React Native, Frontend, General…",
+                  defaultMessage:
+                    "Empty for a general resume; or React Native, Frontend…",
                 })}
               />
             </div>
@@ -232,13 +233,12 @@ function LibraryResumeForm({
         <Button
           disabled={
             generate.isPending ||
-            (!versionId && !focus.trim()) ||
             documentSettings.unpublished ||
             documentSettings.invalid
           }
           onClick={() =>
             generate.mutate({
-              focus: versionId ? undefined : focus,
+              focus: versionId ? undefined : focus.trim() || undefined,
               versionId,
               language,
               reviewDepth,

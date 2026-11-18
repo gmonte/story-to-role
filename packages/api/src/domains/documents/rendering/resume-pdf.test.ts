@@ -49,7 +49,7 @@ describe("rendering a resume PDF", () => {
     expect(short.bytes.subarray(0, 5).toString()).toBe("%PDF-");
     expect(short.pages).toBe(1);
     const long = await renderResumePdf({
-      content: resume(90),
+      content: resume(120),
       language: "pt-BR",
     });
     expect(long.pages).toBeGreaterThan(2);
@@ -62,10 +62,10 @@ describe("rendering a resume PDF", () => {
     >;
     const entryOf = (content: ResumeContent) =>
       (content.sections[1] as Experience).entries[0];
-    const content = resume(30);
+    const content = resume(40);
     const P2 = "00000000-0000-4000-8000-000000000002";
     const older = {
-      ...entryOf(resume(60)),
+      ...entryOf(resume(80)),
       positionId: P2,
       employer: "Acme",
       startDate: "2015-01",
@@ -90,9 +90,9 @@ describe("rendering a resume PDF", () => {
     });
     expect(fitted.pages).toBeLessThanOrEqual(2);
     const [recent, old] = (fitted.content.sections[1] as Experience).entries;
-    expect(old.lines.length).toBeLessThan(60);
+    expect(old.lines.length).toBeLessThan(80);
     // The bullets of a recent experience are never cut.
-    expect(recent.lines).toHaveLength(30);
+    expect(recent.lines).toHaveLength(40);
     // Trimming drops lines from the end; it never rewrites one.
     expect(old.lines.map((line) => line.id)).toEqual(
       Array.from({ length: old.lines.length }, (_, index) => `b${index}`)
@@ -101,7 +101,7 @@ describe("rendering a resume PDF", () => {
   });
 
   it("leaves a resume too long as it is when only recent experiences are left", async () => {
-    const content = resume(90);
+    const content = resume(120);
     const fitted = await fitToPages({
       content,
       language: "en-US",

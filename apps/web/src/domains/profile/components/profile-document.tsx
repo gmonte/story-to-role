@@ -27,6 +27,7 @@ import { cn } from "@repo/web/lib/utils";
 import { useProfileLabels } from "../hooks/use-profile-labels";
 import { blockPositions, isLockedNode } from "../utils/editor-doc";
 import { EntryDialog } from "./entry-dialog";
+import { FindingHoverCard } from "./finding-hover-card";
 import { useProfileEditor } from "./profile-editor-context";
 
 export const entryKinds: ProfileEntryKind[] = [
@@ -107,8 +108,18 @@ type SlashMenu = { query: string; from: number; left: number; top: number };
  */
 export function ProfileDocument() {
   const t = useTranslation();
-  const { entryLabels } = useProfileLabels();
-  const { editor, insert, talkAbout, entryOpenerRef } = useProfileEditor();
+  const { entryLabels, findingMessage } = useProfileLabels();
+  const {
+    editor,
+    insert,
+    talkAbout,
+    entryOpenerRef,
+    findings,
+    reviewFindings,
+    blocks,
+    structure,
+    fix,
+  } = useProfileEditor();
   const [selection, setSelection] = useState<{
     text: string;
     line: number;
@@ -423,6 +434,43 @@ export function ProfileDocument() {
         </button>
       )}
       <EditorContent editor={editor} />
+      <FindingHoverCard
+        editor={editor}
+        describe={(key) => {
+          const [group, number] = key.split("-");
+          const index = Number(number);
+          if (group === "review") {
+            const finding = reviewFindings[index];
+            if (!finding) return null;
+            return {
+              message: finding.message,
+              talk: () =>
+                talkAbout({
+                  quote: blocks[finding.line]?.text ?? "",
+                  line: finding.line,
+                  text: finding.message,
+                }),
+            };
+          }
+          const finding = findings[index];
+          if (!finding) return null;
+          const message = findingMessage(finding, structure.language);
+          const line = finding.line;
+          return {
+            message,
+            fix: finding.fixable ? () => fix(finding) : undefined,
+            talk:
+              line === null
+                ? undefined
+                : () =>
+                    talkAbout({
+                      quote: blocks[line]?.text ?? "",
+                      line,
+                      text: message,
+                    }),
+          };
+        }}
+      />
       {slash && slashOptions.length > 0 && (
         <div
           className="bg-popover text-popover-foreground absolute z-20 w-64 overflow-hidden rounded-md border p-1 shadow-md"

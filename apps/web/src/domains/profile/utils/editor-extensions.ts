@@ -240,7 +240,8 @@ export type EditorDecorationSpec =
       from: number;
       to: number;
       className: string;
-      title?: string;
+      // Identifies the finding a hover card describes.
+      finding?: string;
       key: string;
     }
   // A whole block (a line a suggestion would replace).
@@ -313,8 +314,8 @@ export function setDecorations(editor: Editor, specs: EditorDecorationSpec[]) {
       ];
     }
     if (spec.from >= spec.to || spec.to > doc.content.size) return [];
-    const attrs = spec.title
-      ? { class: spec.className, title: spec.title }
+    const attrs = spec.finding
+      ? { class: spec.className, "data-finding": spec.finding }
       : { class: spec.className };
     return [Decoration.inline(spec.from, spec.to, attrs, { key: spec.key })];
   });

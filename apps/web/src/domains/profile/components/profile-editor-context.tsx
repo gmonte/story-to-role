@@ -222,7 +222,7 @@ export function ProfileEditorProvider({
   const t = useTranslation();
   const trpc = useTRPC();
   const queryClient = useQueryClient();
-  const { findingMessage, sectionHints, entryLabels } = useProfileLabels();
+  const { sectionHints, entryLabels } = useProfileLabels();
   const entryOpenerRef = useRef<((kind: ProfileEntryKind) => void) | null>(
     null
   );
@@ -305,7 +305,7 @@ export function ProfileEditorProvider({
         from: Math.min(start + finding.from, end),
         to: Math.min(start + Math.max(finding.to, finding.from + 1), end),
         className: `profile-finding profile-finding-${finding.kind}`,
-        title: findingMessage(finding, structure.language),
+        finding: `finding-${index}`,
         key: `finding-${index}`,
       });
     });
@@ -316,7 +316,7 @@ export function ProfileEditorProvider({
         from: start + finding.from,
         to: start + finding.to,
         className: "profile-finding profile-finding-review",
-        title: finding.message,
+        finding: `review-${index}`,
         key: `review-${index}`,
       });
     });
@@ -426,7 +426,7 @@ export function ProfileEditorProvider({
       });
     }
     setDecorations(editor, specs);
-    // findingMessage and sectionHints change with the interface language only.
+    // sectionHints change with the interface language only.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editor, blocks, findings, structure, reviewFindings, suggestions]);
 

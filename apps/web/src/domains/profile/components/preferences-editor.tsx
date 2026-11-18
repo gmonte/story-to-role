@@ -46,6 +46,7 @@ import {
   type EditorDecorationSpec,
 } from "../utils/editor-extensions";
 import { DocumentSwitch } from "./document-switch";
+import { FindingHoverCard } from "./finding-hover-card";
 import { VersionsDialog } from "./versions-dialog";
 
 const kind = "preferences" as const;
@@ -145,14 +146,13 @@ function Editor({ draft }: { draft: ProfileDraft }) {
                 1 +
                 Math.max(finding.to, finding.from + 1),
               className: `profile-finding profile-finding-${finding.kind}`,
-              title: findingMessage(finding, language),
+              finding: `finding-${index}`,
               key: `finding-${index}`,
             },
           ]
     );
     setDecorations(editor, specs);
     // findingMessage changes with the interface language only.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editor, blocks, findings, language]);
 
   /** Replaces the document's text, as one undo step. */
@@ -457,6 +457,20 @@ function Editor({ draft }: { draft: ProfileDraft }) {
             })}
           </p>
           <EditorContent editor={editor} />
+          <FindingHoverCard
+            editor={editor}
+            describe={(key) => {
+              const finding = findings[Number(key.split("-")[1])];
+              if (!finding || !editor) return null;
+              return {
+                message: findingMessage(finding, language),
+                fix: finding.fixable
+                  ? () =>
+                      apply(fixPreferencesFormat(docToBlocks(editor.state.doc)))
+                  : undefined,
+              };
+            }}
+          />
         </div>
       </div>
       <VersionsDialog

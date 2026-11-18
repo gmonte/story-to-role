@@ -14,6 +14,7 @@ import {
   serializeBlocks,
 } from "@repo/api/domains/profile/truth/blocks";
 
+import { findLinks } from "./find-links";
 import {
   blocksToDoc,
   docToBlocks,
@@ -234,6 +235,50 @@ export const ProfileLockedHeadings = Extension.create({
   },
 });
 
+/**
+ * Underlines the links in the text (URLs, e-mails) as decorations: the
+ * stored text stays plain. Ctrl/Cmd+click opens one in a new tab; a plain
+ * click still places the cursor.
+ */
+export const ProfileLinks = Extension.create({
+  name: "profileLinks",
+  addProseMirrorPlugins() {
+    return [
+      new Plugin({
+        key: new PluginKey("profileLinks"),
+        props: {
+          decorations: (state) => {
+            const decorations: Decoration[] = [];
+            state.doc.descendants((node, pos) => {
+              if (!node.isTextblock) return true;
+              if (isLockedNode(node)) return false;
+              for (const link of findLinks(node.textContent)) {
+                decorations.push(
+                  Decoration.inline(pos + 1 + link.from, pos + 1 + link.to, {
+                    class: "profile-link",
+                    "data-href": link.href,
+                  })
+                );
+              }
+              return false;
+            });
+            return DecorationSet.create(state.doc, decorations);
+          },
+          handleClick: (_view, _pos, event) => {
+            if (!(event.metaKey || event.ctrlKey)) return false;
+            const href = (
+              event.target as HTMLElement | null
+            )?.closest<HTMLElement>("[data-href]")?.dataset.href;
+            if (!href) return false;
+            window.open(href, "_blank", "noopener,noreferrer");
+            return true;
+          },
+        },
+      }),
+    ];
+  },
+});
+
 export type EditorDecorationSpec =
   | {
       kind: "inline";
@@ -352,6 +397,7 @@ export function profileExtensions() {
     ProfileClipboard,
     ProfileLockedHeadings,
     ProfileDecorations,
+    ProfileLinks,
   ];
 }
 

@@ -28,6 +28,7 @@ import { useProfileLabels } from "../hooks/use-profile-labels";
 import { blockPositions, isLockedNode } from "../utils/editor-doc";
 import { EntryDialog } from "./entry-dialog";
 import { FindingHoverCard } from "./finding-hover-card";
+import { LinkHoverCard } from "./link-hover-card";
 import { useProfileEditor } from "./profile-editor-context";
 
 export const entryKinds: ProfileEntryKind[] = [
@@ -435,6 +436,7 @@ export function ProfileDocument() {
         </button>
       )}
       <EditorContent editor={editor} />
+      <LinkHoverCard editor={editor} />
       <FindingHoverCard
         editor={editor}
         describe={(key) => {

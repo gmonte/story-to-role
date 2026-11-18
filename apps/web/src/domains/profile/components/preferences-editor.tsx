@@ -48,6 +48,7 @@ import {
 } from "../utils/editor-extensions";
 import { DocumentSwitch } from "./document-switch";
 import { FindingHoverCard } from "./finding-hover-card";
+import { LinkHoverCard } from "./link-hover-card";
 import { VersionsDialog } from "./versions-dialog";
 
 const kind = "preferences" as const;
@@ -459,6 +460,7 @@ function Editor({ draft }: { draft: ProfileDraft }) {
             })}
           </p>
           <EditorContent editor={editor} />
+          <LinkHoverCard editor={editor} />
           <FindingHoverCard
             editor={editor}
             describe={(key) => {

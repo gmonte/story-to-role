@@ -15,10 +15,13 @@ export type ChangeWidgetLabels = {
 };
 
 /** The classes of the lines a change replaces, drawn over the blocks. */
+// The lines a change replaces sit in a red box, the twin of the green box
+// with what it writes, so it's clear which lines are being replaced.
 export const replacedBlockClass = (fallback: boolean) =>
-  fallback
-    ? cn("bg-destructive/10 line-through decoration-destructive/60")
-    : cn("border-destructive/60 -ml-2 border-l-2 pl-1.5");
+  cn(
+    "border-destructive/40 bg-destructive/10 my-1.5 rounded-lg border px-3 py-2",
+    fallback && "line-through decoration-destructive/60"
+  );
 
 /** The words a change removes, inside a line it rewrites. */
 export const removedWordsClass = cn(

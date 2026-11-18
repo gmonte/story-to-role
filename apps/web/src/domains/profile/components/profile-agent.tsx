@@ -104,6 +104,8 @@ export function ProfileAgent() {
       chatId={loaded.data.chatId}
       initialMessages={loaded.data.messages}
       session={loaded.data.session}
+      // A chat that replaced another takes the focus: the user was typing.
+      focusOnMount={"replaced" in loaded.data}
     />
   );
 }
@@ -123,10 +125,12 @@ function Conversation({
   chatId,
   initialMessages,
   session,
+  focusOnMount,
 }: {
   chatId: string;
   initialMessages: UIMessage[];
   session: ChatSession | null;
+  focusOnMount: boolean;
 }) {
   const t = useTranslation();
   const trpc = useTRPC();
@@ -157,6 +161,9 @@ function Conversation({
   latestSuggestions.current = suggestions;
   const bottom = useRef<HTMLDivElement>(null);
   const input = useRef<HTMLTextAreaElement>(null);
+  useEffect(() => {
+    if (focusOnMount) input.current?.focus();
+  }, [focusOnMount]);
   const quote = agentTopic?.quote ?? null;
   const attachmentLabel = useAttachmentLabel();
   const attachment = agentTopic?.attachment ?? null;
@@ -308,7 +315,10 @@ function Conversation({
     try {
       await stop();
       const fresh = await startNewProfileChat();
-      queryClient.setQueryData(["profile-chat"], fresh);
+      queryClient.setQueryData(["profile-chat"], {
+        ...fresh,
+        replaced: true,
+      });
     } catch {
       setMessages(previous);
       toast.error(

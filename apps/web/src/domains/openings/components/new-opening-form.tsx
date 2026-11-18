@@ -98,8 +98,11 @@ export function NewOpeningForm({
         </TabsList>
 
         <TabsContent value="paste" className="flex flex-col gap-3 pt-2">
+          {/* A long description scrolls inside the box instead of growing
+              past the page. */}
           <Textarea
             rows={12}
+            className="max-h-[50vh] overflow-y-auto"
             value={description}
             onChange={(event) => setDescription(event.target.value)}
             placeholder={t.formatMessage({

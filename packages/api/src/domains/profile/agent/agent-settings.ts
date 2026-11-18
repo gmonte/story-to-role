@@ -13,7 +13,9 @@ export const agentSettings = {
   maxMessageCharacters: 6000,
   // The method's interview asks at most this many questions per message.
   maxQuestionsPerMessage: 3,
-  maxOutputTokens: 2000,
+  // Per model call, thinking included: the model thinks before it answers,
+  // and a tight limit spent on thinking left turns with no answer at all.
+  maxOutputTokens: 8000,
 };
 
 export const dayMs = 86_400_000;

@@ -136,6 +136,9 @@ export function ProfileDocument() {
     null
   );
   const [blockMenu, setBlockMenu] = useState<number | null>(null);
+  // While a handle's menu is open the handle stays put: the menu is in a
+  // portal, so the pointer leaving the text must not unmount it.
+  const [addMenuOpen, setAddMenuOpen] = useState(false);
   const [dialog, setDialog] = useState<ProfileEntryKind | null>(null);
   const [slash, setSlash] = useState<SlashMenu | null>(null);
 
@@ -292,7 +295,7 @@ export function ProfileDocument() {
     isLockedNode(editor.state.doc.child(hovered.index));
 
   function track(event: React.MouseEvent) {
-    if (!editor || drag || blockMenu !== null) return;
+    if (!editor || drag || blockMenu !== null || addMenuOpen) return;
     const box = wrapper.current?.getBoundingClientRect();
     const block = blockAt(editor, event.clientY);
     if (!block || !box) return;
@@ -330,14 +333,16 @@ export function ProfileDocument() {
       ref={wrapper}
       className="relative mx-auto w-full max-w-3xl py-8 pr-6 pl-16"
       onMouseMove={track}
-      onMouseLeave={() => !drag && blockMenu === null && setHovered(null)}
+      onMouseLeave={() =>
+        !drag && blockMenu === null && !addMenuOpen && setHovered(null)
+      }
     >
       {hovered && editor && (
         <div
           className="absolute left-4 flex items-center gap-0.5"
           style={{ top: hovered.top }}
         >
-          <DropdownMenu>
+          <DropdownMenu open={addMenuOpen} onOpenChange={setAddMenuOpen}>
             <DropdownMenuTrigger asChild>
               <button
                 type="button"

@@ -233,8 +233,7 @@ export async function loadCareerContext(input: {
       credential.kind === "language"
         ? {
             ...credential,
-            title: printing.languageTerm(credential.title),
-            level: printing.nullableLanguageTerm(credential.level),
+            ...printing.languageLine(credential.title, credential.level),
           }
         : {
             ...credential,

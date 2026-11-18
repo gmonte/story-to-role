@@ -43,6 +43,32 @@ describe("code-printed fields in the document's language", () => {
     expect(printing.nullableLanguageTerm(null)).toBeNull();
   });
 
+  it("lets the profile's own entries win on a Languages line", () => {
+    const printing = printedFields({
+      profileLanguage: "pt-BR",
+      language: "en-US",
+      translations: {
+        "en-US": [
+          {
+            original: "Inglês (proficiência profissional C1)",
+            translation: "English (full professional proficiency, C1)",
+          },
+          { original: "nativo", translation: "native speaker" },
+        ],
+      },
+    });
+    expect(
+      printing.languageLine("Inglês", "proficiência profissional C1")
+    ).toEqual({
+      title: "English (full professional proficiency, C1)",
+      level: null,
+    });
+    expect(printing.languageLine("Português", "nativo")).toEqual({
+      title: "Portuguese",
+      level: "native speaker",
+    });
+  });
+
   it("prints an English profile's fields in Portuguese the same way", () => {
     const printing = printedFields({
       profileLanguage: "en-US",

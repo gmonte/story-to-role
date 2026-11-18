@@ -34,10 +34,11 @@ import { hasWarnings } from "../utils/version-checks";
 import { VersionHistorySheet } from "./version-history-sheet";
 
 /**
- * The LinkedIn text edited in place (resume spec, "LinkedIn"): the About
- * and each experience, every line editable and traced to the profile. Each
- * section has a Copy text action, which waits for the coverage findings to
- * be fixed and for edits to be saved; nothing is sent to LinkedIn.
+ * The LinkedIn text edited in place (resume spec, "LinkedIn"): the About,
+ * each experience and, after them, each project (for LinkedIn's Projects
+ * section), every line editable and traced to the profile. Each section
+ * has a Copy text action, which waits for the coverage findings to be
+ * fixed and for edits to be saved; nothing is sent to LinkedIn.
  */
 export function LinkedinEditor({
   versions,
@@ -109,7 +110,48 @@ export function LinkedinEditor({
           row.id === lineId ? { ...row, text } : row
         ),
       })),
+      projects: content.projects.map((entry) => ({
+        ...entry,
+        lines: entry.lines.map((row) =>
+          row.id === lineId ? { ...row, text } : row
+        ),
+      })),
     });
+  /** Removes a line from whichever entry holds it. */
+  const removeLine = (lineId: string) => {
+    const without = <T extends { lines: Line[] }>(entry: T): T => ({
+      ...entry,
+      lines: entry.lines.filter((candidate) => candidate.id !== lineId),
+    });
+    edit({
+      ...content,
+      experiences: content.experiences.map(without),
+      projects: content.projects.map(without),
+    });
+  };
+  /** Adds an empty line at the end of one entry, for the user to write. */
+  const addLine = (ownerId: string) => {
+    const withLine = <T extends { lines: Line[] }>(entry: T): T => ({
+      ...entry,
+      lines: [
+        ...entry.lines,
+        {
+          id: crypto.randomUUID().slice(0, 8),
+          text: "",
+          origin: { kind: "manual" },
+        },
+      ],
+    });
+    edit({
+      ...content,
+      experiences: content.experiences.map((entry) =>
+        entry.positionId === ownerId ? withLine(entry) : entry
+      ),
+      projects: content.projects.map((entry) =>
+        entry.projectId === ownerId ? withLine(entry) : entry
+      ),
+    });
+  };
   const line = (row: Line) => (
     <TracedLine
       key={row.id}
@@ -123,6 +165,62 @@ export function LinkedinEditor({
         onChange={(text) => updateLine(row.id, text)}
       />
     </TracedLine>
+  );
+
+  /** An experience's or a project's text: heading, its lines, Add line. */
+  const entrySection = (entry: {
+    ownerId: string;
+    heading: string;
+    subheading: string;
+    lines: Line[];
+  }) => (
+    // The anchor a coverage finding about this entry scrolls to.
+    <section
+      key={entry.ownerId}
+      data-position-id={entry.ownerId}
+      className="flex flex-col gap-1 rounded-sm"
+    >
+      <div className="flex items-start justify-between gap-2">
+        <div className="flex flex-col">
+          <span className="font-semibold">{entry.heading}</span>
+          {entry.subheading && (
+            <span className="text-muted-foreground text-xs">
+              {entry.subheading}
+            </span>
+          )}
+        </div>
+        <CopySectionButton
+          versionId={version.id}
+          section={entry.ownerId}
+          blockedBy={copyBlock}
+          warned={warned}
+        />
+      </div>
+      <ul className="flex flex-col gap-1 pl-4">
+        {entry.lines.map((row) => (
+          <li key={row.id} className="group flex items-start gap-1">
+            <span className="mt-2 size-1 shrink-0 rounded-full bg-current" />
+            <div className="flex-1">{line(row)}</div>
+            <button
+              type="button"
+              className="text-muted-foreground opacity-0 group-hover:opacity-100"
+              title={t.formatMessage({ defaultMessage: "Remove line" })}
+              onClick={() => removeLine(row.id)}
+            >
+              <X className="size-3.5" />
+            </button>
+          </li>
+        ))}
+      </ul>
+      <button
+        type="button"
+        className="text-muted-foreground flex items-center gap-1 self-start pl-4 text-xs hover:underline"
+        onClick={() => addLine(entry.ownerId)}
+      >
+        <Plus className="size-3" />
+        {t.formatMessage({ defaultMessage: "Add line" })}
+      </button>
+    </section>
   );
 
   return (
@@ -210,92 +308,45 @@ export function LinkedinEditor({
           </div>
           {line(content.about)}
         </section>
-        {content.experiences.map((entry) => (
-          // The anchor a coverage finding about this entry scrolls to.
-          <section
-            key={entry.positionId}
-            data-position-id={entry.positionId}
-            className="flex flex-col gap-1 rounded-sm"
-          >
-            <div className="flex items-start justify-between gap-2">
-              <div className="flex flex-col">
-                <span className="font-semibold">{entry.title}</span>
-                <span className="text-muted-foreground text-xs">
-                  {t.formatMessage(
-                    { defaultMessage: "{employer} · {period}" },
-                    {
-                      employer: entry.employer,
-                      period: formatPeriod(
-                        entry.startDate,
-                        entry.endDate,
-                        version.language
-                      ),
-                    }
-                  )}
-                </span>
-              </div>
-              <CopySectionButton
-                versionId={version.id}
-                section={entry.positionId}
-                blockedBy={copyBlock}
-                warned={warned}
-              />
-            </div>
-            <ul className="flex flex-col gap-1 pl-4">
-              {entry.lines.map((row) => (
-                <li key={row.id} className="group flex items-start gap-1">
-                  <span className="mt-2 size-1 shrink-0 rounded-full bg-current" />
-                  <div className="flex-1">{line(row)}</div>
-                  <button
-                    type="button"
-                    className="text-muted-foreground opacity-0 group-hover:opacity-100"
-                    title={t.formatMessage({ defaultMessage: "Remove line" })}
-                    onClick={() =>
-                      edit({
-                        ...content,
-                        experiences: content.experiences.map((other) => ({
-                          ...other,
-                          lines: other.lines.filter(
-                            (candidate) => candidate.id !== row.id
-                          ),
-                        })),
-                      })
-                    }
-                  >
-                    <X className="size-3.5" />
-                  </button>
-                </li>
-              ))}
-            </ul>
-            <button
-              type="button"
-              className="text-muted-foreground flex items-center gap-1 self-start pl-4 text-xs hover:underline"
-              onClick={() =>
-                edit({
-                  ...content,
-                  experiences: content.experiences.map((other) =>
-                    other.positionId === entry.positionId
-                      ? {
-                          ...other,
-                          lines: [
-                            ...other.lines,
-                            {
-                              id: crypto.randomUUID().slice(0, 8),
-                              text: "",
-                              origin: { kind: "manual" },
-                            },
-                          ],
-                        }
-                      : other
-                  ),
-                })
+        {content.experiences.map((entry) =>
+          entrySection({
+            ownerId: entry.positionId,
+            heading: entry.title,
+            subheading: t.formatMessage(
+              { defaultMessage: "{employer} · {period}" },
+              {
+                employer: entry.employer,
+                period: formatPeriod(
+                  entry.startDate,
+                  entry.endDate,
+                  version.language
+                ),
               }
-            >
-              <Plus className="size-3" />
-              {t.formatMessage({ defaultMessage: "Add line" })}
-            </button>
-          </section>
-        ))}
+            ),
+            lines: entry.lines,
+          })
+        )}
+        {content.projects.length > 0 && (
+          <h3 className="font-semibold">
+            {t.formatMessage({ defaultMessage: "Projects" })}
+          </h3>
+        )}
+        {content.projects.map((entry) =>
+          entrySection({
+            ownerId: entry.projectId,
+            heading: entry.name,
+            subheading: [
+              entry.role ?? "",
+              entry.startDate || entry.endDate
+                ? formatPeriod(entry.startDate, entry.endDate, version.language)
+                : "",
+              entry.link ?? "",
+            ]
+              .filter(Boolean)
+              .join(" · "),
+            lines: entry.lines,
+          })
+        )}
       </article>
     </div>
   );

@@ -100,9 +100,10 @@ export function LinkHoverCard({ editor }: { editor: Editor | null }) {
     <Button
       size="icon"
       className="fixed z-50 size-6 -translate-y-full shadow-sm"
+      // Kept inside the viewport, at the top right of the link.
       style={{
-        left: Math.min(card.left, window.innerWidth - 32),
-        top: card.top,
+        left: Math.max(8, Math.min(card.left, window.innerWidth - 32)),
+        top: Math.max(32, Math.min(card.top, window.innerHeight - 8)),
       }}
       title={label}
       aria-label={label}

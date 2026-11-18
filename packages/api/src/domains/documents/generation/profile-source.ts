@@ -5,10 +5,13 @@ import type { CredentialKind } from "@repo/api/domains/career/schemas/career";
 import type { EvidenceKind } from "@repo/api/domains/applications/schemas/instructions";
 import type { PublishedProfile } from "@repo/api/domains/profile/load-published-profile";
 import { parseBlocks } from "@repo/api/domains/profile/truth/blocks";
+import { valueOrNull } from "@repo/api/domains/profile/truth/extract";
 import { mentions } from "@repo/api/domains/profile/truth/lint";
 import { findMarks } from "@repo/api/domains/profile/truth/marks";
 import {
   experienceFieldOf,
+  isProjectLinkLabel,
+  isProjectRoleLabel,
   normalizeLabel,
   type ExperienceField,
 } from "@repo/api/domains/profile/truth/sections";
@@ -53,6 +56,35 @@ export function positionIdOf(
   );
 }
 
+/**
+ * A project's id: the same in every profile version for as long as its
+ * name and start stay the same.
+ */
+export function projectIdOf(
+  careerProfileId: string,
+  title: { name: string; range: { start: string } }
+) {
+  return stableId(
+    careerProfileId,
+    "project",
+    normalizeLabel(title.name),
+    title.range.start
+  );
+}
+
+/** A project of the profile's Projects section: never a position. */
+export type SourceProject = {
+  id: string;
+  name: string;
+  startDate: string | null;
+  // Null while the project is ongoing.
+  endDate: string | null;
+  // What the person was to the project ("Founder"), printed like a title.
+  role: string | null;
+  link: string | null;
+  notDone: string[];
+};
+
 export type SourcePosition = {
   id: string;
   employer: string;
@@ -67,6 +99,8 @@ export type SourcePosition = {
 export type SourceEvidence = {
   id: string;
   positionId: string | null;
+  // The project the line belongs to, when it is one of a project's lines.
+  projectId: string | null;
   kind: EvidenceKind;
   // As a writer may read it: marks removed, figures it may not use withheld.
   text: string;
@@ -97,6 +131,7 @@ export type ProfileSource = {
   profileVersionNumber: number;
   header: ResumeHeaderFields;
   positions: SourcePosition[];
+  projects: SourceProject[];
   evidence: SourceEvidence[];
   credentials: SourceCredential[];
   skills: Array<{ id: string; name: string; evidenceIds: string[] }>;
@@ -230,6 +265,27 @@ export function readProfileSource(input: {
         }
       : null,
   }));
+  const projects = structure.projects.map((project) => ({
+    rawTitle: project.rawTitle,
+    project: project.parsed
+      ? {
+          id: projectIdOf(input.careerProfileId, project.parsed),
+          name: project.parsed.name,
+          startDate: project.parsed.range.start,
+          endDate: month.test(project.parsed.range.end)
+            ? project.parsed.range.end
+            : null,
+          role: valueOrNull(project.role),
+          link: valueOrNull(project.link),
+          notDone:
+            profile.extract.projects?.find(
+              (extracted) =>
+                extracted.name === project.parsed!.name &&
+                extracted.start === project.parsed!.range.start
+            )?.notDone ?? [],
+        }
+      : null,
+  }));
   profile.extract.experiences.forEach((extracted) => {
     const match = experiences.find(
       (experience) =>
@@ -259,11 +315,25 @@ export function readProfileSource(input: {
     const experience =
       passage.experience === null ? null : experiences[passage.experience];
     const [first = "", ...children] = passage.text.split("\n");
+    // A project's lines are prefixed with its title, like an experience's.
+    const project =
+      passage.section === "projects"
+        ? projects.find((row) => first.startsWith(`${row.rawTitle}: `))
+        : undefined;
+    const entry = experience ?? project;
     const head =
-      experience && first.startsWith(`${experience.rawTitle}: `)
-        ? first.slice(experience.rawTitle.length + 2)
+      entry && first.startsWith(`${entry.rawTitle}: `)
+        ? first.slice(entry.rawTitle.length + 2)
         : first;
     const labelled = splitLabel(head);
+    // A project's role and link are printed by code, never handed to a writer.
+    if (
+      project &&
+      labelled &&
+      (isProjectLinkLabel(labelled.label) || isProjectRoleLabel(labelled.label))
+    ) {
+      continue;
+    }
 
     if (passage.section === "identity" || passage.section === "contact") {
       const field = labelled && headerLabels[normalizeLabel(labelled.label)];
@@ -334,8 +404,7 @@ export function readProfileSource(input: {
       continue;
     }
 
-    const field =
-      experience && labelled ? experienceFieldOf(labelled.label) : null;
+    const field = entry && labelled ? experienceFieldOf(labelled.label) : null;
     const label = field && labelled ? `${labelled.label.trim()}: ` : "";
     const lines = [field && labelled ? labelled.value : head, ...children];
     const ids: string[] = [];
@@ -347,6 +416,7 @@ export function readProfileSource(input: {
       evidence.push({
         id,
         positionId: experience?.position?.id ?? null,
+        projectId: project?.project?.id ?? null,
         kind: field ? evidenceKindOf[field] : "responsibility",
         text: `${label}${read.text}`,
         figures: read.figures,
@@ -379,6 +449,13 @@ export function readProfileSource(input: {
     header,
     positions: experiences
       .flatMap((experience) => experience.position ?? [])
+      .sort(
+        (a, b) =>
+          (b.endDate ?? "9999").localeCompare(a.endDate ?? "9999") ||
+          (b.startDate ?? "").localeCompare(a.startDate ?? "")
+      ),
+    projects: projects
+      .flatMap((row) => row.project ?? [])
       .sort(
         (a, b) =>
           (b.endDate ?? "9999").localeCompare(a.endDate ?? "9999") ||

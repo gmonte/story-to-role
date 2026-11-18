@@ -27,6 +27,10 @@ import {
   dateWords,
   experienceFieldLabels,
   languageNames,
+  projectFieldLabels,
+  projectLinkLabels,
+  projectRoleLabels,
+  sectionHeadings,
   type ProfileLanguage,
 } from "../truth/sections";
 import { readStructure } from "../truth/structure";
@@ -83,6 +87,9 @@ function importPrompt(language: ProfileLanguage) {
   const marks = canonicalMarks[language];
   const words = dateWords[language];
   const fields = Object.values(experienceFieldLabels[language]);
+  const projectFields = Object.values(projectFieldLabels[language]);
+  const linkLabel = projectLinkLabels[language];
+  const roleLabel = projectRoleLabels[language];
   const levels = competencyLabels[language];
   return [
     "A person uploaded a file about their career (a resume, a LinkedIn export, or their own notes). Compare it with their profile_truth.md, the long and true master version of their career (the meu-emprego-novo method), and suggest only what the profile lacks. Each change is shown to them as a tracked change to accept or reject.",
@@ -95,6 +102,7 @@ function importPrompt(language: ProfileLanguage) {
     `- Write in ${languageNames[language]}, the profile's language, translating the file when it is in another one, and in the first person, as the person would write their own profile (“Reduzi”, “I reduced”), never in the third.`,
     "- Copy the lines to replace exactly from the profile into `find`; to add at the end of a part leave `find` empty. One change per passage: a whole new position is one change; inside an existing position, one change per labelled line.",
     `- A position neither the profile nor a waiting suggestion has goes to part “experience” with an empty \`find\`: its title “### Company — Title (YYYY-MM ${words.to} YYYY-MM)” (“${words.present}” for the current one), then the labelled lines ${fields.map((field) => `“- ${field}:”`).join(", ")}, each filled only with what the file states and left empty otherwise. Results go one per line under their label, indented two spaces.`,
+    `- A “Projects” (“Projetos”, “Side projects”) section of the file, or personal work the file does not present as a position, goes to the profile's part “projects” (add the heading “## ${sectionHeadings[language].projects}” in the change when the profile lacks the part, right after Experience), each project with the title “### Name (YYYY-MM ${words.to} YYYY-MM)” (“${words.present}” while ongoing; no employer or title), then “- ${roleLabel}:” when the file says what they were to it, the labelled lines ${projectFields.map((field) => `“- ${field}:”`).join(", ")}, and “- ${linkLabel}:” when the file gives one. Never turn a position into a project or a project into a position.`,
     "- What the person did NOT do stays empty unless the file says it: a resume can't know.",
     `- Every result with a figure ends with [${marks.toConfirm}]: a file's figures may have no backing. Keep a mark only when the file itself writes it next to that figure. A result without a figure ends with [${marks.noNumber}]. Leave Results empty when the file states none.`,
     "- Lines the profile already has stay exactly as they are, marks included, when a change rewrites the lines around them.",

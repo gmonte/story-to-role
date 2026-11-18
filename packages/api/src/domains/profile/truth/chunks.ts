@@ -20,12 +20,30 @@ export type ProfileChunk = {
  * numbered.
  */
 export function experienceKeys(structure: ProfileStructure): string[] {
+  return numberedKeys(
+    "experience",
+    structure.experiences.map((experience) =>
+      experience.parsed
+        ? `${experience.parsed.company} — ${experience.parsed.title}`
+        : experience.rawTitle
+    )
+  );
+}
+
+/** Each project's key, in order: its name, numbered when repeated. */
+export function projectKeys(structure: ProfileStructure): string[] {
+  return numberedKeys(
+    "project",
+    structure.projects.map((project) =>
+      project.parsed ? project.parsed.name : project.rawTitle
+    )
+  );
+}
+
+function numberedKeys(prefix: string, names: string[]) {
   const seen = new Map<string, number>();
-  return structure.experiences.map((experience) => {
-    const name = experience.parsed
-      ? `${experience.parsed.company} — ${experience.parsed.title}`
-      : experience.rawTitle;
-    const key = `experience:${name.toLowerCase()}`;
+  return names.map((name) => {
+    const key = `${prefix}:${name.toLowerCase()}`;
     const count = (seen.get(key) ?? 0) + 1;
     seen.set(key, count);
     return count === 1 ? key : `${key} #${count}`;
@@ -42,8 +60,15 @@ export function profileChunks(blocks: ProfileBlock[]): ProfileChunk[] {
   for (const section of structure.sections) {
     const heading = blocks[section.heading];
     const sectionKey = section.key ?? `other:${heading.text}`;
-    if (section.key === "experience" && structure.experiences.length) {
-      const first = structure.experiences[0].heading;
+    // Experiences and projects are reviewed one by one.
+    const entries =
+      section.key === "experience"
+        ? { keys: experienceKeys(structure), items: structure.experiences }
+        : section.key === "projects"
+          ? { keys: projectKeys(structure), items: structure.projects }
+          : null;
+    if (entries?.items.length) {
+      const first = entries.items[0].heading;
       if (first > section.start) {
         chunks.push({
           key: sectionKey,
@@ -53,14 +78,13 @@ export function profileChunks(blocks: ProfileBlock[]): ProfileChunk[] {
           text: text(blocks, section.heading, first),
         });
       }
-      const keys = experienceKeys(structure);
-      for (const [index, experience] of structure.experiences.entries()) {
+      for (const [index, entry] of entries.items.entries()) {
         chunks.push({
-          key: keys[index],
-          title: experience.rawTitle,
-          start: experience.heading,
-          end: experience.end,
-          text: text(blocks, experience.heading, experience.end),
+          key: entries.keys[index],
+          title: entry.rawTitle,
+          start: entry.heading,
+          end: entry.end,
+          text: text(blocks, entry.heading, entry.end),
         });
       }
       continue;

@@ -101,7 +101,7 @@ export function resumeMaterial(input: {
         ].join("\n")
       : "No style profile yet: write plainly and concretely.",
     ...(input.purposeLines ?? [
-      `Sections to write: ${input.sections.filter((kind) => ["summary", "skills", "experience"].includes(kind)).join(", ")}. Other sections are filled by code.`,
+      `Sections to write: ${input.sections.filter((kind) => ["summary", "skills", "experience", "projects"].includes(kind)).join(", ")}. Other sections are filled by code.`,
     ]),
     "",
     ...(input.purposeLines
@@ -135,11 +135,23 @@ export function resumeMaterial(input: {
         (line) => `  - did NOT do there (never claim it): ${line}`
       ),
     ]),
+    ...(context.projects.length
+      ? [
+          "",
+          "Projects (personal or side work, never a position; name, dates and link are locked; code prints them):",
+          ...context.projects.flatMap((project) => [
+            `- project ${project.id} [${ageNotes[experienceAge(project, settings, input.today)]}]: ${project.name}, ${period(project.startDate, project.endDate)}`,
+            ...project.notDone.map(
+              (line) => `  - did NOT do there (never claim it): ${line}`
+            ),
+          ]),
+        ]
+      : []),
     "",
     "The profile's lines (the only facts you may use; cite their ids). A “[figure withheld]” is a number the profile does not mark as measured: tell that line without any number.",
     ...context.evidence.map(
       (row) =>
-        `- line ${row.id} [${row.kind}]${row.positionId ? ` (position ${row.positionId})` : ""}: ${row.text}`
+        `- line ${row.id} [${row.kind}]${row.positionId ? ` (position ${row.positionId})` : ""}${row.projectId ? ` (project ${row.projectId})` : ""}: ${row.text}`
     ),
     ...(context.instructions.length
       ? [
@@ -189,6 +201,7 @@ function lengthRules(settings: GenerationSettings) {
   return [
     `- A summary of 3 to 4 lines. Exactly ${settings.bulletsRecent} bullet(s) for each recent position and exactly ${settings.bulletsOlder} for each older one, fewer only when its profile lines don't hold that many distinct facts; put first the bullets that answer the opening. Don't drop bullets to save space: the resume must fit ${settings.resumeMaxPages} A4 page(s), and code makes it fit by removing the oldest positions, never by thinning the recent ones.`,
     `- ${veryOld} For every other position \`relevance\` is null.`,
+    `- projects: when the sections to write include projects, one entry per project listed above, with bullets like a position's by its age (${settings.bulletsRecent} recent, ${settings.bulletsOlder} older), each citing only lines of its own project; the project's name, dates and link are printed by code. A project is never written as a position, nor a position as a project. Otherwise an empty list.`,
   ];
 }
 

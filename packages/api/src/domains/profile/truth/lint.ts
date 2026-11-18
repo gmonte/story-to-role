@@ -9,6 +9,7 @@ import {
   type CompetencyLevel,
 } from "./sections";
 import {
+  readLooseProjectTitle,
   readLooseTitle,
   readStructure,
   sectionOf,
@@ -27,6 +28,8 @@ export const findingCodes = {
   missingSection: "format",
   sectionOrder: "format",
   experienceTitle: "format",
+  // A project's heading not in `### Name (YYYY-MM to YYYY-MM)`.
+  projectTitle: "format",
   dateFormat: "format",
   educationFormat: "format",
   certificationFormat: "format",
@@ -186,7 +189,8 @@ function lintSections(structure: ProfileStructure, blocks: ProfileBlock[]) {
   const findings: ProfileFinding[] = [];
   const present = structure.sections.filter((s) => s.key);
   for (const key of profileSectionKeys) {
-    if (key === "addenda") continue;
+    // Projects is optional: the Add menu creates it when wanted.
+    if (key === "addenda" || key === "projects") continue;
     if (!present.some((section) => section.key === key)) {
       findings.push(
         finding(
@@ -271,6 +275,34 @@ function lintExperiences(structure: ProfileStructure, blocks: ProfileBlock[]) {
         }
       }
       previous = current;
+    }
+  }
+  return findings;
+}
+
+/**
+ * A project's heading in its format and its results' figures marked (the
+ * experience's rules where they fit; no "what I did not do" is demanded).
+ */
+function lintProjects(structure: ProfileStructure, blocks: ProfileBlock[]) {
+  const findings: ProfileFinding[] = [];
+  for (const project of structure.projects) {
+    const heading = blocks[project.heading];
+    if (!project.parsed) {
+      findings.push(
+        finding("projectTitle", project.heading, whole(heading), {
+          fixable: !!readLooseProjectTitle(project.rawTitle),
+        })
+      );
+    }
+    const results = project.fields.results;
+    if (results) {
+      for (const line of [results.line, ...results.children]) {
+        const text = blocks[line].text;
+        if (hasFigure(text) && !findMarks(text).length) {
+          findings.push(finding("unmarkedFigure", line, whole(blocks[line])));
+        }
+      }
     }
   }
   return findings;
@@ -446,7 +478,8 @@ function lintCompetencies(structure: ProfileStructure, blocks: ProfileBlock[]) {
     : "";
 
   const reported = new Set<string>();
-  for (const experience of structure.experiences) {
+  // A tool named in a project counts like one named in an experience.
+  for (const experience of [...structure.experiences, ...structure.projects]) {
     const tools = experience.fields.tools;
     if (!tools) continue;
     const block = blocks[tools.line];
@@ -481,13 +514,15 @@ function lintCompetencies(structure: ProfileStructure, blocks: ProfileBlock[]) {
     }
   }
 
-  const experienceSection = sectionOf(structure, "experience");
-  const experienceText = experienceSection
-    ? blocks
-        .slice(experienceSection.start, experienceSection.end)
-        .map((block) => block.text)
-        .join("\n")
-    : "";
+  // An experience or a project backs a competency.
+  const experienceText = ["experience" as const, "projects" as const]
+    .flatMap((key) => {
+      const section = sectionOf(structure, key);
+      return section
+        ? blocks.slice(section.start, section.end).map((block) => block.text)
+        : [];
+    })
+    .join("\n");
   for (const competency of competencies) {
     if (competency.level === "studied") continue;
     if (!mentions(experienceText, competency.name)) {
@@ -538,6 +573,7 @@ export function lintProfile(blocks: ProfileBlock[]): ProfileFinding[] {
   return [
     ...lintSections(structure, blocks),
     ...lintExperiences(structure, blocks),
+    ...lintProjects(structure, blocks),
     ...lintMarks(structure, blocks),
     ...lintCredentials(structure, blocks),
     ...lintCompetencies(structure, blocks),

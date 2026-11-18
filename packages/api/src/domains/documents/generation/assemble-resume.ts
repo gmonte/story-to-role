@@ -71,7 +71,7 @@ type KeptLine = { keep: string };
  */
 export type AssemblyDraft = Omit<
   ResumeDraft,
-  "summary" | "skills" | "experience"
+  "summary" | "skills" | "experience" | "projects"
 > & {
   summary: DraftLine | KeptLine | null;
   skills: Array<
@@ -82,6 +82,7 @@ export type AssemblyDraft = Omit<
       bullets: Array<DraftLine | KeptLine>;
     }
   >;
+  projects: Array<{ project_id: string; bullets: Array<DraftLine | KeptLine> }>;
 };
 
 const isKept = (line: object): line is KeptLine => "keep" in line;
@@ -250,6 +251,17 @@ export function assembleResume(input: {
             entry.lines.map(
               (line) =>
                 [line.id, { line, positionId: entry.positionId }] as const
+            )
+          )
+        : []
+    )
+  );
+  const referenceProjectLines = new Map(
+    reference.flatMap((section) =>
+      section.kind === "projects"
+        ? section.entries.flatMap((entry) =>
+            entry.lines.map(
+              (line) => [line.id, { line, projectId: entry.projectId }] as const
             )
           )
         : []
@@ -557,24 +569,59 @@ export function assembleResume(input: {
       return entries.length > 0 ? { kind: "experience", entries } : null;
     },
     projects: () => {
-      const entries = draft.projects.flatMap((drafted) => {
-        const project = context.projects.find(
-          (row) => row.id === drafted.project_id
+      // Each project of the profile, in its order (most recent first),
+      // written like an experience of its age: bullets per the settings,
+      // each citing the project's own lines, figures only as marked.
+      const entries = context.projects.flatMap((project) => {
+        const drafted = draft.projects.find(
+          (entry) => entry.project_id === project.id
         );
-        if (!project) return [];
-        const lines = drafted.bullets.flatMap(
-          (bullet) =>
+        const keptIds = new Set<string>();
+        const allKept = (drafted?.bullets ?? []).every(isKept);
+        const lines = (drafted?.bullets ?? []).flatMap((bullet) => {
+          if (isKept(bullet)) {
+            const existing = referenceProjectLines.get(bullet.keep);
+            if (
+              existing?.projectId !== project.id ||
+              keptIds.has(bullet.keep)
+            ) {
+              return [];
+            }
+            keptIds.add(bullet.keep);
+            return stillHolds(existing.line.text, null) ? [existing.line] : [];
+          }
+          return (
             toLine(bullet, (id) => {
               const evidence = evidenceById.get(id)!;
               return (
                 evidence.projectId === project.id ||
-                evidence.positionId === project.positionId
+                (!!project.positionId &&
+                  evidence.positionId === project.positionId)
               );
             }) ?? []
-        );
-        return lines.length > 0
-          ? [{ projectId: project.id, name: project.name, lines }]
-          : [];
+          );
+        });
+        if (lines.length === 0) return [];
+        const age = experienceAge(project, input.settings, input.today);
+        return [
+          {
+            projectId: project.id,
+            name: project.name,
+            startDate: project.startDate,
+            endDate: project.endDate,
+            role: project.role,
+            link: project.link,
+            // A kept project is printed as the reference had it.
+            lines: allKept
+              ? lines
+              : lines.slice(
+                  0,
+                  age === "recent"
+                    ? input.settings.bulletsRecent
+                    : input.settings.bulletsOlder
+                ),
+          },
+        ];
       });
       return entries.length > 0 ? { kind: "projects", entries } : null;
     },

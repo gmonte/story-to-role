@@ -13,9 +13,12 @@ export function applyLinkedinEdit(
 ): LinkedinContent {
   const before = new Map<string, Line>();
   before.set(previous.about.id, previous.about);
-  for (const entry of previous.experiences) {
+  for (const entry of [...previous.experiences, ...previous.projects]) {
     for (const line of entry.lines) before.set(line.id, line);
   }
+  const lockedProjects = new Map(
+    previous.projects.map((entry) => [entry.projectId, entry])
+  );
   const locked = new Map(
     previous.experiences.map((entry) => [entry.positionId, entry])
   );
@@ -37,6 +40,18 @@ export function applyLinkedinEdit(
         old.endDate !== entry.endDate
       ) {
         throw new LockedFactEditError(entry.positionId);
+      }
+      return { ...entry, lines: entry.lines.map(mark) };
+    }),
+    projects: next.projects.map((entry) => {
+      const old = lockedProjects.get(entry.projectId);
+      if (
+        old?.name !== entry.name ||
+        old.role !== entry.role ||
+        old.startDate !== entry.startDate ||
+        old.endDate !== entry.endDate
+      ) {
+        throw new LockedFactEditError(entry.projectId);
       }
       return { ...entry, lines: entry.lines.map(mark) };
     }),

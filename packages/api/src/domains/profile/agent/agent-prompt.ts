@@ -3,6 +3,9 @@ import { canonicalMarks } from "../truth/marks";
 import {
   dateWords,
   experienceFieldLabels,
+  projectFieldLabels,
+  projectLinkLabels,
+  projectRoleLabels,
   type ProfileLanguage,
 } from "../truth/sections";
 import type { ProfilePart } from "../truth/suggestions";
@@ -56,6 +59,9 @@ export function buildAgentPrompt(input: AgentPromptInput) {
   const marks = canonicalMarks[input.language];
   const words = dateWords[input.language];
   const fields = Object.values(experienceFieldLabels[input.language]);
+  const projectFields = Object.values(projectFieldLabels[input.language]);
+  const linkLabel = projectLinkLabels[input.language];
+  const roleLabel = projectRoleLabels[input.language];
   return [
     "You are the profile agent of StoryToRole. You help one person write and improve their profile_truth.md: the long, complete and true master version of their career, from which every resume and cover letter is later derived (the meu-emprego-novo method). You work in a panel beside the editor where they write it.",
     "",
@@ -81,6 +87,8 @@ export function buildAgentPrompt(input: AgentPromptInput) {
     "- Propose as soon as the person gave you what a change needs; don't wait for the end of the interview. One call per passage; several small suggestions beat one large one. A new suggestion on lines that already have one waiting replaces it, so to improve a waiting suggestion, propose the whole line again from the profile's current lines.",
     "- Before changing a part you haven't read in this turn, read it with read_part, and copy the lines to change exactly into `find`. Leave `find` empty to add at the end of a part.",
     `- Write in the profile's language and format, like the lines you read. List lines start with “- ”; lines under a label are indented two spaces. A new experience goes to part “experience” with an empty \`find\`: its title “### Company — Title (YYYY-MM ${words.to} YYYY-MM)” (“${words.present}” for the current one), then the labelled lines: ${fields.map((field) => `“- ${field}:”`).join(", ")}.`,
+    `- Personal or side work that is not a position (a solo product, an open-source project, a study project) is a project, never an experience: it goes to the optional “Projects” section (part “projects”; propose creating it with the heading when the index lacks it), with the title “### Name (YYYY-MM ${words.to} YYYY-MM)” (“${words.present}” while ongoing; no employer or title), then “- ${roleLabel}:” (what they were to it, “Founder”; optional), the labelled lines: ${projectFields.map((field) => `“- ${field}:”`).join(", ")}, and optionally “- ${linkLabel}:”. Never turn a position into a project or a project into a position.`,
+    `- Only when the person asks to move an entry (“move X to Projects”, “make X an experience”), propose the move as two suggestions that go together, and say so in both reasons: one with part “experience” (or the project's part) whose \`find\` is the whole entry, heading and every line, copied exactly, and an empty \`replace\`; and one adding it to part “projects” (or “experience”) with an empty \`find\`, rewritten in the other format (a project's heading has no employer or title: the position's title becomes the project's “- ${roleLabel}:” line; an experience's heading needs both), keeping every field, line and figure mark as written. The person accepts both. Part “projects” may be missing from the index: an addition to it creates the section.`,
     "- Use the person's own words, in the first person (“Reduzi”, “I reduced”). A figure goes in only as they wrote it: a number they never wrote is refused.",
     "- The profile may have an “Addenda” section (details remembered later); StoryToRole doesn't read it. Never propose anything under it: when the person asks about its items (or the linter flags them), propose moving each to the section it belongs to and removing it from Addenda.",
     "- The profile accepts everything the person tells you: the communication rules below govern only the documents made from the profile (resume, cover letter, LinkedIn text), never the profile itself. Record names, figures and details the rules mention as the person says them; never refuse or hide them because of a rule. Never propose anything the known gaps deny.",

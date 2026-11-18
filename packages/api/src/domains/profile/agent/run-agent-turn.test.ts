@@ -416,6 +416,80 @@ describe("the profile agent", () => {
     expect(await ctx.profiles.listSuggestions(ctx.user.id)).toEqual([]);
   });
 
+  it("moves an experience to Projects through two suggestions the user accepts together", async () => {
+    const ctx = await setup();
+    const removal = {
+      part: "experience:beta — backend",
+      find: [
+        "### Beta — Backend (2022-03 a atual)",
+        "- Tecnologias: Python",
+        "- Resultados:",
+        "  - Melhorei a performance [sem número].",
+        "- O que NÃO fiz: não liderei pessoas.",
+      ].join("\n"),
+      replace: "",
+      reason: "Vai junto com a sugestão em Projetos: sai de Experiência.",
+    };
+    const addition = {
+      part: "projects",
+      find: "",
+      replace: [
+        "### Beta (2022-03 a atual)",
+        "- Papel: Backend",
+        "- Tecnologias: Python",
+        "- Resultados:",
+        "  - Melhorei a performance [sem número].",
+        "- O que NÃO fiz neste projeto (para não exagerar): não liderei pessoas.",
+      ].join("\n"),
+      reason: "Vai junto com a remoção em Experiência: entra em Projetos.",
+    };
+    const { model } = agentModel(
+      [
+        [
+          { name: "suggest_change", input: removal },
+          { name: "suggest_change", input: addition },
+        ],
+      ],
+      "Propus mover a Beta para Projetos: duas sugestões esperam você."
+    );
+    await ctx.say("Mova a Beta para Projetos.", model);
+    const suggestions = await ctx.profiles.listSuggestions(ctx.user.id);
+    expect(suggestions.map((row) => row.part)).toEqual([
+      "experience:beta — backend",
+      "projects",
+    ]);
+
+    // Accept all, in either order: the section is created right after
+    // Experience and no line of the experience is left behind.
+    const { applyChange } = await import("../truth/suggestions");
+    const { parseBlocks, serializeBlocks } = await import("../truth/blocks");
+    for (const order of [suggestions, [...suggestions].reverse()]) {
+      let blocks = parseBlocks(profile);
+      for (const suggestion of order) {
+        const next = applyChange(blocks, suggestion);
+        expect(next).not.toBeNull();
+        blocks = next!;
+      }
+      const markdown = serializeBlocks(blocks);
+      expect(markdown).toContain(
+        [
+          "## Experiência (mais recente primeiro)",
+          "",
+          "## Projetos",
+          "",
+          "### Beta (2022-03 a atual)",
+          "",
+          "- Papel: Backend",
+        ].join("\n")
+      );
+      expect(markdown).not.toContain("### Beta — Backend");
+      expect(markdown.indexOf("## Projetos")).toBeLessThan(
+        markdown.indexOf("## Formação")
+      );
+      expect(markdown).toContain("  - Melhorei a performance [sem número].");
+    }
+  });
+
   it("refuses a figure the user never gave, and tells the model why", async () => {
     const ctx = await setup();
     const { model, prompts } = agentModel(

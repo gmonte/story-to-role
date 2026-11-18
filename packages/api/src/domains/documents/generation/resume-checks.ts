@@ -44,7 +44,11 @@ export function resumeText(content: ResumeContent) {
         break;
       case "projects":
         for (const entry of section.entries) {
-          parts.push(entry.name, ...entry.lines.map((line) => line.text));
+          parts.push(
+            entry.name,
+            entry.role ?? "",
+            ...entry.lines.map((line) => line.text)
+          );
         }
         break;
       default:

@@ -179,3 +179,112 @@ describe("what Validate reviews", () => {
     ]);
   });
 });
+
+describe("projects", () => {
+  const withProjects = `# Perfil
+
+## Experiência (mais recente primeiro)
+
+### Beta — Backend (2022-03 a atual)
+
+- Resultados: entreguei a API [sem número].
+- O que NÃO fiz: nada de front.
+
+## Projetos
+
+### Meu Produto (2024-01 a atual)
+
+- Papel: Founder
+- Contexto (o que é, para quem): app de finanças para autônomos.
+- O que fiz: desenhei e implementei tudo.
+- Tecnologias: Next.js, Postgres
+- Resultados:
+  - 120 usuários na lista de espera [medido: planilha].
+- Link: https://meuproduto.example.com
+- O que NÃO fiz neste projeto (para não exagerar): não lancei ainda.
+
+### Biblioteca aberta (2020-05 a 2021-02)
+
+- Tecnologias: Python
+
+## Formação
+`;
+
+  it("reads each project with its dates, link and what was not done", () => {
+    const extract = extractProfile(parseBlocks(withProjects));
+    expect(extract.projects).toEqual([
+      {
+        name: "Meu Produto",
+        start: "2024-01",
+        end: "present",
+        role: "Founder",
+        link: "https://meuproduto.example.com",
+        notDone: ["não lancei ainda."],
+      },
+      {
+        name: "Biblioteca aberta",
+        start: "2020-05",
+        end: "2021-02",
+        role: null,
+        link: null,
+        notDone: [],
+      },
+    ]);
+    // A project is never an experience.
+    expect(extract.experiences.map((e) => e.company)).toEqual(["Beta"]);
+    // Its figures are read, outside any experience.
+    expect(extract.figures.map((f) => [f.mark, f.experience])).toEqual([
+      ["noNumber", 0],
+      ["measured", null],
+    ]);
+  });
+
+  it("prefixes a project's passages with its title, its not-done as such", () => {
+    const passages = profilePassages(parseBlocks(withProjects)).filter(
+      (passage) => passage.section === "projects"
+    );
+    expect(passages.map((passage) => [passage.kind, passage.text])).toEqual([
+      ["evidence", "Meu Produto (2024-01 a atual): Papel: Founder"],
+      [
+        "evidence",
+        "Meu Produto (2024-01 a atual): Contexto (o que é, para quem): app de finanças para autônomos.",
+      ],
+      [
+        "evidence",
+        "Meu Produto (2024-01 a atual): O que fiz: desenhei e implementei tudo.",
+      ],
+      [
+        "evidence",
+        "Meu Produto (2024-01 a atual): Tecnologias: Next.js, Postgres",
+      ],
+      [
+        "evidence",
+        "Meu Produto (2024-01 a atual): Resultados:\n120 usuários na lista de espera [medido: planilha].",
+      ],
+      [
+        "evidence",
+        "Meu Produto (2024-01 a atual): Link: https://meuproduto.example.com",
+      ],
+      [
+        "notDone",
+        "Meu Produto (2024-01 a atual): O que NÃO fiz neste projeto (para não exagerar): não lancei ainda.",
+      ],
+      [
+        "evidence",
+        "Biblioteca aberta (2020-05 a 2021-02): Tecnologias: Python",
+      ],
+    ]);
+    expect(passages.every((passage) => passage.experience === null)).toBe(true);
+  });
+
+  it("reviews each project as its own chunk", () => {
+    expect(
+      profileChunks(parseBlocks(withProjects)).map((chunk) => chunk.key)
+    ).toEqual([
+      "experience:beta — backend",
+      "project:meu produto",
+      "project:biblioteca aberta",
+      "education",
+    ]);
+  });
+});

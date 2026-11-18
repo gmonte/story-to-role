@@ -19,13 +19,23 @@ import type {
   SourceCredential,
   SourceEvidence,
   SourcePosition,
+  SourceProject,
 } from "./profile-source";
 
 export type ContextPosition = SourcePosition;
 
 export type ContextEvidence = SourceEvidence & {
   credentialId: string | null;
-  projectId: string | null;
+};
+
+/**
+ * A project as generation may see it: the profile's own (never a
+ * position), its name and dates printed by code like locked facts.
+ */
+export type ContextProject = SourceProject & {
+  // Null for a project of the profile's Projects section; set when a
+  // project belongs to a position (none does yet).
+  positionId: string | null;
 };
 
 export type ContextCredential = SourceCredential;
@@ -58,7 +68,7 @@ export type CareerContext = {
   evidence: ContextEvidence[];
   credentials: ContextCredential[];
   skills: Array<{ id: string; name: string; evidenceIds: string[] }>;
-  projects: Array<{ id: string; positionId: string; name: string }>;
+  projects: ContextProject[];
   instructions: ContextInstruction[];
   // Each fit check passage's evidence lines.
   evidenceOfPassage: Map<string, string[]>;
@@ -185,7 +195,17 @@ export async function loadCareerContext(input: {
   );
   const evidence = (source?.evidence ?? [])
     .filter((row) => kept.has(row.text))
-    .map((row) => ({ ...row, credentialId: null, projectId: null }));
+    .map((row) => ({ ...row, credentialId: null }));
+  // A project whose name is something never to include is left out whole;
+  // its name is printed in its public form, like an employer.
+  const projects: ContextProject[] = (source?.projects ?? [])
+    .filter((project) => !forbidden(project.name))
+    .map((project) => ({
+      ...project,
+      positionId: null,
+      name: publicForm(project.name),
+      role: project.role && !forbidden(project.role) ? project.role : null,
+    }));
 
   const instructionsRepository = new InstructionsRepository(db);
   const instructions = input.openingId
@@ -261,7 +281,7 @@ export async function loadCareerContext(input: {
     evidence,
     credentials,
     skills: source?.skills ?? [],
-    projects: [],
+    projects,
     instructions,
     evidenceOfPassage: source?.evidenceOfPassage ?? new Map<string, string[]>(),
     rules: source?.rules ?? {

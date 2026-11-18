@@ -45,6 +45,8 @@ export type DocumentBlock =
   | { type: "entryPeriod"; ownerId: string; text: string }
   | { type: "entryTitle"; ownerId: string; text: string }
   | { type: "entryContext"; ownerId: string; text: string }
+  // A project's link, as the PDF prints it under the name.
+  | { type: "entryLink"; ownerId: string; text: string }
   // A very old experience: the requirement it entered for.
   | { type: "entryNote"; ownerId: string; text: string }
   | { type: "bullet"; lineId: string; ownerId: string; text: string }
@@ -136,7 +138,35 @@ function sectionBlocks(
       );
     case "projects":
       return section.entries.flatMap((entry): DocumentBlock[] => [
+        ...(entry.startDate || entry.endDate
+          ? [
+              {
+                type: "entryPeriod",
+                ownerId: entry.projectId,
+                text: formatPeriod(entry.startDate, entry.endDate, language),
+              } as const,
+            ]
+          : []),
         { type: "entry", ownerId: entry.projectId, text: entry.name },
+        // The role sits where a position's title does.
+        ...(entry.role === null
+          ? []
+          : [
+              {
+                type: "entryTitle",
+                ownerId: entry.projectId,
+                text: entry.role,
+              } as const,
+            ]),
+        ...(entry.link === null
+          ? []
+          : [
+              {
+                type: "entryLink",
+                ownerId: entry.projectId,
+                text: entry.link,
+              } as const,
+            ]),
         ...entry.lines.map(
           (line): DocumentBlock => ({
             type: "bullet",
@@ -318,11 +348,32 @@ export function blocksToContent<T extends EditableContent>(
         case "projects":
           return {
             ...section,
-            entries: section.entries.map((entry) => ({
-              ...entry,
-              name: factOf(entry.projectId, "entry") ?? entry.name,
-              lines: bulletsOf(entry.projectId, entry.lines),
-            })),
+            entries: section.entries.map((entry) => {
+              const id = entry.projectId;
+              const period = factOf(id, "entryPeriod");
+              const dates = period === undefined ? null : parsePeriod(period);
+              const link = factOf(id, "entryLink");
+              const role = factOf(id, "entryTitle");
+              return {
+                ...entry,
+                name: factOf(id, "entry") ?? entry.name,
+                role:
+                  entry.role === null
+                    ? null
+                    : role === undefined
+                      ? entry.role
+                      : role.trim() || null,
+                startDate: dates ? dates.startDate : entry.startDate,
+                endDate: dates ? dates.endDate : entry.endDate,
+                link:
+                  entry.link === null
+                    ? null
+                    : link === undefined
+                      ? entry.link
+                      : link.trim() || null,
+                lines: bulletsOf(id, entry.lines),
+              };
+            }),
           };
         default:
           return section;

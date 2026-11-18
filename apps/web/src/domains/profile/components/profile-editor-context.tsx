@@ -101,7 +101,9 @@ type ProfileEditorState = {
   /** The one-click edits a finding offers, none when it has no such edit. */
   quickActions: (finding: ProfileFinding) => QuickAction[];
   /** Applies one of them as a single undo step and goes to its line. */
-  applyQuickAction: (action: QuickAction) => void;
+  // `goTo`: puts the cursor on the changed line, scrolling to it; from the
+  // findings list, not from the card over the text being read.
+  applyQuickAction: (action: QuickAction, options?: { goTo?: boolean }) => void;
   fixWholeFormat: () => void;
   goToLine: (line: number, range?: { from: number; to: number }) => void;
   // The last validation's findings, where their passages are now.
@@ -154,7 +156,13 @@ function sameBlocks(a: ProfileBlock[], b: ProfileBlock[]) {
  * insert is a single undo step and the rest of the text (and the cursor)
  * stays put.
  */
-function applyBlocks(editor: Editor, next: ProfileBlock[]) {
+// `scroll`: brings the cursor into view after the change; off for an edit
+// made from where the user is reading.
+function applyBlocks(
+  editor: Editor,
+  next: ProfileBlock[],
+  { scroll = true }: { scroll?: boolean } = {}
+) {
   const { doc } = editor.state;
   const current = docToBlocks(doc);
   const positions = blockPositions(doc);
@@ -199,12 +207,10 @@ function applyBlocks(editor: Editor, next: ProfileBlock[]) {
   const fragment = next.slice(start, endNext).length
     ? nodes.map((json) => editor.schema.nodeFromJSON(json))
     : [];
-  editor.view.dispatch(
-    editor.state.tr
-      .replaceWith(from, to, fragment)
-      .setMeta(allowStructure, true)
-      .scrollIntoView()
-  );
+  const tr = editor.state.tr
+    .replaceWith(from, to, fragment)
+    .setMeta(allowStructure, true);
+  editor.view.dispatch(scroll ? tr.scrollIntoView() : tr);
 }
 
 const entryOfSection: Partial<Record<ProfileSectionKey, ProfileEntryKind>> = {
@@ -626,11 +632,12 @@ export function ProfileEditorProvider({
     },
     quickActions: (finding) =>
       quickActionsFor(finding, blocks, structure.language),
-    applyQuickAction: (action) => {
+    applyQuickAction: (action, { goTo = true } = {}) => {
       if (!editor) return;
       // The action was computed from the last lint; typing since makes it stale.
       if (JSON.stringify(currentBlocks()) !== JSON.stringify(blocks)) return;
-      applyBlocks(editor, action.blocks);
+      applyBlocks(editor, action.blocks, { scroll: goTo });
+      if (!goTo) return;
       requestAnimationFrame(() => {
         goToLine(action.line);
         // A label waiting for its value gets the space after the colon.

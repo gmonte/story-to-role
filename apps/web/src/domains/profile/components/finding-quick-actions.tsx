@@ -19,9 +19,12 @@ import { useProfileEditor } from "./profile-editor-context";
 export function FindingQuickActions({
   finding,
   onApplied,
+  goTo = true,
 }: {
   finding: ProfileFinding;
   onApplied?: () => void;
+  // Whether applying scrolls to the changed line (the list) or stays put.
+  goTo?: boolean;
 }) {
   const t = useTranslation();
   const { levelLabels } = useProfileLabels();
@@ -31,7 +34,7 @@ export function FindingQuickActions({
   if (!actions.length) return null;
 
   const run = (action: (typeof actions)[number]) => {
-    applyQuickAction(action);
+    applyQuickAction(action, { goTo });
     onApplied?.();
   };
   const labels: Record<string, string> = {

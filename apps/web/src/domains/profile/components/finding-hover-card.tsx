@@ -128,7 +128,11 @@ export function FindingHoverCard({
       {(info.fix ?? info.talk ?? info.finding) && (
         <div className="flex flex-wrap items-center gap-1">
           {info.finding && (
-            <FindingQuickActions finding={info.finding} onApplied={close} />
+            <FindingQuickActions
+              finding={info.finding}
+              onApplied={close}
+              goTo={false}
+            />
           )}
           {info.fix && (
             <Button

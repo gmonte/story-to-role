@@ -1,3 +1,4 @@
+import { withoutDismissedFindings } from "@repo/api/domains/documents/coverage-review/finding-key";
 import { isWarningFinding } from "@repo/api/domains/documents/coverage-review/warning-codes";
 import type { VersionView } from "@repo/api/domains/documents/schemas/document-view";
 
@@ -9,10 +10,14 @@ export const hasFindings = (version: VersionView) =>
 
 /**
  * Whether it has only warnings (a real name a public name should have
- * replaced): it can leave once the user confirms.
+ * replaced) the user hasn't ignored: it can leave once the user confirms.
  */
 export const hasWarnings = (version: VersionView) =>
-  !hasFindings(version) && (version.coverage?.findings.length ?? 0) > 0;
+  !hasFindings(version) &&
+  withoutDismissedFindings(
+    version.coverage?.findings ?? [],
+    version.dismissedFindings
+  ).length > 0;
 
 /** Where trimming costs least: the oldest position that still has bullets. */
 export function oldestWithBullets(version: VersionView) {

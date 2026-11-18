@@ -26,15 +26,13 @@ import { Textarea } from "@repo/web/components/ui/textarea";
 import { CoverLetterPrep } from "~/domains/applications/components/cover-letter-prep";
 import { CreditCost } from "~/domains/credits/components/credit-cost";
 import { useCredits } from "~/domains/credits/hooks/use-credits";
-import { GenerateResumeDialog } from "~/domains/documents/components/generate-resume-dialog";
-import { ResumeEditor } from "~/domains/documents/components/resume-editor";
+import { ResumeWorkspace } from "~/domains/documents/components/resume-workspace";
 import { useOpeningDocuments } from "~/domains/documents/hooks/use-opening-documents";
 import { AiAtWork } from "~/domains/workspace/components/ai-at-work";
 import { useTRPC } from "~/tools/trpc/client";
 
 import { useOpening, useRefreshOpenings } from "../hooks/use-opening";
 import { useOpeningLabels } from "../hooks/use-opening-labels";
-import { pendingGaps } from "./fit-check-panel";
 
 /** The opening itself: its status, description and the gap questions. */
 export function OpeningView({ openingId }: { openingId: string }) {
@@ -138,6 +136,51 @@ export function OpeningView({ openingId }: { openingId: string }) {
   const resumeVersions =
     documents.data?.documents.find((document) => document.kind === "resume")
       ?.versions ?? [];
+  const tone =
+    documents.data?.application?.tone ?? data.suggestedTone ?? "your_style";
+  const tabs = data.status === "analyzed" && (
+    <Tabs value={view} onValueChange={setView}>
+      <TabsList>
+        <TabsTrigger value="opening">
+          {t.formatMessage({ defaultMessage: "Opening" })}
+        </TabsTrigger>
+        {resumeVersions.length > 0 && (
+          <TabsTrigger value="resume">
+            {t.formatMessage({ defaultMessage: "Resume" })}
+          </TabsTrigger>
+        )}
+        <TabsTrigger value="letter">
+          {t.formatMessage({ defaultMessage: "Cover letter" })}
+        </TabsTrigger>
+      </TabsList>
+    </Tabs>
+  );
+
+  // A document opens in the workspace, which takes the whole column.
+  if (
+    data.status === "analyzed" &&
+    (view === "letter" || (view === "resume" && resumeVersions.length > 0))
+  ) {
+    return (
+      <div className="flex h-full min-h-0 flex-col">
+        <div className="flex items-center gap-3 border-b px-4 py-2">
+          {tabs}
+          <span className="text-muted-foreground truncate text-sm">
+            {[data.title, data.company].filter(Boolean).join(" · ")}
+          </span>
+        </div>
+        {view === "letter" ? (
+          <CoverLetterPrep
+            openingId={openingId}
+            defaultLanguage={data.language ?? "en-US"}
+            defaultTone={tone}
+          />
+        ) : (
+          <ResumeWorkspace versions={resumeVersions} />
+        )}
+      </div>
+    );
+  }
 
   return (
     <div className="h-full overflow-y-auto">
@@ -236,107 +279,59 @@ export function OpeningView({ openingId }: { openingId: string }) {
           </div>
         )}
 
-        {data.status === "analyzed" && (
-          <Tabs value={view} onValueChange={setView}>
-            <TabsList>
-              <TabsTrigger value="opening">
-                {t.formatMessage({ defaultMessage: "Opening" })}
-              </TabsTrigger>
-              {resumeVersions.length > 0 && (
-                <TabsTrigger value="resume">
-                  {t.formatMessage({ defaultMessage: "Resume" })}
-                </TabsTrigger>
-              )}
-              <TabsTrigger value="letter">
-                {t.formatMessage({ defaultMessage: "Cover letter" })}
-              </TabsTrigger>
-            </TabsList>
-          </Tabs>
+        {tabs}
+
+        {gaps.length > 0 && (
+          <section className="flex flex-col gap-3">
+            <div>
+              <h3 className="font-medium">
+                {t.formatMessage({
+                  defaultMessage: "Before writing for this opening",
+                })}
+              </h3>
+              <p className="text-muted-foreground text-sm">
+                {t.formatMessage({
+                  defaultMessage:
+                    "The opening asks for things your profile doesn't show yet. Tell us if you really lack them, or share a story.",
+                })}
+              </p>
+            </div>
+            {gaps.map((item) => (
+              <GapQuestion
+                key={item.id}
+                fitCheckItemId={item.id}
+                question={item.gapQuestion ?? ""}
+                answer={item.gapAnswer}
+                lacks={item.gapLack}
+                positions={data.fitCheck?.positions ?? []}
+              />
+            ))}
+          </section>
         )}
 
-        {view === "letter" && data.status === "analyzed" ? (
-          <CoverLetterPrep
-            openingId={openingId}
-            defaultLanguage={data.language ?? "en-US"}
-            defaultTone={
-              documents.data?.application?.tone ??
-              data.suggestedTone ??
-              "your_style"
-            }
-          />
-        ) : view === "resume" && resumeVersions.length > 0 ? (
-          <ResumeEditor
-            versions={resumeVersions}
-            generateAgain={(version, trigger) => (
-              <GenerateResumeDialog
-                openingId={openingId}
-                defaultLanguage={version.language}
-                defaultTone={
-                  documents.data?.application?.tone ??
-                  data.suggestedTone ??
-                  "your_style"
-                }
-                versionId={version.id}
-                pendingGaps={pendingGaps(data)}
-                trigger={trigger}
-              />
-            )}
-          />
-        ) : (
-          <>
-            {gaps.length > 0 && (
-              <section className="flex flex-col gap-3">
-                <div>
-                  <h3 className="font-medium">
-                    {t.formatMessage({
-                      defaultMessage: "Before writing for this opening",
-                    })}
-                  </h3>
-                  <p className="text-muted-foreground text-sm">
-                    {t.formatMessage({
-                      defaultMessage:
-                        "The opening asks for things your profile doesn't show yet. Tell us if you really lack them, or share a story.",
-                    })}
-                  </p>
-                </div>
-                {gaps.map((item) => (
-                  <GapQuestion
-                    key={item.id}
-                    fitCheckItemId={item.id}
-                    question={item.gapQuestion ?? ""}
-                    answer={item.gapAnswer}
-                    lacks={item.gapLack}
-                    positions={data.fitCheck?.positions ?? []}
-                  />
-                ))}
-              </section>
-            )}
+        {data.sourceUrl && (
+          <a
+            href={data.sourceUrl}
+            target="_blank"
+            rel="noreferrer noopener"
+            className="text-muted-foreground inline-flex items-center gap-1 text-sm underline"
+          >
+            <ExternalLink className="size-3.5" />
+            {t.formatMessage({ defaultMessage: "Opening text" })}
+          </a>
+        )}
 
-            {data.sourceUrl && (
-              <a
-                href={data.sourceUrl}
-                target="_blank"
-                rel="noreferrer noopener"
-                className="text-muted-foreground inline-flex items-center gap-1 text-sm underline"
-              >
-                <ExternalLink className="size-3.5" />
-                {t.formatMessage({ defaultMessage: "Opening text" })}
-              </a>
-            )}
-
-            {(data.description ?? data.notes) && (
-              <section className="flex flex-col gap-2">
-                <h3 className="font-medium">
-                  {data.description
-                    ? t.formatMessage({ defaultMessage: "Description" })
-                    : t.formatMessage({ defaultMessage: "Notes" })}
-                </h3>
-                <p className="text-muted-foreground text-sm whitespace-pre-wrap">
-                  {data.description ?? data.notes}
-                </p>
-              </section>
-            )}
-          </>
+        {(data.description ?? data.notes) && (
+          <section className="flex flex-col gap-2">
+            <h3 className="font-medium">
+              {data.description
+                ? t.formatMessage({ defaultMessage: "Description" })
+                : t.formatMessage({ defaultMessage: "Notes" })}
+            </h3>
+            <p className="text-muted-foreground text-sm whitespace-pre-wrap">
+              {data.description ?? data.notes}
+            </p>
+          </section>
         )}
       </div>
     </div>

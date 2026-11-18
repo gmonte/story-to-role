@@ -113,6 +113,11 @@ export function useProfileLabels() {
           },
           { name: params.name }
         );
+      case "addendumToPlace":
+        return t.formatMessage({
+          defaultMessage:
+            "Move this to its section: StoryToRole doesn't read Addenda.",
+        });
       case "workModelUnknown":
         return t.formatMessage({
           defaultMessage:
@@ -148,10 +153,6 @@ export function useProfileLabels() {
       defaultMessage:
         "What you don't have or haven't done, stated plainly: it keeps answers from being invented.",
     }),
-    addenda: t.formatMessage({
-      defaultMessage:
-        "Details remembered later, dated, to fold into the sections.",
-    }),
   };
 
   const entryLabels: Record<ProfileEntryKind, string> = {
@@ -162,7 +163,6 @@ export function useProfileLabels() {
     competency: t.formatMessage({ defaultMessage: "Competency" }),
     gap: t.formatMessage({ defaultMessage: "Known gap" }),
     rule: t.formatMessage({ defaultMessage: "Communication rule" }),
-    addendum: t.formatMessage({ defaultMessage: "Addendum" }),
   };
 
   const reviewKinds: Record<ValidationFindingKind, string> = {

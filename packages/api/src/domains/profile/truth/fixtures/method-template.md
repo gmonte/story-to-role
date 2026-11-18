@@ -54,7 +54,3 @@
 
 - Nunca incluir: documentos de identidade, dados bancários, dados pessoais fora da seção Contato, informações confidenciais de empregadores.
 - Nunca afirmar: ...
-
-## Adendos (detalhes lembrados depois)
-
-- AAAA-MM-DD: ...

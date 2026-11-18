@@ -40,7 +40,7 @@ describe("the insert menu", () => {
     expect(lintProfile(next).filter((f) => f.kind === "format")).toEqual([]);
   });
 
-  it("writes education, certifications, languages and addenda in format", () => {
+  it("writes education, certifications, and languages in format", () => {
     let blocks = profileTemplate("en-US");
     for (const entry of [
       {
@@ -58,11 +58,6 @@ describe("the insert menu", () => {
         expiredOn: "2026-01",
       },
       { kind: "language", language: "Portuguese", level: "native" },
-      {
-        kind: "addendum",
-        date: "2026-11-17",
-        text: "ran the on-call [no number]",
-      },
     ] as const) {
       blocks = insertEntry(blocks, entry).blocks;
     }
@@ -72,7 +67,6 @@ describe("the insert menu", () => {
     );
     expect(markdown).toContain("- AWS — Amazon — 2023-01 — expired in 2026-01");
     expect(markdown).toContain("## Languages\n\n- Portuguese — native");
-    expect(markdown).toContain("- 2026-11-17: ran the on-call [no number]");
     expect(lintProfile(blocks).filter((f) => f.kind === "format")).toEqual([]);
   });
 

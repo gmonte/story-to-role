@@ -38,7 +38,6 @@ export const entryKinds: ProfileEntryKind[] = [
   "language",
   "gap",
   "rule",
-  "addendum",
 ];
 
 type BlockKind = "heading2" | "heading3" | "item" | "paragraph";

@@ -33,8 +33,7 @@ export type ProfileEntry =
   | { kind: "language"; language: string; level: string }
   | { kind: "competency"; name: string; level: CompetencyLevel }
   | { kind: "gap"; text: string }
-  | { kind: "rule"; rule: "neverInclude" | "neverClaim"; text: string }
-  | { kind: "addendum"; date: string; text: string };
+  | { kind: "rule"; rule: "neverInclude" | "neverClaim"; text: string };
 
 export type ProfileEntryKind = ProfileEntry["kind"];
 
@@ -46,7 +45,6 @@ const sectionOfEntry: Record<ProfileEntryKind, ProfileSectionKey> = {
   competency: "competencies",
   gap: "gaps",
   rule: "rules",
-  addendum: "addenda",
 };
 
 const words: Record<
@@ -104,8 +102,6 @@ export function entryLine(entry: ProfileEntry, language: ProfileLanguage) {
       return `${entry.language} — ${entry.level}`;
     case "gap":
       return entry.text;
-    case "addendum":
-      return `${entry.date}: ${entry.text}`;
     default:
       return "";
   }

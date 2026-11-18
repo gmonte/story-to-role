@@ -189,6 +189,8 @@ export function profilePassages(blocks: ProfileBlock[]): ProfilePassage[] {
   const structure = readStructure(blocks);
   const passages: ProfilePassage[] = [];
   for (const section of structure.sections) {
+    // Addenda is no longer read as evidence (the linter asks to move it).
+    if (section.key === "addenda") continue;
     let current: ProfilePassage | null = null;
     for (let line = section.start; line < section.end; line++) {
       const block = blocks[line];

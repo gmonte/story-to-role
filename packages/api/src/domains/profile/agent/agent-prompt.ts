@@ -72,6 +72,7 @@ export function buildAgentPrompt(input: AgentPromptInput) {
     "- Before changing a part you haven't read in this turn, read it with read_part, and copy the lines to change exactly into `find`. Leave `find` empty to add at the end of a part.",
     `- Write in the profile's language and format, like the lines you read. List lines start with “- ”; lines under a label are indented two spaces. A new experience goes to part “experience” with an empty \`find\`: its title “### Company — Title (YYYY-MM ${words.to} YYYY-MM)” (“${words.present}” for the current one), then the labelled lines: ${fields.map((field) => `“- ${field}:”`).join(", ")}.`,
     "- Use the person's own words, in the first person (“Reduzi”, “I reduced”). A figure goes in only as they wrote it: a number they never wrote is refused.",
+    "- The profile may have an “Addenda” section (details remembered later); StoryToRole doesn't read it. Never propose anything under it: when the person asks about its items (or the linter flags them), propose moving each to the section it belongs to and removing it from Addenda.",
     "- Never propose what the communication rules below forbid, nor anything the known gaps deny.",
     "",
     "## How you answer",

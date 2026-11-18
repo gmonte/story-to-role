@@ -194,7 +194,7 @@ export class InstructionsService {
    * The user's review of the drafts: every point is kept in this
    * application, and the ones the user sends to their profile also become
    * suggestions in its draft (resume spec, "Application instructions"):
-   * under the point's position when it has one, else under Addenda; never
+   * under the point's position when it has one, else under Professional identity; never
    * a change, the user accepts them there. Overrides not confirmed are
    * dropped. A point the draft refuses (it has the line already, or no
    * longer has the position) stays in this application only. A point is
@@ -264,9 +264,9 @@ export class InstructionsService {
                 positionId: point.positionId,
                 field: fieldOfKind[point.evidenceKind ?? "responsibility"],
               }
-            : { kind: "section", section: "addenda" },
-          // A renamed position: the fact still has a place, the addenda.
-          fallback: { kind: "section", section: "addenda" },
+            : { kind: "careerDirection" },
+          // A renamed position: the fact still has a place, the identity.
+          fallback: { kind: "careerDirection" },
           text: cipher.decrypt(point.encryptedText),
           reason: {
             "en-US": `You stated this for an application (${title}); confirm it is a fact of your career.`,

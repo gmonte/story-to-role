@@ -223,7 +223,6 @@ const entryOfSection: Partial<Record<ProfileSectionKey, ProfileEntryKind>> = {
   competencies: "competency",
   gaps: "gap",
   rules: "rule",
-  addenda: "addendum",
 };
 
 const labelHint = /^([^:(]*)(\([^)]*\))\s*:/;

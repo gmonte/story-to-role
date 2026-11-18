@@ -41,6 +41,8 @@ export const findingCodes = {
   competencyUnbacked: "content",
   studiedUsed: "content",
   neverInclude: "content",
+  // An item under Addenda, which is no longer read.
+  addendumToPlace: "content",
   // The job preferences document's own.
   workModelUnknown: "content",
 } as const satisfies Record<string, FindingKind>;
@@ -543,6 +545,17 @@ function lintNeverInclude(structure: ProfileStructure, blocks: ProfileBlock[]) {
   return findings;
 }
 
+function lintAddenda(structure: ProfileStructure, blocks: ProfileBlock[]) {
+  const findings: ProfileFinding[] = [];
+  const addenda = sectionOf(structure, "addenda");
+  for (let line = addenda?.start ?? 0; addenda && line < addenda.end; line++) {
+    const block = blocks[line];
+    if (block.type === "heading" || !block.text.trim()) continue;
+    findings.push(finding("addendumToPlace", line, whole(block)));
+  }
+  return findings;
+}
+
 /**
  * The deterministic check of the profile (profile spec, "The linter"), the
  * same in the browser as the user types and on the server when the draft is
@@ -557,6 +570,7 @@ export function lintProfile(blocks: ProfileBlock[]): ProfileFinding[] {
     ...lintCredentials(structure, blocks),
     ...lintCompetencies(structure, blocks),
     ...lintNeverInclude(structure, blocks),
+    ...lintAddenda(structure, blocks),
   ].sort((a, b) => (a.line ?? -1) - (b.line ?? -1) || a.from - b.from);
 }
 

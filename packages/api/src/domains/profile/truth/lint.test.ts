@@ -59,10 +59,6 @@ const valid = `# Perfil
 
 - Nunca incluir: Projeto Fênix
 - Nunca afirmar: liderança de pessoas
-
-## Adendos (detalhes lembrados depois)
-
-- 2026-09-21: rotinas SQL agendadas [sem número].
 `;
 
 function codes(findings: ProfileFinding[]) {
@@ -83,6 +79,21 @@ describe("the profile linter", () => {
       const findings = lintProfile(profileTemplate(language));
       expect(findings.filter((f) => f.kind === "format")).toEqual([]);
     }
+  });
+
+  it("has no Addenda in a new profile, and flags an item under it", () => {
+    for (const language of ["pt-BR", "en-US"] as const) {
+      const markdown = serializeBlocks(profileTemplate(language));
+      expect(markdown).not.toMatch(/adendos|addenda/i);
+    }
+    const findings = lint(
+      `${valid}\n## Adendos (detalhes lembrados depois)\n\n- 2026-09-21: rotinas SQL agendadas [sem número].\n`
+    );
+    expect(codes(findings)).toEqual(["addendumToPlace"]);
+    expect(findings[0].kind).toBe("content");
+    expect(lint(`${valid}\n## Addenda (details remembered later)\n`)).toEqual(
+      []
+    );
   });
 
   it("marks a missing section and a section out of order", () => {

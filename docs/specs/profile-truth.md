@@ -33,7 +33,8 @@ The profile follows the method's template. Section names are recognized in Engli
 | Languages | `Language — real level` |
 | Known gaps | What the user does not have or has not done, stated plainly |
 | Communication rules | "Never include" (names, clients, codenames, figures, personal data) and "never claim" |
-| Addenda | Details remembered later, dated, to fold into the sections |
+
+**Addenda.** The method's optional last section (details remembered later) is not part of the template and not read: a detail goes in its proper section. A document that has it (an older profile, an import) still parses; the linter flags each item under it ("Move this to its section"), and nothing deletes the section automatically.
 
 **Figure marks.** Every figure in a result says where it comes from, as the method asks:
 
@@ -51,7 +52,7 @@ English aliases (`[measured]`, `[estimated]`, `[no number]`, `[to confirm]`) are
 My career is the editor: the document's index on the left (its sections and positions), the document in the middle, the agent on the right.
 
 - **Blocks, Markdown underneath.** A Notion-style block editor (TipTap/ProseMirror): each heading, paragraph and list item is a block, with a "+" and a drag handle in the margin and `/` opening the insert menu. What is stored is the Markdown of `profile_truth.md`, so the file the user downloads is the method's file. A small prototype in slice P1 confirms the Markdown round trip before the editor is built on it.
-- **Insert menu.** Experience, education, certification, language, competency, gap, communication rule or addendum: each lands in its section, in the right order (positions by date), already in the template's format with grey hints. Dates and a certification's status have pickers that write the text.
+- **Insert menu.** Experience, education, certification, language, competency, gap, or communication rule: each lands in its section, in the right order (positions by date), already in the template's format with grey hints. Dates and a certification's status have pickers that write the text.
 - **Autosave and undo.** Every change is saved to the draft as the user types; undo and redo work across the session.
 - **Selection.** Selecting text shows a floating bar whose AI icon sends the passage to the agent.
 
@@ -59,8 +60,8 @@ My career is the editor: the document's index on the left (its sections and posi
 
 A deterministic check, plain code, runs on every edit in the browser and again on the server when the draft is saved. Each finding is underlined in the text, with a message and, where it applies, "Fix format" or "Talk about this".
 
-- **Format:** required sections present and in order (Addenda is optional); each experience title parseable (company, title, dates); dates as `YYYY-MM` (a year alone is accepted for when a course was completed or a certification issued); education and certification lines in their format, certifications with a status; competencies under one of the three levels.
-- **Content rules:** a figure without a mark in an experience's results; a mark written another way than the canonical one; an experience without "what I did not do"; overlapping or out-of-order dates; an expired certification without its date; a tool named in an experience but missing from Competencies, a competency listed with no experience behind it and not under "studied", or a "studied" competency an experience uses; a "never include" term appearing in the text.
+- **Format:** required sections present and in order; each experience title parseable (company, title, dates); dates as `YYYY-MM` (a year alone is accepted for when a course was completed or a certification issued); education and certification lines in their format, certifications with a status; competencies under one of the three levels.
+- **Content rules:** a figure without a mark in an experience's results; a mark written another way than the canonical one; an experience without "what I did not do"; overlapping or out-of-order dates; an expired certification without its date; a tool named in an experience but missing from Competencies, a competency listed with no experience behind it and not under "studied", or a "studied" competency an experience uses; a "never include" term appearing in the text; an item under Addenda, which is not read.
 
 **Fix format**, on demand per finding or for the whole document, rewrites what code can fix with certainty: an experience title into `### Company — Title (YYYY-MM to YYYY-MM)` when its parts are recognizable ("Jan/2021 - present" becomes "2021-01 to present"), dates into `YYYY-MM`, marks written another way (`[Medido]`, `(medido)`, `[measured]`) into the canonical one, missing required sections inserted with their hints, sections reordered, a certification's missing status added as a blank to fill. Its changes go to the draft and can be undone; what it can't fix stays marked.
 

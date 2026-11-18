@@ -41,16 +41,6 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
   );
 }
 
-/** Today in the user's time zone, as YYYY-MM-DD. */
-function today() {
-  const now = new Date();
-  return [
-    now.getFullYear(),
-    String(now.getMonth() + 1).padStart(2, "0"),
-    String(now.getDate()).padStart(2, "0"),
-  ].join("-");
-}
-
 /**
  * Asks what the insert menu needs for one entry (profile spec, "Insert
  * menu"); the month and status pickers write the text in the template's
@@ -85,7 +75,7 @@ function EntryForm({
     status: "valid",
     level: "master",
     rule: "neverInclude",
-    date: kind === "addendum" ? today() : "",
+    date: "",
   });
   const [current, setCurrent] = useState(false);
   const [inProgress, setInProgress] = useState(false);
@@ -151,8 +141,6 @@ function EntryForm({
           rule: v("rule") as "neverInclude" | "neverClaim",
           text: v("text"),
         };
-      case "addendum":
-        return { kind, date: v("date"), text: v("text") };
     }
   }
 
@@ -303,22 +291,6 @@ function EntryForm({
           t.formatMessage({
             defaultMessage: "Name, client, codename, figure or claim",
           })
-        )}
-      </>
-    ),
-    addendum: (
-      <>
-        <Field label={t.formatMessage({ defaultMessage: "Date" })}>
-          <Input
-            type="date"
-            required
-            value={values.date ?? ""}
-            onChange={(event) => set("date")(event.target.value)}
-          />
-        </Field>
-        {text(
-          "text",
-          t.formatMessage({ defaultMessage: "What you remembered" })
         )}
       </>
     ),

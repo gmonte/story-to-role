@@ -89,9 +89,10 @@ export function profileTemplate(language: ProfileLanguage): ProfileBlock[] {
   return [
     { type: "heading", level: 1, text: title },
     ...quote.map((text) => ({ type: "quote" as const, text })),
-    ...(Object.keys(sectionHeadings[language]) as ProfileSectionKey[]).flatMap(
-      (key) => sectionTemplate(key, language)
-    ),
+    ...(Object.keys(sectionHeadings[language]) as ProfileSectionKey[])
+      // Addenda is no longer read: a new profile doesn't have it.
+      .filter((key) => key !== "addenda")
+      .flatMap((key) => sectionTemplate(key, language)),
   ];
 }
 

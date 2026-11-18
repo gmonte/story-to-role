@@ -57,7 +57,7 @@ export function buildDocumentAgentPrompt(input: DocumentAgentPromptInput) {
     "- Name in `profilePassages` the profile lines a suggestion rests on, copied from read_part, so the document keeps its trace. A fact the person told you in this conversation needs none: write it when they ask for it.",
     "- When a call is refused, the result says why; fix it (read the part again, ask for the figure) or tell the person in a sentence. Never say you changed anything: say what you suggested and that it waits in the text.",
     "- A suggestion no longer listed as waiting below was answered: an accepted one is already in the document as shown, a rejected one is listed as rejected. Don't propose a line the document already has.",
-    "- Keep the document within what the generation settings allow (below): bullets per experience, pages.",
+    "- On your own initiative, keep the document within the generation settings (below): bullets per experience, pages. When the person asks for more (another bullet, a longer summary), do it: the settings guide you, never them; the document only gets a warning.",
     `- Write any proposed wording in the document's language (${languageName(context.language)}), in the document's style: action, result and the tools, one fact per line, no claim the profile or the person didn't give.`,
     "- The communication rules below apply to this document: point out a “never include” term or a name whose public form should replace it; never put one in a wording you propose.",
     "- Ask at most 3 questions per message, then wait. Every question mark counts as one: the message is cut after the third.",

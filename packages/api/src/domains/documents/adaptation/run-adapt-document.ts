@@ -9,16 +9,11 @@ import type { DbClient } from "@repo/api/tools/db-client";
 import type { Storage } from "@repo/api/tools/storage/storage";
 
 import { DocumentsRepository } from "../documents-repository";
-import { fitToPages } from "../rendering/fit-to-pages";
+import { renderResumePdf } from "../rendering/resume-pdf";
 import { storeRenderedPdf } from "../rendering/store-rendered-pdf";
 import { reviewLoopSettings } from "../generation/review-loop-settings";
 import { loadCareerContext } from "../generation/load-career-context";
 import { reprintFields } from "../translation/reprint-fields";
-import {
-  defaultGenerationSettings,
-  experienceAge,
-  generationSettingsSchema,
-} from "../schemas/generation-settings";
 import {
   communicationRuleLines,
   repairPublicNames,
@@ -145,25 +140,14 @@ export async function runAdaptDocument(deps: {
       generation,
       source,
     });
-    const settings = generationSettingsSchema
-      .catch(defaultGenerationSettings)
-      .parse(adapted.settings ?? defaultGenerationSettings);
-    const today = new Date().toISOString().slice(0, 7);
-    const fitted = await fitToPages({
-      content: adapted.content,
+    // The document belongs to the user: an adaptation carries over every
+    // line of its source, so it is never trimmed to the page limit (the
+    // user sees the length warning instead). Its PDF is only measured.
+    const { content } = adapted;
+    const rendered = await renderResumePdf({
+      content,
       language: generation.language,
-      maxPages: settings.resumeMaxPages,
-      ages: new Map(
-        adapted.positions.map((position) => {
-          const age = experienceAge(position, settings, today);
-          return [
-            position.id,
-            age === "very_old" && settings.veryOld === "keep" ? "older" : age,
-          ] as const;
-        })
-      ),
     });
-    const { content } = fitted;
     await deps.reportProgress?.({ step: 2, totalSteps: 2, label: "saving" });
     const snapshotId = await db.transaction(async (tx) => {
       const repository = new DocumentsRepository(tx);
@@ -221,8 +205,8 @@ export async function runAdaptDocument(deps: {
         userId: deps.userId,
         profileId: profile.id,
         snapshotId,
-        bytes: fitted.bytes,
-        pages: fitted.pages,
+        bytes: rendered.bytes,
+        pages: rendered.pages,
       });
     }
   } catch (error) {
@@ -260,9 +244,6 @@ async function adaptVersion(input: {
   const sourceVersion = await documents.findVersion(
     generation.sourceVersionId!
   );
-  const settings = sourceVersion
-    ? await documents.writtenSettings(sourceVersion.documentId)
-    : null;
   const context = await loadCareerContext({
     db,
     cipher,
@@ -461,7 +442,7 @@ async function adaptVersion(input: {
   ) {
     throw new Error(`Adaptation ${generation.id} altered a locked fact`);
   }
-  return { content, settings, positions: context.positions };
+  return { content };
 }
 
 /** One call adapts the selected changes; code merges them into the target. */

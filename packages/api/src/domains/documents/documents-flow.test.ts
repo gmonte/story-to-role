@@ -2045,6 +2045,142 @@ describe("resume generation and snapshots", () => {
     expect(experienceOf(libraryVersion.content).title).toBe("Tech Lead");
   });
 
+  it("an adaptation carries the latest snapshot's edits, even past the page limit", async () => {
+    const ctx = await setup();
+    const [kubernetes] = await ctx.keepInstructions([
+      "Cut deploy time by 40% with Kubernetes at Initrode",
+    ]);
+    await ctx.generate("quick", {
+      drafts: [
+        ctx.draft(
+          [
+            {
+              text: "Cut deploy time by 40% with Kubernetes.",
+              evidence_ids: [kubernetes.id],
+            },
+          ],
+          kubernetes.id
+        ),
+      ],
+      ratings: [8],
+    });
+    const view = () =>
+      ctx.documents.forOpening({
+        userId: ctx.user.id,
+        openingId: ctx.opening.id,
+      });
+    const [english] = (await view()).documents[0].versions;
+    // The user's own additions: a skills group nothing in the profile backs
+    // and many manual bullets, enough to run over the page limit.
+    const manual = { kind: "manual" as const };
+    const extraLines = Array.from({ length: 150 }, (_, index) => ({
+      id: `manual-${index}`,
+      text: `Manual bullet number ${index}.`,
+      origin: manual,
+    }));
+    const base = resumeOf(english.content);
+    const edited = {
+      ...base,
+      sections: [
+        ...base.sections.filter((section) => section.kind !== "skills"),
+        {
+          kind: "skills" as const,
+          groups: [
+            {
+              id: "own-skills",
+              label: "Tools",
+              text: "Rust, Zig, Elixir, Gleam, OCaml",
+              origin: manual,
+            },
+          ],
+        },
+      ].map((section) =>
+        section.kind === "experience"
+          ? {
+              ...section,
+              entries: section.entries.map((entry) => ({
+                ...entry,
+                lines: [...entry.lines, ...extraLines],
+              })),
+            }
+          : section
+      ),
+    };
+    await ctx.documents.saveEdit({
+      userId: ctx.user.id,
+      versionId: english.id,
+      baseSnapshotId: english.snapshot.id,
+      content: edited,
+    });
+
+    const tasks = new TasksService(ctx.db, ctx.trigger);
+    const adapted = await new AdaptationService(ctx.db, tasks).adapt({
+      userId: ctx.user.id,
+      versionId: english.id,
+      language: "pt-BR",
+    });
+    const filter = await loadNeverIncludeFilter({
+      db: ctx.db,
+      cipher: ctx.cipher,
+      profileId: ctx.profile.id,
+    });
+    // The model drops a skill from the list and leaves bullets unanswered.
+    const fake = fakeProviderPackage({
+      object: () => ({
+        title_line: "",
+        items: [
+          { id: "own-skills", text: "Rust, Zig", label: "Ferramentas" },
+          ...extraLines.slice(0, 3).map((line) => ({
+            id: line.id,
+            text: `Tópico manual ${line.id}.`,
+            label: null,
+          })),
+        ],
+        contexts: [],
+        title_equivalents: [],
+      }),
+    });
+    await runAdaptDocument({
+      db: ctx.db,
+      ai: createAiClient({
+        db: ctx.db,
+        userId: ctx.user.id,
+        funding: "credits",
+        providerPackage: fake.providerPackage,
+        neverIncludeFilter: filter,
+      }),
+      cipher: ctx.cipher,
+      filter,
+      userId: ctx.user.id,
+      generationId: adapted.generationId,
+    });
+
+    const portuguese = (await view()).documents[0].versions.find(
+      (v) => v.language === "pt-BR"
+    )!;
+    const result = resumeOf(portuguese.content);
+    const skills = result.sections.find((s) => s.kind === "skills");
+    expect(skills).toMatchObject({
+      groups: [
+        {
+          id: "own-skills",
+          label: "Ferramentas",
+          // The rewrite listed fewer items: the source wording stays.
+          text: "Rust, Zig, Elixir, Gleam, OCaml",
+          origin: manual,
+        },
+      ],
+    });
+    const lines = experienceOf(portuguese.content).lines;
+    expect(lines).toHaveLength(1 + extraLines.length);
+    expect(lines[1]).toMatchObject({
+      id: "manual-0",
+      text: "Tópico manual manual-0.",
+      origin: manual,
+    });
+    expect(lines.at(-1)).toMatchObject({ id: "manual-149", origin: manual });
+  });
+
   it("adapts into another language, approves a title and syncs changes", async () => {
     const ctx = await setup();
     const [kubernetes, team] = await ctx.keepInstructions([

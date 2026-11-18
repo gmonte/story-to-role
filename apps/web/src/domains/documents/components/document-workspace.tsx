@@ -125,7 +125,7 @@ function NewerProfileNotice() {
   );
 }
 
-/** The versions' tabs, the save status and undo. */
+/** The versions' tabs, the origin legend, the save status and undo. */
 function DocumentToolbar({
   versions,
   select,
@@ -156,15 +156,34 @@ function DocumentToolbar({
   return (
     <div className="bg-background/95 sticky top-0 z-10 flex flex-col gap-2 border-b px-4 py-2 backdrop-blur">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <Tabs value={version.id} onValueChange={select}>
-          <TabsList>
-            {versions.map((row) => (
-              <TabsTrigger key={row.id} value={row.id}>
-                {labels.version(row)}
-              </TabsTrigger>
-            ))}
-          </TabsList>
-        </Tabs>
+        <div className="flex flex-wrap items-center gap-3">
+          {/* One version needs no tabs: they'd be a button doing nothing. */}
+          {versions.length > 1 && (
+            <Tabs value={version.id} onValueChange={select}>
+              <TabsList>
+                {versions.map((row) => (
+                  <TabsTrigger key={row.id} value={row.id}>
+                    {labels.version(row)}
+                  </TabsTrigger>
+                ))}
+              </TabsList>
+            </Tabs>
+          )}
+          <div className="text-muted-foreground flex flex-wrap gap-3 text-xs">
+            <Legend className="border-l-emerald-500">
+              {t.formatMessage({ defaultMessage: "Your profile" })}
+            </Legend>
+            <Legend className="border-dashed border-l-emerald-500">
+              {t.formatMessage({ defaultMessage: "Edited by you" })}
+            </Legend>
+            <Legend className="border-l-sky-500">
+              {t.formatMessage({ defaultMessage: "Application instruction" })}
+            </Legend>
+            <Legend className="border-l-amber-500">
+              {t.formatMessage({ defaultMessage: "Written by you" })}
+            </Legend>
+          </div>
+        </div>
         <div className="flex flex-wrap items-center gap-1">
           <span
             className={cn(
@@ -193,5 +212,21 @@ function DocumentToolbar({
         </div>
       </div>
     </div>
+  );
+}
+
+/** One origin's rule, as the text shows it beside a line. */
+function Legend({
+  className,
+  children,
+}: {
+  className: string;
+  children: ReactNode;
+}) {
+  return (
+    <span className="flex items-center gap-1.5">
+      <span className={cn("h-3.5 border-l-2", className)} />
+      {children}
+    </span>
   );
 }

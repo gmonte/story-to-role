@@ -25,7 +25,9 @@ import { cn } from "@repo/web/lib/utils";
 import { useTRPC } from "~/tools/trpc/client";
 
 import { focusDocumentLine } from "../utils/focus-line";
+import { findPassage, type PassageTarget } from "../utils/passages";
 import { oldestWithBullets } from "../utils/version-checks";
+import { useDocumentAgent } from "./document-agent-context";
 import { ProfilePassage } from "./line-trace";
 
 type Finding = CoverageView["findings"][number];
@@ -322,20 +324,53 @@ function ReviewSections({
         : (sources.purpose.title ??
           sources.purpose.company ??
           t.formatMessage({ defaultMessage: "this opening" }));
-  const toLine = (line: { lineId: string; lineText: string }) => (
-    <button
-      type="button"
-      className="text-left hover:underline"
-      onClick={() =>
-        focusDocumentLine({ lineId: line.lineId, positionId: null })
-      }
-    >
-      {t.formatMessage(
-        { defaultMessage: "“{quote}”" },
-        { quote: line.lineText }
-      )}
-    </button>
-  );
+  // Only where an editor has lent its lines (not LinkedIn's own editor).
+  const context = useDocumentAgent();
+  const agent = context && context.passages.length > 0 ? context : null;
+  const found = (line: PassageTarget) =>
+    agent !== null && findPassage(agent.passages, line) >= 0;
+  // A review item that quotes a line lights the passage up under the
+  // pointer; one whose quote is gone from the text does nothing.
+  const passageProps = (line: PassageTarget) =>
+    agent && found(line)
+      ? {
+          onMouseEnter: () => agent.hoverPassage(line),
+          onMouseLeave: () => agent.hoverPassage(null),
+        }
+      : {};
+  const toLine = (line: PassageTarget & { lineText: string }) => {
+    const quote = t.formatMessage(
+      { defaultMessage: "“{quote}”" },
+      { quote: line.lineText }
+    );
+    // Beside no editor (LinkedIn text), the line's id is all there is.
+    if (!agent) {
+      return line.lineId ? (
+        <button
+          type="button"
+          className="cursor-pointer text-left hover:underline"
+          onClick={() =>
+            focusDocumentLine({ lineId: line.lineId, positionId: null })
+          }
+        >
+          {quote}
+        </button>
+      ) : (
+        <span>{quote}</span>
+      );
+    }
+    return found(line) ? (
+      <button
+        type="button"
+        className="cursor-pointer text-left hover:underline"
+        onClick={() => agent.passageHooks.current?.goTo(line)}
+      >
+        {quote}
+      </button>
+    ) : (
+      <span>{quote}</span>
+    );
+  };
 
   return (
     <div className="flex flex-col gap-1">
@@ -399,7 +434,11 @@ function ReviewSections({
       >
         <ul className="flex flex-col gap-2">
           {review.strong.map((row, index) => (
-            <li key={index} className="flex flex-col gap-0.5">
+            <li
+              key={index}
+              className="flex flex-col gap-0.5"
+              {...passageProps(row)}
+            >
               <span className="font-medium">{row.requirement}</span>
               {toLine(row)}
               <div className="text-muted-foreground border-l-2 pl-2">
@@ -450,7 +489,11 @@ function ReviewSections({
       >
         <ul className="flex flex-col gap-1">
           {review.inconsistencies.map((row, index) => (
-            <li key={index} className="flex flex-col gap-0.5">
+            <li
+              key={index}
+              className="flex flex-col gap-0.5"
+              {...passageProps(row)}
+            >
               {toLine(row)}
               <span className="text-muted-foreground">{row.explanation}</span>
             </li>
@@ -468,8 +511,12 @@ function ReviewSections({
             const { lineId } = row;
             const done = lineId !== null && sent.includes(lineId);
             return (
-              <li key={index} className="flex flex-col gap-1">
-                {lineId && row.lineText
+              <li
+                key={index}
+                className="flex flex-col gap-1"
+                {...(row.lineText ? passageProps(row) : {})}
+              >
+                {row.lineText
                   ? toLine({ lineId, lineText: row.lineText })
                   : null}
                 <span>{row.text}</span>

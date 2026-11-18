@@ -42,6 +42,7 @@ import {
   replacedBlockClass,
 } from "../utils/change-widget";
 import { locateChangeInBlocks } from "../utils/document-changes";
+import { findPassage, type PassageTarget } from "../utils/passages";
 import {
   blocksToContent,
   contentToBlocks,
@@ -62,6 +63,9 @@ import {
 } from "../utils/document-editor-extensions";
 import { useDocumentAgent } from "./document-agent-context";
 import { originMarker } from "./editing";
+
+const infoIcon =
+  '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>';
 
 export type DocumentFinding = CoverageView["findings"][number];
 
@@ -191,6 +195,7 @@ export function DocumentEditorProvider({
   const queryClient = useQueryClient();
   const refresh = useRefreshDocuments();
   const agent = useDocumentAgent();
+  const hoveredPassage = agent?.hoveredPassage ?? null;
   const initial = useMemo(
     () => contentToBlocks(editableContent(version), version.language),
     // The editor starts from the version it was opened with.
@@ -217,6 +222,9 @@ export function DocumentEditorProvider({
   );
 
   const notePrefix = t.formatMessage({ defaultMessage: "Included for:" });
+  const markerLabel = t.formatMessage({
+    defaultMessage: "Where this line comes from",
+  });
 
   /** Saves until what is saved is the latest text. */
   const flush = useCallback(async () => {
@@ -401,6 +409,13 @@ export function DocumentEditorProvider({
     [blocks]
   );
 
+  // The block a review quote points at: its line, or else the line whose
+  // text holds the quote (or is held by it), whitespace and quotes aside.
+  const indexOfPassage = useCallback(
+    (target: PassageTarget) => findPassage(blocks, target),
+    [blocks]
+  );
+
   const goToBlock = useCallback(
     (index: number, range?: { from: number; to: number }) => {
       if (editor && index >= 0) selectBlock(editor, index, range);
@@ -443,10 +458,31 @@ export function DocumentEditorProvider({
   const goToNote = useCallback(
     (note: ReviewNote) => {
       setActiveFinding(noteKey(note));
-      if (note.lineId) goToBlock(indexOfLine(note.lineId));
+      goToBlock(indexOfPassage(note));
     },
-    [goToBlock, indexOfLine, noteKey]
+    [goToBlock, indexOfPassage, noteKey]
   );
+
+  // The review beside the text (another column) finds its quotes among
+  // these lines, lights one up and opens it.
+  const setPassages = agent?.setPassages;
+  const passageHooks = agent?.passageHooks;
+  useEffect(() => {
+    setPassages?.(
+      blocks.flatMap((block) =>
+        "lineId" in block ? [{ lineId: block.lineId, text: block.text }] : []
+      )
+    );
+  }, [blocks, setPassages]);
+  useEffect(() => {
+    if (!passageHooks) return;
+    passageHooks.current = {
+      goTo: (target) => goToBlock(indexOfPassage(target)),
+    };
+    return () => {
+      passageHooks.current = null;
+    };
+  }, [passageHooks, goToBlock, indexOfPassage]);
 
   // The finding under the pointer in the text becomes the active one, so
   // the list shows which row the underline belongs to.
@@ -663,13 +699,33 @@ export function DocumentEditorProvider({
         className: cn("-ml-2 border-l-2 pl-1.5", originMarker[origin.kind]),
         key: `trace-${index}`,
       });
+      const size = range.node.content.size;
+      specs.push({
+        kind: "widget",
+        at: range.from + 1 + size,
+        interactive: true,
+        element: () => {
+          const marker = document.createElement("span");
+          marker.className = cn(
+            "text-muted-foreground/60 hover:text-foreground focus-visible:text-foreground ml-1 inline-flex size-3.5 cursor-help align-[-2px] select-none focus-visible:outline-none"
+          );
+          // lucide's Info icon, as markup: the widget is plain DOM.
+          marker.innerHTML = infoIcon;
+          marker.tabIndex = 0;
+          marker.contentEditable = "false";
+          marker.dataset.traceMarker = block.lineId;
+          marker.setAttribute("aria-label", markerLabel);
+          return marker;
+        },
+        key: `marker-${block.lineId}-${origin.kind}`,
+      });
     });
     const lit = (key: string) =>
       key === hoveredFinding ? "bg-amber-500/20 rounded-sm" : "";
     findings.forEach((finding, index) => {
       const key = `finding-${index}`;
       const underline = cn(
-        "underline decoration-amber-500 decoration-wavy underline-offset-4",
+        "underline decoration-amber-500/70 decoration-dotted decoration-2 underline-offset-4",
         lit(key)
       );
       if (finding.lineId) {
@@ -776,8 +832,8 @@ export function DocumentEditorProvider({
       });
     }
     notes.forEach((note, index) => {
-      if (!note.lineId) return;
-      const at = indexOfLine(note.lineId);
+      const at = indexOfPassage(note);
+      if (at < 0) return;
       const range = nodeOf(at);
       const block = blocks[at];
       if (!range || !block || !("text" in block) || !block.text) return;
@@ -791,6 +847,20 @@ export function DocumentEditorProvider({
         key,
       });
     });
+    if (hoveredPassage) {
+      const at = indexOfPassage(hoveredPassage);
+      const range = at >= 0 ? nodeOf(at) : null;
+      const block = blocks[at];
+      if (range && block && "text" in block && block.text) {
+        specs.push({
+          kind: "inline",
+          from: range.from + 1,
+          to: range.from + 1 + block.text.length,
+          className: "bg-amber-500/20 rounded-sm",
+          key: "hovered-passage",
+        });
+      }
+    }
     setDecorations(editor, specs);
     // The labels are the same strings on every render.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -801,8 +871,10 @@ export function DocumentEditorProvider({
     notes,
     changes,
     hoveredFinding,
+    hoveredPassage,
     lines,
     indexOfLine,
+    indexOfPassage,
     indexOfOwner,
   ]);
 

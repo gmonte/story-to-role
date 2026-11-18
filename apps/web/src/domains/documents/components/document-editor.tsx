@@ -113,7 +113,7 @@ export function DocumentEditor() {
       <TraceHoverCard
         editor={editor}
         describe={(element) => {
-          const lineId = element.dataset.lineId;
+          const lineId = element.dataset.traceMarker;
           if (lineId) {
             const line = lines.get(lineId);
             return (

@@ -27,12 +27,12 @@ const grey = "#666666";
 
 const styles = StyleSheet.create({
   page: {
-    paddingTop: 32,
-    paddingBottom: 32,
+    paddingTop: 28,
+    paddingBottom: 28,
     paddingHorizontal: 36,
     fontFamily: "Helvetica",
     fontSize: 9.5,
-    lineHeight: 1.35,
+    lineHeight: 1.25,
     color: "#1a1a1a",
   },
   name: {
@@ -45,7 +45,7 @@ const styles = StyleSheet.create({
   },
   titleLine: { fontFamily: "Helvetica-Bold", fontSize: 10.5, marginBottom: 2 },
   contacts: { color: grey, fontSize: 8.5 },
-  section: { marginTop: 12 },
+  section: { marginTop: 8 },
   sectionTitle: {
     fontFamily: "Helvetica-Bold",
     fontSize: 10,
@@ -54,15 +54,15 @@ const styles = StyleSheet.create({
     borderBottomWidth: 0.6,
     borderBottomColor: navy,
     paddingBottom: 2,
-    marginBottom: 5,
+    marginBottom: 3,
   },
   justified: { textAlign: "justify" },
   bold: { fontFamily: "Helvetica-Bold" },
   italic: { fontFamily: "Helvetica-Oblique" },
-  entry: { marginBottom: 6 },
+  entry: { marginBottom: 4 },
   entryHeader: { flexDirection: "row", justifyContent: "space-between" },
   period: { color: grey, fontSize: 8.5 },
-  bullet: { flexDirection: "row", marginTop: 1.5 },
+  bullet: { flexDirection: "row", marginTop: 1 },
   bulletMark: { width: 10 },
   bulletText: { flex: 1 },
 });

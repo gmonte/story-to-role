@@ -27,7 +27,7 @@ const navy = "#1f3a68";
 const grey = "#666666";
 
 const createStyles = (step: DensityStep) => {
-  const d = resumeDensity[step];
+  const d = resumeDensity(step);
   return StyleSheet.create({
     page: {
       paddingTop: d.margin,

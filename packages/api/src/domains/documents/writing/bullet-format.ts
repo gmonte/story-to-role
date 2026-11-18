@@ -13,11 +13,19 @@ export const bulletFormatRule = [
   "1. Action: what the person did, with a strong action verb in the past tense and the first person implicit (never “I”, never “Responsible for”).",
   "2. Impact/result: what changed because of it. A figure only when the profile line shows it as measured; otherwise a qualitative result the profile states. Never an invented or unmarked figure. When the profile states no result, say what the work enabled, still inventing nothing.",
   "3. How / with what: the means and keywords, such as methods, architecture and technologies the profile states, preferring the opening's keywords where true of the person, spelled as the opening spells them.",
-  "A bullet is never a bare list of technologies and fits about three lines of a PDF (roughly 330 characters).",
+  "A bullet is never a bare list of technologies and fits about two to three lines of a PDF (roughly 330 characters).",
+  "The three blocks may also flow in one sentence (action, result, then “using/with …”), and the how may name methods and practices, not only technologies.",
   "The examples below show the SHAPE only: never copy their facts, numbers or technologies into a document.",
   "- Example: “Redesigned the application architecture following Clean Architecture and Domain-Driven Design (DDD), optimizing the main section responsible for extracting relevant emails and carbon emissions data. Reduced the average processing time from 15 minutes to just 3 minutes by utilizing Node.js, TypeScript, and various AWS services such as AWS DynamoDB, AWS Cognito, AWS API Gateway, and AWS SQS.”",
   "- Example: “Implemented test coverage for the application, covering 60% of the codebase with unit and integration tests. This effort led to a noticeable decrease in production bugs and significantly improved scalability. Used Jest and TypeScript for efficient testing.”",
   "- Example: “Designed and built a notification system from scratch, adhering to the principles of Clean Architecture. The system efficiently handles multiple mobile devices connected to a single account, leveraging AWS SNS, AWS DynamoDB, and AWS Lambda with Node.js and TypeScript.”",
+  "- Example: “Implemented an end-to-end timeseries telemetry ingestion system capable of processing highly concurrent real-time requests from multiple vendors, delivering results in under 3 seconds using AWS Lambda, API Gateway, SQS, DynamoDB, and feature flags via Flagsmith.”",
+  "- Example: “Built database interaction layers leveraging Sequelize ORM and automated infrastructure deployment with Terraform, ensuring scalable, maintainable, and reproducible environments.”",
+  "- Example: “Architected and delivered two E2E data ingestion pipelines handling telemetry from 8M+ system devices on both daily and monthly schedules, enabling reliable downstream processing for analytics and reporting. Used BullMQ to build a QMS to improve delivery time.”",
+  "- Example: “Developed backfill strategies to synchronize historical datasets from APIs with strict 7-day data retrieval limits, achieving ingestion of up to 3 years of data in under 12 hours while adhering to vendor rate limits.”",
+  "- Example: “Implemented GCP Cloud Functions to feed vendor-specific DAG pipelines, removing obsolete writes to unused legacy tables, resulting in cloud cost reductions and improved operational efficiency.”",
+  "- Example: “Delivered infrastructure-as-code solutions in Terraform and application logic in Node.js and TypeScript to standardize deployments and streamline cross-cloud workflows.”",
+  "- Example: “Onboarded and mentored new engineers in AWS and GCP data ingestion pipelines, providing documentation, technical sessions, and system walkthroughs to accelerate team ramp-up and reduce knowledge gaps.”",
 ].join("\n");
 
 /** A bullet's shape problems code can tell (a warning, never a block). */

@@ -34,6 +34,7 @@ import {
   adjustmentDraft,
   relinkReference,
 } from "./adjust-resume";
+import { repairOpeningTerms } from "./opening-terms";
 import { repairPublicNames } from "./public-names";
 import {
   assembleResume,
@@ -409,7 +410,18 @@ export async function runGenerateResume(deps: {
       language: outputLanguageNames[generation.language],
     });
     stoppedBy ??= repaired.stoppedBy;
-    const best = { ...chosen, content: repaired.content };
+    // A keyword the profile backs that the resume spells another way is
+    // spelled as the opening does, in the lines citing its evidence.
+    const termed = await repairOpeningTerms({
+      ai,
+      filter,
+      content: repaired.content,
+      brief,
+      role,
+      language: outputLanguageNames[generation.language],
+    });
+    stoppedBy ??= termed.stoppedBy;
+    const best = { ...chosen, content: termed.content };
     // Code has the last word: lines with a forbidden term go, and a resume
     // whose real PDF runs over its pages is shortened in the settings'
     // order, never touching the bullets of recent experiences.

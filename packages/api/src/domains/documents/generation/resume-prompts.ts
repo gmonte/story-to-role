@@ -1,6 +1,7 @@
 import type { Tone } from "@repo/api/domains/openings/schemas/opening";
 
 import type { OutputLanguage } from "../schemas/document";
+import { openingTermLines } from "./opening-terms";
 import type {
   ResumeContent,
   ResumeSectionKind,
@@ -124,6 +125,7 @@ export function resumeMaterial(input: {
               (item) =>
                 `- ${item.verdict}: ${item.term}${item.evidenceIds.length ? ` (lines ${item.evidenceIds.join(", ")})` : ""}`
             ),
+            ...openingTermLines(opening),
           ]),
     "",
     "Positions (employer, title and dates are locked; code prints them):",

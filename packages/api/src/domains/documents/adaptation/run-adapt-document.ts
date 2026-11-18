@@ -22,6 +22,8 @@ import {
   communicationRuleLines,
   repairPublicNames,
 } from "../generation/public-names";
+import { repairOpeningTerms } from "../generation/opening-terms";
+import { loadOpeningBrief } from "../generation/run-generate-resume";
 import { outputLanguageNames } from "../generation/resume-prompts";
 import {
   findForbiddenLines,
@@ -404,7 +406,23 @@ async function adaptVersion(input: {
     role: "writing",
     language: outputLanguageNames[generation.language],
   });
-  const content = repaired.content;
+  // A backed keyword the adaptation spells another way follows the opening.
+  const termed = application
+    ? await repairOpeningTerms({
+        ai: input.ai,
+        filter,
+        content: repaired.content,
+        brief: await loadOpeningBrief({
+          db,
+          cipher,
+          openingId: application.openingId,
+          evidenceOfPassage: context.evidenceOfPassage,
+        }),
+        role: "writing",
+        language: outputLanguageNames[generation.language],
+      })
+    : null;
+  const content = termed?.content ?? repaired.content;
 
   const proposed = new Map(
     draft.title_equivalents.map((row) => [row.position_id, row.title.trim()])

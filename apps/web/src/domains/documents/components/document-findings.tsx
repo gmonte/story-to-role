@@ -7,6 +7,7 @@ import {
   ChevronDown,
   ChevronRight,
   EyeOff,
+  Languages,
   Loader2,
   MessageSquare,
   Send,
@@ -18,6 +19,7 @@ import { useRouter } from "next/navigation";
 
 import { useTranslation } from "@repo/intl/use-translation";
 import { Button } from "@repo/web/components/ui/button";
+import { Input } from "@repo/web/components/ui/input";
 import { toast } from "@repo/web/components/ui/sonner";
 import {
   Tooltip,
@@ -39,9 +41,84 @@ import {
 } from "./document-editor-context";
 
 /**
- * "Add to the profile" of a "not in your profile" finding, or where the
- * line stands in the profile once sent (resume spec, "Document
- * workspace"). Nothing for other findings.
+ * "Add translation" of a "not translated" finding: a small form with the
+ * field as printed, whose default is the original itself (no AI), that
+ * proposes the entry in the profile's translations dictionary.
+ */
+function AddTranslation({
+  action,
+}: {
+  action: Extract<ProfileAction, { kind: "translate" }>;
+}) {
+  const t = useTranslation();
+  const [open, setOpen] = useState(false);
+  const [translation, setTranslation] = useState(action.original);
+  if (!open) {
+    return (
+      <Button
+        size="sm"
+        variant="outline"
+        className="h-6 px-2 text-xs"
+        onClick={() => setOpen(true)}
+      >
+        <Languages className="size-3" />
+        {t.formatMessage({ defaultMessage: "Add translation" })}
+      </Button>
+    );
+  }
+  return (
+    <form
+      className="flex w-full flex-wrap items-center gap-1"
+      onSubmit={(event) => {
+        event.preventDefault();
+        if (translation.trim()) action.run(translation.trim());
+      }}
+    >
+      <span className="text-muted-foreground text-xs">
+        {t.formatMessage(
+          { defaultMessage: "“{original}” →" },
+          { original: action.original }
+        )}
+      </span>
+      <Input
+        value={translation}
+        onChange={(event) => setTranslation(event.target.value)}
+        maxLength={300}
+        aria-label={t.formatMessage({ defaultMessage: "Translation" })}
+        className="h-6 min-w-40 flex-1 text-xs"
+        autoFocus
+      />
+      <Button
+        type="submit"
+        size="sm"
+        className="h-6 px-2 text-xs"
+        disabled={action.pending || !translation.trim()}
+      >
+        {action.pending ? (
+          <Loader2 className="size-3 animate-spin" />
+        ) : (
+          <Send className="size-3" />
+        )}
+        {t.formatMessage({ defaultMessage: "Send to my profile" })}
+      </Button>
+      <Button
+        type="button"
+        size="sm"
+        variant="ghost"
+        className="text-muted-foreground h-6 px-2 text-xs"
+        onClick={() => setOpen(false)}
+      >
+        {t.formatMessage({ defaultMessage: "Cancel" })}
+      </Button>
+    </form>
+  );
+}
+
+/**
+ * "Add to the profile" of a "not in your profile" finding, "Add
+ * translation" of a "not translated" one, or where the line stands in the
+ * profile once sent (resume spec, "Document workspace"). Nothing for other
+ * findings.
  */
 export function ProfileActionButton({
   action,
@@ -50,6 +127,7 @@ export function ProfileActionButton({
 }) {
   const t = useTranslation();
   if (!action) return null;
+  if (action.kind === "translate") return <AddTranslation action={action} />;
   if (action.kind === "add") {
     return (
       <Button

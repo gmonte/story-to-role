@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 
 import type { PublicName } from "@repo/api/domains/profile/rules/public-names";
+import type { ProfileTranslations } from "@repo/api/domains/profile/rules/translations";
 import type { CredentialKind } from "@repo/api/domains/career/schemas/career";
 import type { EvidenceKind } from "@repo/api/domains/applications/schemas/instructions";
 import type { PublishedProfile } from "@repo/api/domains/profile/load-published-profile";
@@ -14,6 +15,7 @@ import {
   isProjectRoleLabel,
   normalizeLabel,
   type ExperienceField,
+  type ProfileLanguage,
 } from "@repo/api/domains/profile/truth/sections";
 import {
   readStructure,
@@ -129,6 +131,10 @@ export type ProfileSource = {
   profileVersionId: string;
   // The version's number, as the editor shows it.
   profileVersionNumber: number;
+  // The language the profile is written in: a document in another one
+  // prints its fields through the translations dictionary.
+  language: ProfileLanguage;
+  translations: ProfileTranslations;
   header: ResumeHeaderFields;
   positions: SourcePosition[];
   projects: SourceProject[];
@@ -446,6 +452,8 @@ export function readProfileSource(input: {
   return {
     profileVersionId: profile.versionId,
     profileVersionNumber: profile.number,
+    language: structure.language,
+    translations: profile.extract.rules.translations ?? {},
     header,
     positions: experiences
       .flatMap((experience) => experience.position ?? [])
@@ -465,7 +473,11 @@ export function readProfileSource(input: {
     credentials,
     skills,
     evidenceOfPassage,
-    rules: profile.extract.rules,
+    rules: {
+      neverInclude: profile.extract.rules.neverInclude,
+      neverClaim: profile.extract.rules.neverClaim,
+      publicNames: profile.extract.rules.publicNames,
+    },
     studied: profile.extract.competencies
       .filter((competency) => competency.level === "studied")
       .map((competency) => competency.name),

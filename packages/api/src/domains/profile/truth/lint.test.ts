@@ -250,6 +250,19 @@ describe("the profile linter", () => {
     expect(findings[0].params).toEqual({ entry: "Banco X →" });
   });
 
+  it("marks a half-written translations entry, as a content finding", () => {
+    const markdown = valid.replace(
+      "- Nunca incluir: Projeto Fênix",
+      "- Nunca incluir: Projeto Fênix\n- Em inglês:\n  - Bacharelado → Bachelor's\n  - Belo Horizonte, MG, Brasil →"
+    );
+    const findings = lint(markdown);
+    expect(codes(findings)).toEqual(["translationFormat"]);
+    expect(findings[0].kind).toBe("content");
+    expect(findings[0].params).toEqual({
+      entry: "Belo Horizonte, MG, Brasil →",
+    });
+  });
+
   it("never blocks publishing over a mark written another way", () => {
     const markdown = valid.replace(
       "[sem número].\n- O que",

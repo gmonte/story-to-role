@@ -141,6 +141,10 @@ const context: CareerContext = {
     },
   ],
   evidenceOfPassage: new Map(),
+  profileLanguage: null,
+  translations: [],
+  acceptedEmployers: new Map(),
+  translatedTitles: new Map(),
   rules: { neverInclude: [], neverClaim: [], publicNames: [] },
   studied: [],
   gaps: [],
@@ -480,7 +484,11 @@ describe("figures by the profile's marks", () => {
   });
   const marked: CareerContext = {
     ...source,
+    profileLanguage: source.language,
+    translations: [],
     acceptedTitles: new Map(),
+    acceptedEmployers: new Map(),
+    translatedTitles: new Map(),
     evidence: source.evidence.map((row) => ({
       ...row,
       credentialId: null,
@@ -1594,7 +1602,11 @@ describe("projects of the profile", () => {
   });
   const ctx: CareerContext = {
     ...source,
+    profileLanguage: source.language,
+    translations: [],
     acceptedTitles: new Map(),
+    acceptedEmployers: new Map(),
+    translatedTitles: new Map(),
     evidence: source.evidence.map((row) => ({ ...row, credentialId: null })),
     projects: source.projects.map((row) => ({ ...row, positionId: null })),
     instructions: [],

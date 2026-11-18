@@ -54,11 +54,16 @@ export async function loadPublishedProfile(input: {
   };
 }
 
-// An extract written before the public names line has none of them.
+// An extract written before the public names line or the translations
+// dictionary has none of them.
 function withPublicNames(extract: ProfileExtract): ProfileExtract {
   return {
     ...extract,
-    rules: { ...extract.rules, publicNames: extract.rules.publicNames ?? [] },
+    rules: {
+      ...extract.rules,
+      publicNames: extract.rules.publicNames ?? [],
+      translations: extract.rules.translations ?? {},
+    },
   };
 }
 

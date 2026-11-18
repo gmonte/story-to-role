@@ -94,6 +94,7 @@ describe("the published profile's extract", () => {
         { original: "Projeto Fênix", public: "plataforma de pagamentos" },
         { original: "Banco X", public: "banco de varejo" },
       ],
+      translations: {},
     });
     const passages = profilePassages(parseBlocks(profile));
     for (const figure of extract.figures) {
@@ -177,6 +178,35 @@ describe("what Validate reviews", () => {
       { original: "Projeto Fênix", public: "plataforma de pagamentos" },
       { original: "Banco X", public: "banco de varejo" },
     ]);
+  });
+
+  it("reads the translations dictionary by target language", () => {
+    const blocks = parseBlocks(
+      profile.replace(
+        "- Nomes públicos: Projeto Fênix → plataforma de pagamentos; Banco X -> banco de varejo",
+        [
+          "- Em inglês: Belo Horizonte, MG, Brasil → Belo Horizonte, MG, Brazil",
+          "  - Bacharelado em Sistemas de Informação → Bachelor's in Information Systems",
+          "- Em português:",
+          "  - Meta IT (now Insi) → Meta IT (agora Insi)",
+        ].join("\n")
+      )
+    );
+    expect(extractProfile(blocks).rules.translations).toEqual({
+      "en-US": [
+        {
+          original: "Belo Horizonte, MG, Brasil",
+          translation: "Belo Horizonte, MG, Brazil",
+        },
+        {
+          original: "Bacharelado em Sistemas de Informação",
+          translation: "Bachelor's in Information Systems",
+        },
+      ],
+      "pt-BR": [
+        { original: "Meta IT (now Insi)", translation: "Meta IT (agora Insi)" },
+      ],
+    });
   });
 });
 

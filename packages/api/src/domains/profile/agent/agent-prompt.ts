@@ -1,12 +1,15 @@
+import type { ProfileTranslations } from "../rules/translations";
 import type { SuggestionContent } from "../suggestions/propose-suggestion";
 import { canonicalMarks } from "../truth/marks";
 import {
   dateWords,
   experienceFieldLabels,
+  languageNames,
   projectFieldLabels,
   projectLinkLabels,
   projectRoleLabels,
   type ProfileLanguage,
+  translationLineLabels,
 } from "../truth/sections";
 import type { ProfilePart } from "../truth/suggestions";
 
@@ -20,6 +23,7 @@ export type AgentPromptInput = {
     neverInclude: string[];
     neverClaim: string[];
     publicNames: Array<{ original: string; public: string }>;
+    translations?: ProfileTranslations;
   };
   // The passage the user is talking about, and the part it is in.
   quote: {
@@ -62,6 +66,9 @@ export function buildAgentPrompt(input: AgentPromptInput) {
   const projectFields = Object.values(projectFieldLabels[input.language]);
   const linkLabel = projectLinkLabels[input.language];
   const roleLabel = projectRoleLabels[input.language];
+  const other: ProfileLanguage = input.language === "pt-BR" ? "en-US" : "pt-BR";
+  const translationsLabel = translationLineLabels[input.language][other];
+  const translations = input.rules.translations ?? {};
   return [
     "You are the profile agent of StoryToRole. You help one person write and improve their profile_truth.md: the long, complete and true master version of their career, from which every resume and cover letter is later derived (the meu-emprego-novo method). You work in a panel beside the editor where they write it.",
     "",
@@ -93,6 +100,7 @@ export function buildAgentPrompt(input: AgentPromptInput) {
     "- The profile may have an “Addenda” section (details remembered later); StoryToRole doesn't read it. Never propose anything under it: when the person asks about its items (or the linter flags them), propose moving each to the section it belongs to and removing it from Addenda.",
     "- The profile accepts everything the person tells you: the communication rules below govern only the documents made from the profile (resume, cover letter, LinkedIn text), never the profile itself. Record names, figures and details the rules mention as the person says them; never refuse or hide them because of a rule. Never propose anything the known gaps deny.",
     "- Public names: the rules part may have a “Public names” line (`original → public form`, entries split by `;`) that tells the documents how to write a name publicly. When a name in the profile (a project, company or person) falls under a “never include” category (for example “internal names of repositories and projects”) and has no entry yet, propose adding it to that line as a normal suggestion (keeping the entries it already holds). If you don't know the public form, ask the person what to call it publicly before proposing; never invent one.",
+    `- Translations: the rules part may have one line per target language (“${translationsLabel}:” for ${languageNames[other]}), with entries “original → translation” as sub-items (“  - ”) or split by “;”, that tell the documents written in that language how to print a field code copies from the profile: an employer and its note (“Meta IT (agora Insi) → Meta IT (now Insi)”), a title, an education line's course and institution, a certification's name, the city line. Language names and levels under Languages are translated by code already. When the person asks to translate something of the profile for their documents (“translate my education to English”), propose the entries as a normal suggestion on that line (adding the line under the rules when it is missing, keeping the entries it already holds), one entry per field exactly as the profile writes it; the profile itself stays in its language. An entry changes wording only: never a figure, a date or a fact.`,
     "",
     "## How you answer",
     "- In the language of the person's last message. Plain text, no Markdown. Short: this is a side panel.",
@@ -117,6 +125,10 @@ export function buildAgentPrompt(input: AgentPromptInput) {
         `Never include: ${input.rules.neverInclude.join("; ") || "(none)"}`,
         `Never claim: ${input.rules.neverClaim.join("; ") || "(none)"}`,
         `Public names: ${input.rules.publicNames.map((name) => `${name.original} → ${name.public}`).join("; ") || "(none)"}`,
+        ...(Object.keys(translations) as ProfileLanguage[]).map(
+          (language) =>
+            `${translationLineLabels[input.language][language]}: ${(translations[language] ?? []).map((entry) => `${entry.original} → ${entry.translation}`).join("; ") || "(none)"}`
+        ),
       ].join("\n")
     ),
     "",

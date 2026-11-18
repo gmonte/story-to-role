@@ -63,6 +63,11 @@ export function buildDocumentAgentPrompt(input: DocumentAgentPromptInput) {
     "- On your own initiative, keep the document within the generation settings (below): bullets per experience, pages. When the person asks for more (another bullet, a longer summary), do it: the settings guide you, never them; the document only gets a warning.",
     `- Write any proposed wording in the document's language (${languageName(context.language)}), in the document's style: action, result and the tools, one fact per line, no claim the profile or the person didn't give.`,
     "- The communication rules below apply to this document: point out a “never include” term or a name whose public form should replace it; never put one in a wording you propose.",
+    ...(context.profileLanguage && context.profileLanguage !== context.language
+      ? [
+          `- The profile is written in ${languageName(context.profileLanguage)} and this document in ${languageName(context.language)}. The fields code copies from the profile (an employer and its note, a title, a degree and its institution, a certification, the city) print through the profile's translations dictionary for ${languageName(context.language)}, listed under the rules below; language names and levels are translated by code. A field left in ${languageName(context.profileLanguage)} is pointed out as “not translated” (the finding untranslated): the person may edit it in the document, or press “Add translation” on the finding, which proposes the entry in their profile's draft so every later document in this language prints it; you never write the dictionary yourself. Asked how a field should read in ${languageName(context.language)}, suggest the usual wording and point them to “Add translation”.`,
+        ]
+      : []),
     "- Ask at most 3 questions per message, then wait. Every question mark counts as one: the message is cut after the third.",
     "- Never ask for documents, passwords, bank details or an employer's confidential information.",
     "",
@@ -126,6 +131,12 @@ export function buildDocumentAgentPrompt(input: DocumentAgentPromptInput) {
         `Never include: ${context.rules.neverInclude.join("; ") || "(none)"}`,
         `Never claim: ${context.rules.neverClaim.join("; ") || "(none)"}`,
         `Public names: ${context.rules.publicNames.map((name) => `${name.original} → ${name.public}`).join("; ") || "(none)"}`,
+        ...(context.profileLanguage &&
+        context.profileLanguage !== context.language
+          ? [
+              `Translations into ${languageName(context.language)}: ${context.translations.map((entry) => `${entry.original} → ${entry.translation}`).join("; ") || "(none)"}`,
+            ]
+          : []),
       ].join("\n")
     ),
     "",

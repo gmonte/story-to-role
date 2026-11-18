@@ -170,6 +170,14 @@ function findingText(
         },
         { text, term: str("term"), publicName: str("publicName") }
       );
+    case "untranslated":
+      return t.formatMessage(
+        {
+          defaultMessage:
+            "Not translated: “{text}” ({field, select, employer {employer} title {title} city {city} credential {credential} institution {institution} other {level}}) is still in your profile's language. Edit it here, or add a translation to your profile so every document in this language uses it.",
+        },
+        { text, field: str("field") }
+      );
     case "neverClaim":
       return t.formatMessage(
         {

@@ -1,4 +1,5 @@
 import { parsePublicNames, publicNameValues } from "../rules/public-names";
+import { parseTranslations, translationValues } from "../rules/translations";
 import type { ProfileBlock } from "./blocks";
 import { canonicalMonth, readMonth } from "./dates";
 import { canonicalMarkText, findMarks, hasFigure } from "./marks";
@@ -48,6 +49,8 @@ export const findingCodes = {
   studiedUsed: "content",
   // An entry of the public names line missing its original or its public form.
   publicNameFormat: "content",
+  // An entry of a translations line missing its original or its translation.
+  translationFormat: "content",
   // An item under Addenda, which is no longer read.
   addendumToPlace: "content",
   // The job preferences document's own.
@@ -571,6 +574,22 @@ function lintPublicNames(structure: ProfileStructure, blocks: ProfileBlock[]) {
   return findings;
 }
 
+function lintTranslations(structure: ProfileStructure, blocks: ProfileBlock[]) {
+  const findings: ProfileFinding[] = [];
+  const rules = sectionOf(structure, "rules");
+  if (!rules) return findings;
+  for (const { line, value } of translationValues(blocks, rules)) {
+    for (const entry of parseTranslations(value).malformed) {
+      findings.push(
+        finding("translationFormat", line, whole(blocks[line]), {
+          params: { entry },
+        })
+      );
+    }
+  }
+  return findings;
+}
+
 function lintAddenda(structure: ProfileStructure, blocks: ProfileBlock[]) {
   const findings: ProfileFinding[] = [];
   const addenda = sectionOf(structure, "addenda");
@@ -597,6 +616,7 @@ export function lintProfile(blocks: ProfileBlock[]): ProfileFinding[] {
     ...lintCredentials(structure, blocks),
     ...lintCompetencies(structure, blocks),
     ...lintPublicNames(structure, blocks),
+    ...lintTranslations(structure, blocks),
     ...lintAddenda(structure, blocks),
   ].sort((a, b) => (a.line ?? -1) - (b.line ?? -1) || a.from - b.from);
 }

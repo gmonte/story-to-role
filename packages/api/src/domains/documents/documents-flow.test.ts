@@ -4548,6 +4548,186 @@ describe("resume generation and snapshots", () => {
       language: "en-US",
     });
   });
+
+  it("prints a document in another language through the translations dictionary and points out what it lacks", async () => {
+    // An English profile with a Portuguese dictionary: the employer's note
+    // and the degree are in it; the institution and the city line are not.
+    const withDictionary = (entries: string[]) =>
+      profileMarkdown({
+        rules: [`In Portuguese: ${entries.join("; ")}`],
+        languages: ["Spanish — intermediate"],
+      })
+        .replace(
+          "### Globex — Tech Lead",
+          "### Globex (now Initech) — Tech Lead"
+        )
+        .replace(
+          "## Education\n",
+          "## Education\n\n- Bachelor's in Information Systems — Federal University of Minas Gerais — completed\n"
+        )
+        .replace(
+          "City and state: Belo Horizonte, MG",
+          "City and state: Belo Horizonte, MG, Brazil"
+        );
+    const entries = [
+      "Globex (now Initech) → Globex (agora Initech)",
+      "Bachelor's in Information Systems → Bacharelado em Sistemas de Informação",
+    ];
+    const ctx = await setup({ markdown: withDictionary(entries) });
+    const userId = ctx.user.id;
+    const { generationId } = await ctx.documents.generateResume({
+      ...ctx.request,
+      language: "pt-BR",
+    });
+    const bullet = {
+      text: "Liderou uma equipe de 5 engenheiros.",
+      evidence_ids: [ctx.evidence[1].id],
+    };
+    await ctx.runScripted(generationId, {
+      drafts: [ctx.draft([bullet])],
+      ratings: [9],
+    });
+    const view = async () =>
+      (await ctx.documents.forOpening({ userId, openingId: ctx.opening.id }))
+        .documents[0].versions[0];
+    const printed = await view();
+    const content = resumeOf(printed.content);
+    expect(experienceOf(content)).toMatchObject({
+      employer: "Globex (agora Initech)",
+      title: "Tech Lead",
+    });
+    expect(content.header.city).toBe("Belo Horizonte, MG, Brazil");
+    const credentials = (kind: "education" | "languages", of = content) =>
+      of.sections.flatMap((section) =>
+        section.kind === kind ? section.entries : []
+      );
+    expect(credentials("education")).toMatchObject([
+      {
+        title: "Bacharelado em Sistemas de Informação",
+        institution: "Federal University of Minas Gerais",
+      },
+    ]);
+    // Languages are translated by code: names and level words, codes kept.
+    expect(
+      credentials("languages").map((row) => [row.title, row.level])
+    ).toEqual([
+      ["Inglês", "C1"],
+      ["Espanhol", "intermediário"],
+    ]);
+    // What the dictionary lacks and still reads as English is pointed out:
+    // the city line (“Brazil”), the title (“Lead”) and the institution.
+    const untranslated = (printed.coverage?.findings ?? []).filter(
+      (finding) => finding.code === "untranslated"
+    );
+    expect(untranslated).toEqual([
+      {
+        code: "untranslated",
+        lineId: null,
+        positionId: null,
+        text: "Belo Horizonte, MG, Brazil",
+        params: { field: "city" },
+      },
+      {
+        code: "untranslated",
+        lineId: null,
+        positionId: ctx.positionId,
+        text: "Tech Lead",
+        params: { field: "title" },
+      },
+      {
+        code: "untranslated",
+        lineId: null,
+        positionId: null,
+        text: "Federal University of Minas Gerais",
+        params: {
+          field: "institution",
+          credentialId: credentials("education")[0].credentialId,
+        },
+      },
+    ]);
+    expect(printed.sentTranslations).toEqual([]);
+    // No locked fact is violated by printing the employer's translation.
+    expect(
+      (printed.coverage?.findings ?? []).every(
+        (finding) => finding.code === "untranslated"
+      )
+    ).toBe(true);
+
+    // "Add translation": a suggestion adding the entry to the dictionary
+    // line, in the profile's draft.
+    const tasks = new TasksService(ctx.db, ctx.trigger);
+    const profiles = new ProfileService(ctx.db, tasks);
+    const { profileSuggestionId } = await ctx.documents.addTranslationToProfile(
+      {
+        userId,
+        versionId: printed.id,
+        original: "Federal University of Minas Gerais",
+        translation: "Universidade Federal de Minas Gerais",
+      }
+    );
+    const [suggestion] = await profiles.listSuggestions(userId);
+    expect(suggestion).toMatchObject({
+      id: profileSuggestionId,
+      origin: "document",
+      part: "rules",
+    });
+    // The line's own `;` list gets one more entry.
+    expect(suggestion.find).toBe(`- In Portuguese: ${entries.join("; ")}`);
+    expect(suggestion.replace).toBe(
+      `- In Portuguese: ${entries.join("; ")}; Federal University of Minas Gerais → Universidade Federal de Minas Gerais`
+    );
+    expect(suggestion.reason).toContain("Federal University of Minas Gerais");
+    expect((await view()).sentTranslations).toEqual([
+      {
+        original: "Federal University of Minas Gerais",
+        profileSuggestionId,
+        status: "pending",
+      },
+    ]);
+    // Sent again: the same suggestion.
+    expect(
+      await ctx.documents.addTranslationToProfile({
+        userId,
+        versionId: printed.id,
+        original: "Federal University of Minas Gerais",
+        translation: "Universidade Federal de Minas Gerais",
+      })
+    ).toEqual({ profileSuggestionId });
+
+    // Accepted, published and used here: the field prints translated and
+    // the finding is gone.
+    await profiles.resolveSuggestions({
+      userId,
+      resolution: "accepted",
+      profileSuggestionIds: [profileSuggestionId],
+    });
+    await ctx.publishProfile(
+      withDictionary([
+        ...entries,
+        "Federal University of Minas Gerais → Universidade Federal de Minas Gerais",
+        "Belo Horizonte, MG, Brazil → Belo Horizonte, MG, Brasil",
+      ])
+    );
+    expect(
+      await ctx.documents.useProfileVersion({ userId, versionId: printed.id })
+    ).toMatchObject({ profileVersionNumber: 2 });
+    const fresh = await view();
+    expect(credentials("education", resumeOf(fresh.content))).toMatchObject([
+      {
+        title: "Bacharelado em Sistemas de Informação",
+        institution: "Universidade Federal de Minas Gerais",
+      },
+    ]);
+    expect(resumeOf(fresh.content).header.city).toBe(
+      "Belo Horizonte, MG, Brasil"
+    );
+    expect(experienceOf(fresh.content).employer).toBe("Globex (agora Initech)");
+    // Only the title, which the dictionary still lacks, is pointed out.
+    expect(fresh.coverage?.findings).toMatchObject([
+      { code: "untranslated", text: "Tech Lead" },
+    ]);
+    expect(fresh.sentTranslations).toEqual([]);
+  });
 });
 
 describe("a draft's rating by its coverage", () => {

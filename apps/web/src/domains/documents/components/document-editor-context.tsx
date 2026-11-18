@@ -42,6 +42,7 @@ import {
   replacedBlockClass,
 } from "../utils/change-widget";
 import { locateChangeInBlocks } from "../utils/document-changes";
+import { findPassage, type PassageTarget } from "../utils/passages";
 import {
   blocksToContent,
   contentToBlocks,
@@ -194,6 +195,7 @@ export function DocumentEditorProvider({
   const queryClient = useQueryClient();
   const refresh = useRefreshDocuments();
   const agent = useDocumentAgent();
+  const hoveredPassage = agent?.hoveredPassage ?? null;
   const initial = useMemo(
     () => contentToBlocks(editableContent(version), version.language),
     // The editor starts from the version it was opened with.
@@ -407,6 +409,13 @@ export function DocumentEditorProvider({
     [blocks]
   );
 
+  // The block a review quote points at: its line, or else the line whose
+  // text holds the quote (or is held by it), whitespace and quotes aside.
+  const indexOfPassage = useCallback(
+    (target: PassageTarget) => findPassage(blocks, target),
+    [blocks]
+  );
+
   const goToBlock = useCallback(
     (index: number, range?: { from: number; to: number }) => {
       if (editor && index >= 0) selectBlock(editor, index, range);
@@ -449,10 +458,31 @@ export function DocumentEditorProvider({
   const goToNote = useCallback(
     (note: ReviewNote) => {
       setActiveFinding(noteKey(note));
-      if (note.lineId) goToBlock(indexOfLine(note.lineId));
+      goToBlock(indexOfPassage(note));
     },
-    [goToBlock, indexOfLine, noteKey]
+    [goToBlock, indexOfPassage, noteKey]
   );
+
+  // The review beside the text (another column) finds its quotes among
+  // these lines, lights one up and opens it.
+  const setPassages = agent?.setPassages;
+  const passageHooks = agent?.passageHooks;
+  useEffect(() => {
+    setPassages?.(
+      blocks.flatMap((block) =>
+        "lineId" in block ? [{ lineId: block.lineId, text: block.text }] : []
+      )
+    );
+  }, [blocks, setPassages]);
+  useEffect(() => {
+    if (!passageHooks) return;
+    passageHooks.current = {
+      goTo: (target) => goToBlock(indexOfPassage(target)),
+    };
+    return () => {
+      passageHooks.current = null;
+    };
+  }, [passageHooks, goToBlock, indexOfPassage]);
 
   // The finding under the pointer in the text becomes the active one, so
   // the list shows which row the underline belongs to.
@@ -802,8 +832,8 @@ export function DocumentEditorProvider({
       });
     }
     notes.forEach((note, index) => {
-      if (!note.lineId) return;
-      const at = indexOfLine(note.lineId);
+      const at = indexOfPassage(note);
+      if (at < 0) return;
       const range = nodeOf(at);
       const block = blocks[at];
       if (!range || !block || !("text" in block) || !block.text) return;
@@ -817,6 +847,20 @@ export function DocumentEditorProvider({
         key,
       });
     });
+    if (hoveredPassage) {
+      const at = indexOfPassage(hoveredPassage);
+      const range = at >= 0 ? nodeOf(at) : null;
+      const block = blocks[at];
+      if (range && block && "text" in block && block.text) {
+        specs.push({
+          kind: "inline",
+          from: range.from + 1,
+          to: range.from + 1 + block.text.length,
+          className: "bg-amber-500/20 rounded-sm",
+          key: "hovered-passage",
+        });
+      }
+    }
     setDecorations(editor, specs);
     // The labels are the same strings on every render.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -827,8 +871,10 @@ export function DocumentEditorProvider({
     notes,
     changes,
     hoveredFinding,
+    hoveredPassage,
     lines,
     indexOfLine,
+    indexOfPassage,
     indexOfOwner,
   ]);
 

@@ -11,6 +11,8 @@ import {
 
 import type { AgentAttachment } from "@repo/api/domains/agents/agent-message";
 
+import type { PassageLine, PassageTarget } from "../utils/passages";
+
 // A long selection is about its start; the agent reads the rest.
 export const maxDocumentQuoteCharacters = 1500;
 
@@ -36,9 +38,19 @@ export type ChangeHooks = {
   show: (documentChangeId: string) => void;
 };
 
+/** What the editor lends the review beside it: opening a quoted passage. */
+export type PassageHooks = { goTo: (target: PassageTarget) => void };
+
 type DocumentAgentState = {
   topic: DocumentAgentTopic | null;
   changeHooks: RefObject<ChangeHooks | null>;
+  /** The editor's lines, which the review's quotes are found among. */
+  passages: PassageLine[];
+  setPassages: (lines: PassageLine[]) => void;
+  /** The review item under the pointer: its passage lights up in the text. */
+  hoveredPassage: PassageTarget | null;
+  hoverPassage: (target: PassageTarget | null) => void;
+  passageHooks: RefObject<PassageHooks | null>;
   talkAbout: (topic: {
     quote?: string | null;
     attachment?: AgentAttachment | null;
@@ -63,11 +75,19 @@ export function useDocumentAgent() {
 export function DocumentAgentProvider({ children }: { children: ReactNode }) {
   const [topic, setTopic] = useState<DocumentAgentTopic | null>(null);
   const changeHooks = useRef<ChangeHooks | null>(null);
+  const passageHooks = useRef<PassageHooks | null>(null);
+  const [passages, setPassages] = useState<PassageLine[]>([]);
+  const [hoveredPassage, hoverPassage] = useState<PassageTarget | null>(null);
   return (
     <DocumentAgentContext.Provider
       value={{
         topic,
         changeHooks,
+        passages,
+        setPassages,
+        hoveredPassage,
+        hoverPassage,
+        passageHooks,
         talkAbout: ({ quote, attachment }) =>
           setTopic({
             id: Date.now(),

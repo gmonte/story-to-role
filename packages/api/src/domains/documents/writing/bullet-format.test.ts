@@ -35,6 +35,10 @@ describe("checkBulletShape", () => {
       "Implemented GCP Cloud Functions to feed vendor-specific DAG pipelines, removing obsolete writes to unused legacy tables, resulting in cloud cost reductions and improved operational efficiency.",
       "Delivered infrastructure-as-code solutions in Terraform and application logic in Node.js and TypeScript to standardize deployments and streamline cross-cloud workflows.",
       "Onboarded and mentored new engineers in AWS and GCP data ingestion pipelines, providing documentation, technical sessions, and system walkthroughs to accelerate team ramp-up and reduce knowledge gaps.",
+      "Developed a significant API route adhering to RESTful API standards. This route facilitates the creation of generic datasets based on data categories provided by sellers, along with internal system attributes that categorically sell the data, allowing the possibility of data selling to 900.000 users.",
+      "Implemented custom data payload cron jobs to meet the requirements of global companies, accelerating product delivery to high-demand customers. Executed scripts through AWS EC2 instances with pre-defined AWS AMI images, and integrated with Jenkins for efficient CI/CD.",
+      "Created an internal reporting system to address the issue on routine daily/weekly activities of the Product/Partner Success team. This system efficiently extracts data from AWS S3 using Apache Spark, combining it with data from PostgreSQL tables and results on spreadsheets with data visualization optimizing their decisions on the next steps.",
+      "Successfully managed the migration of legacy system data to a new format, adhering to predefined data rules and formats. Accomplished the transfer using Scala, Scala Cats, Apache Spark, AWS EC2, and AWS S3.",
     ];
     for (const example of examples)
       expect(checkBulletShape(example, "en-US")).toEqual([]);

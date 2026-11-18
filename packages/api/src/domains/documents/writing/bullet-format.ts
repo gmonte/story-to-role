@@ -14,7 +14,7 @@ export const bulletFormatRule = [
   "2. Impact/result: what changed because of it. A figure only when the profile line shows it as measured; otherwise a qualitative result the profile states. Never an invented or unmarked figure. When the profile states no result, say what the work enabled, still inventing nothing.",
   "3. How / with what: the means and keywords, such as methods, architecture and technologies the profile states, preferring the opening's keywords where true of the person, spelled as the opening spells them.",
   "A bullet is never a bare list of technologies and fits about two to three lines of a PDF (roughly 330 characters).",
-  "The three blocks may also flow in one sentence (action, result, then “using/with …”), and the how may name methods and practices, not only technologies.",
+  "The three blocks may also flow in one sentence, or the how may be a separate sentence after the result, or the action may carry its purpose before the result (action, result, then “using/with …”), and the how may name methods and practices, not only technologies.",
   "The examples below show the SHAPE only: never copy their facts, numbers or technologies into a document.",
   "- Example: “Redesigned the application architecture following Clean Architecture and Domain-Driven Design (DDD), optimizing the main section responsible for extracting relevant emails and carbon emissions data. Reduced the average processing time from 15 minutes to just 3 minutes by utilizing Node.js, TypeScript, and various AWS services such as AWS DynamoDB, AWS Cognito, AWS API Gateway, and AWS SQS.”",
   "- Example: “Implemented test coverage for the application, covering 60% of the codebase with unit and integration tests. This effort led to a noticeable decrease in production bugs and significantly improved scalability. Used Jest and TypeScript for efficient testing.”",
@@ -26,6 +26,10 @@ export const bulletFormatRule = [
   "- Example: “Implemented GCP Cloud Functions to feed vendor-specific DAG pipelines, removing obsolete writes to unused legacy tables, resulting in cloud cost reductions and improved operational efficiency.”",
   "- Example: “Delivered infrastructure-as-code solutions in Terraform and application logic in Node.js and TypeScript to standardize deployments and streamline cross-cloud workflows.”",
   "- Example: “Onboarded and mentored new engineers in AWS and GCP data ingestion pipelines, providing documentation, technical sessions, and system walkthroughs to accelerate team ramp-up and reduce knowledge gaps.”",
+  "- Example: “Developed a significant API route adhering to RESTful API standards. This route facilitates the creation of generic datasets based on data categories provided by sellers, along with internal system attributes that categorically sell the data, allowing the possibility of data selling to 900.000 users.”",
+  "- Example: “Implemented custom data payload cron jobs to meet the requirements of global companies, accelerating product delivery to high-demand customers. Executed scripts through AWS EC2 instances with pre-defined AWS AMI images, and integrated with Jenkins for efficient CI/CD.”",
+  "- Example: “Created an internal reporting system to address the issue on routine daily/weekly activities of the Product/Partner Success team. This system efficiently extracts data from AWS S3 using Apache Spark, combining it with data from PostgreSQL tables and results on spreadsheets with data visualization optimizing their decisions on the next steps.”",
+  "- Example: “Successfully managed the migration of legacy system data to a new format, adhering to predefined data rules and formats. Accomplished the transfer using Scala, Scala Cats, Apache Spark, AWS EC2, and AWS S3.”",
 ].join("\n");
 
 /** A bullet's shape problems code can tell (a warning, never a block). */

@@ -137,6 +137,14 @@ export function adjustmentDraft(
         ],
       };
     }),
-    projects: [],
+    // Projects stay as the reference has them, in its order.
+    projects: reference.sections.flatMap((section) =>
+      section.kind === "projects"
+        ? section.entries.map((entry) => ({
+            project_id: entry.projectId,
+            bullets: entry.lines.map((line) => ({ keep: line.id })),
+          }))
+        : []
+    ),
   };
 }

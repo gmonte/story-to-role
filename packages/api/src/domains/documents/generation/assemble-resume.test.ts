@@ -1735,6 +1735,63 @@ describe("projects of the profile", () => {
     ]);
   });
 
+  it("keeps the projects of the resume being adjusted, word for word", () => {
+    const written = assembleResume({
+      draft: {
+        ...draft,
+        experience: [],
+        skills: [],
+        summary: null,
+        projects: [
+          {
+            project_id: sideProduct.id,
+            bullets: [
+              {
+                text: "Got 120 people on the waiting list.",
+                evidence_ids: [idOf("waiting list")],
+              },
+              {
+                text: "Doubled sign-ups after the launch post.",
+                evidence_ids: [idOf("Doubled")],
+              },
+            ],
+          },
+        ],
+      },
+      context: ctx,
+      sections: projectSections,
+      settings: defaultGenerationSettings,
+      today: "2026-01",
+      purposes: [],
+      targetTitle: "Founder",
+    }).content;
+    const adjusted = adjustmentDraft(
+      {
+        changes: [],
+        title_line: "",
+        summary: null,
+        skills: [],
+        experience: [],
+      },
+      written
+    );
+    expect(adjusted.projects).toHaveLength(1);
+    const { content } = assembleResume({
+      draft: adjusted,
+      reference: written,
+      context: ctx,
+      sections: projectSections,
+      settings: defaultGenerationSettings,
+      today: "2026-01",
+      purposes: [],
+      targetTitle: "Founder",
+    });
+    const pick = (c: ResumeContent) =>
+      c.sections.find((s) => s.kind === "projects");
+    expect(pick(content)).toEqual(pick(written));
+    expect(pick(content)).toBeDefined();
+  });
+
   it("leaves the section out when no project has a line, and lists projects in the material", () => {
     const { content } = assembleResume({
       draft: { ...draft, projects: [] },

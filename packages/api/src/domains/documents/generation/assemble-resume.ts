@@ -71,7 +71,7 @@ type KeptLine = { keep: string };
  */
 export type AssemblyDraft = Omit<
   ResumeDraft,
-  "summary" | "skills" | "experience"
+  "summary" | "skills" | "experience" | "projects"
 > & {
   summary: DraftLine | KeptLine | null;
   skills: Array<
@@ -82,6 +82,7 @@ export type AssemblyDraft = Omit<
       bullets: Array<DraftLine | KeptLine>;
     }
   >;
+  projects: Array<{ project_id: string; bullets: Array<DraftLine | KeptLine> }>;
 };
 
 const isKept = (line: object): line is KeptLine => "keep" in line;
@@ -250,6 +251,17 @@ export function assembleResume(input: {
             entry.lines.map(
               (line) =>
                 [line.id, { line, positionId: entry.positionId }] as const
+            )
+          )
+        : []
+    )
+  );
+  const referenceProjectLines = new Map(
+    reference.flatMap((section) =>
+      section.kind === "projects"
+        ? section.entries.flatMap((entry) =>
+            entry.lines.map(
+              (line) => [line.id, { line, projectId: entry.projectId }] as const
             )
           )
         : []
@@ -564,8 +576,21 @@ export function assembleResume(input: {
         const drafted = draft.projects.find(
           (entry) => entry.project_id === project.id
         );
-        const lines = (drafted?.bullets ?? []).flatMap(
-          (bullet) =>
+        const keptIds = new Set<string>();
+        const allKept = (drafted?.bullets ?? []).every(isKept);
+        const lines = (drafted?.bullets ?? []).flatMap((bullet) => {
+          if (isKept(bullet)) {
+            const existing = referenceProjectLines.get(bullet.keep);
+            if (
+              existing?.projectId !== project.id ||
+              keptIds.has(bullet.keep)
+            ) {
+              return [];
+            }
+            keptIds.add(bullet.keep);
+            return stillHolds(existing.line.text, null) ? [existing.line] : [];
+          }
+          return (
             toLine(bullet, (id) => {
               const evidence = evidenceById.get(id)!;
               return (
@@ -574,7 +599,8 @@ export function assembleResume(input: {
                   evidence.positionId === project.positionId)
               );
             }) ?? []
-        );
+          );
+        });
         if (lines.length === 0) return [];
         const age = experienceAge(project, input.settings, input.today);
         return [
@@ -585,12 +611,15 @@ export function assembleResume(input: {
             endDate: project.endDate,
             role: project.role,
             link: project.link,
-            lines: lines.slice(
-              0,
-              age === "recent"
-                ? input.settings.bulletsRecent
-                : input.settings.bulletsOlder
-            ),
+            // A kept project is printed as the reference had it.
+            lines: allKept
+              ? lines
+              : lines.slice(
+                  0,
+                  age === "recent"
+                    ? input.settings.bulletsRecent
+                    : input.settings.bulletsOlder
+                ),
           },
         ];
       });

@@ -1,12 +1,8 @@
 import { TRPCError } from "@trpc/server";
-import { z } from "zod";
 
 import { CareerRepository } from "@repo/api/domains/career/career-repository";
 import { loadProfileSource } from "@repo/api/domains/documents/generation/load-profile-source";
-import {
-  getUserCipher,
-  type UserCipher,
-} from "@repo/api/domains/encryption/user-cipher";
+import { getUserCipher } from "@repo/api/domains/encryption/user-cipher";
 import { OpeningsRepository } from "@repo/api/domains/openings/openings-repository";
 import { suggestLine } from "@repo/api/domains/profile/suggestions/suggest-line";
 import type { ExperienceField } from "@repo/api/domains/profile/truth/sections";
@@ -18,7 +14,6 @@ import { InstructionsRepository } from "./instructions-repository";
 import { loadPendingGapAnswers } from "./load-gap-answers";
 import {
   type ApplicationInstructions,
-  flaggedSensitiveItemSchema,
   type InstructionSendResult,
   positionFieldOf,
 } from "./schemas/instructions";
@@ -33,13 +28,6 @@ const fieldOfKind = {
   tool: "tools",
   responsibility: "responsibilities",
 } as const satisfies Record<string, ExperienceField>;
-
-const sensitiveItemsOf = (cipher: UserCipher, encrypted: string | null) =>
-  encrypted
-    ? z
-        .array(flaggedSensitiveItemSchema)
-        .parse(JSON.parse(cipher.decrypt(encrypted)))
-    : [];
 
 /**
  * Application instructions (resume spec, "Application instructions"):
@@ -111,10 +99,6 @@ export class InstructionsService {
             credentialId: point.credentialId,
             evidenceKind: point.evidenceKind,
             sentToProfile: !!point.sentToProfileAt,
-            sensitiveItems: sensitiveItemsOf(
-              cipher,
-              point.encryptedSensitiveItems
-            ),
           })),
         overrides: (await repository.listOverrides(opening.id)).map((row) => ({
           id: row.id,

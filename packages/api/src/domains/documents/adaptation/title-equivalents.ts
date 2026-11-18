@@ -1,5 +1,5 @@
 import type { UserCipher } from "@repo/api/domains/encryption/user-cipher";
-import type { SensitiveFilter } from "@repo/api/domains/evidence/sensitive/sensitive-filter";
+import type { NeverIncludeFilter } from "@repo/api/domains/profile/rules/never-include-filter";
 import type { DbClient } from "@repo/api/tools/db-client";
 
 import { DocumentsRepository } from "../documents-repository";
@@ -21,7 +21,7 @@ export async function loadTitleEquivalents(input: {
   db: DbClient;
   cipher: UserCipher;
   profileId: string;
-  filter: SensitiveFilter;
+  filter: NeverIncludeFilter;
 }): Promise<TitleEquivalent[]> {
   return (
     await new DocumentsRepository(input.db).listTitleEquivalents(

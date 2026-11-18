@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { createSensitiveFilter } from "@repo/api/domains/evidence/sensitive/sensitive-filter";
+import { createNeverIncludeFilter } from "@repo/api/domains/profile/rules/never-include-filter";
 import { parseBlocks } from "@repo/api/domains/profile/truth/blocks";
 import {
   extractProfile,
@@ -430,7 +430,7 @@ describe("assembling a resume", () => {
     if (experience?.kind === "experience") experience.entries[0].title = "CTO";
     expect(lockedFactViolations(content, context.positions)).toEqual([P1]);
 
-    const filter = createSensitiveFilter([
+    const filter = createNeverIncludeFilter([
       { original: "Kubernetes", choice: "exclude" },
     ]);
     expect(findForbiddenLines(content, filter)).toContain("title_line");

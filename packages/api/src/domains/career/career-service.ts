@@ -3,29 +3,17 @@ import { TRPCError } from "@trpc/server";
 import { importSettings } from "@repo/api/domains/profile/import/import-settings";
 import { TasksRepository } from "@repo/api/domains/tasks/tasks-repository";
 import type { DbClient } from "@repo/api/tools/db-client";
-import {
-  getUserCipher,
-  type UserCipher,
-} from "@repo/api/domains/encryption/user-cipher";
+import { getUserCipher } from "@repo/api/domains/encryption/user-cipher";
 import { ProfileRepository } from "@repo/api/domains/profile/profile-repository";
 
 import { CareerRepository } from "./career-repository";
 import type { InterviewLanguage, StartPath } from "./schemas/career";
-import type {
-  CredentialInput,
-  PositionInput,
-  Timeline,
-} from "./schemas/timeline";
+import type { Timeline } from "./schemas/timeline";
 
 const notFound = () => new TRPCError({ code: "NOT_FOUND" });
 
-function seal(cipher: UserCipher, value: string | null | undefined) {
-  return value ? cipher.encrypt(value) : null;
-}
-
 /**
- * The career profile anchor for one user: the profile, its sources, and the
- * positions and credentials other domains read. Every change goes through
+ * The career profile anchor for one user: the profile and its sources. Every change goes through
  * here, which checks ownership and keeps all career text encrypted.
  */
 export class CareerService {
@@ -156,42 +144,5 @@ export class CareerService {
         })
       ),
     };
-  }
-
-  /**
-   * Adds a position by hand. No route calls it until the published
-   * profile's extract writes positions (P2, docs/plan.md).
-   */
-  async addPosition(input: { userId: string; position: PositionInput }) {
-    const profile = await this.requireProfile(input.userId);
-    const cipher = await getUserCipher(this.db, input.userId);
-    const row = await new CareerRepository(this.db).insertPosition({
-      profileId: profile.id,
-      origin: "manual",
-      encryptedEmployer: cipher.encrypt(input.position.employer),
-      encryptedTitle: cipher.encrypt(input.position.title),
-      encryptedLocation: seal(cipher, input.position.location),
-      startDate: input.position.startDate ?? null,
-      endDate: input.position.endDate ?? null,
-    });
-    return { positionId: row.id };
-  }
-
-  /** Adds a credential by hand, approved (the user is its source). */
-  async addCredential(input: { userId: string; credential: CredentialInput }) {
-    const profile = await this.requireProfile(input.userId);
-    const cipher = await getUserCipher(this.db, input.userId);
-    const row = await new CareerRepository(this.db).insertCredential({
-      profileId: profile.id,
-      kind: input.credential.kind,
-      encryptedInstitution: seal(cipher, input.credential.institution),
-      encryptedTitle: cipher.encrypt(input.credential.title),
-      level: input.credential.level ?? null,
-      startDate: input.credential.startDate ?? null,
-      endDate: input.credential.endDate ?? null,
-      status: input.credential.status,
-      approvedAt: new Date(),
-    });
-    return { credentialId: row.id };
   }
 }

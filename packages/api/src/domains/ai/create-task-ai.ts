@@ -1,7 +1,7 @@
 import { CareerRepository } from "@repo/api/domains/career/career-repository";
 import { TasksRepository } from "@repo/api/domains/tasks/tasks-repository";
 import { getUserCipher } from "@repo/api/domains/encryption/user-cipher";
-import { loadSensitiveFilter } from "@repo/api/domains/evidence/sensitive/load-sensitive-filter";
+import { loadNeverIncludeFilter } from "@repo/api/domains/profile/rules/load-never-include-filter";
 import type { DbClient } from "@repo/api/tools/db-client";
 
 import { createAiClient } from "./ai-client";
@@ -22,8 +22,8 @@ export async function createTaskAi(input: {
   const profile = await new CareerRepository(input.db).findProfileByUserId(
     input.userId
   );
-  const sensitiveFilter = profile
-    ? await loadSensitiveFilter({
+  const neverIncludeFilter = profile
+    ? await loadNeverIncludeFilter({
         db: input.db,
         cipher,
         profileId: profile.id,
@@ -40,7 +40,7 @@ export async function createTaskAi(input: {
   return {
     cipher,
     profileId: profile?.id,
-    sensitiveFilter,
+    neverIncludeFilter,
     funding,
     languageModel,
     ai: createAiClient({
@@ -49,7 +49,7 @@ export async function createTaskAi(input: {
       taskId: input.taskId,
       funding,
       providerPackage,
-      sensitiveFilter,
+      neverIncludeFilter,
     }),
   };
 }

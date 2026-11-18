@@ -3,35 +3,11 @@ import { z } from "zod";
 import { taskProgressSchema } from "@repo/api/domains/tasks/schemas/task";
 
 import {
-  credentialKindSchema,
-  credentialStatusSchema,
   interviewLanguageSchema,
   sourceDocumentKindSchema,
   sourceImportRejectionSchema,
   sourceImportStatusSchema,
-  yearMonthSchema,
 } from "./career";
-
-export const positionInputSchema = z.object({
-  employer: z.string().trim().min(1).max(200),
-  title: z.string().trim().min(1).max(200),
-  startDate: yearMonthSchema.optional(),
-  // Absent end date: the user still holds the position.
-  endDate: yearMonthSchema.optional(),
-  location: z.string().trim().max(200).optional(),
-});
-export type PositionInput = z.infer<typeof positionInputSchema>;
-
-export const credentialInputSchema = z.object({
-  kind: credentialKindSchema,
-  institution: z.string().trim().max(200).optional(),
-  title: z.string().trim().min(1).max(200),
-  level: z.string().trim().max(50).optional(),
-  startDate: yearMonthSchema.optional(),
-  endDate: yearMonthSchema.optional(),
-  status: credentialStatusSchema.default("completed"),
-});
-export type CredentialInput = z.infer<typeof credentialInputSchema>;
 
 export const sourceDocumentViewSchema = z.object({
   id: z.uuid(),

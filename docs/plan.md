@@ -46,7 +46,7 @@ The meu-emprego-novo method in the product (ADR 0008): the profile document, its
 - Squash every migration into one baseline generated from the remaining schema (idempotent as usual); rebuild the local and staging databases from scratch with it. All their data is lost, which is fine: nothing runs outside local and staging yet.
 - The owner recreates their Clerk user while ngrok forwards the webhook (say when it's running); the test users used in live checks are recreated after asking.
 - Note: the career chat's `chat.agent` transport (the agent task, encrypted transcript storage, the 7-day purge and closing sessions on account deletion) went with the old chat; P3 rebuilds it from git history as the profile agent.
-- Note: `positions`, `credentials`, `sensitive_items` and `career_goals` stay on purpose until P5, P6 and P8 move their readers to the profile; until then the `evidence` domain folder holds only the last two.
+- Note: `positions`, `credentials`, `sensitive_items` and `career_goals` stayed until P5, P6 and P8 moved their readers to the profile. After P10 the leftovers were removed (migration `remove_leftover_career_tables`): those four tables, `application_overrides` (per-application sensitive-item overrides) with its router, the points' `encryptedSensitiveItems` columns, the `evidence` domain folder and the account export entries. The communication rules' "never include" filter moved to `domains/profile/rules/`. `locked_fact_overrides` and title equivalents stay.
 
 Acceptance:
 - [ ] No table, task, route or component of the old engine remains; `pnpm lint` and `pnpm test` pass.

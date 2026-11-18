@@ -1,7 +1,7 @@
 import { task } from "@trigger.dev/sdk";
 
 import { createTaskAi } from "@repo/api/domains/ai/create-task-ai";
-import { createSensitiveFilter } from "@repo/api/domains/evidence/sensitive/sensitive-filter";
+import { createNeverIncludeFilter } from "@repo/api/domains/profile/rules/never-include-filter";
 import { runTask } from "@repo/api/domains/tasks/run-task";
 import { db } from "@repo/api/tools/db";
 import { localEmbedder } from "@repo/api/tools/embeddings/embedder";
@@ -23,7 +23,7 @@ export const generateDocumentTask = task({
       { db, taskId, type: "generate_document" },
       async ({ userId, subjectId, reportProgress }) => {
         if (!subjectId) throw new Error(`Task ${taskId} has no generation`);
-        const { ai, cipher, sensitiveFilter } = await createTaskAi({
+        const { ai, cipher, neverIncludeFilter } = await createTaskAi({
           db,
           userId,
           taskId,
@@ -32,7 +32,7 @@ export const generateDocumentTask = task({
           db,
           ai,
           cipher,
-          filter: sensitiveFilter ?? createSensitiveFilter([]),
+          filter: neverIncludeFilter ?? createNeverIncludeFilter([]),
           userId,
           generationId: subjectId,
         };

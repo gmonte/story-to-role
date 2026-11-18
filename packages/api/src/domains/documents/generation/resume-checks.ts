@@ -1,4 +1,4 @@
-import type { SensitiveFilter } from "@repo/api/domains/evidence/sensitive/sensitive-filter";
+import type { NeverIncludeFilter } from "@repo/api/domains/profile/rules/never-include-filter";
 
 import type { CoverLetterContent } from "../schemas/cover-letter-content";
 import type { Line, LineOrigin } from "../schemas/document";
@@ -148,7 +148,7 @@ export function writtenLines(
  */
 export function findForbiddenLines(
   content: ResumeContent,
-  filter: SensitiveFilter
+  filter: NeverIncludeFilter
 ) {
   return writtenLines(content)
     .filter((line) => filter.findForbiddenTerms(line.text).length > 0)

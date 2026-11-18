@@ -1,5 +1,5 @@
 import type { UserCipher } from "@repo/api/domains/encryption/user-cipher";
-import { loadSensitiveFilter } from "@repo/api/domains/evidence/sensitive/load-sensitive-filter";
+import { loadNeverIncludeFilter } from "@repo/api/domains/profile/rules/load-never-include-filter";
 import { OpeningsRepository } from "@repo/api/domains/openings/openings-repository";
 import { ProfileRepository } from "@repo/api/domains/profile/profile-repository";
 import { mentions } from "@repo/api/domains/profile/truth/lint";
@@ -44,7 +44,7 @@ export async function rankStories(input: {
   openingId: string;
 }): Promise<LetterStory[]> {
   const { db, cipher } = input;
-  const filter = await loadSensitiveFilter({
+  const filter = await loadNeverIncludeFilter({
     db,
     cipher,
     profileId: input.profileId,

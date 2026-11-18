@@ -1,11 +1,9 @@
 import { foldAccents } from "@repo/api/utils/text/fold-accents";
 
-import type { SensitivityChoice } from "../schemas/evidence";
-
-export type SensitiveRule = {
+export type NeverIncludeRule = {
   original: string;
   // Null until the user reviews the item: hidden like an exclusion meanwhile.
-  choice: SensitivityChoice | null;
+  choice: "use" | "generalize" | "exclude" | null;
   generalized?: string | null;
 };
 
@@ -16,11 +14,11 @@ function escapeRegExp(text: string) {
 }
 
 /**
- * The user's sensitivity choices, applied by code before and after every AI
- * call (principle 4): what goes into a prompt is rewritten, and an output
- * still carrying a generalized or excluded original is rejected.
+ * The "never include" rules of the user's communication rules, applied by
+ * code before and after every AI call (principle 4): what goes into a
+ * prompt is rewritten, and an output still carrying a generalized or excluded original is rejected.
  */
-export function createSensitiveFilter(rules: SensitiveRule[]) {
+export function createNeverIncludeFilter(rules: NeverIncludeRule[]) {
   // Longest first, so "Banco X Seguros" wins over "Banco X".
   const hidden = rules
     .filter((rule) => rule.choice !== "use" && rule.original.trim())
@@ -48,7 +46,11 @@ export function createSensitiveFilter(rules: SensitiveRule[]) {
     return new RegExp(`${before}${escapeRegExp(term)}${after}`, "giu");
   };
 
-  function replaceAll(text: string, rule: SensitiveRule, replacement: string) {
+  function replaceAll(
+    text: string,
+    rule: NeverIncludeRule,
+    replacement: string
+  ) {
     const folded = foldAccents(text);
     let result = "";
     let cursor = 0;
@@ -59,7 +61,7 @@ export function createSensitiveFilter(rules: SensitiveRule[]) {
     return result + text.slice(cursor);
   }
 
-  function mentions(text: string, rule: SensitiveRule) {
+  function mentions(text: string, rule: NeverIncludeRule) {
     return patternFor(rule.original).test(foldAccents(text));
   }
 
@@ -104,7 +106,7 @@ export function createSensitiveFilter(rules: SensitiveRule[]) {
   };
 }
 
-export type SensitiveFilter = ReturnType<typeof createSensitiveFilter>;
+export type NeverIncludeFilter = ReturnType<typeof createNeverIncludeFilter>;
 
 /** Carries only a count: the terms themselves must never reach a log. */
 export class ForbiddenTermError extends Error {

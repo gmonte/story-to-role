@@ -3,7 +3,7 @@ import { z } from "zod";
 import type { AiClient } from "@repo/api/domains/ai/ai-client";
 import { CareerRepository } from "@repo/api/domains/career/career-repository";
 import type { UserCipher } from "@repo/api/domains/encryption/user-cipher";
-import type { SensitiveFilter } from "@repo/api/domains/evidence/sensitive/sensitive-filter";
+import type { NeverIncludeFilter } from "@repo/api/domains/profile/rules/never-include-filter";
 import type { TaskProgress } from "@repo/api/domains/tasks/schemas/task";
 import type { DbClient } from "@repo/api/tools/db-client";
 import type { Storage } from "@repo/api/tools/storage/storage";
@@ -73,7 +73,7 @@ export async function runAdaptDocument(deps: {
   db: DbClient;
   ai: AiClient;
   cipher: UserCipher;
-  filter: SensitiveFilter;
+  filter: NeverIncludeFilter;
   userId: string;
   generationId: string;
   reportProgress?: (progress: TaskProgress) => Promise<void>;
@@ -230,7 +230,7 @@ async function adaptVersion(input: {
   db: DbClient;
   ai: AiClient;
   cipher: UserCipher;
-  filter: SensitiveFilter;
+  filter: NeverIncludeFilter;
   profileId: string;
   // The profile version the text being adapted was written from: its
   // positions are the ones the content holds.
@@ -419,7 +419,7 @@ async function adaptVersion(input: {
 /** One call adapts the selected changes; code merges them into the target. */
 async function adaptChanges(input: {
   ai: AiClient;
-  filter: SensitiveFilter;
+  filter: NeverIncludeFilter;
   language: OutputLanguage;
   source: ResumeContent;
   target: ResumeContent;

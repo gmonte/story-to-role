@@ -6,7 +6,7 @@ import { createAiClient } from "@repo/api/domains/ai/ai-client";
 import { CareerService } from "@repo/api/domains/career/career-service";
 import { creditCap } from "@repo/api/domains/credits/credit-pricing";
 import { getUserCipher } from "@repo/api/domains/encryption/user-cipher";
-import { loadSensitiveFilter } from "@repo/api/domains/evidence/sensitive/load-sensitive-filter";
+import { loadNeverIncludeFilter } from "@repo/api/domains/profile/rules/load-never-include-filter";
 import { ProfileService } from "@repo/api/domains/profile/profile-service";
 import { TasksService } from "@repo/api/domains/tasks/tasks-service";
 import { createTestUser } from "@repo/api/test/create-test-user";
@@ -101,7 +101,7 @@ async function setup() {
     baseRevision: draft.revision,
   });
   await profiles.publish({ userId: user.id, baseRevision: revision });
-  const filter = await loadSensitiveFilter({
+  const filter = await loadNeverIncludeFilter({
     db,
     cipher,
     profileId: profile.id,
@@ -148,7 +148,7 @@ async function setup() {
         userId: user.id,
         funding: "credits",
         providerPackage: fake.providerPackage,
-        sensitiveFilter: filter,
+        neverIncludeFilter: filter,
       }),
       cipher,
       userId: user.id,

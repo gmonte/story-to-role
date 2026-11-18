@@ -4,7 +4,7 @@ import { KeyUnusableError } from "@repo/api/domains/ai/providers/provider-packag
 import type { AiClient } from "@repo/api/domains/ai/ai-client";
 import { CareerRepository } from "@repo/api/domains/career/career-repository";
 import type { UserCipher } from "@repo/api/domains/encryption/user-cipher";
-import { loadSensitiveFilter } from "@repo/api/domains/evidence/sensitive/load-sensitive-filter";
+import { loadNeverIncludeFilter } from "@repo/api/domains/profile/rules/load-never-include-filter";
 import type { TaskProgress } from "@repo/api/domains/tasks/schemas/task";
 import type { DbClient } from "@repo/api/tools/db-client";
 import { logger } from "@repo/common/tools/logger";
@@ -165,7 +165,7 @@ export async function runGenerateLinkedin(deps: {
       .catch(defaultGenerationSettings)
       .parse(generation.settings ?? defaultGenerationSettings);
     const today = deps.today ?? new Date().toISOString().slice(0, 7);
-    const filter = await loadSensitiveFilter({
+    const filter = await loadNeverIncludeFilter({
       db,
       cipher,
       profileId: generation.profileId,

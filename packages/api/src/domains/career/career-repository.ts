@@ -1,23 +1,9 @@
-import {
-  and,
-  arrayContains,
-  desc,
-  eq,
-  inArray,
-  isNotNull,
-  isNull,
-  sql,
-} from "drizzle-orm";
+import { and, desc, eq, inArray, isNotNull, isNull } from "drizzle-orm";
 
 import { openingsTable } from "@repo/api/domains/openings/db/openings-tables";
 import type { DbClient } from "@repo/api/tools/db-client";
 
-import {
-  careerProfilesTable,
-  credentialsTable,
-  positionsTable,
-  sourceDocumentsTable,
-} from "./db/career-tables";
+import { careerProfilesTable, sourceDocumentsTable } from "./db/career-tables";
 
 type Insert<T extends { $inferInsert: unknown }> = T["$inferInsert"];
 
@@ -42,14 +28,9 @@ export class CareerRepository {
     return rows.length > 0;
   }
 
-  /** Whether the profile holds anything yet: a source, a position or an opening. */
+  /** Whether the profile holds anything yet: a source or an opening. */
   async hasStarted(profileId: string) {
-    const first = (
-      table:
-        | typeof sourceDocumentsTable
-        | typeof positionsTable
-        | typeof openingsTable
-    ) =>
+    const first = (table: typeof sourceDocumentsTable | typeof openingsTable) =>
       this.tx
         .select({ id: table.id })
         .from(table)
@@ -57,7 +38,6 @@ export class CareerRepository {
         .limit(1);
     const found = await Promise.all([
       first(sourceDocumentsTable),
-      first(positionsTable),
       first(openingsTable),
     ]);
     return found.some((rows) => rows.length > 0);
@@ -88,36 +68,6 @@ export class CareerRepository {
       .where(eq(careerProfilesTable.id, profileId));
   }
 
-  listPositions(profileId: string) {
-    return this.tx
-      .select()
-      .from(positionsTable)
-      .where(eq(positionsTable.profileId, profileId));
-  }
-
-  async insertPosition(position: Insert<typeof positionsTable>) {
-    const [row] = await this.tx
-      .insert(positionsTable)
-      .values(position)
-      .returning();
-    return row;
-  }
-
-  listCredentials(profileId: string) {
-    return this.tx
-      .select()
-      .from(credentialsTable)
-      .where(eq(credentialsTable.profileId, profileId));
-  }
-
-  async insertCredential(credential: Insert<typeof credentialsTable>) {
-    const [row] = await this.tx
-      .insert(credentialsTable)
-      .values(credential)
-      .returning();
-    return row;
-  }
-
   listDocuments(profileId: string) {
     return this.tx
       .select()
@@ -146,16 +96,7 @@ export class CareerRepository {
     );
   }
 
-  /** Deletes a source and drops it from the positions and credentials it fed. */
   async deleteDocument(sourceDocumentId: string) {
-    for (const table of [positionsTable, credentialsTable]) {
-      await this.tx
-        .update(table)
-        .set({
-          sourceDocumentIds: sql`array_remove(${table.sourceDocumentIds}, ${sourceDocumentId}::uuid)`,
-        })
-        .where(arrayContains(table.sourceDocumentIds, [sourceDocumentId]));
-    }
     await this.tx
       .delete(sourceDocumentsTable)
       .where(eq(sourceDocumentsTable.id, sourceDocumentId));

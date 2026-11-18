@@ -2,11 +2,6 @@ import { sql } from "drizzle-orm";
 import { index, unique } from "drizzle-orm/pg-core";
 
 import { careerProfilesTable } from "@repo/api/domains/career/db/career-tables";
-import { sensitiveItemsTable } from "@repo/api/domains/evidence/db/evidence-tables";
-import type {
-  EvidenceKind,
-  SensitivityChoice,
-} from "@repo/api/domains/evidence/schemas/evidence";
 import {
   fitCheckItemsTable,
   openingsTable,
@@ -14,6 +9,7 @@ import {
 import { createTable } from "@repo/api/utils/db/create-table";
 
 import type {
+  EvidenceKind,
   InstructionPointStatus,
   InstructionSource,
   InstructionsStatus,
@@ -85,8 +81,6 @@ export const instructionPointsTable = createTable(
     positionId: d.uuid(),
     credentialId: d.uuid(),
     evidenceKind: d.text().$type<EvidenceKind>(),
-    // Flagged names and figures in the point.
-    encryptedSensitiveItems: d.text(),
     confirmedAt: d.timestamp({ withTimezone: true }),
     // When the user sent it to their profile as a suggestion; it stays in
     // this application either way.
@@ -131,44 +125,5 @@ export const lockedFactOverridesTable = createTable(
       t.positionId,
       t.field
     ),
-  ]
-);
-
-/**
- * A sensitive item's choice for one application only (guided interview
- * spec, "Per-application overrides"): keep, generalize or exclude it here,
- * whatever its general choice. Keyed by the opening, whose one application
- * may not exist yet when the user decides before the first generation.
- */
-export const applicationOverridesTable = createTable(
-  "application_overrides",
-  (d) => ({
-    id: d.uuid().defaultRandom().primaryKey(),
-    createdAt: d
-      .timestamp({ withTimezone: true })
-      .default(sql`CURRENT_TIMESTAMP`)
-      .notNull(),
-    profileId: d
-      .uuid()
-      .notNull()
-      .references(() => careerProfilesTable.id, { onDelete: "cascade" }),
-    openingId: d
-      .uuid()
-      .notNull()
-      .references(() => openingsTable.id, { onDelete: "cascade" }),
-    sensitiveItemId: d
-      .uuid()
-      .notNull()
-      .references(() => sensitiveItemsTable.id, { onDelete: "cascade" }),
-    choice: d.text().$type<SensitivityChoice>().notNull(),
-    // For "generalize" here when the item has no general wording yet.
-    encryptedGeneralized: d.text(),
-  }),
-  (t) => [
-    unique("application_overrides_opening_item_unique").on(
-      t.openingId,
-      t.sensitiveItemId
-    ),
-    index("application_overrides_opening_id_idx").on(t.openingId),
   ]
 );

@@ -1,5 +1,5 @@
 import type { DbClient } from "@repo/api/tools/db-client";
-import type { SensitiveFilter } from "@repo/api/domains/evidence/sensitive/sensitive-filter";
+import type { NeverIncludeFilter } from "@repo/api/domains/profile/rules/never-include-filter";
 
 import type { AiFunding } from "./ai-funding";
 import { AiUsageRepository } from "./ai-usage-repository";
@@ -43,18 +43,18 @@ export function createAiClient({
   taskId,
   funding,
   providerPackage,
-  sensitiveFilter,
+  neverIncludeFilter,
 }: {
   db: DbClient;
   userId: string;
   taskId?: string;
   funding: AiFunding;
   providerPackage: ProviderPackage;
-  sensitiveFilter?: SensitiveFilter;
+  neverIncludeFilter?: NeverIncludeFilter;
 }): AiClient {
   const guard = <R extends { system: string }>(request: R): R =>
-    sensitiveFilter
-      ? { ...request, system: sensitiveFilter.apply(request.system) }
+    neverIncludeFilter
+      ? { ...request, system: neverIncludeFilter.apply(request.system) }
       : request;
 
   async function recordUsage(purpose: string, role: AiRole, usage: AiUsage) {

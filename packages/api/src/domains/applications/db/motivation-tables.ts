@@ -81,8 +81,6 @@ export const motivationPointsTable = createTable(
     kind: d.text().$type<MotivationPointKind>().notNull(),
     encryptedText: d.text().notNull(),
     suggested: d.boolean().notNull().default(false),
-    // Names and figures flagged in a story detail, for the sensitive review.
-    encryptedSensitiveItems: d.text(),
     status: d.text().$type<MotivationPointStatus>().notNull().default("draft"),
   }),
   (t) => [index("motivation_points_interview_id_idx").on(t.interviewId)]

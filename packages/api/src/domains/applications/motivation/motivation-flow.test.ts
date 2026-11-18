@@ -132,10 +132,7 @@ async function setup() {
           return { about_story: false, ...script.question };
         }
         return {
-          points: (script.points ?? []).map((point) => ({
-            sensitive_items: [],
-            ...point,
-          })),
+          points: script.points ?? [],
         };
       },
     });

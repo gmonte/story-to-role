@@ -11,11 +11,6 @@ export const yearMonthSchema = z
   .regex(/^\d{4}-(0[1-9]|1[0-2])$/, "Use YYYY-MM");
 export type YearMonth = z.infer<typeof yearMonthSchema>;
 
-// A position's column types: until the published profile's extract (P2)
-// writes positions, only "manual" ones are added.
-export type PositionStatus = "pending" | "approved" | "removed";
-export type PositionOrigin = "manual";
-
 /**
  * How the user starts (workspace spec, "Onboarding"): with an opening in
  * mind, or organizing their career first.
@@ -34,13 +29,6 @@ export const credentialKinds = [
 ] as const;
 export const credentialKindSchema = z.enum(credentialKinds);
 export type CredentialKind = z.infer<typeof credentialKindSchema>;
-
-export const credentialStatusSchema = z.enum([
-  "completed",
-  "in_progress",
-  "do_not_use",
-]);
-export type CredentialStatus = z.infer<typeof credentialStatusSchema>;
 
 export const sourceDocumentKindSchema = z.enum(["resume", "truth_file"]);
 export type SourceDocumentKind = z.infer<typeof sourceDocumentKindSchema>;

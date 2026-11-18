@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 
-import { createSensitiveFilter } from "./sensitive-filter";
+import { createNeverIncludeFilter } from "./never-include-filter";
 
-const filter = createSensitiveFilter([
+const filter = createNeverIncludeFilter([
   {
     original: "Banco X",
     choice: "generalize",
@@ -14,7 +14,7 @@ const filter = createSensitiveFilter([
   { original: "R$ 12 million", choice: null },
 ]);
 
-describe("sensitive filter", () => {
+describe("never-include filter", () => {
   it("replaces generalized items, hides excluded ones and keeps used ones", () => {
     expect(
       filter.apply(
@@ -59,7 +59,7 @@ describe("sensitive filter", () => {
   });
 
   it("matches whole words and figures only, never inside ids or numbers", () => {
-    const strict = createSensitiveFilter([
+    const strict = createNeverIncludeFilter([
       { original: "4", choice: "generalize", generalized: "several" },
       { original: "Rio", choice: "exclude" },
       { original: "30%", choice: "generalize", generalized: "a third" },
@@ -76,7 +76,7 @@ describe("sensitive filter", () => {
     ).toEqual([]);
     expect(strict.findForbiddenTerms("Led 4 engineers")).toEqual(["4"]);
     // A figure with a unit, and a name in the plural, still match.
-    const units = createSensitiveFilter([
+    const units = createNeverIncludeFilter([
       { original: "1.5", choice: "generalize", generalized: "millions" },
       { original: "Acme", choice: "exclude" },
     ]);

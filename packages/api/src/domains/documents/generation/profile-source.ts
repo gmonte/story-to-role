@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 
 import type { CredentialKind } from "@repo/api/domains/career/schemas/career";
-import type { EvidenceKind } from "@repo/api/domains/evidence/schemas/evidence";
+import type { EvidenceKind } from "@repo/api/domains/applications/schemas/instructions";
 import type { PublishedProfile } from "@repo/api/domains/profile/load-published-profile";
 import { parseBlocks } from "@repo/api/domains/profile/truth/blocks";
 import { mentions } from "@repo/api/domains/profile/truth/lint";

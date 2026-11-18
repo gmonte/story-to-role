@@ -217,6 +217,9 @@ export function DocumentEditorProvider({
   );
 
   const notePrefix = t.formatMessage({ defaultMessage: "Included for:" });
+  const markerLabel = t.formatMessage({
+    defaultMessage: "Where this line comes from",
+  });
 
   /** Saves until what is saved is the latest text. */
   const flush = useCallback(async () => {
@@ -663,13 +666,32 @@ export function DocumentEditorProvider({
         className: cn("-ml-2 border-l-2 pl-1.5", originMarker[origin.kind]),
         key: `trace-${index}`,
       });
+      const size = range.node.content.size;
+      specs.push({
+        kind: "widget",
+        at: range.from + 1 + size,
+        interactive: true,
+        element: () => {
+          const marker = document.createElement("span");
+          marker.className = cn(
+            "text-muted-foreground/60 hover:text-foreground focus-visible:text-foreground ml-1 cursor-help text-sm font-bold select-none focus-visible:outline-none"
+          );
+          marker.textContent = "“";
+          marker.tabIndex = 0;
+          marker.contentEditable = "false";
+          marker.dataset.traceMarker = block.lineId;
+          marker.setAttribute("aria-label", markerLabel);
+          return marker;
+        },
+        key: `marker-${block.lineId}-${origin.kind}`,
+      });
     });
     const lit = (key: string) =>
       key === hoveredFinding ? "bg-amber-500/20 rounded-sm" : "";
     findings.forEach((finding, index) => {
       const key = `finding-${index}`;
       const underline = cn(
-        "underline decoration-amber-500 decoration-wavy underline-offset-4",
+        "underline decoration-amber-500/70 decoration-dotted decoration-2 underline-offset-4",
         lit(key)
       );
       if (finding.lineId) {

@@ -232,14 +232,13 @@ export function TracedLine({
   );
 }
 
-const openDelayMs = 400;
+const openDelayMs = 150;
 const closeDelayMs = 120;
 
 /**
- * The trace card over a block of the document editor (resume spec, "Trace
- * in the editor"): it opens when the pointer rests on a line (its origin)
- * or on a locked fact (why it is locked), and gives way to the finding
- * card where a finding is underlined.
+ * The trace card of the document editor (resume spec, "Trace in the
+ * editor"): it opens when the pointer rests on (or focus is in) a line's
+ * origin marker, or on a locked fact (why it is locked).
  */
 export function TraceHoverCard({
   editor,
@@ -268,7 +267,10 @@ export function TraceHoverCard({
     const target = (event: Event) => {
       const element = event.target as HTMLElement | null;
       if (element?.closest("[data-finding]")) return null;
-      return element?.closest<HTMLElement>("[data-document-block]") ?? null;
+      return (
+        element?.closest<HTMLElement>("[data-trace-marker], [data-locked]") ??
+        null
+      );
     };
     const over = (event: MouseEvent) => {
       const element = target(event);
@@ -288,6 +290,8 @@ export function TraceHoverCard({
     };
     dom.addEventListener("mouseover", over);
     dom.addEventListener("mouseout", out);
+    dom.addEventListener("focusin", over as unknown as EventListener);
+    dom.addEventListener("focusout", out as unknown as EventListener);
     dom.addEventListener("keydown", close);
     editor.on("update", close);
     document.addEventListener("scroll", close, true);
@@ -295,6 +299,8 @@ export function TraceHoverCard({
       close();
       dom.removeEventListener("mouseover", over);
       dom.removeEventListener("mouseout", out);
+      dom.removeEventListener("focusin", over as unknown as EventListener);
+      dom.removeEventListener("focusout", out as unknown as EventListener);
       dom.removeEventListener("keydown", close);
       editor.off("update", close);
       document.removeEventListener("scroll", close, true);

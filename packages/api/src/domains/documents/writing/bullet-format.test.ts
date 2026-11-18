@@ -26,6 +26,20 @@ describe("checkBulletShape", () => {
     ).toEqual([]);
   });
 
+  it("accepts the owner's example bullets", () => {
+    const examples = [
+      "Implemented an end-to-end timeseries telemetry ingestion system capable of processing highly concurrent real-time requests from multiple vendors, delivering results in under 3 seconds using AWS Lambda, API Gateway, SQS, DynamoDB, and feature flags via Flagsmith.",
+      "Built database interaction layers leveraging Sequelize ORM and automated infrastructure deployment with Terraform, ensuring scalable, maintainable, and reproducible environments.",
+      "Architected and delivered two E2E data ingestion pipelines handling telemetry from 8M+ system devices on both daily and monthly schedules, enabling reliable downstream processing for analytics and reporting. Used BullMQ to build a QMS to improve delivery time.",
+      "Developed backfill strategies to synchronize historical datasets from APIs with strict 7-day data retrieval limits, achieving ingestion of up to 3 years of data in under 12 hours while adhering to vendor rate limits.",
+      "Implemented GCP Cloud Functions to feed vendor-specific DAG pipelines, removing obsolete writes to unused legacy tables, resulting in cloud cost reductions and improved operational efficiency.",
+      "Delivered infrastructure-as-code solutions in Terraform and application logic in Node.js and TypeScript to standardize deployments and streamline cross-cloud workflows.",
+      "Onboarded and mentored new engineers in AWS and GCP data ingestion pipelines, providing documentation, technical sessions, and system walkthroughs to accelerate team ramp-up and reduce knowledge gaps.",
+    ];
+    for (const example of examples)
+      expect(checkBulletShape(example, "en-US")).toEqual([]);
+  });
+
   it("flags a bare list of technologies", () => {
     expect(
       checkBulletShape("React, Node.js, Postgres, AWS", "en-US")

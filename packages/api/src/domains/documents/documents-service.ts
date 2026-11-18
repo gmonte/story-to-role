@@ -9,6 +9,12 @@ import {
 } from "@repo/api/domains/encryption/user-cipher";
 import { OpeningsRepository } from "@repo/api/domains/openings/openings-repository";
 import type { Tone } from "@repo/api/domains/openings/schemas/opening";
+import { ProfileRepository } from "@repo/api/domains/profile/profile-repository";
+import { readSuggestionContent } from "@repo/api/domains/profile/suggestions/propose-suggestion";
+import {
+  suggestLine,
+  type SuggestionTarget,
+} from "@repo/api/domains/profile/suggestions/suggest-line";
 import type { RealtimeSubscription } from "@repo/api/domains/tasks/schemas/task";
 import { TasksRepository } from "@repo/api/domains/tasks/tasks-repository";
 import { TasksService } from "@repo/api/domains/tasks/tasks-service";
@@ -25,6 +31,8 @@ import {
   bestFactFor,
   ownWordsFacts,
 } from "./coverage-review/coverage-review";
+import { tracesToProfile } from "./coverage-review/check-document";
+import { retraceContent } from "./coverage-review/retrace-lines";
 import { sendLineToProfile } from "./coverage-review/send-to-profile";
 import {
   FrozenContexts,
@@ -265,7 +273,14 @@ export class DocumentsService {
         },
         documents: await Promise.all(
           documents.map((document) =>
-            this.documentView(tx, cipher, document, keywords, trace)
+            this.documentView(
+              tx,
+              cipher,
+              document,
+              keywords,
+              trace,
+              input.userId
+            )
           )
         ),
       };
@@ -287,7 +302,7 @@ export class DocumentsService {
       }
       const cipher = await getUserCipher(tx, input.userId);
       const trace = await this.traceSource(tx, cipher, profile.id, null);
-      return this.documentView(tx, cipher, document, null, trace);
+      return this.documentView(tx, cipher, document, null, trace, input.userId);
     });
   }
 
@@ -299,10 +314,13 @@ export class DocumentsService {
       profileId: string;
     },
     keywords: Array<{ term: string; backedByEvidence: boolean }> | null,
-    trace: TraceSource
+    trace: TraceSource,
+    userId: string
   ): Promise<DocumentView> {
     const nameFor = await fileNamer(tx, cipher, document);
     const repository = new DocumentsRepository(tx);
+    const published = await this.publishedProfileVersion(tx, userId);
+    const sentSuggestions = await this.documentSuggestions(tx, cipher, userId);
     const versions = await repository.listVersions([document.id]);
     const generation = await repository.latestGeneration(document.id);
     const outdated = await outdatedVersions(repository, cipher, versions);
@@ -397,6 +415,23 @@ export class DocumentsService {
           context: frozen,
         }),
         dismissedFindings: version.dismissedFindings,
+        profile: {
+          versionNumber: frozen.profileVersionNumber,
+          // A snapshot from before they carried a version reads the one
+          // published now: "Use version N" pins it.
+          newer:
+            published &&
+            published.id !== latest.profileVersionId &&
+            (!latest.profileVersionId ||
+              published.number > (frozen.profileVersionNumber ?? 0))
+              ? { profileVersionId: published.id, number: published.number }
+              : null,
+        },
+        sentToProfile: sentToProfile(
+          coverage.findings,
+          writtenLines(content),
+          sentSuggestions
+        ),
         outdated: outdated.get(version.id) ?? [],
         titleProposals: isResume
           ? trace.titleProposalsFor(content, version.language)
@@ -445,6 +480,178 @@ export class DocumentsService {
             }
           : null,
     };
+  }
+
+  /** The profile version published now, if any. */
+  private async publishedProfileVersion(tx: DbClient, userId: string) {
+    const profiles = new ProfileRepository(tx);
+    const document = await profiles.findDocument(userId, "profile");
+    if (!document?.publishedVersionId) return null;
+    const version = await profiles.findVersion(
+      document.id,
+      document.publishedVersionId
+    );
+    return version ? { id: version.id, number: version.number } : null;
+  }
+
+  /** The suggestions documents sent to the profile, waiting or accepted. */
+  private async documentSuggestions(
+    tx: DbClient,
+    cipher: UserCipher,
+    userId: string
+  ): Promise<SentSuggestion[]> {
+    const profiles = new ProfileRepository(tx);
+    const document = await profiles.findDocument(userId, "profile");
+    if (!document) return [];
+    const rows = await profiles.listSuggestionsByOrigin(
+      document.id,
+      "document"
+    );
+    return rows.flatMap((row) =>
+      row.status === "pending" || row.status === "accepted"
+        ? [
+            {
+              id: row.id,
+              status: row.status,
+              lines: readSuggestionContent(cipher, row)
+                .replace.split("\n")
+                .map((line) => line.trim()),
+            },
+          ]
+        : []
+    );
+  }
+
+  /**
+   * "Add to the profile" (resume spec, "Document workspace"): a line of the
+   * official snapshot that doesn't trace to the frozen profile version
+   * becomes a suggestion in the profile's draft (origin `document`), in
+   * the part it belongs to: an experience line under its position's
+   * Results, a skills line under Competencies, a summary or a letter
+   * paragraph under the career direction. The user accepts it there.
+   */
+  async addLineToProfile(input: {
+    userId: string;
+    versionId: string;
+    lineId: string;
+  }) {
+    const { version, document, profile } = await requireUserVersion(
+      this.db,
+      input.userId,
+      input.versionId
+    );
+    const repository = new DocumentsRepository(this.db);
+    const latest = await repository.latestSnapshot(version.id);
+    if (!latest) throw notFound();
+    const cipher = await getUserCipher(this.db, input.userId);
+    const content = decryptDocument(cipher, latest);
+    const line = writtenLines(content).find((row) => row.id === input.lineId);
+    if (!line?.origin || !line.text.trim()) {
+      throw new TRPCError({ code: "BAD_REQUEST" });
+    }
+    const contexts = new FrozenContexts(this.db, cipher, profile.id);
+    const context = await contexts.load({
+      profileVersionId: latest.profileVersionId,
+      openingId: await contexts.openingOf(document.applicationId),
+      language: version.language,
+    });
+    if (tracesToProfile(line.origin, context)) {
+      throw new TRPCError({
+        code: "BAD_REQUEST",
+        message: "This line is in your profile already.",
+      });
+    }
+    const group =
+      content.kind === "resume"
+        ? content.sections
+            .flatMap((section) =>
+              section.kind === "skills" ? section.groups : []
+            )
+            .find((candidate) => candidate.id === line.id)
+        : undefined;
+    const target: SuggestionTarget = line.positionId
+      ? { kind: "experience", positionId: line.positionId, field: "results" }
+      : group
+        ? { kind: "section", section: "competencies" }
+        : { kind: "careerDirection" };
+    const kind = {
+      resume: { "en-US": "resume", "pt-BR": "currículo" },
+      cover_letter: {
+        "en-US": "cover letter",
+        "pt-BR": "carta de apresentação",
+      },
+      linkedin: { "en-US": "LinkedIn text", "pt-BR": "texto do LinkedIn" },
+    }[content.kind];
+    return suggestLine({
+      db: this.db,
+      cipher,
+      userId: input.userId,
+      careerProfileId: profile.id,
+      target,
+      // A position the draft no longer has: the fact still has a place.
+      fallback: { kind: "careerDirection" },
+      text: group ? `${group.label}: ${line.text}` : line.text,
+      reason: {
+        "en-US": `Written in your ${kind["en-US"]} and not in your profile yet.`,
+        "pt-BR": `Escrito no seu ${kind["pt-BR"]} e ainda fora do seu perfil.`,
+      },
+      origin: "document",
+    });
+  }
+
+  /**
+   * "Use version N" (resume spec, "Document workspace"): the version moves
+   * to the profile version published now. A new snapshot with the same
+   * text freezes it, its lines traced again against it (a line that
+   * version backs by its words gets its trace), and the checks read it
+   * from then on. No model is called.
+   */
+  async useProfileVersion(input: { userId: string; versionId: string }) {
+    return this.db.transaction(async (tx) => {
+      const repository = new DocumentsRepository(tx);
+      const { version, document, profile } = await requireUserVersion(
+        tx,
+        input.userId,
+        input.versionId,
+        { lock: true }
+      );
+      const latest = await repository.latestSnapshot(version.id);
+      if (!latest) throw notFound();
+      const published = await this.publishedProfileVersion(tx, input.userId);
+      if (!published || published.id === latest.profileVersionId) {
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message: "The document reads the published profile version already.",
+        });
+      }
+      const cipher = await getUserCipher(tx, input.userId);
+      const contexts = new FrozenContexts(tx, cipher, profile.id);
+      const openingId = await contexts.openingOf(document.applicationId);
+      const load = (profileVersionId: string | null) =>
+        contexts.load({
+          profileVersionId,
+          openingId,
+          language: version.language,
+        });
+      const content = retraceContent(decryptDocument(cipher, latest), {
+        from: await load(latest.profileVersionId),
+        to: await load(published.id),
+      });
+      const snapshot = await repository.insertSnapshot({
+        versionId: version.id,
+        sequence: latest.sequence + 1,
+        parentSnapshotId: latest.id,
+        origin: "rebased",
+        author: "user",
+        encryptedContent: cipher.encrypt(JSON.stringify(content)),
+        profileVersionId: published.id,
+        ...resumeLinkOf(latest),
+      });
+      return {
+        snapshotId: snapshot.id,
+        profileVersionNumber: published.number,
+      };
+    });
   }
 
   /** The opening's keywords, each backed or not by fit check evidence. */
@@ -1012,6 +1219,43 @@ function evidenceTrace(
           : null,
       };
     });
+}
+
+type SentSuggestion = {
+  id: string;
+  status: "pending" | "accepted";
+  // The lines the suggestion writes, trimmed.
+  lines: string[];
+};
+
+/**
+ * Which "not in your profile" lines were added to the profile: the latest
+ * suggestion whose written lines hold the line's words, waiting in the
+ * draft or accepted there.
+ */
+function sentToProfile(
+  findings: CoverageView["findings"],
+  lines: Array<{ id: string; text: string }>,
+  suggestions: SentSuggestion[]
+): VersionView["sentToProfile"] {
+  const textOf = new Map(lines.map((line) => [line.id, line.text.trim()]));
+  return findings.flatMap((finding) => {
+    if (finding.code !== "notInProfile" || !finding.lineId) return [];
+    const text = textOf.get(finding.lineId);
+    if (!text) return [];
+    const sent = suggestions.findLast((suggestion) =>
+      suggestion.lines.some((line) => line.includes(text))
+    );
+    return sent
+      ? [
+          {
+            lineId: finding.lineId,
+            profileSuggestionId: sent.id,
+            status: sent.status,
+          },
+        ]
+      : [];
+  });
 }
 
 /** A generation whose task never started: it failed, nothing waits on it. */

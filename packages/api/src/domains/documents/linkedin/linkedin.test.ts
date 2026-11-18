@@ -302,7 +302,7 @@ describe("LinkedIn text", () => {
     );
   });
 
-  it("blocks copying while a figure the profile doesn't mark measured is in the text, and keeps locked facts", async () => {
+  it("asks before copying while a figure the profile doesn't mark measured is in the text, and keeps locked facts", async () => {
     const ctx = await setup();
     const { version, documentId } = await ctx.generate(writer(ctx));
     const content = linkedinOf(version.content);
@@ -350,6 +350,7 @@ describe("LinkedIn text", () => {
       })
     ).versions;
     expect(edited.coverage?.findings).toMatchObject([
+      { code: "notInProfile" },
       { code: "figure", params: { figures: "30%" } },
     ]);
     expect(linkedinOf(edited.content).experiences[0].lines[0].origin).toEqual({
@@ -364,6 +365,17 @@ describe("LinkedIn text", () => {
         })
       ).rejects.toMatchObject({ code: "PRECONDITION_FAILED" });
     }
+    // Confirmed, the text is copied with the figure in it.
+    await expect(
+      ctx.service.sectionText({
+        userId: ctx.user.id,
+        versionId: version.id,
+        section: ctx.globex.id,
+        acknowledgeWarnings: true,
+      })
+    ).resolves.toEqual({
+      text: "• Cut costs by 30%.\n• Led a team of 5 engineers.",
+    });
 
     // A locked fact is never edited here.
     await expect(

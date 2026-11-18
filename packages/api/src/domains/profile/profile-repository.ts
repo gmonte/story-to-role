@@ -21,7 +21,10 @@ import {
   profileValidationsTable,
   profileVersionsTable,
 } from "./db/profile-tables";
-import type { ProfileDocumentKind } from "./schemas/profile";
+import type {
+  ProfileDocumentKind,
+  ProfileSuggestionOrigin,
+} from "./schemas/profile";
 
 type Insert<T extends { $inferInsert: unknown }> = T["$inferInsert"];
 
@@ -240,6 +243,24 @@ export class ProfileRepository {
         and(
           eq(profileSuggestionsTable.documentId, documentId),
           eq(profileSuggestionsTable.status, "pending")
+        )
+      )
+      .orderBy(asc(profileSuggestionsTable.createdAt));
+  }
+
+  /**
+   * The suggestions of one origin still waiting or accepted, oldest first
+   * (what a document shows as sent to the profile).
+   */
+  listSuggestionsByOrigin(documentId: string, origin: ProfileSuggestionOrigin) {
+    return this.tx
+      .select()
+      .from(profileSuggestionsTable)
+      .where(
+        and(
+          eq(profileSuggestionsTable.documentId, documentId),
+          eq(profileSuggestionsTable.origin, origin),
+          inArray(profileSuggestionsTable.status, ["pending", "accepted"])
         )
       )
       .orderBy(asc(profileSuggestionsTable.createdAt));

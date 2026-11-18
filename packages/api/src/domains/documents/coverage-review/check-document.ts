@@ -15,13 +15,19 @@ import {
   experienceAge,
   type GenerationSettings,
 } from "../schemas/generation-settings";
+import type { LineOrigin } from "../schemas/document";
 import type { ExperienceEntry, ResumeContent } from "../schemas/resume-content";
 
 /**
  * What the coverage review's code checks find (resume spec, "Coverage
- * review"): each one blocks the document until it is fixed.
+ * review"): each one is pointed out, and none blocks the document (resume
+ * spec, "Document workspace": the PDF asks for “Generate PDF anyway”).
  */
 export const coverageFindingCodes = [
+  // A line that doesn't trace to the frozen profile version: typed by the
+  // user, or accepted from the agent without profile passages. "Add to the
+  // profile" proposes it in the profile's draft.
+  "notInProfile",
   // An entry's employer, title or dates differ from the frozen profile, or
   // the profile has no such position.
   "lockedFact",
@@ -35,8 +41,7 @@ export const coverageFindingCodes = [
   // A line names a term of the communication rules.
   "neverInclude",
   // A line still names something by its real name, though the profile's
-  // public names say how to write it. Only a warning: the document can leave
-  // once the user confirms.
+  // public names say how to write it.
   "publicName",
   "neverClaim",
   // A line claims something its position says the person did not do.
@@ -61,6 +66,36 @@ export type CoverageFinding = {
   // What the interface needs to word it (the figure, the term, the limit).
   params: Record<string, string | number>;
 };
+
+/**
+ * Whether a line rests on the frozen profile version (resume spec,
+ * "Document workspace": a line that doesn't is "not in your profile"): a
+ * profile line it cites that the version has, an instruction, a company
+ * fact, a motivation point or a credential. A line the user typed, or one
+ * whose cited passages the version no longer holds, doesn't.
+ */
+export function tracesToProfile(
+  origin: LineOrigin | null,
+  context: Pick<CareerContext, "evidence" | "careerDirection">
+) {
+  // Text code prints (the title line, a group's label) has no origin.
+  if (!origin || origin.kind === "manual") return origin === null;
+  if (origin.kind === "credential") return true;
+  if (origin.kind === "instruction") return true;
+  if (
+    origin.kind === "letter" &&
+    (origin.instructionIds.length > 0 ||
+      origin.companyFactIds.length > 0 ||
+      origin.motivationPointIds.length > 0)
+  ) {
+    return true;
+  }
+  const known = new Set([
+    ...context.evidence.map((row) => row.id),
+    ...context.careerDirection.map((row) => row.id),
+  ]);
+  return origin.evidenceIds.some((id) => known.has(id));
+}
 
 /** A tool line ("Tools: Kubernetes, Terraform") as the names it lists. */
 function toolNames(evidence: CareerContext["evidence"]) {
@@ -114,7 +149,7 @@ export function deniedNamesOf(context: CareerContext) {
  * read with that version), the settings of the generation that wrote it
  * and its purposes. Deterministic, so the editor runs them live on the
  * official snapshot: an edit that adds an unmarked figure shows a finding
- * at once, and the document is blocked until it is fixed.
+ * at once.
  */
 export function checkDocument(input: {
   content: ResumeContent;
@@ -126,7 +161,7 @@ export function checkDocument(input: {
   // The opening's title, which code prints on the title line as written.
   targetTitle?: string | null;
   // The rendered PDF's measured pages. Without a file there is no finding:
-  // an estimate is too rough to block (the editor warns on it instead).
+  // an estimate is too rough to point out (the editor warns on it instead).
   pages?: number | null;
 }): CoverageFinding[] {
   const { content, context, settings } = input;
@@ -252,6 +287,9 @@ export function checkDocument(input: {
   });
 
   for (const line of writtenLines(content)) {
+    if (!tracesToProfile(line.origin, context)) {
+      findings.push(lineFinding(line, "notInProfile", {}));
+    }
     const marks = findMarks(line.text).map((mark) =>
       line.text.slice(mark.from, mark.to)
     );

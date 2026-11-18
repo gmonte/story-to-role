@@ -36,7 +36,7 @@ export const evidenceTraceSchema = z.object({
 });
 export type EvidenceTrace = z.infer<typeof evidenceTraceSchema>;
 
-/** A code check's finding (coverage review): it blocks the document. */
+/** A code check's finding (coverage review): pointed out, never blocking. */
 export const coverageFindingSchema = z.object({
   code: z.enum(coverageFindingCodes),
   lineId: z.string().nullable(),
@@ -170,8 +170,27 @@ export const versionViewSchema = z.object({
   // A resume's or a cover letter's coverage review.
   coverage: coverageViewSchema.nullable(),
   // Keys of the findings the user ignored in this version
-  // (`coverageFindingKey`, `reviewNoteKey`): warnings and review notes.
+  // (`coverageFindingKey`, `reviewNoteKey`): findings and review notes.
   dismissedFindings: z.array(z.string()),
+  // The profile version the official snapshot froze, and the published
+  // one when it is newer (resume spec, "Document workspace": "Use version
+  // N" moves the version to it).
+  profile: z.object({
+    versionNumber: z.number().int().nullable(),
+    newer: z
+      .object({ profileVersionId: z.uuid(), number: z.number().int() })
+      .nullable(),
+  }),
+  // Lines "not in your profile" the user added to the profile: the
+  // suggestion waits in the draft or was accepted there (and the document
+  // still reads an older version).
+  sentToProfile: z.array(
+    z.object({
+      lineId: z.string(),
+      profileSuggestionId: z.uuid(),
+      status: z.enum(["pending", "accepted"]),
+    })
+  ),
   // Linked versions with changes this one has not received (language sync).
   outdated: z.array(
     z.object({

@@ -314,7 +314,7 @@ export async function loadDocumentAgentContext(input: {
     coverage.findings,
     version.dismissedFindings
   ).map((finding) => ({
-    text: finding.text,
+    text: `${finding.code}: ${finding.text}`,
     lineText: finding.lineId ? (lineText.get(finding.lineId) ?? null) : null,
   }));
 

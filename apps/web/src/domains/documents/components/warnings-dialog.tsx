@@ -12,8 +12,8 @@ import {
 } from "@repo/web/components/ui/dialog";
 
 /**
- * Asks before a document with only warnings leaves (a real name that the
- * profile's public names replace in public documents): the user can fix it
+ * Asks before a document with open findings leaves (resume spec, "Document
+ * workspace": findings point out, never block): the user can fix them
  * first, or go on anyway.
  */
 export function WarningsDialog({
@@ -34,13 +34,13 @@ export function WarningsDialog({
         <DialogHeader>
           <DialogTitle>
             {t.formatMessage({
-              defaultMessage: "A real name is still in the text",
+              defaultMessage: "The document has open findings",
             })}
           </DialogTitle>
           <DialogDescription>
             {t.formatMessage({
               defaultMessage:
-                "The coverage review found a name your profile writes another way in public documents. You can fix it first, or go on anyway.",
+                "The checks found something to look at: a line not in your profile, a figure it doesn't mark as measured, a name it writes another way. You can fix it first, or go on anyway.",
             })}
           </DialogDescription>
         </DialogHeader>

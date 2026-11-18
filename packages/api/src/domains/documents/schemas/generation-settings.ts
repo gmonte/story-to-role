@@ -30,9 +30,9 @@ export type GenerationSettings = z.infer<typeof generationSettingsSchema>;
 export const defaultGenerationSettings: GenerationSettings = {
   bulletsRecent: 3,
   recentYears: 5,
-  bulletsOlder: 1,
+  bulletsOlder: 2,
   veryOld: "relevant_only",
-  veryOldYears: 15,
+  veryOldYears: 10,
   resumeMaxPages: 2,
   letterMaxParagraphs: 4,
   letterMaxPages: 1,

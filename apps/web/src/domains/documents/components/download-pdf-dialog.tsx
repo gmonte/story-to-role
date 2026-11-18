@@ -23,7 +23,7 @@ import { toast } from "@repo/web/components/ui/sonner";
 import { useTRPC } from "~/tools/trpc/client";
 
 import { useRefreshDocuments } from "../hooks/use-opening-documents";
-import { hasFindings, hasWarnings } from "../utils/version-checks";
+import { hasWarnings } from "../utils/version-checks";
 import { WarningsDialog } from "./warnings-dialog";
 
 /**
@@ -47,9 +47,6 @@ export function DownloadPdfDialog({ version }: { version: VersionView }) {
   // Leaving with only warnings needs the user's confirmation, once.
   const [acknowledged, setAcknowledged] = useState(false);
   const { ready, rendering } = version.pdf;
-  // A document with coverage findings doesn't leave (resume spec,
-  // "Coverage review"); the server refuses it too.
-  const blocked = hasFindings(version);
 
   const begin = (confirmed: boolean) => {
     setFileName(version.pdf.fileName);
@@ -79,19 +76,10 @@ export function DownloadPdfDialog({ version }: { version: VersionView }) {
         <Button
           size="sm"
           variant="ghost"
-          disabled={blocked}
           onClick={() =>
             hasWarnings(version) && !acknowledged
               ? setConfirming(true)
               : begin(acknowledged)
-          }
-          title={
-            blocked
-              ? t.formatMessage({
-                  defaultMessage:
-                    "Fix the coverage findings before downloading.",
-                })
-              : undefined
           }
         >
           <Download />

@@ -58,6 +58,8 @@ export function useDocumentLabels() {
           return t.formatMessage({ defaultMessage: "Copied" });
         case "suggested":
           return t.formatMessage({ defaultMessage: "Suggested" });
+        case "rebased":
+          return t.formatMessage({ defaultMessage: "Profile version updated" });
       }
     },
     section(kind: ResumeSectionKind) {

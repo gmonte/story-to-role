@@ -135,6 +135,14 @@ function findingText(
   const { text, params } = finding;
   const str = (key: string) => String(params[key] ?? "");
   switch (finding.code) {
+    case "notInProfile":
+      return t.formatMessage(
+        {
+          defaultMessage:
+            "“{text}” is not in your profile. Add it there to keep it for your next documents, or ignore this.",
+        },
+        { text }
+      );
     case "figure":
       return t.formatMessage(
         {

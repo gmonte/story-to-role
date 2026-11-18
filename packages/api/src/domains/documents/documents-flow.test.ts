@@ -932,7 +932,7 @@ describe("resume generation and snapshots", () => {
     ).rejects.toMatchObject({ code: "NOT_FOUND" });
   });
 
-  it("blocks a resume with a figure the profile doesn't mark measured until it is fixed", async () => {
+  it("points out a figure the profile doesn't mark measured, and asks for a confirmation before the document leaves", async () => {
     const ctx = await setup();
     const line = {
       text: "Led a team of 5 engineers.",
@@ -984,6 +984,7 @@ describe("resume generation and snapshots", () => {
     const edited = await view();
     expect(edited.coverage).toMatchObject({
       findings: [
+        { code: "notInProfile", lineId: "costs", text: "Cut costs by 30%." },
         {
           code: "figure",
           lineId: "costs",
@@ -996,27 +997,39 @@ describe("resume generation and snapshots", () => {
       reviewedSnapshotId: clean.snapshot.id,
       current: false,
     });
-    // Nothing leaves the platform: no download, no ZIP, no sending.
-    const blocked = { code: "PRECONDITION_FAILED" };
+    // Nothing blocks: the download, the ZIP and sending ask once for the
+    // user's confirmation, and go on with it.
+    const asks = { code: "PRECONDITION_FAILED", message: warningsToConfirm };
     const userId = ctx.user.id;
     await expect(
       pdfs.request({ userId, versionId: clean.id })
-    ).rejects.toMatchObject(blocked);
+    ).rejects.toMatchObject(asks);
     await expect(
       pdfs.prepareApplication({ userId, openingId: ctx.opening.id })
-    ).rejects.toMatchObject(blocked);
+    ).rejects.toMatchObject(asks);
     await expect(
       pdfs.readApplicationZip({ userId, openingId: ctx.opening.id })
-    ).rejects.toMatchObject(blocked);
+    ).rejects.toMatchObject(asks);
     await expect(
       tracker.markApplied({ userId, applicationId, versionIds: [clean.id] })
-    ).rejects.toMatchObject(blocked);
+    ).rejects.toMatchObject(asks);
     expect(ctx.trigger.trigger).not.toHaveBeenCalledWith(
       "render_pdf",
       expect.anything()
     );
+    expect(
+      await pdfs.request({
+        userId,
+        versionId: clean.id,
+        acknowledgeWarnings: true,
+      })
+    ).toEqual({ ready: false });
+    expect(ctx.trigger.trigger).toHaveBeenCalledWith(
+      "render_pdf",
+      expect.anything()
+    );
 
-    // Taking the figure out unblocks it.
+    // Taking the figure out, nothing asks anymore.
     await ctx.documents.undo({ userId, versionId: clean.id });
     expect((await view()).coverage?.findings).toEqual([]);
     expect(await pdfs.request({ userId, versionId: clean.id })).toEqual({
@@ -1166,6 +1179,214 @@ describe("resume generation and snapshots", () => {
     ).rejects.toMatchObject({ code: "NOT_FOUND" });
   });
 
+  it("points out a typed line the profile doesn't back; Add to the profile proposes it, and Use version N drops it", async () => {
+    const ctx = await setup();
+    const line = {
+      text: "Led a team of 5 engineers.",
+      evidence_ids: [ctx.evidence[1].id],
+    };
+    await ctx.generate("quick", { drafts: [ctx.draft([line])], ratings: [9] });
+    const tasks = new TasksService(ctx.db, ctx.trigger);
+    const profiles = new ProfileService(ctx.db, tasks);
+    const userId = ctx.user.id;
+    const view = async () =>
+      (await ctx.documents.forOpening({ userId, openingId: ctx.opening.id }))
+        .documents[0].versions[0];
+    const clean = await view();
+    expect(clean.profile).toEqual({ versionNumber: 1, newer: null });
+    expect(clean.coverage?.findings).toEqual([]);
+
+    // The user types a bullet of their own.
+    const typed = "Mentored two interns through their first year.";
+    const entry = experienceOf(clean.content);
+    await ctx.documents.saveEdit({
+      userId,
+      versionId: clean.id,
+      baseSnapshotId: clean.snapshot.id,
+      content: {
+        ...resumeOf(clean.content),
+        sections: resumeOf(clean.content).sections.map((section) =>
+          section.kind === "experience"
+            ? {
+                ...section,
+                entries: [
+                  {
+                    ...entry,
+                    lines: [
+                      ...entry.lines,
+                      { id: "mentor", text: typed, origin: { kind: "manual" } },
+                    ],
+                  },
+                ],
+              }
+            : section
+        ),
+      },
+    });
+    const edited = await view();
+    expect(edited.coverage?.findings).toEqual([
+      {
+        code: "notInProfile",
+        lineId: "mentor",
+        positionId: ctx.positionId,
+        text: typed,
+        params: {},
+      },
+    ]);
+    expect(edited.sentToProfile).toEqual([]);
+    await expect(
+      ctx.documents.useProfileVersion({ userId, versionId: clean.id })
+    ).rejects.toMatchObject({ code: "PRECONDITION_FAILED" });
+
+    // Add to the profile: a suggestion under the position's Results, in
+    // the draft, for the user to accept there.
+    const { profileSuggestionId } = await ctx.documents.addLineToProfile({
+      userId,
+      versionId: clean.id,
+      lineId: "mentor",
+    });
+    const [suggestion] = await profiles.listSuggestions(userId);
+    expect(suggestion).toMatchObject({
+      id: profileSuggestionId,
+      origin: "document",
+      part: "experience:globex — tech lead",
+    });
+    expect(suggestion.replace).toContain(`  - ${typed}`);
+    expect(suggestion.reason).toContain("resume");
+    expect((await view()).sentToProfile).toEqual([
+      { lineId: "mentor", profileSuggestionId, status: "pending" },
+    ]);
+    // A line the profile backs has nothing to add.
+    await expect(
+      ctx.documents.addLineToProfile({
+        userId,
+        versionId: clean.id,
+        lineId: entry.lines[0].id,
+      })
+    ).rejects.toMatchObject({ code: "BAD_REQUEST" });
+
+    // Accepted and published: the document still reads version 1, and
+    // says version 2 is newer.
+    await profiles.resolveSuggestions({
+      userId,
+      resolution: "accepted",
+      profileSuggestionIds: [profileSuggestionId],
+    });
+    await ctx.publishProfile(profileMarkdown({ results: [typed] }));
+    const stale = await view();
+    expect(stale.profile).toMatchObject({
+      versionNumber: 1,
+      newer: { number: 2 },
+    });
+    expect(stale.coverage?.findings).toHaveLength(1);
+    expect(stale.sentToProfile).toEqual([
+      { lineId: "mentor", profileSuggestionId, status: "accepted" },
+    ]);
+
+    // Use version 2: a new snapshot freezes it, the line traces to the
+    // new profile line by its words, and the finding is gone.
+    expect(
+      await ctx.documents.useProfileVersion({ userId, versionId: clean.id })
+    ).toMatchObject({ profileVersionNumber: 2 });
+    const fresh = await view();
+    expect(fresh.profile).toEqual({ versionNumber: 2, newer: null });
+    expect(fresh.snapshot).toMatchObject({ origin: "rebased", author: "user" });
+    expect(fresh.coverage?.findings).toEqual([]);
+    expect(fresh.sentToProfile).toEqual([]);
+    const mentor = ctx.lineOf(typed, await ctx.readCareer());
+    expect(
+      experienceOf(fresh.content).lines.find((row) => row.id === "mentor")
+        ?.origin
+    ).toEqual({ kind: "evidence", evidenceIds: [mentor.id] });
+    expect(fresh.trace).toContainEqual(
+      expect.objectContaining({ evidenceId: mentor.id })
+    );
+    const versionOf = async (snapshotId: string) =>
+      (await new DocumentsRepository(ctx.db).findSnapshot(snapshotId))
+        ?.profileVersionId;
+    expect(await versionOf(fresh.snapshot.id)).toBe(
+      (await ctx.readCareer()).profileVersionId
+    );
+    // No model was called for any of it.
+    expect(ctx.trigger.trigger).not.toHaveBeenCalledWith(
+      expect.stringContaining("agent"),
+      expect.anything()
+    );
+  });
+
+  it("adds a typed summary under the career direction and a typed skills line under Competencies", async () => {
+    const ctx = await setup();
+    const line = {
+      text: "Led a team of 5 engineers.",
+      evidence_ids: [ctx.evidence[1].id],
+    };
+    await ctx.generate("quick", { drafts: [ctx.draft([line])], ratings: [9] });
+    const profiles = new ProfileService(
+      ctx.db,
+      new TasksService(ctx.db, ctx.trigger)
+    );
+    const userId = ctx.user.id;
+    const view = async () =>
+      (await ctx.documents.forOpening({ userId, openingId: ctx.opening.id }))
+        .documents[0].versions[0];
+    const clean = await view();
+    const content = resumeOf(clean.content);
+    const summary = content.sections.find((row) => row.kind === "summary")!;
+    const skills = content.sections.find((row) => row.kind === "skills")!;
+    if (summary.kind !== "summary" || skills.kind !== "skills")
+      throw new Error();
+    await ctx.documents.saveEdit({
+      userId,
+      versionId: clean.id,
+      baseSnapshotId: clean.snapshot.id,
+      content: {
+        ...content,
+        sections: content.sections.map((section) =>
+          section.kind === "summary"
+            ? {
+                ...section,
+                line: {
+                  ...section.line,
+                  text: "Engineer who loves platforms.",
+                },
+              }
+            : section.kind === "skills"
+              ? {
+                  ...section,
+                  groups: [{ ...section.groups[0], text: "Kubernetes, Helm" }],
+                }
+              : section
+        ),
+      },
+    });
+    const edited = await view();
+    expect(edited.coverage?.findings.map((row) => row.lineId)).toEqual([
+      summary.line.id,
+      skills.groups[0].id,
+    ]);
+    await ctx.documents.addLineToProfile({
+      userId,
+      versionId: clean.id,
+      lineId: summary.line.id,
+    });
+    await ctx.documents.addLineToProfile({
+      userId,
+      versionId: clean.id,
+      lineId: skills.groups[0].id,
+    });
+    const suggestions = await profiles.listSuggestions(userId);
+    expect(suggestions.map((row) => [row.origin, row.part])).toEqual([
+      ["document", "identity"],
+      ["document", "competencies"],
+    ]);
+    expect(suggestions[0].replace).toContain("Engineer who loves platforms.");
+    expect(suggestions[1].replace).toContain("Core: Kubernetes, Helm");
+    expect((await view()).sentToProfile.map((row) => row.lineId)).toEqual([
+      summary.line.id,
+      skills.groups[0].id,
+    ]);
+  });
+
   it("ignores a warning per version, which then needs no confirmation to leave", async () => {
     // The profile writes Globex under a public name; the typed line keeps
     // the real one, which only warns.
@@ -1215,9 +1436,19 @@ describe("resume generation and snapshots", () => {
       },
     });
     const warned = await view();
-    const [finding] = warned.coverage!.findings;
+    // The typed line is pointed out as not in the profile too; ignored
+    // first, so only the public name is left to confirm.
+    const [typed, finding] = warned.coverage!.findings;
+    expect(typed).toMatchObject({ code: "notInProfile", lineId: "named" });
     expect(finding).toMatchObject({ code: "publicName", lineId: "named" });
     expect(warned.dismissedFindings).toEqual([]);
+    const typedKey = coverageFindingKey(typed);
+    await ctx.documents.setFindingDismissed({
+      userId,
+      versionId: clean.id,
+      findingKey: typedKey,
+      dismissed: true,
+    });
     // A warning asks for confirmation before the PDF.
     await expect(
       pdfs.request({ userId, versionId: clean.id })
@@ -1232,18 +1463,18 @@ describe("resume generation and snapshots", () => {
         findingKey: key,
         dismissed: true,
       })
-    ).toEqual({ dismissedFindings: [key] });
-    expect((await view()).dismissedFindings).toEqual([key]);
+    ).toEqual({ dismissedFindings: [typedKey, key] });
+    expect((await view()).dismissedFindings).toEqual([typedKey, key]);
     expect(await pdfs.request({ userId, versionId: clean.id })).toEqual({
       ready: false,
     });
-    // A blocking finding is never ignored, even under its key.
+    // Any finding can be ignored under its key: none blocks.
     expect(
       withoutDismissedFindings(
         [{ code: "figure", text: "x", params: {} }],
         [coverageFindingKey({ code: "figure", text: "x", params: {} })]
       )
-    ).toHaveLength(1);
+    ).toHaveLength(0);
 
     // Brought back, it asks again; another user never touches it.
     await ctx.documents.setFindingDismissed({
@@ -1252,7 +1483,7 @@ describe("resume generation and snapshots", () => {
       findingKey: key,
       dismissed: false,
     });
-    expect((await view()).dismissedFindings).toEqual([]);
+    expect((await view()).dismissedFindings).toEqual([typedKey]);
     const stranger = await createTestUser("mallory@example.com");
     await new CareerService(ctx.db).getOrCreateProfile({
       userId: stranger.id,
@@ -3326,6 +3557,7 @@ describe("resume generation and snapshots", () => {
     const [after] = (await letterDocument()).versions;
     expect(after.coverage?.findings.map((row) => row.code)).toEqual([
       "paragraphs",
+      "notInProfile",
       "figure",
     ]);
     // The AI review isn't run again after an edit.
@@ -3957,9 +4189,32 @@ describe("resume generation and snapshots", () => {
       text: "Led a team of 5 engineers.",
       evidence_ids: [ctx.evidence[1].id],
     };
-    // Every position is recent enough to this month to be printed.
+    // Every position is recent enough to this month to be printed, and
+    // each gets a bullet: an experience without one is never printed.
+    const base = ctx.draft([line]);
+    const bulletFor = (positionId: string) => {
+      const row = ctx.context.evidence.find(
+        (candidate) => candidate.positionId === positionId
+      )!;
+      return {
+        position_id: positionId,
+        context: null,
+        relevance: null,
+        bullets: [
+          { text: row.text.replace(/^[^:]*:\s*/, ""), evidence_ids: [row.id] },
+        ],
+      };
+    };
     await ctx.generate("quick", {
-      drafts: [ctx.draft([line])],
+      drafts: [
+        {
+          ...base,
+          experience: [
+            ...base.experience,
+            ...ctx.context.positions.slice(1).map((row) => bulletFor(row.id)),
+          ],
+        },
+      ],
       ratings: [9],
       today: "2026-01",
     });

@@ -36,10 +36,7 @@ import { toast } from "@repo/web/components/ui/sonner";
 
 import { useDocumentLabels } from "~/domains/documents/hooks/use-document-labels";
 import { WarningsDialog } from "~/domains/documents/components/warnings-dialog";
-import {
-  hasFindings,
-  hasWarnings,
-} from "~/domains/documents/utils/version-checks";
+import { hasWarnings } from "~/domains/documents/utils/version-checks";
 import { useOpeningDocuments } from "~/domains/documents/hooks/use-opening-documents";
 import { useTRPC } from "~/tools/trpc/client";
 import { useOpening } from "~/domains/openings/hooks/use-opening";
@@ -323,11 +320,8 @@ function MarkAppliedForm({
   const [chosen, setChosen] = useState<string[] | null>(null);
   // Every version comes checked until the user changes it.
   const selected = chosen ?? versions.map(({ version }) => version.id);
-  // Sending is the document leaving: one with coverage findings can't go
-  // (resume spec, "Coverage review"); the server refuses it too.
-  const blocked = versions.some(
-    ({ version }) => selected.includes(version.id) && hasFindings(version)
-  );
+  // Sending is the document leaving: one with open findings asks for a
+  // confirmation (resume spec, "Document workspace"); the server asks too.
   const warned = versions.some(
     ({ version }) => selected.includes(version.id) && hasWarnings(version)
   );
@@ -387,13 +381,6 @@ function MarkAppliedForm({
                 version: documentLabels.version(version),
               }
             )}
-            {hasFindings(version) && (
-              <span className="text-xs text-red-600 dark:text-red-400">
-                {t.formatMessage({
-                  defaultMessage: "Has coverage findings to fix",
-                })}
-              </span>
-            )}
           </label>
         ))}
         <div className="grid gap-1.5 pt-2">
@@ -411,15 +398,7 @@ function MarkAppliedForm({
       </div>
       <DialogFooter>
         <Button
-          disabled={mark.isPending || selected.length === 0 || blocked}
-          title={
-            blocked
-              ? t.formatMessage({
-                  defaultMessage:
-                    "Fix the coverage findings of the checked documents before marking the application as applied.",
-                })
-              : undefined
-          }
+          disabled={mark.isPending || selected.length === 0}
           onClick={() => (warned ? setConfirming(true) : send(false))}
         >
           {t.formatMessage({ defaultMessage: "Mark as applied" })}

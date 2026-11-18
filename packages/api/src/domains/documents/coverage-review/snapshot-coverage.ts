@@ -25,7 +25,6 @@ import { linkedinAsResume } from "../linkedin/linkedin-resume";
 import { checkDocument } from "./check-document";
 import { checkLetter } from "./check-letter";
 import { withoutDismissedFindings } from "./finding-key";
-import { isWarningFinding } from "./warning-codes";
 
 type Snapshot = NonNullable<
   Awaited<ReturnType<DocumentsRepository["findSnapshot"]>>
@@ -233,9 +232,11 @@ export async function snapshotCoverage(input: {
 export const warningsToConfirm = "WARNINGS_TO_CONFIRM";
 
 /**
- * A resume whose official snapshot has code findings never leaves the
- * platform (resume spec, "Coverage review": a failure blocks the document
- * until it is fixed): downloads and sending refuse it.
+ * A document whose official snapshot has open code findings leaves the
+ * platform only once the user confirms (resume spec, "Document workspace":
+ * the document is theirs, the findings point out and never block):
+ * downloads, the ZIP, copying and sending ask for that confirmation, and
+ * a finding the user ignored needs none.
  */
 export async function assertSendable(input: {
   db: DbClient;
@@ -252,8 +253,7 @@ export async function assertSendable(input: {
   snapshot: Pick<Snapshot, "id" | "encryptedContent" | "profileVersionId">;
   // Shared by the caller when it checks several documents at once.
   contexts?: FrozenContexts;
-  // The user confirmed leaving with warnings (a real name a public name
-  // should have replaced); other findings still block.
+  // The user confirmed leaving with open findings (“Generate PDF anyway”).
   acknowledgeWarnings?: boolean;
 }) {
   const { findings } = await snapshotCoverage({
@@ -262,12 +262,6 @@ export async function assertSendable(input: {
       input.contexts ??
       new FrozenContexts(input.db, input.cipher, input.profileId),
   });
-  if (findings.some((finding) => !isWarningFinding(finding))) {
-    throw new TRPCError({
-      code: "PRECONDITION_FAILED",
-      message: "The document has coverage findings to fix before it can leave.",
-    });
-  }
   const open = withoutDismissedFindings(
     findings,
     input.version.dismissedFindings ?? []

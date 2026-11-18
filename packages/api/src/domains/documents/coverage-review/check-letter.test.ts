@@ -119,7 +119,7 @@ describe("the cover letter's code checks", () => {
     ).toEqual([]);
   });
 
-  it("blocks a figure the profile doesn't show, a mark, and too many paragraphs or pages", () => {
+  it("points out a figure the profile doesn't show, a mark, and too many paragraphs or pages", () => {
     expect(
       check(
         letter([
@@ -148,17 +148,18 @@ describe("the cover letter's code checks", () => {
       ["figure", "a"],
     ]);
     expect(check(cited("a", "I cut deploy time by 40%.", [E1]))).toEqual([]);
-    // Written by hand: no citations, any measured profile line backs it.
+    // Written by hand: no citations, any measured profile line backs it;
+    // the paragraph itself is pointed out as not in the profile.
     const manual = letter([{ id: "a", text: "x", evidenceIds: [] }]);
     manual.paragraphs[0] = {
       id: "a",
       text: "I cut deploy time by 40%.",
       origin: { kind: "manual" },
     };
-    expect(check(manual)).toEqual([]);
+    expect(check(manual)).toEqual([["notInProfile", "a"]]);
   });
 
-  it("blocks forbidden terms and what a position says the person did not do", () => {
+  it("points out forbidden terms, what a position says the person did not do, and a paragraph resting on nothing", () => {
     expect(
       check(
         letter([
@@ -171,6 +172,7 @@ describe("the cover letter's code checks", () => {
       ["paragraphs", null],
       ["neverInclude", "a"],
       ["notDone", "b"],
+      ["notInProfile", "c"],
       ["studied", "c"],
     ]);
   });

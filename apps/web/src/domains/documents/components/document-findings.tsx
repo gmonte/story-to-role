@@ -3,14 +3,21 @@
 import { useState } from "react";
 
 import { useMutation } from "@tanstack/react-query";
-import { ChevronDown, ChevronRight, EyeOff, Send, Wand2 } from "lucide-react";
+import {
+  ChevronDown,
+  ChevronRight,
+  EyeOff,
+  Loader2,
+  Send,
+  UserPlus,
+  Wand2,
+} from "lucide-react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 
-import { isWarningFinding } from "@repo/api/domains/documents/coverage-review/warning-codes";
 import { useTranslation } from "@repo/intl/use-translation";
 import { Button } from "@repo/web/components/ui/button";
 import { toast } from "@repo/web/components/ui/sonner";
-import { cn } from "@repo/web/lib/utils";
 
 import { useTRPC } from "~/tools/trpc/client";
 
@@ -18,14 +25,62 @@ import { useFindingLabel } from "./coverage-review";
 import {
   useDocumentEditor,
   type DocumentFinding,
+  type ProfileAction,
   type ReviewNote,
 } from "./document-editor-context";
 
 /**
+ * "Add to the profile" of a "not in your profile" finding, or where the
+ * line stands in the profile once sent (resume spec, "Document
+ * workspace"). Nothing for other findings.
+ */
+export function ProfileActionButton({
+  action,
+}: {
+  action: ProfileAction | null;
+}) {
+  const t = useTranslation();
+  if (!action) return null;
+  if (action.kind === "add") {
+    return (
+      <Button
+        size="sm"
+        variant="outline"
+        className="h-6 px-2 text-xs"
+        disabled={action.pending}
+        onClick={action.run}
+      >
+        {action.pending ? (
+          <Loader2 className="size-3 animate-spin" />
+        ) : (
+          <UserPlus className="size-3" />
+        )}
+        {t.formatMessage({ defaultMessage: "Add to the profile" })}
+      </Button>
+    );
+  }
+  return (
+    <span className="text-muted-foreground flex flex-wrap items-center gap-1 text-xs">
+      {action.status === "pending"
+        ? t.formatMessage({
+            defaultMessage: "Sent to the profile — accept it there.",
+          })
+        : t.formatMessage({
+            defaultMessage:
+              "Accepted in the profile — publish it, then use the new version here.",
+          })}
+      <Link href="/app/career" className="underline underline-offset-2">
+        {t.formatMessage({ defaultMessage: "Open My career" })}
+      </Link>
+    </span>
+  );
+}
+
+/**
  * The document's findings (resume spec, "Document workspace"): the code
- * checks first, which block the document until fixed, then the warnings
- * and the AI review's notes, which the user may ignore. Each opens its
- * line; Fix appears where code fixes it.
+ * checks, which point out and never block, then the AI review's notes;
+ * the user may ignore any. Each opens its line; Fix appears where code
+ * fixes it, and "Add to the profile" on a line the profile doesn't back.
  */
 export function DocumentFindings() {
   const t = useTranslation();
@@ -38,12 +93,12 @@ export function DocumentFindings() {
     ignoredFindings,
     notes,
     ignoredNotes,
-    canIgnore,
     ignoreFinding,
     restoreFinding,
     ignoreNote,
     restoreNote,
     fixFor,
+    profileActionFor,
     goToLine,
     goToOwner,
   } = useDocumentEditor();
@@ -89,21 +144,18 @@ export function DocumentFindings() {
 
   const findingItem = (finding: DocumentFinding, key: string) => {
     const fix = fixFor(finding);
-    const blocking = !isWarningFinding(finding);
     return (
       <li key={key} className="flex flex-col">
         <button
           type="button"
           onClick={() => goTo(finding)}
-          className={cn(
-            "hover:bg-muted w-full rounded px-2 py-1 text-left text-xs",
-            blocking ? "text-destructive" : "text-amber-700 dark:text-amber-400"
-          )}
+          className="hover:bg-muted w-full rounded px-2 py-1 text-left text-xs text-amber-700 dark:text-amber-400"
         >
           {label(finding, version)}
         </button>
-        {(fix ?? canIgnore(finding)) && (
+        {
           <div className="flex flex-wrap items-center gap-1 px-2 pb-1">
+            <ProfileActionButton action={profileActionFor(finding)} />
             {fix && (
               <Button
                 size="sm"
@@ -115,22 +167,20 @@ export function DocumentFindings() {
                 {t.formatMessage({ defaultMessage: "Fix" })}
               </Button>
             )}
-            {canIgnore(finding) && (
-              <Button
-                size="sm"
-                variant="ghost"
-                className="text-muted-foreground h-6 px-2 text-xs"
-                title={t.formatMessage({
-                  defaultMessage: "This finding doesn't apply: stop showing it",
-                })}
-                onClick={() => ignoreFinding(finding)}
-              >
-                <EyeOff className="size-3" />
-                {t.formatMessage({ defaultMessage: "Ignore" })}
-              </Button>
-            )}
+            <Button
+              size="sm"
+              variant="ghost"
+              className="text-muted-foreground h-6 px-2 text-xs"
+              title={t.formatMessage({
+                defaultMessage: "This finding doesn't apply: stop showing it",
+              })}
+              onClick={() => ignoreFinding(finding)}
+            >
+              <EyeOff className="size-3" />
+              {t.formatMessage({ defaultMessage: "Ignore" })}
+            </Button>
           </div>
-        )}
+        }
       </li>
     );
   };
@@ -260,8 +310,6 @@ export function DocumentFindings() {
     );
   }
 
-  const blocking = findings.filter((finding) => !isWarningFinding(finding));
-  const warnings = findings.filter(isWarningFinding);
   return (
     <section>
       <button
@@ -280,24 +328,12 @@ export function DocumentFindings() {
         )}
       </button>
       {open && (
-        <>
-          {blocking.length > 0 && (
-            <p className="text-muted-foreground px-2 pb-1 text-xs">
-              {t.formatMessage({
-                defaultMessage: "Fix before downloading, sending or copying",
-              })}
-            </p>
+        <ul className="space-y-0.5">
+          {findings.map((finding, index) =>
+            findingItem(finding, `finding-${index}`)
           )}
-          <ul className="space-y-0.5">
-            {blocking.map((finding, index) =>
-              findingItem(finding, `blocking-${index}`)
-            )}
-            {warnings.map((finding, index) =>
-              findingItem(finding, `warning-${index}`)
-            )}
-            {notes.map(noteItem)}
-          </ul>
-        </>
+          {notes.map(noteItem)}
+        </ul>
       )}
       {ignoredGroup}
     </section>

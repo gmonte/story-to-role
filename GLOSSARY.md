@@ -40,6 +40,10 @@ _Avoid_: Draft fact, proposal, edit
 The AI the user talks to about a passage of their profile; it interviews per the method and changes the profile only through suggestions.
 _Avoid_: Interviewer, career chat, orchestrator
 
+**Document agent**:
+The AI the user talks to about one generated document (a resume or a cover letter), with the profile version it froze in view; it changes the document only through suggestions, grounded on the profile and on what the user asks.
+_Avoid_: Resume chat, editor assistant
+
 **Experience**:
 One position in the profile's Experience section, titled `### Company — Title (YYYY-MM to YYYY-MM)`, with context, responsibilities, tools, results and what the user did not do.
 _Avoid_: Job, role, account

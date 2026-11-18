@@ -198,6 +198,46 @@ After P10, before calling the MVP done. Raised by the owner while testing the fi
 Acceptance:
 - [ ] Switching the interface to Brazilian Portuguese translates every screen.
 
+## Document workspace
+
+The resume and the cover letter edited like the profile, with an agent per document (ADR 0009, [resume-and-cover-letter.md](./specs/resume-and-cover-letter.md#document-workspace)). Asked by the owner during the walkthrough. Same rules as the profile_truth slices: one PR per slice to `staging`, merged after its checks, then tagged.
+
+### D1: The document in its PDF look, editable
+
+- The workspace layout (index and findings, document, side panel with preview and versions) for resumes and cover letters, library and application.
+- A snapshot's structured content as editor blocks styled like the PDF (header and section titles locked, employer, title and dates locked), and blocks back to structured content; edits save as coalesced snapshots (origin edited, author user). Trace on hover as today.
+- Findings (code checks, coverage review) as underlines with the hover card: Fix where code fixes it, Ignore.
+
+Acceptance:
+- [ ] A generated resume and a cover letter open in the PDF look; editing a bullet saves a snapshot and the PDF preview shows it.
+- [ ] Locked facts and section titles can't be edited in place.
+
+### D2: The document agent
+
+- One agent per document on `chat.agent`, sharing the profile agent's plumbing (sessions, recovery, New conversation, `/clear`, attachments, autocomplete).
+- Context: the generation's frozen profile version (index plus a tool to read a part), settings, the opening's brief and fit check or the focus, communication rules with public names, the coverage review, the lines' traces. A selected passage or a finding (“Talk to the agent”) arrives as an attachment.
+- Charged per message like the profile agent.
+
+Acceptance:
+- [ ] Selecting a passage of the resume opens the agent with it, and the agent answers about it with the profile in view.
+
+### D3: Suggestions in the document
+
+- A document change (a part, the lines it replaces, the lines it writes, the profile passages it draws on) shown in place with the word-level diff; Accept creates a snapshot authored by the AI and accepted by the user, Reject drops it; a newer one on the same lines supersedes the waiting one.
+- The agent grounds a suggestion on the profile version and on the user's words in the conversation; code refuses a figure found in neither (the profile agent's rule) and a change to a locked fact.
+
+Acceptance:
+- [ ] Only accepted suggestions reach the document, each as a snapshot.
+- [ ] Asked to, the agent writes a fact the user just told it, and refuses a figure nobody gave.
+
+### D4: Pointing out what the profile doesn't back
+
+- Lines that don't trace to the profile version (typed by the user or accepted from the agent) are findings, “not in your profile”, with Add to the profile (a suggestion in the profile's draft, origin `document`) and Ignore; figures not `[medido]`, never-include terms and originals with a public name too. None of them blocks: the PDF asks for “Generate PDF anyway”.
+- “Profile version N is newer than this document's” with Use version N: the document freezes the newer version; traces and findings rerun against it.
+
+Acceptance:
+- [ ] A line the user types that the profile doesn't back is pointed out, and Add to the profile creates a profile suggestion; after publishing and Use version N, it is no longer pointed out.
+
 ## Not in the MVP
 
 Hiring interview prep, job search, scam guidance as a feature, the retrospective, team or recruiter accounts, email reminders, OpenAI package and "Sign in with ChatGPT", languages beyond English and Brazilian Portuguese, final prices.

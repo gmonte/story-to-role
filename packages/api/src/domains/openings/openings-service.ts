@@ -228,18 +228,30 @@ export class OpeningsService {
                 )
               )
             : [],
-          // The positions a confirmed gap can be tied to: those of the
-          // profile published now (“what I did not do” is per position).
-          positions: (
-            (await loadProfileSource({ db: tx, cipher, profileId: profile.id }))
-              ?.positions ?? []
-          ).map((position) => ({
-            positionId: position.id,
-            employer: position.employer,
-            title: position.title,
-            startDate: position.startDate,
-            endDate: position.endDate,
-          })),
+          // The positions and projects of the profile published now: an
+          // answer to a gap question can be tied to them.
+          ...(await (async () => {
+            const source = await loadProfileSource({
+              db: tx,
+              cipher,
+              profileId: profile.id,
+            });
+            return {
+              positions: (source?.positions ?? []).map((position) => ({
+                positionId: position.id,
+                employer: position.employer,
+                title: position.title,
+                startDate: position.startDate,
+                endDate: position.endDate,
+              })),
+              projects: (source?.projects ?? []).map((project) => ({
+                projectId: project.id,
+                name: project.name,
+                startDate: project.startDate,
+                endDate: project.endDate,
+              })),
+            };
+          })()),
           outdated:
             !!profileDocument?.publishedVersionId &&
             (fitCheck.profileVersionId !== profileDocument.publishedVersionId ||
@@ -439,22 +451,36 @@ export class OpeningsService {
   }
 
   /**
-   * The answer to a gap question (resume spec, "Gap questions"): either a
-   * story, kept with the opening and turned into an application
-   * instruction when it is split; or the user confirming they really lack
-   * it, which becomes a suggestion in the profile's draft: under "what I
-   * did not do" of the position the user names, else under Known gaps. Nothing changes until the user accepts it there.
+   * The answer to a gap question (resume spec, "Gap questions"). "I have
+   * it": a story, kept with the opening (an application instruction) and
+   * proposed as a line under what the user did in each position or project
+   * they tie it to, or under Professional identity when it is tied to none.
+   * "I don't have it": a suggestion under Known gaps, in the user's words
+   * or as the requirement. Nothing changes until the user accepts it in My
+   * career.
    */
   async answerGapQuestion(input: {
     userId: string;
     fitCheckItemId: string;
     answer?: string;
     lacks?: boolean;
-    positionId?: string;
-  }): Promise<{ profileSuggestionId: string | null }> {
+    positionIds?: string[];
+    projectIds?: string[];
+    notTied?: boolean;
+  }): Promise<{ profileSuggestionIds: string[] }> {
     const profile = await this.requireProfile(input.userId);
     const answer = input.answer?.trim();
-    if (!input.lacks && !answer) throw new TRPCError({ code: "BAD_REQUEST" });
+    const positionIds = input.lacks ? [] : [...new Set(input.positionIds)];
+    const projectIds = input.lacks ? [] : [...new Set(input.projectIds)];
+    if (!input.lacks) {
+      // A story, and where it happened (or that it was general).
+      if (
+        !answer ||
+        (!positionIds.length && !projectIds.length && !input.notTied)
+      ) {
+        throw new TRPCError({ code: "BAD_REQUEST" });
+      }
+    }
     const { item, openingId } = await this.db.transaction(async (tx) => {
       const openings = new OpeningsRepository(tx);
       const found = await openings.findFitCheckItem(input.fitCheckItemId);
@@ -475,49 +501,99 @@ export class OpeningsService {
       }
       return { item: found.item, openingId: opening.id };
     });
-    if (!input.lacks) return { profileSuggestionId: null };
 
     const cipher = await getUserCipher(this.db, input.userId);
     const openings = new OpeningsRepository(this.db);
+    const propose = async (
+      target: SuggestionTarget,
+      text: string | Record<"en-US" | "pt-BR", string>,
+      reason: Record<"en-US" | "pt-BR", string>,
+      fallback?: SuggestionTarget
+    ) => {
+      try {
+        const { profileSuggestionId } = await suggestLine({
+          db: this.db,
+          cipher,
+          userId: input.userId,
+          careerProfileId: profile.id,
+          target,
+          fallback,
+          text,
+          reason,
+        });
+        return profileSuggestionId;
+      } catch (error) {
+        // The profile already says it: nothing to suggest.
+        if (error instanceof TRPCError && error.code === "CONFLICT") {
+          return null;
+        }
+        throw error;
+      }
+    };
+
+    if (!input.lacks) {
+      const reason = {
+        "en-US":
+          "You said you have this when answering an opening's gap question.",
+        "pt-BR":
+          "Você disse que tem isto ao responder a pergunta de lacuna de uma vaga.",
+      };
+      const targets: SuggestionTarget[] = [
+        ...positionIds.map(
+          (positionId): SuggestionTarget => ({
+            kind: "experience",
+            positionId,
+            field: "responsibilities",
+          })
+        ),
+        ...projectIds.map(
+          (projectId): SuggestionTarget => ({
+            kind: "project",
+            projectId,
+            field: "responsibilities",
+          })
+        ),
+        ...(input.notTied ? [{ kind: "identityAreas" } as const] : []),
+      ];
+      const ids: string[] = [];
+      for (const target of targets) {
+        const id = await propose(
+          target,
+          answer!,
+          reason,
+          // An entry the draft no longer has: the fact still has a place.
+          target.kind === "identityAreas"
+            ? undefined
+            : { kind: "identityAreas" }
+        );
+        if (id && !ids.includes(id)) ids.push(id);
+      }
+      return { profileSuggestionIds: ids };
+    }
+
     const term = (await openings.listTerms(openingId)).find(
       (row) => row.id === item.termId
     );
     if (!term) throw notFound();
-    const text = cipher.decrypt(term.encryptedText);
-    const known: SuggestionTarget = { kind: "section", section: "gaps" };
-    let profileSuggestionId: string | null = null;
-    try {
-      ({ profileSuggestionId } = await suggestLine({
-        db: this.db,
-        cipher,
-        userId: input.userId,
-        careerProfileId: profile.id,
-        target: input.positionId
-          ? {
-              kind: "experience",
-              positionId: input.positionId,
-              field: "notDone",
-            }
-          : known,
-        text,
-        reason: {
-          "en-US":
-            "You confirmed you really lack this when answering an opening's gap question.",
-          "pt-BR":
-            "Você confirmou que realmente não tem isto ao responder a pergunta de lacuna de uma vaga.",
-        },
-      }));
-    } catch (error) {
-      // The profile already says it: nothing to suggest.
-      if (!(error instanceof TRPCError && error.code === "CONFLICT")) {
-        throw error;
+    const requirement = cipher.decrypt(term.encryptedText);
+    const id = await propose(
+      { kind: "section", section: "gaps" },
+      answer ?? {
+        "en-US": `No experience with ${requirement}`,
+        "pt-BR": `Não tenho experiência com ${requirement}`,
+      },
+      {
+        "en-US":
+          "You confirmed you really lack this when answering an opening's gap question.",
+        "pt-BR":
+          "Você confirmou que realmente não tem isto ao responder a pergunta de lacuna de uma vaga.",
       }
-    }
+    );
     await openings.answerFitCheckItem({
       fitCheckItemId: item.id,
       lackConfirmedAt: new Date(),
     });
-    return { profileSuggestionId };
+    return { profileSuggestionIds: id ? [id] : [] };
   }
 }
 

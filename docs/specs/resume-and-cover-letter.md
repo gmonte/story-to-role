@@ -94,7 +94,12 @@ Every generated resume and cover letter comes with a coverage review (the method
 
 ## Gap questions
 
-The profile is not rewritten for every opening: the goal is that, once it is published, the user only adds an opening and asks for a document. Before generating, StoryToRole turns each gap found by the fit check into a question, one per point: does the user really lack it, or do they have a story for it? An answer with a story is an application instruction, so it can stay in this application or, point by point, become a suggestion in the profile's draft. When the user confirms they lack it, the gap becomes a suggestion for "what I did not do" in the right position or for the known gaps.
+The profile is not rewritten for every opening: the goal is that, once it is published, the user only adds an opening and asks for a document. Before generating, StoryToRole turns each gap found by the fit check into a question, one per point: does the user have it, or not? Each answer is one of two, and either way the profile only changes when the user accepts the suggestion in My career and publishes.
+
+- **I have it.** The user writes what they did and says where: a multi-select of the published profile's positions and projects, at least one, or "Not tied to a position" for something general. The answer is kept with the opening as an application instruction and also proposed to the profile (origin `application`, figures only as the user wrote them): one suggestion per chosen entry, adding the answer as a line under Responsibilities of a position or What I did of a project, and one under Seniority and areas of Professional identity for a general answer. After the user accepts and publishes, the fit check finds it. The screen says it was sent to the profile, with a link to My career.
+- **I don't have it.** No position is asked. The lack is recorded on the opening and proposed as a line under Known gaps, in the user's words when they wrote any, else as the requirement ("No experience with X"); never under a position's "what I did not do".
+
+An answer can be edited or changed to the other kind later; a suggestion already sent stays in My career until the user rejects it there.
 
 ## ATS check
 

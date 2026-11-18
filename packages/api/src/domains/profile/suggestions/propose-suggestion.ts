@@ -68,8 +68,10 @@ function firstNewLine(change: Pick<ProfileChange, "find" | "replace">) {
  * without this a second version would wait beside the first.
  */
 export function sameAdditions(
-  pending: Array<Pick<ProfileChange, "find" | "replace"> & { id: string }>,
-  change: Pick<ProfileChange, "find" | "replace">
+  pending: Array<
+    Pick<ProfileChange, "find" | "replace"> & { id: string; part?: string }
+  >,
+  change: Pick<ProfileChange, "find" | "replace"> & { part?: string }
 ) {
   const isAddition = (other: Pick<ProfileChange, "find" | "replace">) =>
     !other.find.trim() || other.replace.startsWith(other.find);
@@ -77,7 +79,13 @@ export function sameAdditions(
   const first = firstNewLine(change);
   if (!first) return [];
   return pending
-    .filter((other) => isAddition(other) && firstNewLine(other) === first)
+    .filter(
+      (other) =>
+        isAddition(other) &&
+        firstNewLine(other) === first &&
+        // The same line proposed for another entry is another addition.
+        (!other.part || !change.part || other.part === change.part)
+    )
     .map((other) => other.id);
 }
 

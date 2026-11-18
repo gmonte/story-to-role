@@ -11,14 +11,8 @@ import type { OpeningDetail } from "@repo/api/domains/openings/schemas/opening-v
 import { useTranslation } from "@repo/intl/use-translation";
 import { Badge } from "@repo/web/components/ui/badge";
 import { Button } from "@repo/web/components/ui/button";
+import { Checkbox } from "@repo/web/components/ui/checkbox";
 import { Label } from "@repo/web/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@repo/web/components/ui/select";
 import { toast } from "@repo/web/components/ui/sonner";
 import { Tabs, TabsList, TabsTrigger } from "@repo/web/components/ui/tabs";
 import { Textarea } from "@repo/web/components/ui/textarea";
@@ -308,6 +302,7 @@ export function OpeningView({ openingId }: { openingId: string }) {
                 answer={item.gapAnswer}
                 lacks={item.gapLack}
                 positions={data.fitCheck?.positions ?? []}
+                projects={data.fitCheck?.projects ?? []}
               />
             ))}
           </section>
@@ -342,14 +337,13 @@ export function OpeningView({ openingId }: { openingId: string }) {
   );
 }
 
-const notTiedToPosition = "none";
-
 function GapQuestion({
   fitCheckItemId,
   question,
   answer,
   lacks,
   positions,
+  projects,
 }: {
   fitCheckItemId: string;
   question: string;
@@ -357,49 +351,50 @@ function GapQuestion({
   /** The user confirmed they lack it: a suggestion went to their profile. */
   lacks: boolean;
   positions: NonNullable<OpeningDetail["fitCheck"]>["positions"];
+  projects: NonNullable<OpeningDetail["fitCheck"]>["projects"];
 }) {
   const t = useTranslation();
   const trpc = useTRPC();
-  const router = useRouter();
   const refresh = useRefreshOpenings();
   const [draft, setDraft] = useState(answer ?? "");
-  const [asking, setAsking] = useState(false);
+  // “I have it” asks where; “I don't have it” asks nothing more.
+  const [mode, setMode] = useState<"have" | "lack">("have");
   // The user changed their mind after confirming they lack it.
   const [reopened, setReopened] = useState(false);
-  const [positionId, setPositionId] = useState(notTiedToPosition);
+  const [positionIds, setPositionIds] = useState<string[]>([]);
+  const [projectIds, setProjectIds] = useState<string[]>([]);
+  const [notTied, setNotTied] = useState(false);
+  const [sent, setSent] = useState(false);
+  const toggle = (list: string[], id: string) =>
+    list.includes(id) ? list.filter((value) => value !== id) : [...list, id];
+  const tied = positionIds.length + projectIds.length > 0 || notTied;
   const save = useMutation(
     trpc.openings.answerGapQuestion.mutationOptions({
       onSuccess: async (result, input) => {
         await refresh();
-        setAsking(false);
         setReopened(false);
-        if (!input.lacks) {
-          toast.success(
-            t.formatMessage({
-              defaultMessage: "Answer saved for this opening.",
-            })
-          );
-          return;
-        }
+        setSent(!input.lacks && result.profileSuggestionIds.length > 0);
         toast.success(
-          result.profileSuggestionId
-            ? t.formatMessage({
-                defaultMessage:
-                  "Noted. A suggestion waits for you in My career.",
+          input.lacks
+            ? result.profileSuggestionIds.length > 0
+              ? t.formatMessage({
+                  defaultMessage:
+                    "Noted. A suggestion waits for you in My career.",
+                })
+              : t.formatMessage({ defaultMessage: "Noted for this opening." })
+            : t.formatMessage({
+                defaultMessage: "Answer saved for this opening.",
               })
-            : t.formatMessage({ defaultMessage: "Noted for this opening." }),
-          result.profileSuggestionId
-            ? {
-                action: {
-                  label: t.formatMessage({ defaultMessage: "Open My career" }),
-                  onClick: () => router.push("/app/career"),
-                },
-              }
-            : undefined
         );
       },
       onError: (error) => toast.error(error.message),
     })
+  );
+
+  const myCareer = (
+    <Link href="/app/career" className="underline">
+      {t.formatMessage({ defaultMessage: "Open My career" })}
+    </Link>
   );
 
   return (
@@ -407,11 +402,14 @@ function GapQuestion({
       <p className="text-sm">{question}</p>
       {lacks && !reopened ? (
         <div className="flex flex-col items-start gap-2">
-          <p className="text-muted-foreground text-xs">
-            {t.formatMessage({
-              defaultMessage:
-                "You said you don't have it. A suggestion was sent to My career.",
-            })}
+          <p className="text-muted-foreground flex flex-wrap gap-x-1 text-xs">
+            <span>
+              {t.formatMessage({
+                defaultMessage:
+                  "You said you don't have it. A suggestion was sent to My career.",
+              })}
+            </span>
+            {myCareer}
           </p>
           <Button size="sm" variant="ghost" onClick={() => setReopened(true)}>
             {t.formatMessage({ defaultMessage: "Answer instead" })}
@@ -431,70 +429,111 @@ function GapQuestion({
             rows={2}
             value={draft}
             onChange={(event) => setDraft(event.target.value)}
-            placeholder={t.formatMessage({
-              defaultMessage: "Your answer, or tell us you don't have it",
-            })}
+            placeholder={
+              mode === "have"
+                ? t.formatMessage({ defaultMessage: "Tell us what you did" })
+                : t.formatMessage({
+                    defaultMessage: "Optional: say it in your own words",
+                  })
+            }
           />
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex gap-2">
             <Button
               size="sm"
-              variant="outline"
-              disabled={
-                !draft.trim() || save.isPending || draft.trim() === answer
-              }
-              onClick={() =>
-                save.mutate({ fitCheckItemId, answer: draft.trim() })
-              }
+              variant={mode === "have" ? "secondary" : "ghost"}
+              onClick={() => setMode("have")}
             >
-              {t.formatMessage({ defaultMessage: "Save answer" })}
+              {t.formatMessage({ defaultMessage: "I have it" })}
             </Button>
             <Button
               size="sm"
-              variant="ghost"
-              disabled={save.isPending}
-              onClick={() => setAsking(!asking)}
+              variant={mode === "lack" ? "secondary" : "ghost"}
+              onClick={() => setMode("lack")}
             >
               {t.formatMessage({ defaultMessage: "I don't have it" })}
             </Button>
           </div>
-          {asking && (
-            <div className="grid gap-1.5 rounded-md border p-2.5">
+          {mode === "have" ? (
+            <div className="grid gap-2 rounded-md border p-2.5">
               <Label>
-                {t.formatMessage({ defaultMessage: "At which position?" })}
+                {t.formatMessage({ defaultMessage: "Where did you do it?" })}
               </Label>
-              <Select value={positionId} onValueChange={setPositionId}>
-                <SelectTrigger className="w-full">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value={notTiedToPosition}>
-                    {t.formatMessage({
-                      defaultMessage: "Not tied to a position",
-                    })}
-                  </SelectItem>
-                  {positions.map((position) => (
-                    <SelectItem
-                      key={position.positionId}
-                      value={position.positionId}
-                    >
-                      {t.formatMessage(
-                        { defaultMessage: "{title} at {employer}" },
-                        { title: position.title, employer: position.employer }
-                      )}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              {positions.map((position) => (
+                <Label key={position.positionId} className="gap-2 font-normal">
+                  <Checkbox
+                    checked={positionIds.includes(position.positionId)}
+                    onCheckedChange={() =>
+                      setPositionIds(toggle(positionIds, position.positionId))
+                    }
+                  />
+                  {t.formatMessage(
+                    { defaultMessage: "{title} at {employer}" },
+                    { title: position.title, employer: position.employer }
+                  )}
+                </Label>
+              ))}
+              {projects.map((project) => (
+                <Label key={project.projectId} className="gap-2 font-normal">
+                  <Checkbox
+                    checked={projectIds.includes(project.projectId)}
+                    onCheckedChange={() =>
+                      setProjectIds(toggle(projectIds, project.projectId))
+                    }
+                  />
+                  {t.formatMessage(
+                    { defaultMessage: "{name} (project)" },
+                    { name: project.name }
+                  )}
+                </Label>
+              ))}
+              <Label className="gap-2 font-normal">
+                <Checkbox
+                  checked={notTied}
+                  onCheckedChange={(checked) => setNotTied(checked === true)}
+                />
+                {t.formatMessage({ defaultMessage: "Not tied to a position" })}
+              </Label>
               <p className="text-muted-foreground text-xs">
-                {positionId === notTiedToPosition
-                  ? t.formatMessage({
+                {t.formatMessage({
+                  defaultMessage:
+                    "A suggestion adds your answer to each one you pick, for you to accept in My career.",
+                })}
+              </p>
+              <Button
+                size="sm"
+                className="self-start"
+                disabled={!draft.trim() || !tied || save.isPending}
+                onClick={() =>
+                  save.mutate({
+                    fitCheckItemId,
+                    answer: draft.trim(),
+                    positionIds,
+                    projectIds,
+                    notTied,
+                  })
+                }
+              >
+                {t.formatMessage({ defaultMessage: "Save answer" })}
+              </Button>
+              {(sent || answer) && (
+                <p className="text-muted-foreground flex flex-wrap gap-x-1 text-xs">
+                  <span>
+                    {t.formatMessage({
                       defaultMessage:
-                        "The suggestion goes to your profile's known gaps.",
-                    })
-                  : t.formatMessage({
-                      defaultMessage:
-                        "The suggestion goes to “what I did not do” of this position.",
+                        "Sent to your profile — accept it in My career.",
                     })}
+                  </span>
+                  {myCareer}
+                </p>
+              )}
+            </div>
+          ) : (
+            <div className="grid gap-1.5 rounded-md border p-2.5">
+              <p className="text-muted-foreground text-xs">
+                {t.formatMessage({
+                  defaultMessage:
+                    "The suggestion goes to your profile's known gaps.",
+                })}
               </p>
               <Button
                 size="sm"
@@ -504,8 +543,7 @@ function GapQuestion({
                   save.mutate({
                     fitCheckItemId,
                     lacks: true,
-                    positionId:
-                      positionId === notTiedToPosition ? undefined : positionId,
+                    answer: draft.trim() || undefined,
                   })
                 }
               >

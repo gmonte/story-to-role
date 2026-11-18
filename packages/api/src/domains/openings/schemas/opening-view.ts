@@ -70,14 +70,22 @@ export const openingDetailSchema = openingSummarySchema.extend({
       items: z.array(fitCheckItemViewSchema),
       // The job preferences the opening breaks: any makes the band low.
       preferenceConflicts: preferenceConflictsSchema,
-      // The positions of the profile published now: a gap the user
-      // confirms is lacking can be tied to one (`positionId` of
-      // `answerGapQuestion`), for its “what I did not do”.
+      // The positions and projects of the profile published now: a gap
+      // the user has experience with is tied to them (`positionIds` and
+      // `projectIds` of `answerGapQuestion`).
       positions: z.array(
         z.object({
           positionId: z.uuid(),
           employer: z.string(),
           title: z.string(),
+          startDate: z.string().nullable(),
+          endDate: z.string().nullable(),
+        })
+      ),
+      projects: z.array(
+        z.object({
+          projectId: z.uuid(),
+          name: z.string(),
           startDate: z.string().nullable(),
           endDate: z.string().nullable(),
         })

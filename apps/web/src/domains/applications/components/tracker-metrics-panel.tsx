@@ -114,7 +114,18 @@ function MetricsBody({ metrics }: { metrics: TrackerMetrics }) {
           t.formatMessage({ defaultMessage: "Sent" }),
           t.formatNumber(metrics.sent)
         )}
-        {stat(t.formatMessage({ defaultMessage: "Responses" }), rate(metrics))}
+        {stat(
+          t.formatMessage({ defaultMessage: "Responses" }),
+          t.formatMessage(
+            { defaultMessage: "{responded, number} ({rate})" },
+            {
+              responded: metrics.responded,
+              rate: t.formatNumber(metrics.responded / metrics.sent, {
+                style: "percent",
+              }),
+            }
+          )
+        )}
         {stat(
           t.formatMessage({ defaultMessage: "Median time to first response" }),
           metrics.medianDaysToResponse === null
@@ -237,13 +248,13 @@ function RateGroup({
 }) {
   if (rows.length === 0) return null;
   return (
-    <div className="flex flex-col gap-1">
+    <div className="flex min-w-0 flex-col gap-1">
       <h3 className="text-xs font-medium">{title}</h3>
-      <ul className="flex flex-col gap-1">
+      <ul className="flex flex-col gap-1.5">
         {rows.map((row) => (
-          <li key={row.key} className="flex flex-col">
-            <span className="min-w-0 truncate">{row.label}</span>
-            <span className="text-muted-foreground whitespace-nowrap">
+          <li key={row.key} className="flex min-w-0 flex-col">
+            <span className="truncate">{row.label}</span>
+            <span className="text-muted-foreground text-xs break-words">
               {rate(row.group)}
             </span>
           </li>

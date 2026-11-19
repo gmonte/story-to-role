@@ -2,6 +2,7 @@ import { TRPCError } from "@trpc/server";
 
 import { CareerRepository } from "@repo/api/domains/career/career-repository";
 import { getUserCipher } from "@repo/api/domains/encryption/user-cipher";
+import { MotivationRepository } from "@repo/api/domains/applications/motivation/motivation-repository";
 import { OpeningsRepository } from "@repo/api/domains/openings/openings-repository";
 import type { Tone } from "@repo/api/domains/openings/schemas/opening";
 import type { RealtimeSubscription } from "@repo/api/domains/tasks/schemas/task";
@@ -156,6 +157,30 @@ export class LetterService {
       // letter's version may be the resume's older one, where it is found
       // again by its words.
       let storyLineId: string | null = null;
+      // No story picked: the one the motivation interview was about, found
+      // again by its words in the profile version the letter reads.
+      if (input.storyLineId === undefined) {
+        const interview = await new MotivationRepository(
+          tx
+        ).findInterviewByOpening(opening.id);
+        if (interview?.encryptedStory) {
+          const story = cipher.decrypt(interview.encryptedStory);
+          const source = await loadProfileSource({
+            db: tx,
+            cipher,
+            profileId: profile.id,
+            profileVersionId,
+          });
+          storyLineId =
+            source?.evidence.find(
+              (line) =>
+                line.kind === "achievement" &&
+                line.text === story &&
+                (!interview.storyPositionId ||
+                  line.positionId === interview.storyPositionId)
+            )?.id ?? null;
+        }
+      }
       if (input.storyLineId) {
         const source = (version: string) =>
           loadProfileSource({

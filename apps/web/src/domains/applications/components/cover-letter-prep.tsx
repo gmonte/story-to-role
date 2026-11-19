@@ -3,7 +3,7 @@
 import { useEffect, useState, type ReactNode } from "react";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { CheckCircle2, ChevronRight, Loader2, Mail, Send } from "lucide-react";
+import { CheckCircle2, ChevronRight, Loader2, Send } from "lucide-react";
 import { useRouter } from "next/navigation";
 
 import type { MotivationView } from "@repo/api/domains/applications/schemas/motivation";
@@ -31,7 +31,7 @@ import {
   LetterStoryPicker,
   useLetterStories,
 } from "~/domains/documents/components/letter-story-picker";
-import { GenerateLetterDialog } from "~/domains/documents/components/generate-letter-dialog";
+import { GenerateLetterNow } from "~/domains/documents/components/generate-letter-dialog";
 import { useOpeningDocuments } from "~/domains/documents/hooks/use-opening-documents";
 import { useTimeline } from "~/domains/career/hooks/use-career-queries";
 import { useTRPC } from "~/tools/trpc/client";
@@ -329,17 +329,11 @@ function WriteLetter({
           })}
         </p>
       )}
-      <GenerateLetterDialog
+      <GenerateLetterNow
         openingId={openingId}
         resumeVersions={resumeVersions}
         defaultLanguage={defaultLanguage}
         defaultTone={defaultTone}
-        trigger={
-          <Button size="lg">
-            <Mail />
-            {t.formatMessage({ defaultMessage: "Generate cover letter" })}
-          </Button>
-        }
       />
     </section>
   );

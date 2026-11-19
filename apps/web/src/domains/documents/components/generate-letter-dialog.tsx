@@ -3,6 +3,7 @@
 import { useState, type ReactNode } from "react";
 
 import { useMutation } from "@tanstack/react-query";
+import { Mail } from "lucide-react";
 
 import type {
   OutputLanguage,
@@ -58,6 +59,100 @@ const latestResumeIn = (versions: VersionView[], language: OutputLanguage) =>
     .sort(
       (a, b) => b.snapshot.createdAt.getTime() - a.snapshot.createdAt.getTime()
     )[0];
+
+/**
+ * Writes the cover letter at once with what the opening and the interview
+ * already settled (owner): its language, the latest resume in it, the
+ * application's tone, the standard writing level, the user's settings and
+ * the interview's story. The line under it says so, with the dialog a
+ * click away to change any of it.
+ */
+export function GenerateLetterNow({
+  openingId,
+  resumeVersions,
+  defaultLanguage,
+  defaultTone,
+}: {
+  openingId: string;
+  resumeVersions: VersionView[];
+  defaultLanguage: OutputLanguage;
+  defaultTone: Tone;
+}) {
+  const t = useTranslation();
+  const labels = useDocumentLabels();
+  const openingLabels = useOpeningLabels();
+  const trpc = useTRPC();
+  const refresh = useRefreshDocuments();
+  const credits = useCredits();
+  const resume = latestResumeIn(resumeVersions, defaultLanguage);
+  const generate = useMutation(
+    trpc.letters.generate.mutationOptions({
+      onSuccess: refresh,
+      onError: (error) => toast.error(error.message),
+    })
+  );
+  return (
+    <div className="flex flex-col items-start gap-2">
+      <div className="flex flex-wrap items-center gap-3">
+        <Button
+          size="lg"
+          disabled={generate.isPending}
+          onClick={() =>
+            generate.mutate({
+              openingId,
+              language: defaultLanguage,
+              tone: defaultTone,
+              writingLevel: "standard",
+              resumeVersionId: resume?.id ?? null,
+            })
+          }
+        >
+          <Mail />
+          {t.formatMessage({ defaultMessage: "Generate cover letter" })}
+        </Button>
+        <CreditCost
+          credits={letterCredits(credits.data?.estimates, "standard")}
+        />
+      </div>
+      <p className="text-muted-foreground flex flex-wrap items-center gap-x-1 text-xs">
+        <span>
+          {resume
+            ? t.formatMessage(
+                {
+                  defaultMessage:
+                    "In {language}, with your resume in {language}, {tone} tone.",
+                },
+                {
+                  language: labels.language(defaultLanguage),
+                  tone: openingLabels.tone(defaultTone),
+                }
+              )
+            : t.formatMessage(
+                {
+                  defaultMessage:
+                    "In {language}, without a resume, {tone} tone.",
+                },
+                {
+                  language: labels.language(defaultLanguage),
+                  tone: openingLabels.tone(defaultTone),
+                }
+              )}
+        </span>
+        <GenerateLetterDialog
+          openingId={openingId}
+          resumeVersions={resumeVersions}
+          defaultLanguage={defaultLanguage}
+          defaultTone={defaultTone}
+          trigger={
+            <Button size="sm" variant="link" className="h-auto p-0 text-xs">
+              {t.formatMessage({ defaultMessage: "Change options" })}
+            </Button>
+          }
+        />
+      </p>
+    </div>
+  );
+}
 
 /**
  * The choices before a cover letter (resume spec, "Cover letter and its
@@ -209,7 +304,9 @@ function LetterForm({
           </div>
         )}
         <div className="grid gap-1.5">
-          <Label>{t.formatMessage({ defaultMessage: "Resume" })}</Label>
+          <Label>
+            {t.formatMessage({ defaultMessage: "Resume it builds on" })}
+          </Label>
           <Select value={resumeId} onValueChange={setChosenResume}>
             <SelectTrigger className="w-full">
               <SelectValue />
@@ -227,36 +324,42 @@ function LetterForm({
           </Select>
         </div>
         <div className="grid grid-cols-2 gap-2">
-          <Select
-            value={tone}
-            onValueChange={(value) => setTone(value as Tone)}
-          >
-            <SelectTrigger className="w-full">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {tones.map((option) => (
-                <SelectItem key={option} value={option}>
-                  {openingLabels.tone(option)}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <Select
-            value={writingLevel}
-            onValueChange={(value) => setWritingLevel(value as WritingLevel)}
-          >
-            <SelectTrigger className="w-full">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {(["standard", "maximum"] as const).map((option) => (
-                <SelectItem key={option} value={option}>
-                  {labels.writingLevel(option)}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <div className="grid gap-1.5">
+            <Label>{t.formatMessage({ defaultMessage: "Tone" })}</Label>
+            <Select
+              value={tone}
+              onValueChange={(value) => setTone(value as Tone)}
+            >
+              <SelectTrigger className="w-full">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {tones.map((option) => (
+                  <SelectItem key={option} value={option}>
+                    {openingLabels.tone(option)}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="grid gap-1.5">
+            <Label>{t.formatMessage({ defaultMessage: "Writing" })}</Label>
+            <Select
+              value={writingLevel}
+              onValueChange={(value) => setWritingLevel(value as WritingLevel)}
+            >
+              <SelectTrigger className="w-full">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {(["standard", "maximum"] as const).map((option) => (
+                  <SelectItem key={option} value={option}>
+                    {labels.writingLevel(option)}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
         </div>
         <DocumentSettings
           value={documentSettings.value}

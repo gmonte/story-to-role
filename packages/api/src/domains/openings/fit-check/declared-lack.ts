@@ -20,9 +20,15 @@ const alternatives = /(^|\s)(or|ou)(\s|$)|\//i;
 
 const countWords = (text: string) => text.trim().split(/\s+/).length;
 
-/** Whether a short clause of the line names the term. */
+/**
+ * Whether a short clause of the line names the term. A labelled line
+ * (“Kubernetes: never touched it; only Docker.”) lacks only its label: what
+ * follows the colon is commentary and may name what the person does have.
+ */
 function namedIn(line: string, name: string) {
-  return line
+  const colon = line.indexOf(":");
+  const subject = colon > 0 ? line.slice(0, colon) : line;
+  return subject
     .replace(/\([^)]*\)/g, "")
     .split(/[;.]/)
     .some(

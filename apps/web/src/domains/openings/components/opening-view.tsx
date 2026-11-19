@@ -108,12 +108,17 @@ export function OpeningPageBody({
   layout: OpeningLayout;
 }) {
   const worked = opening.status === "analyzed" || opening.status === "closed";
-  const showFit = worked;
-  const showApplication = worked || !!opening.applicationId;
+  const recheck = isRecheck(opening);
+  const showFit = worked || recheck;
+  const showApplication = worked || recheck || !!opening.applicationId;
   const description = <DescriptionColumn opening={opening} />;
   const fit = showFit && (
     <section id="fit-column">
-      <FitColumn opening={opening} />
+      {recheck ? (
+        <AnalysisProgress opening={opening} />
+      ) : (
+        <FitColumn opening={opening} />
+      )}
     </section>
   );
   const application = showApplication && (
@@ -302,64 +307,82 @@ export function DocumentPage({
  * the person pasted (or the analysis' progress while it runs).
  */
 function DescriptionColumn({ opening }: { opening: OpeningDetail }) {
-  const t = useTranslation();
-  const labels = useOpeningLabels();
-
-  if (opening.status === "processing") {
-    const found = opening.progress?.counts;
+  // A first analysis fills the page; a re-check runs in the fit column and
+  // leaves the description where it is.
+  if (opening.status === "processing" && !isRecheck(opening)) {
     return (
       <div className="mx-auto w-full max-w-md py-6">
-        <AiAtWork
-          title={t.formatMessage({
-            defaultMessage: "Reading the opening and checking your fit",
-          })}
-          current={opening.progress?.label ?? "reading"}
-          steps={[
-            {
-              key: "reading",
-              label: t.formatMessage({ defaultMessage: "Reading the opening" }),
-            },
-            {
-              key: "requirements",
-              label: t.formatMessage({
-                defaultMessage: "Listing what it asks for",
-              }),
-            },
-            {
-              key: "matching",
-              label: t.formatMessage({
-                defaultMessage:
-                  "Looking for the passages of your profile behind each point",
-              }),
-            },
-            {
-              key: "judging",
-              label: t.formatMessage({
-                defaultMessage: "Weighing what you have against each one",
-              }),
-            },
-          ]}
-          detail={
-            found?.requirements !== undefined &&
-            t.formatMessage(
-              {
-                defaultMessage:
-                  "It asks for {keywords, plural, =0 {no listed skills} one {# skill} other {# skills}} and {requirements, plural, =0 {no other requirements} one {# requirement} other {# requirements}}.",
-              },
-              {
-                keywords: found.keywords ?? 0,
-                requirements: found.requirements,
-              }
-            )
-          }
-          note={t.formatMessage({
-            defaultMessage: "You can leave this page; the result will be here.",
-          })}
-        />
+        <AnalysisProgress opening={opening} />
       </div>
     );
   }
 
+  return <DescriptionBody opening={opening} />;
+}
+
+/** A re-check: the opening was analyzed before and is being checked again. */
+export function isRecheck(opening: OpeningDetail) {
+  return opening.status === "processing" && !!opening.fitCheck;
+}
+
+/** The analysis' live steps (reading, listing, matching, judging). */
+function AnalysisProgress({ opening }: { opening: OpeningDetail }) {
+  const t = useTranslation();
+  const found = opening.progress?.counts;
+  return (
+    <AiAtWork
+      title={t.formatMessage({
+        defaultMessage: "Reading the opening and checking your fit",
+      })}
+      current={opening.progress?.label ?? "reading"}
+      steps={[
+        {
+          key: "reading",
+          label: t.formatMessage({ defaultMessage: "Reading the opening" }),
+        },
+        {
+          key: "requirements",
+          label: t.formatMessage({
+            defaultMessage: "Listing what it asks for",
+          }),
+        },
+        {
+          key: "matching",
+          label: t.formatMessage({
+            defaultMessage:
+              "Looking for the passages of your profile behind each point",
+          }),
+        },
+        {
+          key: "judging",
+          label: t.formatMessage({
+            defaultMessage: "Weighing what you have against each one",
+          }),
+        },
+      ]}
+      detail={
+        found?.requirements !== undefined &&
+        t.formatMessage(
+          {
+            defaultMessage:
+              "It asks for {keywords, plural, =0 {no listed skills} one {# skill} other {# skills}} and {requirements, plural, =0 {no other requirements} one {# requirement} other {# requirements}}.",
+          },
+          {
+            keywords: found.keywords ?? 0,
+            requirements: found.requirements,
+          }
+        )
+      }
+      note={t.formatMessage({
+        defaultMessage: "You can leave this page; the result will be here.",
+      })}
+    />
+  );
+}
+
+function DescriptionBody({ opening }: { opening: OpeningDetail }) {
+  const t = useTranslation();
+  const labels = useOpeningLabels();
   return (
     <>
       {opening.status === "external" && (

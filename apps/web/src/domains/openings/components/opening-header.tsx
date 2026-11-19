@@ -197,7 +197,7 @@ export function OpeningHeader({
       <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-2">
         {/* On a narrow screen the actions wrap under the title. */}
         <div className="min-w-0 basis-full sm:flex-1 sm:basis-0">
-          {processing ? (
+          {processing && !opening.title ? (
             <h1 className="font-display text-2xl font-semibold tracking-tight sm:text-3xl">
               {t.formatMessage({ defaultMessage: "Reading the opening…" })}
             </h1>

@@ -32,6 +32,7 @@ import { toast } from "@repo/web/components/ui/sonner";
 import { cn } from "@repo/web/lib/utils";
 
 import { useTRPC } from "~/tools/trpc/client";
+import { ResizableAside } from "~/domains/workspace/components/resizable-aside";
 
 import {
   useDraftAutosave,
@@ -263,7 +264,10 @@ function Editor({ draft }: { draft: ProfileDraft }) {
 
   return (
     <div className="flex min-h-0 flex-1">
-      <aside className="hidden w-60 shrink-0 space-y-6 overflow-y-auto border-r p-4 md:block">
+      <ResizableAside
+        storageKey="profile-index-width"
+        className="space-y-6 p-4"
+      >
         <DocumentSwitch current={kind} />
         <nav>
           <p className="text-muted-foreground mb-2 text-xs font-medium uppercase">
@@ -331,7 +335,7 @@ function Editor({ draft }: { draft: ProfileDraft }) {
             ))}
           </ul>
         </section>
-      </aside>
+      </ResizableAside>
       <div className="min-w-0 flex-1 overflow-y-auto">
         <div className="bg-background/95 sticky top-0 z-10 flex flex-wrap items-center gap-2 border-b px-4 py-2 backdrop-blur">
           <span

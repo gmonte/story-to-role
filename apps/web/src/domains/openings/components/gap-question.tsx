@@ -14,6 +14,7 @@ import { Button } from "@repo/web/components/ui/button";
 import { Checkbox } from "@repo/web/components/ui/checkbox";
 import { Label } from "@repo/web/components/ui/label";
 import { toast } from "@repo/web/components/ui/sonner";
+import { cn } from "@repo/web/lib/utils";
 import { Textarea } from "@repo/web/components/ui/textarea";
 
 import { useTRPC } from "~/tools/trpc/client";
@@ -35,7 +36,8 @@ export function GapQuestion({
   projects,
 }: {
   fitCheckItemId: string;
-  question: string;
+  /** Null for a gap the profile declares: it has no question. */
+  question: string | null;
   answer: string | null;
   /** The user confirmed they lack it: a suggestion went to their profile. */
   lacks: boolean;
@@ -62,6 +64,8 @@ export function GapQuestion({
   );
   const [notTied, setNotTied] = useState(links?.notTied ?? false);
   const [sent, setSent] = useState(false);
+  // A declared gap starts closed behind “This isn't a gap”.
+  const [opened, setOpened] = useState(!!answer);
   const toggle = (list: string[], id: string) =>
     list.includes(id) ? list.filter((value) => value !== id) : [...list, id];
   const tied = positionIds.length + projectIds.length > 0 || notTied;
@@ -94,9 +98,25 @@ export function GapQuestion({
     </Link>
   );
 
+  if (question === null && !opened) {
+    return (
+      <div className="border-t pt-2">
+        <Button size="sm" variant="outline" onClick={() => setOpened(true)}>
+          {t.formatMessage({ defaultMessage: "This isn’t a gap" })}
+        </Button>
+      </div>
+    );
+  }
+
   return (
     <div className="flex flex-col gap-2 border-t pt-2">
-      <p className="text-sm font-medium">{question}</p>
+      <p className="text-sm font-medium">
+        {question ??
+          t.formatMessage({
+            defaultMessage:
+              "Tell us what you did, to count it for this opening.",
+          })}
+      </p>
       {lacks && !reopened ? (
         <div className="flex flex-col items-start gap-2">
           <p className="text-muted-foreground flex flex-wrap gap-x-1 text-xs">
@@ -134,7 +154,7 @@ export function GapQuestion({
                   })
             }
           />
-          <div className="flex gap-2">
+          <div className={cn("flex gap-2", question === null && "hidden")}>
             <Button
               size="sm"
               variant={mode === "have" ? "secondary" : "ghost"}

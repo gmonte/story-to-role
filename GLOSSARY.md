@@ -60,6 +60,10 @@ _Avoid_: Qualification, certificate, diploma
 An employer, title or date of an experience that code prevents the AI from altering in any generated text.
 _Avoid_: Fixed field, protected field
 
+**Condition**:
+A requirement of an opening that is a term of the job, not a skill (work model, schedule or availability, location, travel, contract type, start date, salary). The user answers it with how they stand: meets it, doesn't but it is not a blocker, or it is a blocker.
+_Avoid_: Soft requirement
+
 **Known gap**:
 Something the user does not have or has not done, stated in the profile (in an experience's "what I did not do" or in Known gaps); it counts as a gap, never as coverage.
 _Avoid_: Weakness, missing skill

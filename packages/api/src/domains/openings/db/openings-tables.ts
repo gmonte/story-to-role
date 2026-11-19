@@ -13,6 +13,7 @@ import type {
   OpeningKind,
   OpeningRejectionReason,
   OpeningStatus,
+  ConditionStance,
   OpeningTermCategory,
   OpeningTermImportance,
   OpeningTermKind,
@@ -167,6 +168,8 @@ export const fitCheckItemsTable = createTable(
     // The user confirmed they really lack it: it was suggested for "what I
     // did not do" or the known gaps (resume spec, "Gap questions").
     lackConfirmedAt: d.timestamp({ withTimezone: true }),
+    // How the user stands on a condition (the note, if any, is the answer).
+    conditionStance: d.text().$type<ConditionStance>(),
   }),
   (t) => [index("fit_check_items_fit_check_id_idx").on(t.fitCheckId)]
 );

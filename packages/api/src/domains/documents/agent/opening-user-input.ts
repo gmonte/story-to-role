@@ -18,6 +18,8 @@ export type OpeningUserInput = {
   gapAnswers: Array<{
     requirement: string;
     lacks: boolean;
+    // For a condition: how the person stands on it.
+    stance: "meets" | "not_blocker" | "blocker" | null;
     answer: string | null;
     // The positions and projects the answer is tied to, by name.
     where: string[];
@@ -68,11 +70,14 @@ export async function loadOpeningUserInput(input: {
   const gapAnswers = items
     .filter(
       (item) =>
-        item.encryptedGapAnswer !== null || item.lackConfirmedAt !== null
+        item.encryptedGapAnswer !== null ||
+        item.lackConfirmedAt !== null ||
+        item.conditionStance !== null
     )
     .map((item) => ({
       requirement: terms.get(item.termId) ?? "",
       lacks: !!item.lackConfirmedAt,
+      stance: item.conditionStance ?? null,
       answer: item.encryptedGapAnswer ? open(item.encryptedGapAnswer) : null,
       where: [
         ...(item.gapLinks?.positionIds ?? []).map((id) => positions.get(id)),
@@ -122,9 +127,10 @@ const shorten = (text: string, max = 400) => {
 export function userInputLines(input: OpeningUserInput | null): string[] {
   if (!input) return [];
   return [
-    ...input.gapAnswers.map(
-      (gap) =>
-        `- gap question “${gap.requirement}”: ${gap.lacks ? "the person says they do NOT have it" : "the person says they have it"}${gap.answer ? ` — “${shorten(gap.answer)}”` : ""}${gap.where.length ? ` (at: ${gap.where.join("; ")})` : ""}`
+    ...input.gapAnswers.map((gap) =>
+      gap.stance
+        ? `- condition “${gap.requirement}”: ${{ meets: "the person says they meet it", not_blocker: "the person says they do not meet it, but it is NOT a blocker for them", blocker: "the person says it is a BLOCKER for them" }[gap.stance]}${gap.answer ? ` — “${shorten(gap.answer)}”` : ""}`
+        : `- gap question “${gap.requirement}”: ${gap.lacks ? "the person says they do NOT have it" : "the person says they have it"}${gap.answer ? ` — “${shorten(gap.answer)}”` : ""}${gap.where.length ? ` (at: ${gap.where.join("; ")})` : ""}`
     ),
     ...input.instructions.map(
       (text) => `- application instruction: ${shorten(text)}`

@@ -3,6 +3,12 @@ import { randomBytes } from "node:crypto";
 import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { createAiClient } from "@repo/api/domains/ai/ai-client";
+import { loadPendingGapAnswers } from "@repo/api/domains/applications/load-gap-answers";
+import { careerProfilesTable } from "@repo/api/domains/career/db/career-tables";
+import {
+  loadOpeningUserInput,
+  userInputLines,
+} from "@repo/api/domains/documents/agent/opening-user-input";
 import { CareerService } from "@repo/api/domains/career/career-service";
 import { getUserCipher } from "@repo/api/domains/encryption/user-cipher";
 import { ProfileService } from "@repo/api/domains/profile/profile-service";
@@ -1250,5 +1256,201 @@ describe("openings and fit check", () => {
     await expect(
       ctx.openings.get({ userId: grace.id, openingId })
     ).rejects.toMatchObject({ code: "NOT_FOUND" });
+  });
+});
+
+describe("answering any gap", () => {
+  beforeEach(async () => {
+    await clearTestDatabase();
+  });
+
+  afterAll(async () => {
+    await closeTestDatabase();
+  });
+
+  const conditionExtraction = {
+    ...extraction,
+    requirements: [
+      ...extraction.requirements,
+      {
+        text: "Available to start the day at 7:00 Brazil local time",
+        category: "condition",
+        importance: "mandatory",
+      },
+    ],
+  };
+  const allGaps = fitScript(
+    (terms) => ({
+      items: terms.map((term) => ({
+        term_id: term.termId,
+        verdict: "gap",
+        passage_ids: [],
+        explanation: "No",
+      })),
+    }),
+    conditionExtraction
+  );
+
+  async function conditionSetup() {
+    const ctx = await setup();
+    const openingId = await ctx.add();
+    await ctx.analyze(openingId, allGaps);
+    const items = (await ctx.detail(openingId)).fitCheck!.items;
+    const item = (term: string) => items.find((i) => i.term.startsWith(term))!;
+    return { ctx, openingId, item };
+  }
+
+  it("asks no gap question of a condition, which is answered by its own stance", async () => {
+    const { item } = await conditionSetup();
+    expect(item("Available").category).toBe("condition");
+    expect(item("Available").gapQuestion).toBeNull();
+  });
+
+  it.each(["meets", "not_blocker", "blocker"] as const)(
+    "stores a %s answer, counts it as input and reads the check as outdated",
+    async (stance) => {
+      const { ctx, openingId, item } = await conditionSetup();
+      expect((await ctx.detail(openingId)).fitCheck!.outdated).toBe(false);
+      await ctx.openings.answerCondition({
+        userId: ctx.user.id,
+        fitCheckItemId: item("Available").id,
+        stance,
+        note: "I can start at 7:00 if needed",
+        language: "en-US",
+      });
+
+      const check = (await ctx.detail(openingId)).fitCheck!;
+      expect(check.outdated).toBe(true);
+      expect(
+        check.items.find((i) => i.id === item("Available").id)
+      ).toMatchObject({
+        conditionStance: stance,
+        gapAnswer: "I can start at 7:00 if needed",
+      });
+
+      const pending = await loadPendingGapAnswers({
+        db: ctx.db,
+        cipher: ctx.cipher,
+        openingId,
+      });
+      expect(pending).toHaveLength(1);
+      expect(pending[0].question).toContain("Available");
+      expect(pending[0].answer).toContain("I can start at 7:00 if needed");
+
+      const [career] = await ctx.db.select().from(careerProfilesTable);
+      const input = await loadOpeningUserInput({
+        db: ctx.db,
+        cipher: ctx.cipher,
+        profileId: career.id,
+        openingId,
+        kind: "resume",
+        career: {
+          positions: [],
+          projects: [],
+          evidence: [],
+          instructions: [],
+        } as never,
+        storyLineId: null,
+      });
+      expect(input.gapAnswers).toMatchObject([
+        {
+          requirement: "Available to start the day at 7:00 Brazil local time",
+          stance,
+        },
+      ]);
+      expect(userInputLines(input).join("\n")).toContain(
+        "condition “Available"
+      );
+    }
+  );
+
+  it("undoes a condition answer", async () => {
+    const { ctx, openingId, item } = await conditionSetup();
+    await ctx.openings.answerCondition({
+      userId: ctx.user.id,
+      fitCheckItemId: item("Available").id,
+      stance: "meets",
+      language: "en-US",
+    });
+    await ctx.openings.undoConditionAnswer({
+      userId: ctx.user.id,
+      fitCheckItemId: item("Available").id,
+    });
+    expect(
+      (await ctx.detail(openingId)).fitCheck!.items.find(
+        (i) => i.id === item("Available").id
+      )
+    ).toMatchObject({ conditionStance: null, gapAnswer: null });
+  });
+
+  it("refuses a condition answer on a skill", async () => {
+    const { ctx, item } = await conditionSetup();
+    await expect(
+      ctx.openings.answerCondition({
+        userId: ctx.user.id,
+        fitCheckItemId: item("Kubernetes").id,
+        stance: "meets",
+        language: "en-US",
+      })
+    ).rejects.toMatchObject({ code: "BAD_REQUEST" });
+  });
+
+  it("adds a blocker to the job preferences as a discard rule when asked", async () => {
+    const { ctx, item } = await conditionSetup();
+    const without = await ctx.openings.answerCondition({
+      userId: ctx.user.id,
+      fitCheckItemId: item("Available").id,
+      stance: "blocker",
+      language: "en-US",
+    });
+    expect(without.preferenceRule).toBeNull();
+    const result = await ctx.openings.answerCondition({
+      userId: ctx.user.id,
+      fitCheckItemId: item("Available").id,
+      stance: "blocker",
+      note: "I can't wake up that early",
+      addToPreferences: true,
+      language: "en-US",
+    });
+    expect(result.preferenceRule).toBe(
+      "Available to start the day at 7:00 Brazil local time: I can't wake up that early"
+    );
+    const draft = await ctx.profiles.getDraft({
+      userId: ctx.user.id,
+      language: "en-US",
+      kind: "preferences",
+    });
+    expect(draft.markdown).toContain(result.preferenceRule!);
+  });
+
+  it("answers a declared gap with “I have it”, with no question asked", async () => {
+    const ctx = await setup();
+    const openingId = await ctx.add();
+    // The profile declares Go as a known gap: no question, still answerable.
+    await ctx.analyze(
+      openingId,
+      fitScript(allMet, {
+        ...extraction,
+        keywords: [
+          { text: "Go", category: "hard_skill", importance: "desirable" },
+        ],
+      })
+    );
+    const go = (await ctx.detail(openingId)).fitCheck!.items.find(
+      (i) => i.term === "Go"
+    )!;
+    expect(go).toMatchObject({ verdict: "gap", gapQuestion: null });
+    const result = await ctx.openings.answerGapQuestion({
+      userId: ctx.user.id,
+      fitCheckItemId: go.id,
+      answer: "I shipped a Go service at Acme.",
+      notTied: true,
+    });
+    expect(result.profileSuggestionIds).toHaveLength(1);
+    const after = (await ctx.detail(openingId)).fitCheck!;
+    expect(after.items.find((i) => i.id === go.id)).toMatchObject({
+      gapAnswer: "I shipped a Go service at Acme.",
+    });
+    expect(after.outdated).toBe(true);
   });
 });

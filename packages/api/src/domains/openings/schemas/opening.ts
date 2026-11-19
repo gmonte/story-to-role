@@ -47,9 +47,30 @@ export const openingTermCategorySchema = z.enum([
   "years_of_experience",
   "location",
   "work_model",
+  // A condition of the job: schedule or availability, travel, contract
+  // type, start date, salary, language level.
+  "condition",
   "other",
 ]);
 export type OpeningTermCategory = z.infer<typeof openingTermCategorySchema>;
+
+/**
+ * Requirements that are conditions of the job, not skills: the user answers
+ * them with how they stand (met, not a blocker, a blocker), not with a story.
+ */
+export const conditionCategories: OpeningTermCategory[] = [
+  "location",
+  "work_model",
+  "condition",
+];
+
+/** How the user stands on a condition of an opening. */
+export const conditionStanceSchema = z.enum([
+  "meets",
+  "not_blocker",
+  "blocker",
+]);
+export type ConditionStance = z.infer<typeof conditionStanceSchema>;
 
 /** What the opening requires, and what it only wishes for. */
 export const openingTermImportanceSchema = z.enum(["mandatory", "desirable"]);

@@ -11,6 +11,7 @@ import {
 } from "@repo/api/tools/trpc";
 
 import { openingLimits, OpeningsService } from "./openings-service";
+import { conditionStanceSchema } from "./schemas/opening";
 import {
   openingDetailSchema,
   openingSummarySchema,
@@ -272,6 +273,52 @@ export const openingsRouter = createTRPCRouter({
       new OpeningsService(db).answerGapQuestion({
         userId: ctx.userId,
         ...input,
+      })
+    ),
+
+  undoConditionAnswer: userProcedure
+    .meta(
+      openApiMeta(
+        "openings",
+        "DELETE",
+        "/fit-check-items/by-id/{fitCheckItemId}/condition",
+        "Takes back the answer to a condition requirement"
+      )
+    )
+    .input(z.object({ fitCheckItemId: z.uuid() }))
+    .output(okSchema)
+    .mutation(async ({ ctx, input }) => {
+      await new OpeningsService(db).undoConditionAnswer({
+        userId: ctx.userId,
+        ...input,
+      });
+      return ok;
+    }),
+
+  answerCondition: userProcedure
+    .meta(
+      openApiMeta(
+        "openings",
+        "PUT",
+        "/fit-check-items/by-id/{fitCheckItemId}/condition",
+        "Answers a condition requirement: the user meets it, doesn't but it is not a blocker, or it is a blocker"
+      )
+    )
+    .input(
+      z.object({
+        fitCheckItemId: z.uuid(),
+        stance: conditionStanceSchema,
+        note: z.string().trim().max(1000).optional(),
+        // For a blocker: add it to the job preferences as a discard rule.
+        addToPreferences: z.boolean().default(false),
+      })
+    )
+    .output(z.object({ preferenceRule: z.string().nullable() }))
+    .mutation(({ ctx, input }) =>
+      new OpeningsService(db).answerCondition({
+        userId: ctx.userId,
+        ...input,
+        language: templateLanguage(ctx),
       })
     ),
 });

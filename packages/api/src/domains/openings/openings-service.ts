@@ -22,6 +22,7 @@ import { ProfileService } from "@repo/api/domains/profile/profile-service";
 import type { ProfileLanguage } from "@repo/api/domains/profile/truth/sections";
 
 import type { openingsTable } from "./db/openings-tables";
+import { conditionCategories, type ConditionStance } from "./schemas/opening";
 import { rewriteGapAnswer } from "./fit-check/rewrite-gap-answer";
 import { OpeningsRepository } from "./openings-repository";
 import {
@@ -228,6 +229,7 @@ export class OpeningsService {
               gapQuestion: open(cipher, item.encryptedGapQuestion),
               gapAnswer: open(cipher, item.encryptedGapAnswer),
               gapLack: !!item.lackConfirmedAt,
+              conditionStance: item.conditionStance ?? null,
               gapLinks: item.gapLinks ?? null,
               citesAnswer: item.citesAnswer,
             };
@@ -564,7 +566,9 @@ export class OpeningsService {
           profileId: profile.id,
           openingId: found.openingId,
         }));
-      if (!found?.item.encryptedGapQuestion || !opening) throw notFound();
+      // Any gap or partial card can be answered, with or without a question
+      // (a declared gap has none); a condition has its own answer.
+      if (!found || !opening || found.item.verdict === "met") throw notFound();
       if (!input.lacks) {
         const cipher = await getUserCipher(tx, input.userId);
         await openings.answerFitCheckItem({
@@ -572,6 +576,7 @@ export class OpeningsService {
           encryptedGapAnswer: cipher.encrypt(answer!),
           gapLinks: { positionIds, projectIds, notTied: !!input.notTied },
           lackConfirmedAt: null,
+          conditionStance: null,
         });
       }
       return { item: found.item, openingId: opening.id };
@@ -634,7 +639,9 @@ export class OpeningsService {
         (row) => row.id === item.termId
       );
       const requirement = term ? cipher.decrypt(term.encryptedText) : "";
-      const question = cipher.decrypt(item.encryptedGapQuestion!);
+      const question = item.encryptedGapQuestion
+        ? cipher.decrypt(item.encryptedGapQuestion)
+        : requirement;
       const ids: string[] = [];
       for (const target of targets) {
         // The answer is the user's own words, kept as they are with the
@@ -686,8 +693,78 @@ export class OpeningsService {
     await openings.answerFitCheckItem({
       fitCheckItemId: item.id,
       lackConfirmedAt: new Date(),
+      conditionStance: null,
     });
     return { profileSuggestionIds: id ? [id] : [] };
+  }
+
+  /** Takes back the answer to a condition (the check reads as outdated). */
+  async undoConditionAnswer(input: { userId: string; fitCheckItemId: string }) {
+    const profile = await this.requireProfile(input.userId);
+    await this.db.transaction(async (tx) => {
+      const openings = new OpeningsRepository(tx);
+      const found = await openings.findFitCheckItem(input.fitCheckItemId);
+      const opening =
+        found &&
+        (await openings.findOpening({
+          profileId: profile.id,
+          openingId: found.openingId,
+        }));
+      if (!found || !opening || !found.item.conditionStance) throw notFound();
+      await openings.clearCondition(found.item.id);
+    });
+  }
+
+  /**
+   * Answers a condition requirement (work model, schedule, location,
+   * travel…): the user meets it, doesn't but it is no blocker, or it is a
+   * blocker. The note is optional. For a blocker, the user can add it to
+   * the job preferences as a discard rule. Nothing re-runs: the check reads
+   * as outdated until the user checks again.
+   */
+  async answerCondition(input: {
+    userId: string;
+    fitCheckItemId: string;
+    stance: ConditionStance;
+    note?: string;
+    addToPreferences?: boolean;
+    language: ProfileLanguage;
+  }): Promise<{ preferenceRule: string | null }> {
+    const profile = await this.requireProfile(input.userId);
+    const note = input.note?.trim() ?? "";
+    const cipher = await getUserCipher(this.db, input.userId);
+    const requirement = await this.db.transaction(async (tx) => {
+      const openings = new OpeningsRepository(tx);
+      const found = await openings.findFitCheckItem(input.fitCheckItemId);
+      const opening =
+        found &&
+        (await openings.findOpening({
+          profileId: profile.id,
+          openingId: found.openingId,
+        }));
+      if (!found || !opening || found.item.verdict === "met") throw notFound();
+      const term = (await openings.listTerms(opening.id)).find(
+        (row) => row.id === found.item.termId
+      );
+      if (!term || !conditionCategories.includes(term.category)) {
+        throw new TRPCError({ code: "BAD_REQUEST" });
+      }
+      await openings.answerCondition({
+        fitCheckItemId: found.item.id,
+        conditionStance: input.stance,
+        encryptedNote: note ? cipher.encrypt(note) : null,
+      });
+      return cipher.decrypt(term.encryptedText);
+    });
+    if (input.stance !== "blocker" || !input.addToPreferences) {
+      return { preferenceRule: null };
+    }
+    const rule = await new ProfileService(this.db, this.tasks).addDiscardRule({
+      userId: input.userId,
+      text: note ? `${requirement}: ${note}` : requirement,
+      language: input.language,
+    });
+    return { preferenceRule: rule.text };
   }
 }
 

@@ -4,6 +4,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { RotateCw } from "lucide-react";
 import Link from "next/link";
 
+import { conditionCategories } from "@repo/api/domains/openings/schemas/opening";
 import type {
   FitCheckItemView,
   OpeningDetail,
@@ -20,6 +21,7 @@ import { useTRPC } from "~/tools/trpc/client";
 
 import { useRefreshOpenings } from "../hooks/use-opening";
 import { useOpeningLabels } from "../hooks/use-opening-labels";
+import { ConditionAnswer } from "./condition-answer";
 import { GapQuestion } from "./gap-question";
 
 const verdictOrder = { gap: 0, partial: 1, met: 2 } as const;
@@ -71,6 +73,9 @@ export function FitColumn({ opening }: { opening: OpeningDetail }) {
   const t = useTranslation();
   const labels = useOpeningLabels();
   const fitCheck = opening.fitCheck;
+  const blockers =
+    fitCheck?.items.filter((item) => item.conditionStance === "blocker")
+      .length ?? 0;
 
   return (
     <div className="flex flex-col gap-4">
@@ -120,6 +125,17 @@ export function FitColumn({ opening }: { opening: OpeningDetail }) {
                 </Badge>
               ))}
             </div>
+            {blockers > 0 && (
+              <p className="text-xs font-medium text-red-600 dark:text-red-400">
+                {t.formatMessage(
+                  {
+                    defaultMessage:
+                      "{count, plural, =0 {No blockers} one {You marked # blocker} other {You marked # blockers}}",
+                  },
+                  { count: blockers }
+                )}
+              </p>
+            )}
             {/* The check is worth running again once what it read changed. */}
             {fitCheck.outdated && (
               <p className="text-xs font-medium">
@@ -341,17 +357,26 @@ function FitCheckItem({
           {passage.text}
         </p>
       ))}
-      {item.gapQuestion && (
-        <GapQuestion
-          fitCheckItemId={item.id}
-          question={item.gapQuestion}
-          answer={item.gapAnswer}
-          lacks={item.gapLack}
-          links={item.gapLinks}
-          positions={positions}
-          projects={projects}
-        />
-      )}
+      {item.verdict !== "met" &&
+        conditionCategories.includes(item.category) && (
+          <ConditionAnswer
+            fitCheckItemId={item.id}
+            stance={item.conditionStance}
+            note={item.gapAnswer}
+          />
+        )}
+      {item.verdict !== "met" &&
+        !conditionCategories.includes(item.category) && (
+          <GapQuestion
+            fitCheckItemId={item.id}
+            question={item.gapQuestion}
+            answer={item.gapAnswer}
+            lacks={item.gapLack}
+            links={item.gapLinks}
+            positions={positions}
+            projects={projects}
+          />
+        )}
     </li>
   );
 }

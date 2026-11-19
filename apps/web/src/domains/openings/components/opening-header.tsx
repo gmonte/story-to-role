@@ -47,6 +47,8 @@ import { useCredits } from "~/domains/credits/hooks/use-credits";
 import { useDownloadZip } from "~/domains/documents/components/download-zip-button";
 import { useOpeningDocuments } from "~/domains/documents/hooks/use-opening-documents";
 import { useTRPC } from "~/tools/trpc/client";
+import { CoverageScoreBadge } from "~/domains/documents/components/coverage-score";
+import { useSelectedVersion } from "~/domains/documents/hooks/use-selected-version";
 
 import { useRefreshOpenings } from "../hooks/use-opening";
 import { useOpeningLabels } from "../hooks/use-opening-labels";
@@ -130,6 +132,12 @@ export function OpeningHeader({
   const trackerLabels = useTrackerLabels();
   const journey = useOpeningJourney(openingId, opening);
   const processing = opening.status === "processing";
+  // The score of the resume version open on the resume page (the first one
+  // by default), when it was reviewed.
+  const resumeVersion = useSelectedVersion(
+    journey.resume?.versions ?? [],
+    "resume"
+  ).selected;
   const stepLabels: Record<OpeningView, string> = {
     opening: t.formatMessage({ defaultMessage: "Opening" }),
     resume: t.formatMessage({ defaultMessage: "Resume" }),
@@ -248,6 +256,9 @@ export function OpeningHeader({
               <Badge variant="outline">
                 {t.formatMessage({ defaultMessage: "No vacancy" })}
               </Badge>
+            )}
+            {resumeVersion && (
+              <CoverageScoreBadge version={resumeVersion} inline />
             )}
             {opening.suggestedTone && (
               <Badge variant="outline" className="text-muted-foreground">

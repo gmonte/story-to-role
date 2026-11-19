@@ -497,7 +497,14 @@ function ReviewerList({ review }: { review: Review }) {
  * the same card in a popover, and carries a dot while the text was edited
  * after the review. Nothing without a review.
  */
-export function CoverageScoreBadge({ version }: { version: VersionView }) {
+export function CoverageScoreBadge({
+  version,
+  inline = false,
+}: {
+  version: VersionView;
+  // Among other chips (the opening's header): no button padding.
+  inline?: boolean;
+}) {
   const t = useTranslation();
   const label = useScoreLabel();
   const review = version.review;
@@ -521,7 +528,11 @@ export function CoverageScoreBadge({ version }: { version: VersionView }) {
   return (
     <Popover>
       <PopoverTrigger asChild>
-        <Button size="sm" variant="ghost" className="h-7 gap-1.5 px-2">
+        <Button
+          size="sm"
+          variant="ghost"
+          className={cn("h-7 gap-1.5 px-2", inline && "h-auto p-0")}
+        >
           <Badge variant={badgeVariant[band]}>{label(review)}</Badge>
           {review.inconsistencies > 0 && (
             <span

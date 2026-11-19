@@ -180,9 +180,15 @@ function Prep({
         <div className="mx-auto w-full max-w-3xl p-6">{children}</div>
       </div>
       {agent && (
-        <aside className="bg-muted/30 hidden w-96 shrink-0 border-l lg:block">
+        <ResizableAside
+          storageKey="letter-agent-width"
+          defaultWidth={384}
+          side="right"
+          from="lg"
+          className="bg-muted/30"
+        >
           {agent}
-        </aside>
+        </ResizableAside>
       )}
     </div>
   );

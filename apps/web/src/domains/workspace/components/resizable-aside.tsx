@@ -15,19 +15,24 @@ const minWidth = 240;
 const maxWidth = 640;
 
 /**
- * A left column the user widens or narrows by dragging its edge (the
- * index of My career and the documents), remembered per viewer under
- * `storageKey`: read from storage on the client, so the server renders
- * the default and both agree.
+ * A side column the user widens or narrows by dragging its inner edge
+ * (the index of My career and the documents on the left, an agent on the
+ * right), remembered per viewer under `storageKey`: read from storage on
+ * the client, so the server renders the default and both agree.
  */
 export function ResizableAside({
   storageKey,
   defaultWidth = 360,
+  side = "left",
+  from = "md",
   className,
   children,
 }: {
   storageKey: string;
   defaultWidth?: number;
+  side?: "left" | "right";
+  // The breakpoint from which the column shows.
+  from?: "md" | "lg";
   className?: string;
   children: ReactNode;
 }) {
@@ -53,7 +58,10 @@ export function ResizableAside({
     const onMove = (move: PointerEvent) => {
       latest = Math.min(
         maxWidth,
-        Math.max(minWidth, width + move.clientX - startX)
+        Math.max(
+          minWidth,
+          width + (move.clientX - startX) * (side === "left" ? 1 : -1)
+        )
       );
       setDragged(latest);
     };
@@ -70,22 +78,41 @@ export function ResizableAside({
     window.addEventListener("pointerup", onUp);
   }
 
-  return (
+  const aside = (
+    <aside
+      className={cn(
+        "hidden shrink-0 overflow-y-auto",
+        from === "md" ? "md:block" : "lg:block",
+        className
+      )}
+      style={{ width }}
+    >
+      {children}
+    </aside>
+  );
+  const separator = (
+    <div
+      role="separator"
+      aria-orientation="vertical"
+      onPointerDown={startResize}
+      className={cn(
+        "hover:bg-primary/20 hidden w-1.5 shrink-0 cursor-col-resize touch-none items-center justify-center",
+        side === "left" ? "border-l" : "border-r",
+        from === "md" ? "md:flex" : "lg:flex"
+      )}
+    >
+      <GripVertical className="text-muted-foreground size-3" />
+    </div>
+  );
+  return side === "left" ? (
     <>
-      <aside
-        className={cn("hidden shrink-0 overflow-y-auto md:block", className)}
-        style={{ width }}
-      >
-        {children}
-      </aside>
-      <div
-        role="separator"
-        aria-orientation="vertical"
-        onPointerDown={startResize}
-        className="hover:bg-primary/20 hidden w-1.5 shrink-0 cursor-col-resize touch-none items-center justify-center border-l md:flex"
-      >
-        <GripVertical className="text-muted-foreground size-3" />
-      </div>
+      {aside}
+      {separator}
+    </>
+  ) : (
+    <>
+      {separator}
+      {aside}
     </>
   );
 }

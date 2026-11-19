@@ -28,7 +28,8 @@ function kindOf(suggestion: Suggestion) {
 
 /**
  * The suggestions waiting in the text (profile spec, "Suggestions"),
- * always in view while there are any, like a merge-conflict bar: how many
+ * pinned to the top of the text while there are any, like a merge-conflict
+ * bar: how many
  * of each kind, moving to the previous or next one, and accepting or
  * rejecting them all. One whose lines were edited away can only be
  * rejected.
@@ -63,8 +64,8 @@ export function ProfileSuggestionsBar() {
   }
 
   return (
-    <div className="pointer-events-none sticky bottom-4 z-20 flex justify-center px-4">
-      <div className="bg-popover text-popover-foreground pointer-events-auto flex max-w-full flex-col gap-2 rounded-lg border p-2 text-xs shadow-lg">
+    <div className="bg-background border-b shadow-sm">
+      <div className="bg-primary/10 flex flex-col gap-2 px-4 py-2 text-xs">
         {staleOpen && stale.length > 0 && (
           <ul className="max-h-48 space-y-1 overflow-y-auto">
             {stale.map((suggestion) => (

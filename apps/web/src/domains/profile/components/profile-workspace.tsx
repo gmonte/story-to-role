@@ -52,10 +52,13 @@ export function ProfileWorkspace() {
         <ProfileReview />
       </ResizableAside>
       <div className="min-w-0 flex-1 overflow-y-auto">
-        <ProfileToolbar />
+        {/* The toolbar and, while suggestions wait, their bar stay pinned
+            to the top of the scrolling text. */}
+        <div className="sticky top-0 z-20">
+          <ProfileToolbar />
+          <ProfileSuggestionsBar />
+        </div>
         <ProfileDocument />
-        {/* Floats at the bottom of the scrolling text while suggestions wait. */}
-        <ProfileSuggestionsBar />
       </div>
     </div>
   );

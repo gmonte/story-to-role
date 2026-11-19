@@ -84,7 +84,7 @@ import {
   editorScrollMargins,
 } from "../utils/editor-extensions";
 import { suggestionWidget } from "../utils/suggestion-widget";
-import { lineDiff } from "../utils/word-diff";
+import { lineDiff, lineKey, unchangedEnds } from "../utils/word-diff";
 
 // The most of a passage a message quotes.
 export const maxQuoteCharacters = 1500;
@@ -428,11 +428,23 @@ export function ProfileEditorProvider({
     // Each suggestion as a tracked change: the lines it replaces struck
     // through, and what it writes below them with Accept and Reject.
     for (const suggestion of suggestions) {
-      const { range } = suggestion;
-      if (!range) continue;
+      if (!suggestion.range) continue;
+      // Lines it leaves alone at either end are neither struck nor shown
+      // again (a sub-item added under an unchanged parent).
+      const written = parseFragment(suggestion.replace);
+      const ends = unchangedEnds(
+        blocks.slice(suggestion.range.start, suggestion.range.end).map(lineKey),
+        written.map(lineKey)
+      );
+      const range = {
+        start: suggestion.range.start + ends.prefix,
+        end: suggestion.range.end - ends.suffix,
+      };
       const diff = lineDiff(
         blocks.slice(range.start, range.end).map((block) => block.text),
-        parseFragment(suggestion.replace).map((block) => block.text)
+        written
+          .slice(ends.prefix, written.length - ends.suffix)
+          .map((block) => block.text)
       );
       for (let line = range.start; line < range.end; line++) {
         const from = positions[line];

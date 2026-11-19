@@ -3,7 +3,7 @@ import { parseFragment } from "@repo/api/domains/profile/truth/suggestions";
 import { buttonVariants } from "@repo/web/components/ui/button";
 import { cn } from "@repo/web/lib/utils";
 
-import { lineDiff } from "./word-diff";
+import { lineDiff, lineKey, unchangedEnds } from "./word-diff";
 
 export type SuggestionWidgetLabels = {
   accept: string;
@@ -49,9 +49,17 @@ export function suggestionWidget(
   root.setAttribute("data-suggestion-id", suggestion.id);
   root.contentEditable = "false";
 
-  const lines = parseFragment(suggestion.replace);
+  // Lines it leaves alone at either end are not written again.
+  const found = parseFragment(suggestion.find);
+  const written = parseFragment(suggestion.replace);
+  const { prefix, suffix } = unchangedEnds(
+    found.map(lineKey),
+    written.map(lineKey)
+  );
+  const lines = written.slice(prefix, written.length - suffix);
+  const replaced = found.slice(prefix, found.length - suffix);
   const diff = lineDiff(
-    parseFragment(suggestion.find).map((block) => block.text),
+    replaced.map((block) => block.text),
     lines.map((block) => block.text)
   );
   for (const [index, block] of lines.entries()) {
@@ -79,7 +87,7 @@ export function suggestionWidget(
     }
     root.append(line);
   }
-  if (!lines.length) {
+  if (!lines.length && replaced.length) {
     const removal = document.createElement("div");
     removal.className = "profile-suggestion-note";
     removal.textContent = labels.removal;

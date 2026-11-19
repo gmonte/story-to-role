@@ -519,6 +519,15 @@ describe("resume generation and snapshots", () => {
       contacts: ["ada@example.com"],
       city: "Belo Horizonte, MG",
     });
+    // The rating shows: each round's, and the kept one's.
+    expect(version.review).toMatchObject({
+      rating: 8,
+      target: 8,
+      rounds: [
+        { round: 0, rating: 6, kept: false },
+        { round: 1, rating: 8, kept: true },
+      ],
+    });
     // What the kept draft emphasizes, in at most five lines.
     expect(version.emphasis).toEqual({
       lines: ["One", "Two", "Three", "Four", "Five"],
@@ -3325,6 +3334,8 @@ describe("resume generation and snapshots", () => {
       lines: ["Team leadership first", "Node.js before Kubernetes"],
       adjusted: true,
     });
+    // Nothing was rated, so the version shows no rating.
+    expect(adjusted.review).toBeNull();
     // Nothing was judged, so no round is stored and none is the best.
     const repository = new DocumentsRepository(ctx.db);
     expect(await repository.listReviewRounds(generationId)).toEqual([]);

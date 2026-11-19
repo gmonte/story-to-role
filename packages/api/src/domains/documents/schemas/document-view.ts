@@ -163,6 +163,28 @@ export const versionViewSchema = z.object({
   emphasis: z
     .object({ lines: z.array(z.string()), adjusted: z.boolean() })
     .nullable(),
+  // The coverage rating of the generation that wrote the version, with the
+  // rating of each review round; null without rounds (adjustment, copy,
+  // letter).
+  review: z
+    .object({
+      rating: z.number().int(),
+      target: z.number().int(),
+      rounds: z.array(
+        z.object({
+          round: z.number().int(),
+          rating: z.number().int(),
+          kept: z.boolean(),
+        })
+      ),
+      coveredStrong: z.number().int(),
+      coveredPartial: z.number().int(),
+      judged: z.number().int(),
+      inconsistencies: z.number().int(),
+      // Library resumes are written for a focus, not an opening.
+      purpose: z.enum(["opening", "focus"]),
+    })
+    .nullable(),
   trace: z.array(evidenceTraceSchema),
   instructionTrace: z.array(
     z.object({ instructionId: z.uuid(), text: z.string() })

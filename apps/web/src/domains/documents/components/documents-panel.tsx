@@ -23,6 +23,7 @@ import { useOpeningDocuments } from "../hooks/use-opening-documents";
 import { useSelectedVersion } from "../hooks/use-selected-version";
 import { AdaptVersionDialog } from "./adapt-version-dialog";
 import { CoverageReviewBlock } from "./coverage-review";
+import { CoverageScore } from "./coverage-score";
 import { oldestWithBullets } from "../utils/version-checks";
 import { DownloadZipButton } from "./download-zip-button";
 import { GenerateResumeDialog } from "./generate-resume-dialog";
@@ -270,6 +271,7 @@ export function VersionChecks({ version }: { version: VersionView }) {
 
   return (
     <div className="flex flex-col gap-2">
+      <CoverageScore version={version} />
       <CoverageReviewBlock version={version} />
       {/* Measured over the limit, a resume shows it as a finding instead. */}
       {version.pages > version.maxPages &&

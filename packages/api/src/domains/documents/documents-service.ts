@@ -66,6 +66,7 @@ import {
 import { applyUserEdit, LockedFactEditError } from "./editing/apply-user-edit";
 import { atsCheck } from "./generation/ats-check";
 import { freezeGeneration } from "./generation/generation-request";
+import { reviewViewOf } from "./generation/review-view";
 import { loadProfileSource } from "./generation/load-profile-source";
 import {
   defaultGenerationSettings,
@@ -439,6 +440,14 @@ export class DocumentsService {
               adjusted: !!written.referenceSnapshotId,
             }
           : null,
+        review:
+          isResume && written
+            ? reviewViewOf(
+                await repository.listReviewRounds(written.id),
+                cipher,
+                openingId ? "opening" : "focus"
+              )
+            : null,
         trace: evidenceTrace(content, frozen),
         instructionTrace: trace.instructionsFor(content),
         coverage: await this.coverageView(repository, cipher, version, latest, {

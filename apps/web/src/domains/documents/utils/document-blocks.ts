@@ -9,7 +9,15 @@ import {
   parsePeriod,
   sectionTitles,
 } from "@repo/api/domains/documents/rendering/output-conventions";
+import {
+  aboutParagraphs,
+  certificationText,
+  languageText,
+  type LinkedinSectionKind,
+  linkedinSectionTitles,
+} from "@repo/api/domains/documents/linkedin/linkedin-resume";
 import type { CoverLetterContent } from "@repo/api/domains/documents/schemas/cover-letter-content";
+import type { LinkedinContent } from "@repo/api/domains/documents/schemas/linkedin-content";
 import type {
   Line,
   OutputLanguage,
@@ -21,8 +29,11 @@ import type {
   ResumeSectionKind,
 } from "@repo/api/domains/documents/schemas/resume-content";
 
-/** The content the document editor shows: a resume or a cover letter. */
-export type EditableContent = ResumeContent | CoverLetterContent;
+/** The content the document editor shows: a resume, a letter or LinkedIn. */
+export type EditableContent =
+  | ResumeContent
+  | CoverLetterContent
+  | LinkedinContent;
 
 /**
  * The document as the editor holds it (resume spec, "Document workspace"):
@@ -30,28 +41,37 @@ export type EditableContent = ResumeContent | CoverLetterContent;
  * is text they may edit, except the section titles (the template's), the
  * credentials (the profile's records) and a very old experience's note.
  * A line the user writes carries the id of the line it edits; a
- * position's facts carry the position as their owner.
+ * position's facts carry the position as their owner. On LinkedIn a
+ * position's or project's facts are locked (`locked`), printed by code.
  */
 export type DocumentBlock =
   | { type: "name"; text: string }
   | { type: "titleLine"; text: string }
   | { type: "contacts"; text: string }
   | { type: "city"; text: string }
-  | { type: "sectionTitle"; kind: ResumeSectionKind; text: string }
+  | {
+      type: "sectionTitle";
+      kind: ResumeSectionKind | LinkedinSectionKind;
+      text: string;
+    }
   | { type: "summary"; lineId: string; text: string }
   | { type: "skill"; lineId: string; label: string; text: string }
   // The employer of a position, or a project's name.
-  | { type: "entry"; ownerId: string; text: string }
+  | { type: "entry"; ownerId: string; text: string; locked?: boolean }
   // A position's period, as the PDF prints it ("Mar/2021 – Present").
-  | { type: "entryPeriod"; ownerId: string; text: string }
-  | { type: "entryTitle"; ownerId: string; text: string }
+  | { type: "entryPeriod"; ownerId: string; text: string; locked?: boolean }
+  | { type: "entryTitle"; ownerId: string; text: string; locked?: boolean }
   | { type: "entryContext"; ownerId: string; text: string }
   // A project's link, as the PDF prints it under the name.
-  | { type: "entryLink"; ownerId: string; text: string }
+  | { type: "entryLink"; ownerId: string; text: string; locked?: boolean }
   // A very old experience: the requirement it entered for.
   | { type: "entryNote"; ownerId: string; text: string }
   | { type: "bullet"; lineId: string; ownerId: string; text: string }
   | { type: "credential"; credentialId: string; text: string }
+  // LinkedIn: the chosen headline, and an education's description (its
+  // owner is the education's credential).
+  | { type: "headline"; lineId: string; text: string }
+  | { type: "description"; lineId: string; ownerId: string; text: string }
   | { type: "greeting"; text: string }
   | { type: "paragraph"; lineId: string; text: string }
   | { type: "closing"; text: string };
@@ -64,7 +84,7 @@ const lockedTypes = new Set<DocumentBlock["type"]>([
 
 /** Whether the user may type in a block. */
 export const isEditableBlock = (block: DocumentBlock) =>
-  !lockedTypes.has(block.type);
+  !lockedTypes.has(block.type) && !("locked" in block && block.locked);
 
 /** Whether a block splits into another of its kind on Enter. */
 export const isListBlock = (type: DocumentBlock["type"]) =>
@@ -75,7 +95,9 @@ export function lineIdOf(block: DocumentBlock) {
   return "lineId" in block ? block.lineId : null;
 }
 
-function headerBlocks(content: EditableContent): DocumentBlock[] {
+function headerBlocks(
+  content: ResumeContent | CoverLetterContent
+): DocumentBlock[] {
   const { header } = content;
   return [
     { type: "name", text: header.name },
@@ -186,11 +208,118 @@ function sectionBlocks(
   }
 }
 
+/**
+ * A LinkedIn text's blocks, in LinkedIn's order (resume spec, "LinkedIn"):
+ * a section only when it has something, the headline and the About always.
+ * A missing headline or education description is an empty block to write
+ * in; the facts code prints are locked.
+ */
+function linkedinBlocks(
+  content: LinkedinContent,
+  language: OutputLanguage
+): DocumentBlock[] {
+  const title = (kind: LinkedinSectionKind): DocumentBlock => ({
+    type: "sectionTitle",
+    kind,
+    text: linkedinSectionTitles[language][kind],
+  });
+  const facts = (blocks: DocumentBlock[]) =>
+    blocks.map((block) =>
+      "ownerId" in block && block.type !== "bullet"
+        ? { ...block, locked: true }
+        : block
+    );
+  const resumeView = (
+    section: Extract<ResumeSection, { kind: "experience" | "projects" }>
+  ) => facts(sectionBlocks(section, language));
+  return [
+    title("headline"),
+    {
+      type: "headline",
+      lineId: content.headline?.id ?? newLineId(),
+      text: content.headline?.text ?? "",
+    },
+    title("about"),
+    ...(aboutParagraphs(content.about.text).length
+      ? aboutParagraphs(content.about.text)
+      : [""]
+    ).map(
+      (text): DocumentBlock => ({
+        type: "paragraph",
+        lineId: content.about.id,
+        text,
+      })
+    ),
+    ...(content.experiences.length
+      ? [
+          title("experience"),
+          ...resumeView({
+            kind: "experience",
+            entries: content.experiences.map((entry) => ({
+              ...entry,
+              context: null,
+              relevance: null,
+            })),
+          }),
+        ]
+      : []),
+    ...(content.projects.length
+      ? [
+          title("projects"),
+          ...resumeView({ kind: "projects", entries: content.projects }),
+        ]
+      : []),
+    ...(content.education.length
+      ? [
+          title("education"),
+          ...content.education.flatMap((entry): DocumentBlock[] => [
+            {
+              type: "credential",
+              credentialId: entry.credentialId,
+              text: credentialLine(entry, language),
+            },
+            {
+              type: "description",
+              lineId: entry.description?.id ?? newLineId(),
+              ownerId: entry.credentialId,
+              text: entry.description?.text ?? "",
+            },
+          ]),
+        ]
+      : []),
+    ...(content.certifications.length
+      ? [
+          title("certifications"),
+          ...content.certifications.map(
+            (entry): DocumentBlock => ({
+              type: "credential",
+              credentialId: entry.credentialId,
+              text: certificationText(entry),
+            })
+          ),
+        ]
+      : []),
+    ...(content.languages.length
+      ? [
+          title("languages"),
+          ...content.languages.map(
+            (entry): DocumentBlock => ({
+              type: "credential",
+              credentialId: entry.credentialId,
+              text: languageText(entry, language),
+            })
+          ),
+        ]
+      : []),
+  ];
+}
+
 /** The document's blocks, in the order the PDF prints them. */
 export function contentToBlocks(
   content: EditableContent,
   language: OutputLanguage
 ): DocumentBlock[] {
+  if (content.kind === "linkedin") return linkedinBlocks(content, language);
   if (content.kind === "cover_letter") {
     return [
       ...headerBlocks(content),
@@ -236,7 +365,70 @@ function linesFrom(
   });
 }
 
-function headerFrom<T extends EditableContent>(
+/** A single line a block writes, or none when it was emptied. */
+function optionalLine(
+  block: { lineId: string; text: string } | undefined,
+  before: Line[]
+): Line | null {
+  if (!block?.text.trim()) return null;
+  return linesFrom([block], before)[0];
+}
+
+/**
+ * A LinkedIn text the blocks describe, written over `base`: the headline
+ * (none when emptied), the About's paragraphs joined by a blank line, each
+ * position's and project's bullets and each education's description; the
+ * headline options, the facts code prints and the credentials come from
+ * `base`, whatever the blocks say.
+ */
+function linkedinFrom(
+  base: LinkedinContent,
+  blocks: DocumentBlock[]
+): LinkedinContent {
+  const headline = blocks.find((block) => block.type === "headline");
+  const paragraphs = blocks.filter((block) => block.type === "paragraph");
+  const bulletsOf = (ownerId: string, before: Line[]) =>
+    linesFrom(
+      blocks.filter(
+        (block) => block.type === "bullet" && block.ownerId === ownerId
+      ) as Array<{ lineId: string; text: string }>,
+      before
+    );
+  return {
+    ...base,
+    headline: optionalLine(
+      headline as { lineId: string; text: string } | undefined,
+      [...base.headlineOptions, ...(base.headline ? [base.headline] : [])]
+    ),
+    about: {
+      ...base.about,
+      text: paragraphs
+        .map((block) => block.text.trim())
+        .filter(Boolean)
+        .join("\n\n"),
+    },
+    experiences: base.experiences.map((entry) => ({
+      ...entry,
+      lines: bulletsOf(entry.positionId, entry.lines),
+    })),
+    projects: base.projects.map((entry) => ({
+      ...entry,
+      lines: bulletsOf(entry.projectId, entry.lines),
+    })),
+    education: base.education.map((entry) => ({
+      ...entry,
+      description: optionalLine(
+        blocks.find(
+          (block) =>
+            block.type === "description" && block.ownerId === entry.credentialId
+        ) as { lineId: string; text: string } | undefined,
+        entry.description ? [entry.description] : []
+      ),
+    })),
+  };
+}
+
+function headerFrom<T extends ResumeContent | CoverLetterContent>(
   base: T,
   blocks: DocumentBlock[]
 ): T["header"] {
@@ -274,6 +466,7 @@ export function blocksToContent<T extends EditableContent>(
   base: T,
   blocks: DocumentBlock[]
 ): T {
+  if (base.kind === "linkedin") return linkedinFrom(base, blocks) as T;
   if (base.kind === "cover_letter") {
     const greeting = blocks.find((block) => block.type === "greeting");
     const closing = blocks.find((block) => block.type === "closing");
@@ -421,21 +614,32 @@ export function moveSectionBlocks(
 /** Every line of the content by id, for the trace and the findings. */
 export function linesById(content: EditableContent) {
   const lines =
-    content.kind === "cover_letter"
-      ? content.paragraphs
-      : content.sections.flatMap((section): Line[] => {
-          switch (section.kind) {
-            case "summary":
-              return [section.line];
-            case "skills":
-              return section.groups;
-            case "experience":
-            case "projects":
-              return section.entries.flatMap((entry) => entry.lines);
-            default:
-              return [];
-          }
-        });
+    content.kind === "linkedin"
+      ? [
+          ...content.headlineOptions,
+          ...(content.headline ? [content.headline] : []),
+          content.about,
+          ...content.experiences.flatMap((entry) => entry.lines),
+          ...content.projects.flatMap((entry) => entry.lines),
+          ...content.education.flatMap((entry) =>
+            entry.description ? [entry.description] : []
+          ),
+        ]
+      : content.kind === "cover_letter"
+        ? content.paragraphs
+        : content.sections.flatMap((section): Line[] => {
+            switch (section.kind) {
+              case "summary":
+                return [section.line];
+              case "skills":
+                return section.groups;
+              case "experience":
+              case "projects":
+                return section.entries.flatMap((entry) => entry.lines);
+              default:
+                return [];
+            }
+          });
   return new Map(lines.map((line) => [line.id, line]));
 }
 

@@ -3,6 +3,7 @@
 import { useQuery } from "@tanstack/react-query";
 import {
   BriefcaseBusiness,
+  IdCard,
   KanbanSquare,
   Library,
   Plus,
@@ -50,6 +51,11 @@ export function AppSidebar() {
       href: "/app/career",
       label: t.formatMessage({ defaultMessage: "My career" }),
       icon: BriefcaseBusiness,
+    },
+    {
+      href: "/app/linkedin",
+      label: t.formatMessage({ defaultMessage: "LinkedIn" }),
+      icon: IdCard,
     },
     {
       href: "/app/library",

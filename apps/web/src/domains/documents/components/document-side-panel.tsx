@@ -61,15 +61,20 @@ export function DocumentSidePanel({
   version,
   versions,
   agent,
+  preview = true,
 }: {
   version: VersionView;
   /** The Versions tab: the list, what creates versions, the checks. */
   versions: ReactNode;
   /** The Agent tab, first when given. */
   agent?: ReactNode;
+  /** The PDF preview's tab; a LinkedIn text has no PDF. */
+  preview?: boolean;
 }) {
   const t = useTranslation();
-  const [tab, setTab] = useState(agent ? "agent" : "preview");
+  const [tab, setTab] = useState(
+    agent ? "agent" : preview ? "preview" : "versions"
+  );
   // A new topic (a passage, a finding) opens the agent, once per request.
   const topic = useDocumentAgent()?.topic;
   const [seenTopic, setSeenTopic] = useState(topic?.id);
@@ -89,9 +94,11 @@ export function DocumentSidePanel({
             {t.formatMessage({ defaultMessage: "Agent" })}
           </TabsTrigger>
         )}
-        <TabsTrigger value="preview" className="flex-1">
-          {t.formatMessage({ defaultMessage: "Preview" })}
-        </TabsTrigger>
+        {preview && (
+          <TabsTrigger value="preview" className="flex-1">
+            {t.formatMessage({ defaultMessage: "Preview" })}
+          </TabsTrigger>
+        )}
         <TabsTrigger value="versions" className="flex-1">
           {t.formatMessage({ defaultMessage: "Versions" })}
         </TabsTrigger>
@@ -106,9 +113,11 @@ export function DocumentSidePanel({
           {agent}
         </TabsContent>
       )}
-      <TabsContent value="preview">
-        <PdfPreview key={version.id} version={version} />
-      </TabsContent>
+      {preview && (
+        <TabsContent value="preview">
+          <PdfPreview key={version.id} version={version} />
+        </TabsContent>
+      )}
       <TabsContent value="versions" className="flex flex-col gap-4">
         {versions}
       </TabsContent>

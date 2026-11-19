@@ -10,6 +10,43 @@ import type {
 } from "../schemas/resume-content";
 import { proficiencyLabel } from "./linkedin-proficiency";
 
+/** LinkedIn's sections, in the order its profile shows them. */
+export const linkedinSectionKinds = [
+  "headline",
+  "about",
+  "experience",
+  "projects",
+  "education",
+  "certifications",
+  "languages",
+] as const;
+export type LinkedinSectionKind = (typeof linkedinSectionKinds)[number];
+
+/** Each section as LinkedIn names it in the output language. */
+export const linkedinSectionTitles: Record<
+  OutputLanguage,
+  Record<LinkedinSectionKind, string>
+> = {
+  "en-US": {
+    headline: "Headline",
+    about: "About",
+    experience: "Experience",
+    projects: "Projects",
+    education: "Education",
+    certifications: "Licenses & certifications",
+    languages: "Languages",
+  },
+  "pt-BR": {
+    headline: "Título",
+    about: "Sobre",
+    experience: "Experiência",
+    projects: "Projetos",
+    education: "Formação acadêmica",
+    certifications: "Licenças e certificados",
+    languages: "Idiomas",
+  },
+};
+
 /**
  * A LinkedIn text as the resume machinery reads it: the chosen headline,
  * the About and each education's description as summaries, its

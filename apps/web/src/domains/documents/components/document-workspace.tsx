@@ -40,6 +40,7 @@ export function DocumentWorkspace({
   select,
   notices,
   aside,
+  index,
 }: {
   version: VersionView;
   versions: VersionView[];
@@ -48,6 +49,8 @@ export function DocumentWorkspace({
   notices?: ReactNode;
   /** More for the left column: what applies to this document's opening. */
   aside?: ReactNode;
+  /** The left column's index, when the document has its own (LinkedIn). */
+  index?: ReactNode;
 }) {
   return (
     <DocumentEditorProvider key={version.id} version={version}>
@@ -56,7 +59,7 @@ export function DocumentWorkspace({
           storageKey="document-index-width"
           className="space-y-6 p-4"
         >
-          <DocumentIndex />
+          {index ?? <DocumentIndex />}
           <DocumentFindings />
           {aside}
         </ResizableAside>

@@ -89,10 +89,26 @@ export function nodeToBlock(node: ProseMirrorNode): DocumentBlock {
     case "entry":
     case "entryPeriod":
     case "entryTitle":
-    case "entryContext":
     case "entryLink":
+      return {
+        type: attrs.type,
+        ownerId: attrs.ownerId ?? "",
+        text,
+        // A LinkedIn text's facts, printed by code.
+        ...(attrs.locked ? { locked: true } : {}),
+      };
+    case "entryContext":
     case "entryNote":
       return { type: attrs.type, ownerId: attrs.ownerId ?? "", text };
+    case "headline":
+      return { type: "headline", lineId: attrs.lineId ?? "", text };
+    case "description":
+      return {
+        type: "description",
+        lineId: attrs.lineId ?? "",
+        ownerId: attrs.ownerId ?? "",
+        text,
+      };
     case "bullet":
       return {
         type: "bullet",
@@ -168,13 +184,15 @@ const attribute = (name: keyof BlockAttrs) => ({
 export const DocumentBlockNode = Node.create<{
   // "Included for:", before a very old experience's requirement.
   notePrefix: string;
+  // What an empty LinkedIn headline or education description invites.
+  placeholders: { headline: string; description: string };
 }>({
   name: blockNodeName,
   group: "block",
   content: "text*",
   defining: true,
   addOptions() {
-    return { notePrefix: "" };
+    return { notePrefix: "", placeholders: { headline: "", description: "" } };
   },
   addAttributes() {
     return Object.fromEntries(
@@ -265,6 +283,23 @@ export const DocumentBlockNode = Node.create<{
         );
       case "credential":
         return block(cn("mt-0.5"), 0);
+      // An empty one shows what to write, until the user types.
+      case "headline":
+      case "description":
+        return [
+          "div",
+          {
+            ...base,
+            "data-placeholder": this.options.placeholders[attrs.type],
+            class: cn(
+              attrs.type === "headline"
+                ? "font-semibold"
+                : "text-muted-foreground mb-1 text-xs",
+              "has-[br.ProseMirror-trailingBreak:only-child]:before:text-muted-foreground/60 has-[br.ProseMirror-trailingBreak:only-child]:before:pointer-events-none has-[br.ProseMirror-trailingBreak:only-child]:before:float-left has-[br.ProseMirror-trailingBreak:only-child]:before:content-[attr(data-placeholder)]"
+            ),
+          },
+          0,
+        ] as unknown as DOMOutputSpec;
       case "greeting":
         return block(cn("mt-6"), 0);
       case "paragraph":
@@ -408,7 +443,10 @@ export const DocumentLocked = Extension.create({
   },
 });
 
-export function documentExtensions(options: { notePrefix: string }) {
+export function documentExtensions(options: {
+  notePrefix: string;
+  placeholders: { headline: string; description: string };
+}) {
   return [
     StarterKit.configure({
       blockquote: false,

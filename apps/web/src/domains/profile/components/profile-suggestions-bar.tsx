@@ -12,7 +12,6 @@ import {
 } from "lucide-react";
 
 import { useTranslation } from "@repo/intl/use-translation";
-import { Badge } from "@repo/web/components/ui/badge";
 import { Button } from "@repo/web/components/ui/button";
 
 import { useProfileEditor } from "./profile-editor-context";
@@ -50,6 +49,32 @@ export function ProfileSuggestionsBar() {
   const counts = { add: 0, change: 0, remove: 0 };
   for (const suggestion of located) counts[kindOf(suggestion)]++;
   const position = Math.min(current, located.length - 1);
+  const kinds = [
+    counts.add > 0 &&
+      t.formatMessage(
+        {
+          defaultMessage:
+            "{count, plural, =0 {no lines to add} one {# adds a line} other {# add lines}}",
+        },
+        { count: counts.add }
+      ),
+    counts.change > 0 &&
+      t.formatMessage(
+        {
+          defaultMessage:
+            "{count, plural, =0 {no lines to change} one {# changes a line} other {# change lines}}",
+        },
+        { count: counts.change }
+      ),
+    counts.remove > 0 &&
+      t.formatMessage(
+        {
+          defaultMessage:
+            "{count, plural, =0 {no lines to remove} one {# removes a line} other {# remove lines}}",
+        },
+        { count: counts.remove }
+      ),
+  ].filter(Boolean);
 
   function go(step: number) {
     if (!located.length) return;
@@ -67,7 +92,7 @@ export function ProfileSuggestionsBar() {
     <div className="bg-background border-b shadow-sm">
       <div className="bg-primary/10 flex flex-col gap-2 px-4 py-2 text-xs">
         {staleOpen && stale.length > 0 && (
-          <ul className="max-h-48 space-y-1 overflow-y-auto">
+          <ul className="mx-auto max-h-48 w-full max-w-3xl space-y-1 overflow-y-auto">
             {stale.map((suggestion) => (
               <li
                 key={suggestion.id}
@@ -88,50 +113,25 @@ export function ProfileSuggestionsBar() {
             ))}
           </ul>
         )}
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex flex-wrap items-center justify-center gap-2">
           <Sparkles className="text-primary size-3.5" />
-          <span className="font-medium">
-            {t.formatMessage(
-              {
-                defaultMessage:
-                  "{count, plural, =0 {No suggestions} one {# suggestion} other {# suggestions}}",
-              },
-              { count: suggestions.length }
+          <span>
+            <span className="font-medium">
+              {t.formatMessage(
+                {
+                  defaultMessage:
+                    "{count, plural, =0 {No suggestions waiting for you} one {# suggestion waiting for you} other {# suggestions waiting for you}}",
+                },
+                { count: suggestions.length }
+              )}
+            </span>
+            {/* What they do, only when they don't all do the same. */}
+            {kinds.length > 1 && (
+              <span className="text-muted-foreground ml-2 border-l pl-2">
+                {kinds.join(" · ")}
+              </span>
             )}
           </span>
-          {counts.add > 0 && (
-            <Badge variant="secondary">
-              {t.formatMessage(
-                {
-                  defaultMessage:
-                    "{count, plural, =0 {no additions} one {# addition} other {# additions}}",
-                },
-                { count: counts.add }
-              )}
-            </Badge>
-          )}
-          {counts.change > 0 && (
-            <Badge variant="secondary">
-              {t.formatMessage(
-                {
-                  defaultMessage:
-                    "{count, plural, =0 {no changes} one {# change} other {# changes}}",
-                },
-                { count: counts.change }
-              )}
-            </Badge>
-          )}
-          {counts.remove > 0 && (
-            <Badge variant="secondary">
-              {t.formatMessage(
-                {
-                  defaultMessage:
-                    "{count, plural, =0 {no removals} one {# removal} other {# removals}}",
-                },
-                { count: counts.remove }
-              )}
-            </Badge>
-          )}
           {stale.length > 0 && (
             <Button
               size="sm"

@@ -77,7 +77,10 @@ function MetricsBody({ metrics }: { metrics: TrackerMetrics }) {
   const labels = useTrackerLabels();
   const rate = (group: { sent: number; responded: number }) =>
     t.formatMessage(
-      { defaultMessage: "{responded, number} of {sent, number} ({rate})" },
+      {
+        defaultMessage:
+          "{sent, plural, =0 {none sent} one {# sent} other {# sent}} · {responded, plural, =0 {no replies} one {# reply} other {# replies}} ({rate})",
+      },
       {
         responded: group.responded,
         sent: group.sent,
@@ -151,13 +154,15 @@ function MetricsBody({ metrics }: { metrics: TrackerMetrics }) {
                 key={group.versionId ?? "none"}
                 className="flex justify-between gap-2"
               >
-                <span className="truncate">
+                <span className="min-w-0 truncate">
                   {group.versionId
                     ? (group.label ??
                       t.formatMessage({ defaultMessage: "Resume" }))
                     : t.formatMessage({ defaultMessage: "Not recorded" })}
                 </span>
-                <span className="text-muted-foreground">{rate(group)}</span>
+                <span className="text-muted-foreground shrink-0 whitespace-nowrap">
+                  {rate(group)}
+                </span>
               </li>
             ))}
           </ul>
@@ -172,8 +177,12 @@ function MetricsBody({ metrics }: { metrics: TrackerMetrics }) {
                 key={group.source ?? "none"}
                 className="flex justify-between gap-2"
               >
-                <span>{labels.source(group.source)}</span>
-                <span className="text-muted-foreground">{rate(group)}</span>
+                <span className="min-w-0 truncate">
+                  {labels.source(group.source)}
+                </span>
+                <span className="text-muted-foreground shrink-0 whitespace-nowrap">
+                  {rate(group)}
+                </span>
               </li>
             ))}
           </ul>

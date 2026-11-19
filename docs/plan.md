@@ -274,19 +274,19 @@ The LinkedIn text moves out of the library to its own sidebar item, the second o
 - The page: the empty state with Generate my LinkedIn, then the document workspace (index, findings, the texts in blocks, choosing a headline, Copy text per section, versions on the right).
 
 Acceptance:
-- [ ] LinkedIn is the sidebar's second item; generating writes headline options, About, experiences, projects, education, certifications and languages; each section copies its text.
-- [ ] A language level reads on LinkedIn's scale in the output language; a headline option the profile doesn't back is not kept.
+- [x] LinkedIn is the sidebar's second item; generating writes headline options, About, experiences, projects, education, certifications and languages; each section copies its text.
+- [x] A language level reads on LinkedIn's scale in the output language; a headline option the profile doesn't back is not kept.
 
 ### L2: Redoing one section
 
 - **Generate this section again** on the headline, the About, an experience, a project and an education's description: a `linkedin_section` generation naming the section, charged as an adjustment (`generate_document` with the section hint, 10 × level), whose snapshot replaces that section only; the code checks run on it.
 
 Acceptance:
-- [ ] Redoing one experience leaves the other sections, and the user's edits in them, untouched, in a new snapshot that undo reverts.
+- [x] Redoing one experience leaves the other sections, and the user's edits in them, untouched, in a new snapshot that undo reverts.
 
 ### L3: The agent on the LinkedIn text
 
 - The document agent and its suggestions on the LinkedIn text, through its view as a resume: a change is located and applied on that view and mapped back; Talk about this and Talk to the agent from a finding work as on a resume.
 
 Acceptance:
-- [ ] Asked to rewrite a bullet of an experience, the agent suggests it in place and Accept creates a snapshot.
+- [x] Asked to rewrite a bullet of an experience, the agent suggests it in place and Accept creates a snapshot.

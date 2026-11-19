@@ -122,78 +122,83 @@ export function ProfileSuggestionsBar() {
             ))}
           </ul>
         )}
-        <div className="flex flex-wrap items-center justify-center gap-2">
-          <Sparkles className="text-primary size-3.5" />
-          <span>
-            <span className="font-medium">
-              {t.formatMessage(
-                {
-                  defaultMessage:
-                    "{count, plural, =0 {No suggestions waiting for you} one {# suggestion waiting for you} other {# suggestions waiting for you}}",
-                },
-                { count: suggestions.length }
-              )}
-            </span>
-            {/* What they do, only when they don't all do the same. */}
-            {kinds.length > 1 && (
-              <span className="text-muted-foreground ml-2 border-l pl-2">
-                {kinds.join(" · ")}
-              </span>
-            )}
-          </span>
-          {stale.length > 0 && (
-            <Button
-              size="sm"
-              variant="ghost"
-              className="h-6 px-2 text-xs"
-              onClick={() => setStaleOpen(!staleOpen)}
-            >
-              <TriangleAlert className="size-3" />
-              {t.formatMessage(
-                {
-                  defaultMessage:
-                    "{count, plural, =0 {none} one {# no longer fits the text} other {# no longer fit the text}}",
-                },
-                { count: stale.length }
-              )}
-            </Button>
-          )}
-          {located.length > 0 && (
-            <div className="flex items-center gap-0.5 border-l pl-2">
-              <Button
-                size="icon"
-                variant="ghost"
-                className="size-6"
-                aria-label={t.formatMessage({
-                  defaultMessage: "Previous suggestion",
-                })}
-                onClick={() => go(-1)}
-              >
-                <ChevronUp className="size-3.5" />
-              </Button>
-              <span className="text-muted-foreground min-w-12 text-center tabular-nums">
+        {/* Counter and navigation in the middle, the actions on the right;
+            the empty left cell keeps the middle centred. */}
+        <div className="grid grid-cols-1 items-center gap-2 md:grid-cols-[1fr_auto_1fr]">
+          <span className="hidden md:block" />
+          <div className="flex flex-wrap items-center justify-center gap-2">
+            <Sparkles className="text-primary size-3.5" />
+            <span>
+              <span className="font-medium">
                 {t.formatMessage(
-                  { defaultMessage: "{current} of {total}" },
                   {
-                    current: position < 0 ? "–" : position + 1,
-                    total: located.length,
-                  }
+                    defaultMessage:
+                      "{count, plural, =0 {No suggestions waiting for you} one {# suggestion waiting for you} other {# suggestions waiting for you}}",
+                  },
+                  { count: suggestions.length }
                 )}
               </span>
+              {/* What they do, only when they don't all do the same. */}
+              {kinds.length > 1 && (
+                <span className="text-muted-foreground ml-2 border-l pl-2">
+                  {kinds.join(" · ")}
+                </span>
+              )}
+            </span>
+            {stale.length > 0 && (
               <Button
-                size="icon"
+                size="sm"
                 variant="ghost"
-                className="size-6"
-                aria-label={t.formatMessage({
-                  defaultMessage: "Next suggestion",
-                })}
-                onClick={() => go(1)}
+                className="h-6 px-2 text-xs"
+                onClick={() => setStaleOpen(!staleOpen)}
               >
-                <ChevronDown className="size-3.5" />
+                <TriangleAlert className="size-3" />
+                {t.formatMessage(
+                  {
+                    defaultMessage:
+                      "{count, plural, =0 {none} one {# no longer fits the text} other {# no longer fit the text}}",
+                  },
+                  { count: stale.length }
+                )}
               </Button>
-            </div>
-          )}
-          <div className="flex items-center gap-1 border-l pl-2">
+            )}
+            {located.length > 0 && (
+              <div className="flex items-center gap-0.5 border-l pl-2">
+                <Button
+                  size="icon"
+                  variant="ghost"
+                  className="size-6"
+                  aria-label={t.formatMessage({
+                    defaultMessage: "Previous suggestion",
+                  })}
+                  onClick={() => go(-1)}
+                >
+                  <ChevronUp className="size-3.5" />
+                </Button>
+                <span className="text-muted-foreground min-w-12 text-center tabular-nums">
+                  {t.formatMessage(
+                    { defaultMessage: "{current} of {total}" },
+                    {
+                      current: position < 0 ? "–" : position + 1,
+                      total: located.length,
+                    }
+                  )}
+                </span>
+                <Button
+                  size="icon"
+                  variant="ghost"
+                  className="size-6"
+                  aria-label={t.formatMessage({
+                    defaultMessage: "Next suggestion",
+                  })}
+                  onClick={() => go(1)}
+                >
+                  <ChevronDown className="size-3.5" />
+                </Button>
+              </div>
+            )}
+          </div>
+          <div className="flex items-center justify-center gap-1 md:justify-end">
             {located.length > 0 && (
               <Button
                 size="sm"

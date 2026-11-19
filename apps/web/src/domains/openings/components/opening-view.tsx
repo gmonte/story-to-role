@@ -26,8 +26,9 @@ export type OpeningLayout = "three" | "two" | "stack";
 
 /**
  * The opening itself, on one screen (workspace spec, "The opening page"):
- * the application on the left, the opening's description in the middle and
- * the fit on the right, each scrolling on its own. Where there is no room
+ * the fit on the left, the opening's description in the middle and the
+ * application on the right (as an issue tracker's sidebar), each scrolling
+ * on its own. Where there is no room
  * the application folds behind the header's button and the fit goes below
  * the description; on a phone everything stacks.
  */
@@ -56,12 +57,9 @@ export function OpeningPageBody({
   if (layout === "three") {
     return (
       <div className="flex min-h-0 flex-1">
-        {application && (
-          <aside
-            id="application-column"
-            className="bg-muted/30 w-80 shrink-0 overflow-y-auto border-r p-4"
-          >
-            {application}
+        {fit && (
+          <aside className="bg-muted/30 w-[26rem] shrink-0 overflow-y-auto border-r p-4">
+            {fit}
           </aside>
         )}
         <main className="min-w-0 flex-1 overflow-y-auto">
@@ -69,9 +67,12 @@ export function OpeningPageBody({
             {description}
           </div>
         </main>
-        {fit && (
-          <aside className="bg-muted/30 w-[26rem] shrink-0 overflow-y-auto border-l p-4">
-            {fit}
+        {application && (
+          <aside
+            id="application-column"
+            className="bg-muted/30 w-80 shrink-0 overflow-y-auto border-l p-4"
+          >
+            {application}
           </aside>
         )}
       </div>

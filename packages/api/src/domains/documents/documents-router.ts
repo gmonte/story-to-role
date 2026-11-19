@@ -47,6 +47,24 @@ export const documentsRouter = createTRPCRouter({
       new DocumentsService(db).forOpening({ userId: ctx.userId, ...input })
     ),
 
+  letterAgentDocument: userProcedure
+    .meta(
+      openApiMeta(
+        "documents",
+        "POST",
+        "/openings/by-id/{openingId}/letter-agent",
+        "Returns the opening's cover letter document, whose agent helps before the letter exists"
+      )
+    )
+    .input(z.object({ openingId: z.uuid() }))
+    .output(z.object({ documentId: z.uuid() }))
+    .mutation(({ ctx, input }) =>
+      new DocumentsService(db).letterAgentDocument({
+        userId: ctx.userId,
+        ...input,
+      })
+    ),
+
   generateResume: userProcedure
     .use(rateLimited("taskStart"))
     .meta(

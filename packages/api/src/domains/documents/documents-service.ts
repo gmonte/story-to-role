@@ -246,6 +246,33 @@ export class DocumentsService {
     return { generationId: generation.id, realtime };
   }
 
+  /**
+   * The opening's cover letter document, created empty when there is none:
+   * the letter's agent is keyed by the document, so it can help during the
+   * preparation and the same conversation goes on beside the letter.
+   */
+  async letterAgentDocument(input: { userId: string; openingId: string }) {
+    const profile = await this.requireProfile(input.userId);
+    return this.db.transaction(async (tx) => {
+      const opening = await new OpeningsRepository(tx).findOpening({
+        profileId: profile.id,
+        openingId: input.openingId,
+      });
+      if (!opening) throw notFound();
+      const repository = new DocumentsRepository(tx);
+      const application = await repository.findOrInsertApplication({
+        profileId: profile.id,
+        openingId: opening.id,
+      });
+      const document = await repository.findOrInsertApplicationDocument({
+        profileId: profile.id,
+        applicationId: application.id,
+        kind: "cover_letter",
+      });
+      return { documentId: document.id };
+    });
+  }
+
   /** The opening's application and documents, each version official. */
   async forOpening(input: {
     userId: string;

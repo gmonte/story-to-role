@@ -34,6 +34,7 @@ import type { MisuseGuard } from "@repo/api/tools/misuse-guard";
 
 import { readChangeContent } from "../changes/propose-change";
 import { DocumentsRepository } from "../documents-repository";
+import { DocumentsService } from "../documents-service";
 import { loadCareerContext } from "../generation/load-career-context";
 import type { CoverLetterContent } from "../schemas/cover-letter-content";
 import type { ResumeContent } from "../schemas/resume-content";
@@ -632,6 +633,139 @@ describe("the document agent", () => {
     expect(resumeSystem).not.toContain("chosen story");
     expect(resumeSystem).not.toContain("Hooli runs on Kubernetes.");
     expect(resumeSystem).not.toContain("I want to build platforms");
+  });
+
+  it("helps prepare the cover letter before it exists, and the same conversation goes on beside the letter", async () => {
+    const ctx = await setup();
+    const { db, cipher, opening } = ctx;
+    // The opening's resume, the motivation so far and a ticked fact.
+    await ctx.insertResume("opening");
+    const motivations = new MotivationRepository(db);
+    const interview = await motivations.replaceInterview({
+      profileId: ctx.profileId,
+      openingId: opening.id,
+      status: "in_progress",
+    });
+    await motivations.insertPoints([
+      {
+        profileId: ctx.profileId,
+        interviewId: interview.id,
+        kind: "goal",
+        encryptedText: cipher.encrypt("I want to build platforms at scale."),
+        status: "draft",
+      },
+    ]);
+    await motivations.insertTurn({
+      interviewId: interview.id,
+      role: "question",
+      encryptedText: cipher.encrypt("What drew you to Hooli?"),
+    });
+    await new ResearchRepository(db).insertFacts([
+      {
+        profileId: ctx.profileId,
+        openingId: opening.id,
+        encryptedText: cipher.encrypt("Hooli runs on Kubernetes."),
+        encryptedSourceUrl: cipher.encrypt("https://hooli.example"),
+        encryptedSourceTitle: cipher.encrypt("Hooli"),
+        approvedAt: new Date(),
+      },
+    ]);
+
+    // The document row is made empty, with no version.
+    const { documentId } = await new DocumentsService(db).letterAgentDocument({
+      userId: ctx.user.id,
+      openingId: opening.id,
+    });
+    const again = await new DocumentsService(db).letterAgentDocument({
+      userId: ctx.user.id,
+      openingId: opening.id,
+    });
+    expect(again.documentId).toBe(documentId);
+
+    const { chatId } = await ctx.chats.current(ctx.user.id, {
+      kind: "document",
+      documentId,
+    });
+    const prep = agentModel(
+      [
+        [
+          {
+            name: "read_part",
+            input: { part: "experience:globex — tech lead" },
+          },
+        ],
+      ],
+      "I can help you phrase it."
+    );
+    const first = await ctx.say(
+      chatId,
+      "Help me answer the question.",
+      prep.model
+    );
+    expect(first.text).toBe("I can help you phrase it.");
+    const system = systemOf(prep.prompts[0]);
+    expect(system).toContain("isn't written yet");
+    // The profile's index, the opening, the interview, the motivation
+    // points so far, the ticked fact and this opening's resume.
+    expect(system).toContain("experience:globex — tech lead");
+    expect(system).toContain("Platform Engineer at Hooli");
+    expect(system).toContain("What drew you to Hooli?");
+    expect(system).toContain("motivation: I want to build platforms at scale.");
+    expect(system).toContain("Hooli runs on Kubernetes.");
+    expect(system).toContain("Cut deploy time by 40% with Kubernetes.");
+    expect(system).toContain("Mentored two interns.");
+    // The trace and the line ids of the resume are left out.
+    expect(system).not.toContain("[exp1]");
+    expect(system).not.toContain("written by the person");
+    // Only reading the profile: nothing to change yet.
+    expect(toolResultsOf(prep.prompts[1])).toContain(
+      "Led a team of 5 engineers"
+    );
+    expect(JSON.stringify(prep.prompts[0])).not.toContain("propose_change");
+    expect(first.turn).not.toBeNull();
+
+    // The letter is generated: the document's conversation is the same
+    // chat, and the agent now reads the letter.
+    const letter = await new DocumentsRepository(db).insertVersion({
+      documentId,
+      language: "en-US",
+    });
+    const content: CoverLetterContent = {
+      kind: "cover_letter",
+      header: {
+        name: "Ada Lovelace",
+        titleLine: "Platform Engineer",
+        contacts: [],
+        city: "Belo Horizonte, MG",
+      },
+      greeting: "Dear hiring team,",
+      paragraphs: [
+        {
+          id: "par1",
+          text: "I want to build platforms at Hooli.",
+          origin: { kind: "manual" },
+        },
+      ],
+      closing: "Best regards,",
+    };
+    await new DocumentsRepository(db).insertSnapshot({
+      versionId: letter.id,
+      sequence: 1,
+      origin: "generated",
+      author: "ai",
+      encryptedContent: cipher.encrypt(JSON.stringify(content)),
+      profileVersionId: ctx.profileVersionId,
+    });
+    const next = await ctx.chats.current(ctx.user.id, {
+      kind: "document",
+      documentId,
+    });
+    expect(next.chatId).toBe(chatId);
+    const after = agentModel([], "Ok.");
+    await ctx.say(chatId, "How does it read?", after.model);
+    const letterSystem = systemOf(after.prompts[0]);
+    expect(letterSystem).toContain("I want to build platforms at Hooli.");
+    expect(letterSystem).not.toContain("isn't written yet");
   });
 
   it("opens conversations only on the user's own documents, and only to their owner", async () => {

@@ -13,22 +13,23 @@ export type DocumentAgentPromptInput = {
   attachment: AgentAttachment | null;
 };
 
-const list = (items: string[]) =>
+export const list = (items: string[]) =>
   items.length ? items.map((item) => `- ${item}`).join("\n") : "(none)";
 
 const tagNames =
-  "document|passage|index|purpose|userInput|rules|gaps|findings|review|settings|attachment|waiting|rejected";
+  "resume|interview|profile|document|passage|index|purpose|userInput|rules|gaps|findings|review|settings|attachment|waiting|rejected";
 
-const oneLine = (text: string) => text.replace(/\s*\n\s*/g, " / ").trim();
+export const oneLine = (text: string) =>
+  text.replace(/\s*\n\s*/g, " / ").trim();
 
 /**
  * The person's text between tags, as data: a tag of ours written inside it
  * is dropped, so it can't close its block and speak as instructions.
  */
-const data = (tag: string, text: string) =>
+export const data = (tag: string, text: string) =>
   `<${tag}>\n${text.replace(new RegExp(`</?(?:${tagNames})>`, "gi"), "")}\n</${tag}>`;
 
-const languageName = (language: string) =>
+export const languageName = (language: string) =>
   language === "pt-BR" ? "Brazilian Portuguese" : "English";
 
 /**

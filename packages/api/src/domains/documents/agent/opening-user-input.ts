@@ -36,6 +36,8 @@ export async function loadOpeningUserInput(input: {
   kind: "resume" | "cover_letter";
   career: CareerContext;
   storyLineId: string | null;
+  // Before the letter exists: the motivation points not yet decided count.
+  draftMotivation?: boolean;
 }): Promise<OpeningUserInput> {
   const { db, cipher, career } = input;
   const filter = await loadNeverIncludeFilter({
@@ -91,7 +93,10 @@ export async function loadOpeningUserInput(input: {
     motivation = interview
       ? (await motivations.listPoints(interview.id))
           .filter(
-            (point) => point.status === "kept" || point.status === "promoted"
+            (point) =>
+              point.status === "kept" ||
+              point.status === "promoted" ||
+              (input.draftMotivation && point.status === "draft")
           )
           .map((point) => open(point.encryptedText))
       : [];

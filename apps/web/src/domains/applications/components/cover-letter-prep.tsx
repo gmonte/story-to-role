@@ -1,9 +1,9 @@
 "use client";
 
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Send } from "lucide-react";
+import { Loader2, Send } from "lucide-react";
 import { useRouter } from "next/navigation";
 
 import type { MotivationView } from "@repo/api/domains/applications/schemas/motivation";
@@ -19,6 +19,7 @@ import type { Tone } from "@repo/api/domains/openings/schemas/opening";
 
 import { AiAtWork } from "~/domains/workspace/components/ai-at-work";
 import { VoiceInputButton } from "~/domains/career/components/voice-input-button";
+import { DocumentAgent } from "~/domains/documents/components/document-agent";
 import { CoverLetterWorkspace } from "~/domains/documents/components/cover-letter-workspace";
 import {
   chosenStory,
@@ -65,6 +66,8 @@ export function CoverLetterPrep({
     refetchInterval: (query) => (query.state.data?.thinking ? 1500 : false),
   });
   const documents = useOpeningDocuments(openingId);
+  // The motivation answer being written: the agent may fill it.
+  const [answerText, setAnswerText] = useState("");
   const data = motivation.data;
   if (!data) return null;
   const letter = documents.data?.documents.find(
@@ -93,9 +96,19 @@ export function CoverLetterPrep({
   ) {
     return <CoverLetterWorkspace document={letter} aside={aside} />;
   }
+  const agent = (
+    <LetterPrepAgent
+      openingId={openingId}
+      onUseAnswer={
+        data.status === "in_progress" && !data.thinking
+          ? setAnswerText
+          : undefined
+      }
+    />
+  );
   if (!data.status || data.status === "failed") {
     return (
-      <Prep aside={aside}>
+      <Prep aside={aside} agent={agent}>
         <MotivationStart
           openingId={openingId}
           failed={data.status === "failed"}
@@ -105,7 +118,7 @@ export function CoverLetterPrep({
   }
   if (data.status === "skipped") {
     return (
-      <Prep aside={aside}>
+      <Prep aside={aside} agent={agent}>
         <div className="flex flex-col gap-4">
           <Skipped openingId={openingId} />
           {writeLetter}
@@ -115,13 +128,18 @@ export function CoverLetterPrep({
   }
   if (data.status === "in_progress") {
     return (
-      <Prep aside={aside}>
-        <Interview openingId={openingId} motivation={data} />
+      <Prep aside={aside} agent={agent}>
+        <Interview
+          openingId={openingId}
+          motivation={data}
+          text={answerText}
+          setText={setAnswerText}
+        />
       </Prep>
     );
   }
   return (
-    <Prep aside={aside}>
+    <Prep aside={aside} agent={agent}>
       <div className="flex flex-col gap-6">
         <PointsReview
           key={data.points.map((point) => `${point.id}:${point.status}`).join()}
@@ -138,7 +156,16 @@ export function CoverLetterPrep({
  * The steps before the letter, read in the column's width, in the same
  * three zones as the document workspace so the page doesn't jump.
  */
-function Prep({ children, aside }: { children: ReactNode; aside?: ReactNode }) {
+function Prep({
+  children,
+  aside,
+  agent,
+}: {
+  children: ReactNode;
+  aside?: ReactNode;
+  /** The cover letter's agent, in the right column. */
+  agent?: ReactNode;
+}) {
   return (
     <div className="flex min-h-0 flex-1">
       {aside && (
@@ -152,7 +179,49 @@ function Prep({ children, aside }: { children: ReactNode; aside?: ReactNode }) {
       <div className="min-w-0 flex-1 overflow-y-auto">
         <div className="mx-auto w-full max-w-3xl p-6">{children}</div>
       </div>
+      {agent && (
+        <aside className="bg-muted/30 hidden w-96 shrink-0 border-l lg:block">
+          {agent}
+        </aside>
+      )}
     </div>
+  );
+}
+
+/**
+ * The cover letter's agent while the letter is prepared: the letter's
+ * document is made empty so the agent has its conversation, which goes on
+ * beside the letter once it is generated.
+ */
+function LetterPrepAgent({
+  openingId,
+  onUseAnswer,
+}: {
+  openingId: string;
+  onUseAnswer?: (text: string) => void;
+}) {
+  const trpc = useTRPC();
+  const document = useMutation(
+    trpc.documents.letterAgentDocument.mutationOptions()
+  );
+  const { mutate } = document;
+  useEffect(() => {
+    mutate({ openingId });
+  }, [mutate, openingId]);
+  if (!document.data) {
+    return (
+      <div className="flex h-full items-center justify-center">
+        <Loader2 className="text-muted-foreground size-5 animate-spin" />
+      </div>
+    );
+  }
+  return (
+    <DocumentAgent
+      documentId={document.data.documentId}
+      kind="cover_letter"
+      version={null}
+      onUseAnswer={onUseAnswer}
+    />
   );
 }
 
@@ -315,15 +384,18 @@ function Skipped({ openingId }: { openingId: string }) {
 function Interview({
   openingId,
   motivation,
+  text,
+  setText,
 }: {
   openingId: string;
   motivation: MotivationView;
+  text: string;
+  setText: (text: string) => void;
 }) {
   const t = useTranslation();
   const trpc = useTRPC();
   const refresh = useRefreshMotivation();
   const timeline = useTimeline();
-  const [text, setText] = useState("");
   const answer = useMutation(
     trpc.motivation.answer.mutationOptions({
       onSuccess: async () => {

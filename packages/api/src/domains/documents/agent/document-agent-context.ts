@@ -172,7 +172,7 @@ function traceOf(
   return parts.length ? parts.join("; ") : "from the profile";
 }
 
-type Sources = Parameters<typeof traceOf>[1];
+export type Sources = Parameters<typeof traceOf>[1];
 
 const tracedLine = (line: Line, sources: Sources) =>
   `[${line.id}] ${line.text}\n    ← ${traceOf(line, sources)}`;
@@ -183,7 +183,7 @@ const headerText = (content: ResumeContent | CoverLetterContent) => [
   ...headerLines(content.header).map((line) => `[${line.id}] ${line.text}`),
 ];
 
-function resumeText(content: ResumeContent, sources: Sources) {
+export function resumeText(content: ResumeContent, sources: Sources) {
   const out: string[] = headerText(content);
   for (const section of content.sections) {
     const part =

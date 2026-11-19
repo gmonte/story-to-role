@@ -859,7 +859,6 @@
   "q/uwLT": "Parar",
   "q1Cd7m": "Seção",
   "q1WWIr": "Em andamento",
-  "q48AAN": "Nota do match: {rating}/{target}",
   "q4AgnG": "Gerar carta de apresentação",
   "qIBzII": "Pesquisa da empresa",
   "qIPUb7": "Pesquisar empresa",
@@ -1007,5 +1006,12 @@
   "zyRm34": "Marcar como enviada",
   "zz6ObK": "Restaurar",
   "/wWm3I": "Editado depois da revisão",
-  "B2JAEk": "Revisando…"
+  "B2JAEk": "Revisando…",
+  "5ObzAv": "Nota do match {rating}/10",
+  "HxHmIG": "Avaliador {number} · {rating}/10",
+  "NwQ09Y": "Não aparecem no currículo",
+  "ZFaPs2": "O que ele recomendou",
+  "ghoWzb": "a que ficou",
+  "ofu5Y2": "Discorda do seu perfil",
+  "r7kwxR": "Cobertos em parte"
 }

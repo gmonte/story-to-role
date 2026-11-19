@@ -9,6 +9,11 @@ import { useTranslation } from "@repo/intl/use-translation";
 import { Badge } from "@repo/web/components/ui/badge";
 import { Button } from "@repo/web/components/ui/button";
 import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@repo/web/components/ui/collapsible";
+import {
   Popover,
   PopoverContent,
   PopoverTrigger,
@@ -36,11 +41,8 @@ function useScoreLabel() {
   const t = useTranslation();
   return (review: Review) =>
     t.formatMessage(
-      { defaultMessage: "Match score {rating}/{target}" },
-      {
-        rating: t.formatNumber(review.rating),
-        target: t.formatNumber(review.target),
-      }
+      { defaultMessage: "Match score {rating}/10" },
+      { rating: t.formatNumber(review.rating) }
     );
 }
 
@@ -183,9 +185,115 @@ function CoverageScoreBody({
               </p>
             )
           )}
+          <ReviewerList review={review} />
         </div>
       )}
     </>
+  );
+}
+
+function FeedbackList({
+  title,
+  items,
+  destructive,
+}: {
+  title: string;
+  items: string[];
+  destructive?: boolean;
+}) {
+  if (items.length === 0) return null;
+  return (
+    <div className="flex flex-col gap-0.5">
+      <p
+        className={cn(
+          "font-medium",
+          destructive ? "text-destructive" : "text-foreground"
+        )}
+      >
+        {title}
+      </p>
+      <ul className="list-disc space-y-0.5 pl-4">
+        {items.map((item, index) => (
+          <li key={index}>{item}</li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+/** Each reviewer as a collapsible row with the feedback they gave. */
+function ReviewerList({ review }: { review: Review }) {
+  const t = useTranslation();
+  const needsAttention =
+    review.rating < review.target || coverageScoreBand(review) === "capped";
+  return (
+    <div className="flex flex-col gap-1">
+      {review.rounds.map((round, index) => {
+        const empty =
+          round.inconsistencies.length +
+            round.advice.length +
+            round.partial.length +
+            round.notProven.length ===
+          0;
+        return (
+          <Collapsible
+            key={round.round}
+            defaultOpen={round.kept && needsAttention}
+            className="rounded-md border"
+          >
+            <CollapsibleTrigger
+              disabled={empty}
+              className="flex w-full items-center justify-between gap-2 px-2 py-1.5 text-left"
+            >
+              <span className="text-foreground font-medium">
+                {t.formatMessage(
+                  { defaultMessage: "Reviewer {number} · {rating}/10" },
+                  {
+                    number: t.formatNumber(index + 1),
+                    rating: t.formatNumber(round.rating),
+                  }
+                )}
+              </span>
+              <span className="flex items-center gap-1.5">
+                {round.kept && (
+                  <Badge variant="secondary">
+                    {t.formatMessage({ defaultMessage: "kept" })}
+                  </Badge>
+                )}
+                {!empty && <ChevronDown className="size-3.5" />}
+              </span>
+            </CollapsibleTrigger>
+            <CollapsibleContent className="flex max-h-60 flex-col gap-2 overflow-y-auto px-2 pb-2">
+              <FeedbackList
+                destructive
+                title={t.formatMessage({
+                  defaultMessage: "Disagrees with your profile",
+                })}
+                items={round.inconsistencies}
+              />
+              <FeedbackList
+                title={t.formatMessage({
+                  defaultMessage: "What it advised",
+                })}
+                items={round.advice}
+              />
+              <FeedbackList
+                title={t.formatMessage({
+                  defaultMessage: "Partially covered",
+                })}
+                items={round.partial}
+              />
+              <FeedbackList
+                title={t.formatMessage({
+                  defaultMessage: "Not shown in the resume",
+                })}
+                items={round.notProven}
+              />
+            </CollapsibleContent>
+          </Collapsible>
+        );
+      })}
+    </div>
   );
 }
 
@@ -231,7 +339,10 @@ export function CoverageScoreBadge({ version }: { version: VersionView }) {
           )}
         </Button>
       </PopoverTrigger>
-      <PopoverContent align="end" className="flex w-80 flex-col gap-2 text-xs">
+      <PopoverContent
+        align="end"
+        className="flex max-h-96 w-80 flex-col gap-2 overflow-y-auto text-xs"
+      >
         <div className="flex items-center justify-between gap-2">
           <span className="text-sm font-medium">{label(review)}</span>
           <BandBadge band={band} />

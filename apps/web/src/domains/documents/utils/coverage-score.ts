@@ -17,6 +17,6 @@ export function coverageScoreBand(
 }
 
 /** The ratings of the rounds in order: "6 · 7 · 8". */
-export function roundsTrail(rounds: Review["rounds"]) {
+export function roundsTrail(rounds: Array<{ rating: number }>) {
   return rounds.map((round) => round.rating).join(" · ");
 }

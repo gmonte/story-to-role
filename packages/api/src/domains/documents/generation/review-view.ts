@@ -15,6 +15,7 @@ const storedReviewSchema = z.object({
     )
     .catch([]),
   inconsistencies: z.array(z.string()).catch([]),
+  advice: z.array(z.string()).catch([]),
 });
 
 type RoundRow = {
@@ -45,20 +46,36 @@ export function reviewViewOf(
   const reviewedId = judgedOf(allRows[allRows.length - 1]);
   const rows = allRows.filter((row) => judgedOf(row) === reviewedId);
   const kept = rows.find((row) => row.kept) ?? rows[rows.length - 1];
-  const stored = kept.encryptedReview
-    ? storedReviewSchema.safeParse(
-        JSON.parse(cipher.decrypt(kept.encryptedReview))
-      )
-    : null;
-  const review = stored?.success ? stored.data : null;
+  const reviewOf = (row: RoundRow) => {
+    const stored = row.encryptedReview
+      ? storedReviewSchema.safeParse(
+          JSON.parse(cipher.decrypt(row.encryptedReview))
+        )
+      : null;
+    return stored?.success ? stored.data : null;
+  };
+  const review = reviewOf(kept);
   return {
     rating: kept.rating,
     target: reviewLoopSettings.targetRating,
-    rounds: rows.map(({ round, rating, kept: isKept }) => ({
-      round,
-      rating,
-      kept: isKept,
-    })),
+    // Each reviewer's own feedback. The not-proven list may include gaps
+    // the fit check already knows.
+    rounds: rows.map((row) => {
+      const own = reviewOf(row);
+      const named = (level: "partial" | "not_proven") =>
+        own?.coverage
+          .filter((item) => item.level === level)
+          .map((item) => item.requirement) ?? [];
+      return {
+        round: row.round,
+        rating: row.rating,
+        kept: row.kept,
+        inconsistencies: own?.inconsistencies ?? [],
+        advice: own?.advice ?? [],
+        partial: named("partial"),
+        notProven: named("not_proven"),
+      };
+    }),
     coveredStrong:
       review?.coverage.filter((item) => item.level === "strong").length ?? 0,
     coveredPartial:

@@ -175,6 +175,10 @@ export const versionViewSchema = z.object({
           round: z.number().int(),
           rating: z.number().int(),
           kept: z.boolean(),
+          inconsistencies: z.array(z.string()),
+          advice: z.array(z.string()),
+          partial: z.array(z.string()),
+          notProven: z.array(z.string()),
         })
       ),
       coveredStrong: z.number().int(),

@@ -23,12 +23,8 @@ describe("coverage score", () => {
   });
 
   it("lists the rounds in order", () => {
-    expect(
-      roundsTrail([
-        { round: 0, rating: 6, kept: false },
-        { round: 1, rating: 7, kept: false },
-        { round: 2, rating: 8, kept: true },
-      ])
-    ).toBe("6 · 7 · 8");
+    expect(roundsTrail([{ rating: 6 }, { rating: 7 }, { rating: 8 }])).toBe(
+      "6 · 7 · 8"
+    );
   });
 });

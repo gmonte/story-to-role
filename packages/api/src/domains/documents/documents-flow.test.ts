@@ -525,8 +525,27 @@ describe("resume generation and snapshots", () => {
       rating: 8,
       target: 8,
       rounds: [
-        { round: 0, rating: 6, kept: false },
-        { round: 1, rating: 8, kept: true },
+        {
+          round: 0,
+          rating: 6,
+          kept: false,
+          inconsistencies: [],
+          advice: ["Be more concrete"],
+          partial: [],
+          notProven: [
+            "Requirement 7",
+            "Requirement 8",
+            "Requirement 9",
+            "Requirement 10",
+          ],
+        },
+        {
+          round: 1,
+          rating: 8,
+          kept: true,
+          advice: ["Be more concrete"],
+          notProven: ["Requirement 9", "Requirement 10"],
+        },
       ],
     });
     // What the kept draft emphasizes, in at most five lines.

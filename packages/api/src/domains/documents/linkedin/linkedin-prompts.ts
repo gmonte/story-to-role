@@ -42,6 +42,24 @@ export const linkedinDraftSchema = z.object({
 });
 export type LinkedinDraft = z.infer<typeof linkedinDraftSchema>;
 
+/**
+ * Bullets per experience and project on LinkedIn (resume spec, "LinkedIn"):
+ * 3 to 4 whatever its age, fewer only when the profile holds fewer facts.
+ */
+export const linkedinBullets = { fewest: 3, most: 4 };
+
+/**
+ * The settings a LinkedIn text is written and checked by: the user's, with
+ * LinkedIn's bullet count in place of the resume's.
+ */
+export const linkedinSettings = (
+  settings: GenerationSettings
+): GenerationSettings => ({
+  ...settings,
+  bulletsRecent: linkedinBullets.most,
+  bulletsOlder: linkedinBullets.most,
+});
+
 /** The purpose block of the writer's material (see `resumeMaterial`). */
 export const linkedinPurposeLines = [
   "A LinkedIn profile text with no opening behind it: headline options, the “About” section, for each position its experience text, for each project its text for LinkedIn's Projects section and, where the profile backs one, a short description of an education. It favours no specialty: tell the career as the profile states it, bringing forward each position's strongest points.",
@@ -58,14 +76,15 @@ export function linkedinPrompt(
     leave_out: `A very old position (ended ${settings.veryOldYears} years ago or more) is left out: write nothing for it.`,
     keep: "A very old position is written like an older one.",
   }[settings.veryOld];
+  const bullets = `${linkedinBullets.fewest} to ${linkedinBullets.most}`;
   return [
     "You write a person's LinkedIn text from their career profile, which is the only source of facts: headline options, the About section, each position's experience text, each project's and an education's description. It is read by people, not by a filter: natural, as the person would speak, never a list of keywords.",
     "Rules, enforced by code after you answer:",
     `- headlines: 3 to 5 different options, each at most ${headlineMaxLength} characters: how the person defines themselves professionally, their main area and what they bring, as the profile states it (“Tech Lead | Platform engineering and developer experience”). No hashtags, no emoji, no list of every technology. Each cites in evidence_ids the profile lines it rests on; an option with none, or longer than the limit, is deleted.`,
     "- about: 3 to 5 short paragraphs, in the first person unless the style profile says otherwise, as the person would speak. evidence_ids lists the profile lines (or instructions) the About rests on; with none it is deleted.",
-    `- experience: for each position, bullets: up to ${settings.bulletsRecent} for a recent position and ${settings.bulletsOlder} for an older one, leaner than a resume's, put first the strongest. Each bullet cites, in evidence_ids, lines of its own position only; a bullet without any is deleted.`,
+    `- experience: for each position, its key achievements in ${bullets} bullets, recent or older alike, fewer only when its profile lines don't hold ${linkedinBullets.fewest} distinct facts; put first the strongest. Each bullet cites, in evidence_ids, lines of its own position only; a bullet without any is deleted.`,
     `- ${veryOld}`,
-    `- projects: for each project listed in the material (personal or side work, never a position), bullets like a position's by its age (${settings.bulletsRecent} recent, ${settings.bulletsOlder} older), each citing only lines of its own project; code prints the name, dates and link. Never write a project as a position.`,
+    `- projects: for each project listed in the material (personal or side work, never a position), ${bullets} bullets like a position's, each citing only lines of its own project; code prints the name, dates and link. Never write a project as a position.`,
     bulletFormatRule,
     "- A figure appears only when the line it cites shows it; a line carrying any other number is deleted. A result with “[figure withheld]” is told as a qualitative one.",
     `- education: for an education listed below, a description of one or two sentences only when profile lines tell something about it (a thesis, an honour, a project done there), citing them in evidence_ids; otherwise description is null. Never restate the course or the institution: code prints them.${education.length ? "" : " The profile lists no education: return an empty list."}`,

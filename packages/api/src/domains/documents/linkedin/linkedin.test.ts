@@ -291,6 +291,13 @@ describe("LinkedIn text", () => {
     ]);
     // The writer and the coverage review: two calls, the review general.
     expect(fake.generateObject).toHaveBeenCalledTimes(2);
+    // Experiences and projects in 3 to 4 bullets, the resume's format.
+    expect(fake.generateObject.mock.calls[0][0].system).toContain(
+      "3 to 4 bullets"
+    );
+    expect(fake.generateObject.mock.calls[0][0].system).toContain(
+      "Bullet format"
+    );
     expect(fake.generateObject.mock.calls[1][0].system).toContain(
       "Career as the profile states it"
     );
@@ -411,6 +418,42 @@ describe("LinkedIn text", () => {
         },
       })
     ).rejects.toMatchObject({ code: "BAD_REQUEST" });
+
+    // Four bullets on an experience is LinkedIn's count, not a finding.
+    const four = await ctx.documents.saveEdit({
+      userId: ctx.user.id,
+      versionId: version.id,
+      baseSnapshotId: edited.snapshot.id,
+      content: {
+        ...linkedinOf(edited.content),
+        experiences: [
+          {
+            ...content.experiences[0],
+            lines: [
+              ...content.experiences[0].lines,
+              ...content.experiences[0].lines.map((line, index) => ({
+                ...line,
+                id: `extra-${index}`,
+              })),
+            ],
+          },
+        ],
+      },
+    });
+    expect(four).toBeTruthy();
+    const [fourBullets] = (
+      await ctx.documents.libraryDocument({
+        userId: ctx.user.id,
+        documentId,
+      })
+    ).versions;
+    expect(linkedinOf(fourBullets.content).experiences[0].lines).toHaveLength(
+      4
+    );
+    expect(
+      fourBullets.coverage?.findings.map((finding) => finding.code)
+    ).not.toContain("bulletCount");
+    await ctx.documents.undo({ userId: ctx.user.id, versionId: version.id });
 
     // Undoing the edit brings the copy back.
     await ctx.documents.undo({ userId: ctx.user.id, versionId: version.id });
@@ -830,14 +873,36 @@ describe("LinkedIn text", () => {
       });
     const draft = writer(ctx);
 
-    // Bullets per the settings: a recent position keeps its first few.
-    const limited = assemble(draft, {
-      ...defaultGenerationSettings,
-      bulletsRecent: 1,
-    });
-    expect(limited.content.experiences[0].lines).toHaveLength(1);
+    // 3 to 4 bullets per experience, whatever the resume's settings: the
+    // first four kept are printed.
+    const tools = ctx.lineOf("Tools: Kubernetes, Terraform");
+    const many = assemble(
+      {
+        ...draft,
+        experience: [
+          {
+            position_id: ctx.globex.id,
+            bullets: [
+              { text: "Led a team of 5 engineers.", evidence_ids: [team.id] },
+              { text: "Cut deploy time by 40%.", evidence_ids: [deploy.id] },
+              { text: "Ran Kubernetes clusters.", evidence_ids: [tools.id] },
+              { text: "Wrote Terraform modules.", evidence_ids: [tools.id] },
+              { text: "Mentored the team.", evidence_ids: [team.id] },
+            ],
+          },
+        ],
+      },
+      { ...defaultGenerationSettings, bulletsRecent: 1, bulletsOlder: 0 }
+    );
+    expect(many.content.experiences[0].lines.map((l) => l.text)).toEqual([
+      "Led a team of 5 engineers.",
+      "Cut deploy time by 40%.",
+      "Ran Kubernetes clusters.",
+      "Wrote Terraform modules.",
+    ]);
+    const limited = assemble(draft);
 
-    // “Keep”: the very old position is written like an older one (1 bullet).
+    // “Keep”: the very old position is written like an older one.
     const kept = assemble(draft, {
       ...defaultGenerationSettings,
       veryOld: "keep",

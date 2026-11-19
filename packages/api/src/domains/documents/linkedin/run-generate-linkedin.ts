@@ -45,6 +45,7 @@ import {
   linkedinPrompt,
   linkedinPurposeLines,
   linkedinSectionInstruction,
+  linkedinSettings,
 } from "./linkedin-prompts";
 
 /** A line code refused, or a headline option longer than LinkedIn takes. */
@@ -56,8 +57,8 @@ export type LinkedinDroppedLine =
  * Assembles LinkedIn content from a draft by the resume's own rules
  * (`assembleResume`): locked facts printed by code, each line citing
  * profile lines, figures only where the profile marks them measured, the
- * communication rules, studied and never-claim terms refused, bullets per
- * the settings by age and the very old rule. LinkedIn has no requirement
+ * communication rules, studied and never-claim terms refused, at most
+ * four bullets per experience and project, and the very old rule. LinkedIn has no requirement
  * to justify a very old experience, so under “relevant only” it is left
  * out. Positions and projects with no line left are not printed. Each
  * headline option and education description is checked like the summary;
@@ -95,11 +96,12 @@ export function assembleLinkedin(input: {
     })),
   };
   const newLineId = input.newLineId ?? (() => randomUUID().slice(0, 8));
+  const settings = linkedinSettings(input.settings);
   const { content, dropped } = assembleResume({
     draft: assemblyDraft,
     context: input.context,
     sections: ["summary", "experience", "projects"],
-    settings: input.settings,
+    settings,
     today: input.today,
     purposes: [],
     targetTitle: null,
@@ -122,7 +124,7 @@ export function assembleLinkedin(input: {
       draft: { ...assemblyDraft, summary: line },
       context: input.context,
       sections: ["summary"],
-      settings: input.settings,
+      settings,
       today: input.today,
       purposes: [],
       targetTitle: null,

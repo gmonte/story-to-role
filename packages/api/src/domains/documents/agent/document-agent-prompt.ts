@@ -1,5 +1,6 @@
 import type { AgentAttachment } from "@repo/api/domains/agents/agent-message";
 
+import { linkedinBullets } from "../linkedin/linkedin-prompts";
 import { headlineMaxLength } from "../schemas/linkedin-content";
 import { bulletFormatRule } from "../writing/bullet-format";
 import type { DocumentAgentContext } from "./document-agent-context";
@@ -166,7 +167,9 @@ export function buildDocumentAgentPrompt(input: DocumentAgentPromptInput) {
     data(
       "settings",
       [
-        `Bullets per recent experience (ended within ${settings.recentYears} years): ${settings.bulletsRecent}; per older experience: ${settings.bulletsOlder}`,
+        context.kind === "linkedin"
+          ? `Bullets per experience and project: ${linkedinBullets.fewest} to ${linkedinBullets.most}`
+          : `Bullets per recent experience (ended within ${settings.recentYears} years): ${settings.bulletsRecent}; per older experience: ${settings.bulletsOlder}`,
         `Experiences ended ${settings.veryOldYears}+ years ago: ${settings.veryOld.replace("_", " ")}`,
         context.kind === "resume"
           ? `Resume length: at most ${settings.resumeMaxPages} page(s)`

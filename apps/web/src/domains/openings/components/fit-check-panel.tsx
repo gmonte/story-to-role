@@ -72,16 +72,42 @@ export function FitColumn({ opening }: { opening: OpeningDetail }) {
                   header's chip. */}
               <p className="font-medium">{labels.band(fitCheck.band)}</p>
               <div className="flex items-center gap-2">
-                <RunFitCheck openingId={opening.id} again enabled />
+                <RunFitCheck
+                  openingId={opening.id}
+                  again
+                  enabled
+                  highlight={fitCheck.outdated}
+                />
               </div>
             </div>
-            {/* The check is worth running again once the profile or the
-                preferences moved on. */}
+            <div className="flex flex-wrap gap-1.5">
+              {(["met", "partial", "gap"] as const).map((verdict) => (
+                <Badge
+                  key={verdict}
+                  variant={
+                    verdict === "gap"
+                      ? "destructive"
+                      : verdict === "met"
+                        ? "default"
+                        : "secondary"
+                  }
+                >
+                  {cn(
+                    t.formatNumber(
+                      fitCheck.items.filter((item) => item.verdict === verdict)
+                        .length
+                    ),
+                    labels.verdict(verdict)
+                  )}
+                </Badge>
+              ))}
+            </div>
+            {/* The check is worth running again once what it read changed. */}
             {fitCheck.outdated && (
-              <p className="text-muted-foreground text-xs">
+              <p className="text-xs font-medium">
                 {t.formatMessage({
                   defaultMessage:
-                    "Your profile or your job preferences were published again since this check.",
+                    "This check is outdated: you answered questions, edited the description, or published your profile or job preferences again since it ran. Its status and totals don’t count that yet. Check again to include it.",
                 })}
               </p>
             )}
@@ -159,11 +185,13 @@ function RunFitCheck({
   openingId,
   again = false,
   enabled,
+  highlight = false,
 }: {
   openingId: string;
   again?: boolean;
   // Nothing to check against until a profile is published.
   enabled: boolean;
+  highlight?: boolean;
 }) {
   const t = useTranslation();
   const trpc = useTRPC();
@@ -179,7 +207,7 @@ function RunFitCheck({
     <>
       <Button
         size="sm"
-        variant="outline"
+        variant={highlight ? "default" : "outline"}
         className="h-7"
         disabled={run.isPending || !enabled}
         onClick={() => run.mutate({ openingId })}

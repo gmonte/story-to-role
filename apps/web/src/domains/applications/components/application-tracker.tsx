@@ -3,7 +3,8 @@
 import { useState, type ReactNode } from "react";
 
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { ChevronDown, Send, Trash2 } from "lucide-react";
+import { ChevronDown, FileText, Send, Trash2 } from "lucide-react";
+import Link from "next/link";
 
 import {
   type ApplicationStatus,
@@ -70,12 +71,20 @@ export function ApplicationTracker({ openingId }: { openingId: string }) {
   });
   if (!applicationId) {
     return (
-      <p className="text-muted-foreground text-xs">
-        {t.formatMessage({
-          defaultMessage:
-            "No application yet. It starts with the first document you write for this opening.",
-        })}
-      </p>
+      <div className="flex flex-col items-start gap-2">
+        <p className="text-muted-foreground text-xs">
+          {t.formatMessage({
+            defaultMessage:
+              "No application yet. It starts with the first document you write for this opening.",
+          })}
+        </p>
+        <Button asChild size="sm" variant="outline">
+          <Link href="?view=resume" scroll={false}>
+            <FileText />
+            {t.formatMessage({ defaultMessage: "Go to the resume" })}
+          </Link>
+        </Button>
+      </div>
     );
   }
   if (!detail.data) return null;

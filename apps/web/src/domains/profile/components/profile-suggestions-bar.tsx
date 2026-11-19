@@ -35,8 +35,13 @@ function kindOf(suggestion: Suggestion) {
  */
 export function ProfileSuggestionsBar() {
   const t = useTranslation();
-  const { suggestions, acceptSuggestions, rejectSuggestions, goToLine } =
-    useProfileEditor();
+  const {
+    suggestions,
+    acceptSuggestions,
+    rejectSuggestions,
+    goToLine,
+    scrollToLine,
+  } = useProfileEditor();
   const [current, setCurrent] = useState(-1);
   const [staleOpen, setStaleOpen] = useState(false);
   if (!suggestions.length) return null;
@@ -85,7 +90,11 @@ export function ProfileSuggestionsBar() {
           : located.length - 1
         : (position + step + located.length) % located.length;
     setCurrent(next);
-    goToLine(located[next].range!.start);
+    const line = located[next].range!.start;
+    goToLine(line);
+    // The caret alone may count as in view under the pinned bars: centre
+    // the suggestion once the selection has moved.
+    requestAnimationFrame(() => scrollToLine(line));
   }
 
   return (

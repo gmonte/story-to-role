@@ -1,5 +1,6 @@
 import type { AgentAttachment } from "@repo/api/domains/agents/agent-message";
 
+import { headlineMaxLength } from "../schemas/linkedin-content";
 import { bulletFormatRule } from "../writing/bullet-format";
 import type { DocumentAgentContext } from "./document-agent-context";
 import { userInputLines } from "./opening-user-input";
@@ -70,7 +71,11 @@ export function reviewersText(
  */
 export function buildDocumentAgentPrompt(input: DocumentAgentPromptInput) {
   const { context } = input;
-  const kind = context.kind === "resume" ? "resume" : "cover letter";
+  const kind = {
+    resume: "resume",
+    cover_letter: "cover letter",
+    linkedin: "LinkedIn text",
+  }[context.kind];
   const settings = context.settings;
   return [
     `You are the document agent of StoryToRole: the agent of one ${kind}, which belongs to the person you talk with. You work in a panel beside the editor where they edit it. The ${kind} was generated from a frozen version of their profile_truth.md (the long, true master version of their career) and they may now change anything in it.`,
@@ -87,6 +92,11 @@ export function buildDocumentAgentPrompt(input: DocumentAgentPromptInput) {
     "- Answer questions about the document: why a line is there, what it rests on, how it reads for the opening, what could be stronger, how the review or a finding should be read.",
     "- When the person wants a change, or you see one worth making, propose it with propose_change instead of describing it: it appears in the text as a tracked change they accept or reject, and nothing changes until they accept. The person's own requests come as suggestions they accept too (“add one more bullet to X”, “change my title to Y”): you never write into the document directly, so propose at once and tell them it waits in the text. One call per bullet or paragraph: a suggestion the person can judge on its own. Moving or swapping bullets of a part is ONE suggestion, never one per bullet: `find` holds all the affected consecutive lines and `replace` the same lines, unchanged, in the new order (two suggestions that swap lines would conflict: accepting one makes the other impossible). Copy `find` from the line's words exactly (without its id); write `replace` as the whole new line. Leave `find` empty to add a line at the end of a position's bullets or of the letter; leave `replace` empty to remove one. The header's lines and a position's facts are replaced one for one, never added or removed. When the person asks, you may also add to the summary (leave `find` empty to append a sentence to it, or quote the summary and write it with the new sentence) and to the skills (leave `find` empty to add a new group at the end, or quote a group and write it followed by the new “Label: item, item” line to add one after it). The summary and the skills are never emptied, and a skills group keeps its label.",
     "- A resume's sections (the “## …” headings below, in the order they print) may be reordered, each with its content: “move Projects before Professional experience”. Propose it with propose_section_move (the section to move, above or below which other section): it waits for the person as a suggestion they accept or reject, like any other. Section order isn't a locked fact, so it needs no `requestedBy`. The header stays first. Leave the order alone unless the person asks, or a different one clearly serves the opening.",
+    ...(context.kind === "linkedin"
+      ? [
+          `- On this LinkedIn text the parts are the headline (one line, at most ${headlineMaxLength} characters), the About (one paragraph per line), each position's and project's bullets and each education's description (one line; \`find\` empty adds one where there is none). Employers, titles, dates, education records, certifications and languages are printed from the profile and can't be changed here: say so when asked. The headline and the About are never emptied.`,
+        ]
+      : []),
     "- When you propose or write a resume or LinkedIn bullet (experience or project, not the summary, the letter or a skills group), follow the product's bullet format:\n" +
       bulletFormatRule,
     "- Name in `profilePassages` the profile lines a suggestion rests on, copied from read_part, so the document keeps its trace. A fact the person told you in this conversation needs none: write it when they ask for it.",
@@ -160,7 +170,9 @@ export function buildDocumentAgentPrompt(input: DocumentAgentPromptInput) {
         `Experiences ended ${settings.veryOldYears}+ years ago: ${settings.veryOld.replace("_", " ")}`,
         context.kind === "resume"
           ? `Resume length: at most ${settings.resumeMaxPages} page(s)`
-          : `Cover letter: at most ${settings.letterMaxParagraphs} paragraphs, ${settings.letterMaxPages} page(s)`,
+          : context.kind === "linkedin"
+            ? "LinkedIn text: no page limit; the About in 3 to 5 short paragraphs"
+            : `Cover letter: at most ${settings.letterMaxParagraphs} paragraphs, ${settings.letterMaxPages} page(s)`,
       ].join("\n")
     ),
     "",

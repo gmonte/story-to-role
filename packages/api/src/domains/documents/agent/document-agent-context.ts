@@ -16,12 +16,16 @@ import type { DbClient } from "@repo/api/tools/db-client";
 
 import { readChangeContent } from "../changes/propose-change";
 import {
+  aboutPart,
   closingPart,
+  educationPart,
   factsLines,
   factsPart,
   greetingPart,
   headerLines,
   headerPart,
+  headlinePart,
+  listDocumentParts,
   type ChangeableContent,
 } from "../changes/document-change";
 import type { DocumentChangeContent } from "../schemas/document-change";
@@ -40,10 +44,12 @@ import { reviewViewOf } from "../generation/review-view";
 import type { CareerContext } from "../generation/load-career-context";
 import { writtenLines } from "../generation/resume-checks";
 import type { OpeningBrief } from "../generation/resume-prompts";
+import { certificationText } from "../linkedin/linkedin-resume";
 import type { CoverLetterContent } from "../schemas/cover-letter-content";
 import type { Line, OutputLanguage } from "../schemas/document";
 import type { DocumentContent } from "../schemas/document-content";
 import type { GenerationSettings } from "../schemas/generation-settings";
+import type { LinkedinContent } from "../schemas/linkedin-content";
 import type { ResumeContent } from "../schemas/resume-content";
 import { decryptDocument } from "../snapshot-content";
 import {
@@ -55,7 +61,7 @@ import {
 export type DocumentAgentContext = {
   documentId: string;
   versionId: string;
-  kind: "resume" | "cover_letter";
+  kind: "resume" | "cover_letter" | "linkedin";
   language: OutputLanguage;
   // The version's latest snapshot: what a change is proposed against.
   snapshotId: string;
@@ -236,6 +242,61 @@ export function resumeText(content: ResumeContent, sources: Sources) {
   return out.join("\n");
 }
 
+/**
+ * A LinkedIn text as the agent reads it: the headline, the About a
+ * paragraph per line, each position's and project's bullets and each
+ * education's description as parts; employers, titles, dates and the
+ * credentials printed by code, locked.
+ */
+function linkedinText(content: LinkedinContent, sources: Sources) {
+  const out: string[] = [
+    `## headline [part: ${headlinePart}]`,
+    content.headline ? tracedLine(content.headline, sources) : "(none yet)",
+    "",
+    `## about [part: ${aboutPart}] (one paragraph per line)`,
+    ...listDocumentParts(content)
+      .find((part) => part.key === aboutPart)!
+      .lines.map((line) => tracedLine(line, sources)),
+  ];
+  if (content.experiences.length) out.push("", "## experience");
+  for (const entry of content.experiences) {
+    out.push(
+      `### ${entry.employer} — ${entry.title} (${entry.startDate ?? "?"} – ${entry.endDate ?? "present"}) (locked) [part: experience:${entry.positionId}]`,
+      ...entry.lines.map((line) => tracedLine(line, sources))
+    );
+  }
+  if (content.projects.length) out.push("", "## projects");
+  for (const entry of content.projects) {
+    out.push(
+      `### ${entry.name} [part: projects:${entry.projectId}]`,
+      ...entry.lines.map((line) => tracedLine(line, sources))
+    );
+  }
+  if (content.education.length) out.push("", "## education");
+  for (const entry of content.education) {
+    out.push(
+      `### ${[entry.title, entry.institution].filter(Boolean).join(", ")} (locked) [part: ${educationPart(entry.credentialId)}]`,
+      entry.description
+        ? tracedLine(entry.description, sources)
+        : "(no description)"
+    );
+  }
+  const credentials = [
+    ...content.certifications.map(certificationText),
+    ...content.languages.map((entry) =>
+      [entry.title, entry.level].filter(Boolean).join(" — ")
+    ),
+  ];
+  if (credentials.length) {
+    out.push(
+      "",
+      "## certifications and languages (locked, printed from the profile)",
+      ...credentials.map((text) => `- ${text}`)
+    );
+  }
+  return out.join("\n");
+}
+
 function letterText(content: CoverLetterContent, sources: Sources) {
   return [
     ...headerText(content),
@@ -281,7 +342,6 @@ export async function loadDocumentAgentContext(input: {
   const latest = await repository.latestSnapshot(version.id);
   if (!latest) return null;
   const content: DocumentContent = decryptDocument(cipher, latest);
-  if (content.kind === "linkedin") return null;
 
   const contexts = new FrozenContexts(db, cipher, profile.id);
   const openingId = await contexts.openingOf(document.applicationId);
@@ -436,7 +496,9 @@ export async function loadDocumentAgentContext(input: {
     documentText:
       content.kind === "resume"
         ? resumeText(content, sources)
-        : letterText(content, sources),
+        : content.kind === "linkedin"
+          ? linkedinText(content, sources)
+          : letterText(content, sources),
     lines,
     profile:
       published && blocks

@@ -17,6 +17,9 @@ import {
   getTestDatabase,
 } from "@repo/api/test/pglite";
 
+import { loadDocumentAgentContext } from "../agent/document-agent-context";
+import { ChangesService } from "../changes/changes-service";
+import { proposeChange } from "../changes/propose-change";
 import type { CoverageReviewDraft } from "../coverage-review/coverage-review";
 import { DocumentsService } from "../documents-service";
 import { loadCareerContext } from "../generation/load-career-context";
@@ -598,6 +601,97 @@ describe("LinkedIn text", () => {
         linkedinSection: true,
       })
     ).toBe(creditCap("adapt_document"));
+  });
+
+  it("lets the document agent suggest changes to the LinkedIn text, applied on Accept", async () => {
+    const ctx = await setup();
+    const team = ctx.lineOf("Led a team of 5 engineers");
+    const { version, documentId } = await ctx.generate({
+      ...writer(ctx),
+      headlines: [{ text: "Tech Lead | Platform", evidence_ids: [team.id] }],
+    });
+    const cipher = await getUserCipher(ctx.db, ctx.user.id);
+    const agent = await loadDocumentAgentContext({
+      db: ctx.db,
+      cipher,
+      userId: ctx.user.id,
+      documentId,
+    });
+    expect(agent?.kind).toBe("linkedin");
+    expect(agent?.documentText).toContain("[part: headline]");
+    expect(agent?.documentText).toContain("[part: about]");
+    expect(agent?.documentText).toContain(
+      `[part: experience:${ctx.globex.id}]`
+    );
+
+    const propose = (change: { part: string; find: string; replace: string }) =>
+      proposeChange({
+        db: ctx.db,
+        cipher,
+        versionId: version.id,
+        snapshotId: version.snapshot.id,
+        content: agent!.content,
+        origin: "document_agent",
+        change,
+        reason: "More direct.",
+        profilePassages: [team.text],
+        evidence: agent!.evidence,
+        profileText: agent!.profileText,
+        sources: [],
+      });
+    await expect(
+      propose({
+        part: `experience:${ctx.globex.id}`,
+        find: "Led a team of 5 engineers.",
+        replace: "Led a platform team of 5 engineers.",
+      })
+    ).resolves.toMatchObject({ ok: true });
+    await expect(
+      propose({
+        part: "about",
+        find: "I lead platform teams.",
+        replace: "I lead platform teams that ship.",
+      })
+    ).resolves.toMatchObject({ ok: true });
+    await expect(
+      propose({
+        part: "headline",
+        find: "Tech Lead | Platform",
+        replace: "Platform Tech Lead",
+      })
+    ).resolves.toMatchObject({ ok: true });
+    // The certifications and languages stay the profile's.
+    await expect(
+      propose({ part: "languages", find: "English", replace: "French" })
+    ).resolves.toMatchObject({ ok: false, refusal: { kind: "locked" } });
+
+    const changes = new ChangesService(ctx.db);
+    const listed = await changes.listChanges({
+      userId: ctx.user.id,
+      versionId: version.id,
+    });
+    expect(listed.map((change) => change.stale)).toEqual([false, false, false]);
+    await changes.acceptChanges({
+      userId: ctx.user.id,
+      versionId: version.id,
+      baseSnapshotId: version.snapshot.id,
+    });
+    const content = linkedinOf(
+      (await ctx.documents.libraryDocument({ userId: ctx.user.id, documentId }))
+        .versions[0].content
+    );
+    expect(content.experiences[0].lines.map((line) => line.text)).toEqual([
+      "Cut deploy time by 40%.",
+      "Led a platform team of 5 engineers.",
+    ]);
+    expect(content.about.text).toBe(
+      "I lead platform teams that ship.\n\nI cut deploy time by 40% with Kubernetes."
+    );
+    expect(content.headline?.text).toBe("Platform Tech Lead");
+    expect(content.headline?.origin).toEqual({
+      kind: "evidence",
+      evidenceIds: [team.id],
+    });
   });
 
   it("keeps it to its owner and refuses what isn't LinkedIn text", async () => {

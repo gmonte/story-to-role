@@ -1,15 +1,20 @@
 import type { Line, LineOrigin } from "../schemas/document";
 import type { DocumentChangeContent } from "../schemas/document-change";
+import { aboutParagraphs } from "../linkedin/linkedin-resume";
 import type { CoverLetterContent } from "../schemas/cover-letter-content";
 import { applySectionMove, sectionMoveOf } from "./section-order";
+import type { LinkedinContent } from "../schemas/linkedin-content";
 import type {
   ResumeContent,
   ResumeSection,
   SkillGroup,
 } from "../schemas/resume-content";
 
-/** The content a change can target: a resume or a cover letter. */
-export type ChangeableContent = ResumeContent | CoverLetterContent;
+/** The content a change can target: a resume, a letter or LinkedIn. */
+export type ChangeableContent =
+  | ResumeContent
+  | CoverLetterContent
+  | LinkedinContent;
 
 /**
  * A change proposed to a document (ADR 0009; resume spec, "Document
@@ -45,6 +50,12 @@ export const letterPart = "letter";
 export const headerPart = "header";
 export const greetingPart = "greeting";
 export const closingPart = "closing";
+// LinkedIn: the chosen headline, the About (a line per paragraph) and an
+// education's description (`education:<credential id>`).
+export const headlinePart = "headline";
+export const aboutPart = "about";
+export const educationPart = (credentialId: string) =>
+  `education:${credentialId}`;
 /** The key of a position's facts (employer, title, context). */
 export const factsPart = (positionId: string) => `facts:${positionId}`;
 
@@ -137,7 +148,56 @@ export const isLockedFactPart = (key: string) => {
   return trimmed === headerPart || trimmed.startsWith("facts:");
 };
 
+/** The About's paragraphs as lines, each with an id of its own. */
+const aboutLines = (about: Line): Line[] =>
+  aboutParagraphs(about.text).map((text, index) => ({
+    ...about,
+    id: `${about.id}-${index + 1}`,
+    text,
+  }));
+
+/**
+ * A LinkedIn text's parts: the headline and the About, never emptied,
+ * each position's and project's bullets and each education's description.
+ * Its facts and credentials are printed by code: no part holds them.
+ */
+function linkedinParts(content: LinkedinContent): DocumentPart[] {
+  return [
+    {
+      key: headlinePart,
+      title: "the headline",
+      fixed: false,
+      lines: content.headline ? [content.headline] : [],
+    },
+    {
+      key: aboutPart,
+      title: "the About section",
+      fixed: false,
+      lines: aboutLines(content.about),
+    },
+    ...content.experiences.map((entry) => ({
+      key: `experience:${entry.positionId}`,
+      title: `${entry.employer} — ${entry.title}`,
+      fixed: false,
+      lines: entry.lines,
+    })),
+    ...content.projects.map((entry) => ({
+      key: `projects:${entry.projectId}`,
+      title: entry.name,
+      fixed: false,
+      lines: entry.lines,
+    })),
+    ...content.education.map((entry) => ({
+      key: educationPart(entry.credentialId),
+      title: `the description of ${entry.title}`,
+      fixed: false,
+      lines: entry.description ? [entry.description] : [],
+    })),
+  ];
+}
+
 export function listDocumentParts(content: ChangeableContent): DocumentPart[] {
+  if (content.kind === "linkedin") return linkedinParts(content);
   const header: DocumentPart = {
     key: headerPart,
     title: "the header",
@@ -454,10 +514,18 @@ function writtenById(
  * a locked fact or changes the line count of a fixed part. Replaced lines
  * keep their ids (the findings and notes on them still point at them).
  */
-export function applyDocumentChange(
-  content: ChangeableContent,
+export function applyDocumentChange<T extends ChangeableContent>(
+  content: T,
   change: DocumentChange,
   evidenceIds: string[] = []
+): T | null {
+  return applyChange(content, change, evidenceIds) as T | null;
+}
+
+function applyChange(
+  content: ChangeableContent,
+  change: DocumentChange,
+  evidenceIds: string[]
 ): ChangeableContent | null {
   const move = sectionMoveOf(change);
   if (move) {
@@ -468,8 +536,16 @@ export function applyDocumentChange(
   const { part, start, end } = located;
   const written = splitChangeLines(change.replace);
   if (part.fixed && written.length !== end - start) return null;
-  if (part.key === summaryPart && !written.length) return null;
+  if (
+    neverEmptied(part.key) &&
+    written.length === 0 &&
+    end - start === part.lines.length
+  )
+    return null;
   const origin = changedLineOrigin(content.kind, evidenceIds, part.key);
+  if (content.kind === "linkedin") {
+    return applyLinkedinChange(content, located, written, origin);
+  }
   if (part.key === headerPart) {
     const lines = writtenById(part, located, written);
     const contacts = lines.get(headerLineIds.contacts);
@@ -590,6 +666,69 @@ export function applyDocumentChange(
   };
 }
 
+/** The parts a change may rewrite but never leave empty. */
+const neverEmptied = (key: string) =>
+  key === summaryPart || key === headlinePart || key === aboutPart;
+
+/**
+ * A change on a LinkedIn text: the headline and an education's
+ * description stay one line (an addition joins it), the About keeps a
+ * paragraph per line, bullets are rewritten like a resume's.
+ */
+function applyLinkedinChange(
+  content: LinkedinContent,
+  located: { part: DocumentPart; start: number; end: number },
+  written: string[],
+  origin: LineOrigin
+): LinkedinContent {
+  const { part } = located;
+  const oneLine = (line: Line | null): Line | null => {
+    const text = rewriteLines(line ? [line] : [], located, written, origin)
+      .map((row) => row.text)
+      .join(" ")
+      .trim();
+    return text ? { id: line?.id ?? newChangeLineId(), text, origin } : null;
+  };
+  if (part.key === headlinePart) {
+    return { ...content, headline: oneLine(content.headline) };
+  }
+  if (part.key === aboutPart) {
+    const paragraphs = rewriteLines(part.lines, located, written, origin);
+    return {
+      ...content,
+      about: {
+        ...content.about,
+        text: paragraphs.map((row) => row.text).join("\n\n"),
+        origin,
+      },
+    };
+  }
+  return {
+    ...content,
+    experiences: content.experiences.map((entry) =>
+      part.key === `experience:${entry.positionId}`
+        ? {
+            ...entry,
+            lines: rewriteLines(entry.lines, located, written, origin),
+          }
+        : entry
+    ),
+    projects: content.projects.map((entry) =>
+      part.key === `projects:${entry.projectId}`
+        ? {
+            ...entry,
+            lines: rewriteLines(entry.lines, located, written, origin),
+          }
+        : entry
+    ),
+    education: content.education.map((entry) =>
+      part.key === educationPart(entry.credentialId)
+        ? { ...entry, description: oneLine(entry.description) }
+        : entry
+    ),
+  };
+}
+
 /**
  * Why a change can't be written, beyond not applying: a skills line
  * whose label changed is a change to a locked label; a fixed part's line
@@ -604,7 +743,12 @@ export function changeViolation(
   const { part, start, end } = located;
   const written = splitChangeLines(change.replace);
   if (part.fixed && written.length !== end - start) return "fixedLines";
-  if (part.key === summaryPart && !written.length) return "fixedLines";
+  if (
+    neverEmptied(part.key) &&
+    !written.length &&
+    end - start === part.lines.length
+  )
+    return "fixedLines";
   if (part.key === skillsPart) {
     const plan = planSkills(
       part.lines.slice(start, end).map((line) => line.text.split(":")[0]),

@@ -1,8 +1,11 @@
 import {
+  aboutPart,
   closingPart,
+  educationPart,
   factsPart,
   greetingPart,
   headerPart,
+  headlinePart,
   letterPart,
   locateInLines,
   skillLine,
@@ -45,8 +48,13 @@ export function blockInPart(block: DocumentBlock, part: string) {
       return part === factsPart(block.ownerId);
     case "greeting":
       return part === greetingPart;
+    // A letter's paragraphs, or a LinkedIn text's About.
     case "paragraph":
-      return part === letterPart;
+      return part === letterPart || part === aboutPart;
+    case "headline":
+      return part === headlinePart;
+    case "description":
+      return part === educationPart(block.ownerId);
     case "closing":
       return part === closingPart;
     default:

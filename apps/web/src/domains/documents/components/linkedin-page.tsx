@@ -11,6 +11,7 @@ import { WorkspaceBody } from "~/domains/workspace/components/workspace-body";
 import { useLibrary, useLibraryDocument } from "../hooks/use-library";
 import { useSelectedVersion } from "../hooks/use-selected-version";
 import { DeleteDocumentDialog } from "./delete-document-dialog";
+import { DocumentAgent } from "./document-agent";
 import { DocumentAgentProvider } from "./document-agent-context";
 import {
   DocumentSidePanel,
@@ -174,6 +175,13 @@ function LinkedinPanel({ documentId }: { documentId: string }) {
     <DocumentSidePanel
       version={selected}
       preview={false}
+      agent={
+        <DocumentAgent
+          documentId={documentId}
+          kind="linkedin"
+          version={selected}
+        />
+      }
       versions={
         <VersionsBlock
           document={document.data}

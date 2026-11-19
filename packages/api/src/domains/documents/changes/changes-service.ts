@@ -42,10 +42,7 @@ export class ChangesService {
         createdAt: row.createdAt,
         ...change,
         // Never hidden: a change whose lines are gone stays listed.
-        stale:
-          !content ||
-          content.kind === "linkedin" ||
-          !changeApplies(content, change),
+        stale: !content || !changeApplies(content, change),
       };
     });
   }
@@ -79,9 +76,6 @@ export class ChangesService {
       }
       const cipher = await getUserCipher(tx, input.userId);
       let content = decryptDocument(cipher, latest);
-      if (content.kind === "linkedin") {
-        throw new TRPCError({ code: "BAD_REQUEST" });
-      }
       const wanted = input.documentChangeIds
         ? new Set(input.documentChangeIds)
         : null;

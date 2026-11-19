@@ -53,7 +53,7 @@ export function DocumentAgent({
   onUseAnswer,
 }: {
   documentId: string;
-  kind: "resume" | "cover_letter";
+  kind: "resume" | "cover_letter" | "linkedin";
   // The version the user is on: each message says. Null while the letter
   // is still being prepared: there is nothing to change yet.
   version: VersionView | null;
@@ -115,7 +115,7 @@ function Conversation({
   focusOnMount,
 }: {
   documentId: string;
-  kind: "resume" | "cover_letter";
+  kind: "resume" | "cover_letter" | "linkedin";
   versionId: string | null;
   onUseAnswer?: (text: string) => void;
   chatId: string;
@@ -394,9 +394,13 @@ function Conversation({
                 ? t.formatMessage({
                     defaultMessage: "Ask about your resume",
                   })
-                : t.formatMessage({
-                    defaultMessage: "Ask about your cover letter",
-                  })
+                : kind === "linkedin"
+                  ? t.formatMessage({
+                      defaultMessage: "Ask about your LinkedIn",
+                    })
+                  : t.formatMessage({
+                      defaultMessage: "Ask about your cover letter",
+                    })
         }
         cards={
           <>
@@ -427,7 +431,7 @@ function Introduction({
   kind,
   preparing,
 }: {
-  kind: "resume" | "cover_letter";
+  kind: "resume" | "cover_letter" | "linkedin";
   preparing: boolean;
 }) {
   const t = useTranslation();
@@ -453,7 +457,9 @@ function Introduction({
       <h2 className="font-display text-lg font-semibold tracking-tight">
         {kind === "resume"
           ? t.formatMessage({ defaultMessage: "Your resume's agent" })
-          : t.formatMessage({ defaultMessage: "Your cover letter's agent" })}
+          : kind === "linkedin"
+            ? t.formatMessage({ defaultMessage: "Your LinkedIn's agent" })
+            : t.formatMessage({ defaultMessage: "Your cover letter's agent" })}
       </h2>
       <p className="text-muted-foreground text-sm">
         {t.formatMessage({

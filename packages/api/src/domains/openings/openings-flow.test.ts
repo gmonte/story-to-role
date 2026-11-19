@@ -692,6 +692,37 @@ describe("openings and fit check", () => {
     expect((await ctx.detail(openingId)).fitCheck?.outdated).toBe(false);
   });
 
+  it("keeps an optional link per opening, set and cleared with the title", async () => {
+    const ctx = await setup();
+    const openingId = await ctx.add();
+    await ctx.openings.rename({
+      userId: ctx.user.id,
+      openingId,
+      title: "Platform Engineer",
+      sourceUrl: "https://jobs.example.com/42",
+    });
+    expect(await ctx.detail(openingId)).toMatchObject({
+      title: "Platform Engineer",
+      sourceUrl: "https://jobs.example.com/42",
+    });
+    // Renaming without it leaves the link; null removes it.
+    await ctx.openings.rename({
+      userId: ctx.user.id,
+      openingId,
+      title: "Staff Platform Engineer",
+    });
+    expect((await ctx.detail(openingId)).sourceUrl).toBe(
+      "https://jobs.example.com/42"
+    );
+    await ctx.openings.rename({
+      userId: ctx.user.id,
+      openingId,
+      title: "Staff Platform Engineer",
+      sourceUrl: null,
+    });
+    expect((await ctx.detail(openingId)).sourceUrl).toBeNull();
+  });
+
   it("keeps the opening and the gap answers when the check runs again", async () => {
     const ctx = await setup();
     const openingId = await ctx.add();

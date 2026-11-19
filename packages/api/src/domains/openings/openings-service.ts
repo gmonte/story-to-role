@@ -476,6 +476,7 @@ export class OpeningsService {
     openingId: string;
     title: string;
     company?: string;
+    sourceUrl?: string | null;
   }) {
     const profile = await this.requireProfile(input.userId);
     await this.db.transaction(async (tx) => {
@@ -490,6 +491,13 @@ export class OpeningsService {
         encryptedTitle: cipher.encrypt(input.title.trim()),
         ...(input.company?.trim()
           ? { encryptedCompany: cipher.encrypt(input.company.trim()) }
+          : {}),
+        ...(input.sourceUrl !== undefined
+          ? {
+              encryptedSourceUrl: input.sourceUrl
+                ? cipher.encrypt(input.sourceUrl)
+                : null,
+            }
           : {}),
       });
     });

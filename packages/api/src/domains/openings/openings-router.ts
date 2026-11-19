@@ -205,7 +205,7 @@ export const openingsRouter = createTRPCRouter({
         "openings",
         "PUT",
         "/openings/by-id/{openingId}",
-        "Edits an opening's title and company"
+        "Edits an opening's title, company and link"
       )
     )
     .input(
@@ -213,6 +213,12 @@ export const openingsRouter = createTRPCRouter({
         openingId: z.uuid(),
         title: z.string().trim().min(1).max(200),
         company: z.string().trim().max(200).optional(),
+        // The posting's address; null removes it, absent leaves it.
+        sourceUrl: z
+          .url({ protocol: /^https?$/ })
+          .max(2000)
+          .nullable()
+          .optional(),
       })
     )
     .output(okSchema)

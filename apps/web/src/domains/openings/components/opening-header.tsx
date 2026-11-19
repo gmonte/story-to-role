@@ -6,11 +6,11 @@ import { useMutation } from "@tanstack/react-query";
 import {
   Ban,
   Briefcase,
+  ExternalLink,
   Mail,
   Pencil,
   Download,
   Ellipsis,
-  ExternalLink,
   FileText,
   Loader2,
   TriangleAlert,
@@ -224,6 +224,17 @@ export function OpeningHeader({
           <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
             {opening.company && (
               <p className="text-muted-foreground text-sm">{opening.company}</p>
+            )}
+            {opening.sourceUrl && (
+              <a
+                href={opening.sourceUrl}
+                target="_blank"
+                rel="noreferrer noopener"
+                className="text-muted-foreground hover:text-foreground inline-flex items-center gap-1 text-sm underline-offset-4 hover:underline"
+              >
+                <ExternalLink className="size-3.5" />
+                {t.formatMessage({ defaultMessage: "Posting" })}
+              </a>
             )}
             {opening.fitCheck && (
               <Tooltip>
@@ -533,6 +544,7 @@ function OpeningTitle({
   const [editing, setEditing] = useState(false);
   const [title, setTitle] = useState("");
   const [company, setCompany] = useState("");
+  const [link, setLink] = useState("");
   const rename = useMutation(
     trpc.openings.rename.mutationOptions({
       onSuccess: async () => {
@@ -547,11 +559,17 @@ function OpeningTitle({
   function start() {
     setTitle(opening.title ?? "");
     setCompany(opening.company ?? "");
+    setLink(opening.sourceUrl ?? "");
     setEditing(true);
   }
   function save() {
     if (!title.trim()) return;
-    rename.mutate({ openingId, title: title.trim(), company: company.trim() });
+    rename.mutate({
+      openingId,
+      title: title.trim(),
+      company: company.trim(),
+      sourceUrl: link.trim() || null,
+    });
   }
 
   if (!editing) {
@@ -601,6 +619,19 @@ function OpeningTitle({
           placeholder={t.formatMessage({ defaultMessage: "Company" })}
           aria-label={t.formatMessage({ defaultMessage: "Company" })}
           className="h-8 max-w-xs text-sm"
+        />
+        <Input
+          type="url"
+          value={link}
+          maxLength={2000}
+          onChange={(event) => setLink(event.target.value)}
+          placeholder={t.formatMessage({
+            defaultMessage: "Link to the posting (optional)",
+          })}
+          aria-label={t.formatMessage({
+            defaultMessage: "Link to the posting",
+          })}
+          className="h-8 max-w-sm text-sm"
         />
         <Button
           size="sm"

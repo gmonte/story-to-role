@@ -148,6 +148,13 @@
       "when": 1795041437519,
       "tag": "0020_add_fit_check_item_cites_answer",
       "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1795057901329,
+      "tag": "0021_opening_description_edited_at",
+      "breakpoints": true
     }
   ]
 }

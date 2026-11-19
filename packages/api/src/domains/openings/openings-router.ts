@@ -220,6 +220,30 @@ export const openingsRouter = createTRPCRouter({
       return ok;
     }),
 
+  updateDescription: userProcedure
+    .meta(
+      openApiMeta(
+        "openings",
+        "PUT",
+        "/openings/by-id/{openingId}/description",
+        "Edits an opening's description; its fit check then reads as outdated"
+      )
+    )
+    .input(
+      z.object({
+        openingId: z.uuid(),
+        description: z.string().max(openingLimits.maxDescriptionCharacters),
+      })
+    )
+    .output(okSchema)
+    .mutation(async ({ ctx, input }) => {
+      await new OpeningsService(db).updateDescription({
+        userId: ctx.userId,
+        ...input,
+      });
+      return ok;
+    }),
+
   answerGapQuestion: userProcedure
     .meta(
       openApiMeta(

@@ -595,6 +595,71 @@ describe("openings and fit check", () => {
     expect((await ctx.detail(openingId)).fitCheck?.outdated).toBe(true);
   });
 
+  it("edits the description and reads the fit check as outdated", async () => {
+    const ctx = await setup();
+    const openingId = await ctx.add();
+    await ctx.analyze(openingId, fitScript(allMet, extraction));
+    expect((await ctx.detail(openingId)).fitCheck?.outdated).toBe(false);
+
+    await ctx.openings.updateDescription({
+      userId: ctx.user.id,
+      openingId,
+      description: "  # Platform Engineer\n\nNew text.  ",
+    });
+    const after = await ctx.detail(openingId);
+    expect(after.description).toBe("# Platform Engineer\n\nNew text.");
+    expect(after.fitCheck?.outdated).toBe(true);
+
+    const grace = await createTestUser("grace-edit@example.com");
+    await new CareerService(ctx.db).getOrCreateProfile({
+      userId: grace.id,
+      defaultLanguage: "en-US",
+    });
+    await expect(
+      ctx.openings.updateDescription({
+        userId: grace.id,
+        openingId,
+        description: "x",
+      })
+    ).rejects.toMatchObject({ code: "NOT_FOUND" });
+  });
+
+  it("reads the fit check as outdated after a gap answer, until it runs again", async () => {
+    const ctx = await setup();
+    const openingId = await ctx.add();
+    const allGaps = fitScript((terms) => ({
+      items: terms.map((term) => ({
+        term_id: term.termId,
+        verdict: "gap",
+        passage_ids: [],
+        explanation: "No",
+      })),
+    }));
+    await ctx.analyze(openingId, {
+      object: (request: { system: string }) =>
+        request.system.startsWith("Write")
+          ? {
+              questions: [
+                ...request.system.matchAll(/- ([0-9a-f-]{36}): (.*)/g),
+              ].map((m) => ({ term_id: m[1], question: `About ${m[2]}?` })),
+            }
+          : allGaps.object(request),
+    });
+    const check = (await ctx.detail(openingId)).fitCheck!;
+    expect(check.outdated).toBe(false);
+
+    await ctx.openings.answerGapQuestion({
+      userId: ctx.user.id,
+      fitCheckItemId: check.items.find((item) => item.gapQuestion)!.id,
+      lacks: true,
+    });
+    expect((await ctx.detail(openingId)).fitCheck?.outdated).toBe(true);
+
+    await ctx.openings.reanalyze({ userId: ctx.user.id, openingId });
+    await ctx.analyze(openingId, fitScript(allMet));
+    expect((await ctx.detail(openingId)).fitCheck?.outdated).toBe(false);
+  });
+
   it("keeps the opening and the gap answers when the check runs again", async () => {
     const ctx = await setup();
     const openingId = await ctx.add();

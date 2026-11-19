@@ -45,6 +45,9 @@ export const openingsTable = createTable(
     // for an unsolicited opening, the intended role or area.
     encryptedTitle: d.text(),
     encryptedDescription: d.text(),
+    // When the user last edited the description: a fit check made before
+    // it read other text, so it is outdated.
+    descriptionEditedAt: d.timestamp({ withTimezone: true }),
     encryptedNotes: d.text(),
     encryptedSourceUrl: d.text(),
     // Why it was refused (not a job posting, unreadable link…), no content.

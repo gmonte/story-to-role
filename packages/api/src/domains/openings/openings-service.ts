@@ -254,11 +254,20 @@ export class OpeningsService {
               })),
             };
           })()),
+          // An answer saved after the check: its status and totals read
+          // the opening before it.
           outdated:
-            !!profileDocument?.publishedVersionId &&
-            (fitCheck.profileVersionId !== profileDocument.publishedVersionId ||
-              fitCheck.preferencesVersionId !==
-                (preferencesDocument?.publishedVersionId ?? null)),
+            checkItems.some(
+              (item) =>
+                !!item.answeredAt && item.answeredAt > fitCheck.createdAt
+            ) ||
+            (!!row.descriptionEditedAt &&
+              row.descriptionEditedAt > fitCheck.createdAt) ||
+            (!!profileDocument?.publishedVersionId &&
+              (fitCheck.profileVersionId !==
+                profileDocument.publishedVersionId ||
+                fitCheck.preferencesVersionId !==
+                  (preferencesDocument?.publishedVersionId ?? null))),
         };
       }
 
@@ -423,6 +432,29 @@ export class OpeningsService {
       await openings.updateOpening(row.id, {
         status: input.closed ? "closed" : "analyzed",
         closedAt: input.closed ? new Date() : null,
+      });
+    });
+  }
+
+  /** The description is the user's to edit; nothing runs again by itself. */
+  async updateDescription(input: {
+    userId: string;
+    openingId: string;
+    description: string;
+  }) {
+    const profile = await this.requireProfile(input.userId);
+    await this.db.transaction(async (tx) => {
+      const openings = new OpeningsRepository(tx);
+      const row = await openings.findOpening({
+        profileId: profile.id,
+        openingId: input.openingId,
+      });
+      if (!row) throw notFound();
+      const description = input.description.trim();
+      const cipher = await getUserCipher(tx, input.userId);
+      await openings.updateOpening(row.id, {
+        encryptedDescription: description ? cipher.encrypt(description) : null,
+        descriptionEditedAt: new Date(),
       });
     });
   }

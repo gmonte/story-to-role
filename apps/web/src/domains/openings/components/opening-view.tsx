@@ -28,6 +28,7 @@ import { AiAtWork } from "~/domains/workspace/components/ai-at-work";
 
 import { useOpeningLabels } from "../hooks/use-opening-labels";
 import type { OpeningView as Page } from "../utils/opening-journey";
+import { DescriptionEditor } from "./description-editor";
 import { FitColumn, pendingGaps } from "./fit-check-panel";
 import type { useOpeningJourney } from "./opening-header";
 
@@ -404,17 +405,20 @@ function DescriptionColumn({ opening }: { opening: OpeningDetail }) {
         </div>
       )}
 
-      {(opening.description ?? opening.notes) && (
+      {opening.description === null && opening.notes ? (
         <section className="flex flex-col gap-2">
           <h2 className="font-medium">
-            {opening.description
-              ? t.formatMessage({ defaultMessage: "Description" })
-              : t.formatMessage({ defaultMessage: "Notes" })}
+            {t.formatMessage({ defaultMessage: "Notes" })}
           </h2>
           <p className="text-muted-foreground text-sm whitespace-pre-wrap">
-            {opening.description ?? opening.notes}
+            {opening.notes}
           </p>
         </section>
+      ) : (
+        <DescriptionEditor
+          openingId={opening.id}
+          initial={opening.description ?? ""}
+        />
       )}
 
       {opening.sourceUrl && (

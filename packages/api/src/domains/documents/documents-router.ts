@@ -428,6 +428,43 @@ export const documentsRouter = createTRPCRouter({
       })
     ),
 
+  checkAgainstProfile: userProcedure
+    .use(rateLimited("pdfRender"))
+    .meta(
+      openApiMeta(
+        "documents",
+        "POST",
+        "/document-versions/by-id/{versionId}/profile-check",
+        "Checks the lines the profile doesn't back against the profile published now, tracing the ones it backs"
+      )
+    )
+    .input(
+      z.object({
+        versionId: z.uuid(),
+        lineIds: z.array(z.string()).max(200).optional(),
+      })
+    )
+    .output(
+      z.object({
+        snapshotId: z.uuid().nullable(),
+        profileVersionNumber: z.number().int(),
+        lines: z.array(
+          z.object({
+            lineId: z.string(),
+            backed: z.boolean(),
+            missing: z.string(),
+            figures: z.array(z.string()),
+          })
+        ),
+      })
+    )
+    .mutation(({ ctx, input }) =>
+      new DocumentsService(db).checkAgainstProfile({
+        userId: ctx.userId,
+        ...input,
+      })
+    ),
+
   requestPdf: userProcedure
     .use(rateLimited("pdfRender"))
     .meta(

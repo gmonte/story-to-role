@@ -1,8 +1,7 @@
 import { TRPCError } from "@trpc/server";
 
-import { createAiClient, type AiClient } from "@repo/api/domains/ai/ai-client";
-import { resolveAiFunding } from "@repo/api/domains/ai/ai-funding";
-import { decideFunding } from "@repo/api/domains/credits/credit-funding";
+import type { AiClient } from "@repo/api/domains/ai/ai-client";
+import { smallCallAi } from "@repo/api/domains/ai/small-call-ai";
 import { CareerRepository } from "@repo/api/domains/career/career-repository";
 import {
   getUserCipher,
@@ -690,27 +689,6 @@ export class OpeningsService {
     });
     return { profileSuggestionIds: id ? [id] : [] };
   }
-}
-
-/**
- * An AI client for a small call made outside a task, with no credit spent
- * (the cap is zero: the user's own key on a paid plan, else StoryToRole
- * pays); its usage is recorded against the user with no task.
- */
-async function smallCallAi(db: DbClient, userId: string, cipher: UserCipher) {
-  const funding = await decideFunding(db, {
-    userId,
-    cap: 0,
-    scope: "any",
-    now: new Date(),
-  });
-  const { providerPackage } = await resolveAiFunding({
-    db,
-    userId,
-    cipher,
-    funding,
-  });
-  return createAiClient({ db, userId, funding, providerPackage });
 }
 
 /** The opening's application in the tracker, if it has one. */

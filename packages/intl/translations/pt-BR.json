@@ -1019,6 +1019,14 @@
   "zyRm34": "Marcar como enviada",
   "zz6ObK": "Restaurar",
   "BEGudn": "Feedback do avaliador",
-  "MNoXxK": "Conversar sobre isto",
-  "mdG51D": "Conversar sobre esta avaliação"
+  "mdG51D": "Conversar sobre esta avaliação",
+  "8zXS67": "Ainda não está no seu perfil: {figures} não está marcado como medido lá.",
+  "DzAe3I": "Verifica de novo, no perfil publicado agora, se ele sustenta as linhas que você escreveu ou editou",
+  "FaiFs+": "Nenhuma linha precisava de verificação.",
+  "dHBL/1": "Ainda não está no seu perfil.",
+  "fj3+fe": "Verificar no meu perfil",
+  "mq/tU2": "O documento mudou durante a verificação: tente de novo.",
+  "qzDvUB": "Ainda não está no seu perfil: {missing}",
+  "wJ96X6": "A verificação no seu perfil falhou.",
+  "xLwdnI": "Verificado na versão {number} do perfil: {backed, plural, =0 {nenhuma linha é sustentada} one {# linha é sustentada} other {# linhas são sustentadas}} por ele."
 }

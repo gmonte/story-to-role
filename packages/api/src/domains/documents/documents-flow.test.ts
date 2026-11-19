@@ -314,7 +314,30 @@ async function setup({
     );
   }
 
-  const documents = new DocumentsService(db, tasks);
+  // The small AI call that matches hand-written lines to the profile:
+  // scripted per test, and failing (every line stays unbacked) by default.
+  const matcher: {
+    script: (request: { system: string; messages: unknown }) => unknown;
+    calls: Array<{ system: string; messages: unknown }>;
+  } = {
+    script: () => {
+      throw new Error("provider down");
+    },
+    calls: [],
+  };
+  const documents = new DocumentsService(db, tasks, undefined, async () =>
+    createAiClient({
+      db,
+      userId: user.id,
+      funding: "credits",
+      providerPackage: fakeProviderPackage({
+        object: (request) => {
+          matcher.calls.push(request as never);
+          return matcher.script(request as never);
+        },
+      }).providerPackage,
+    })
+  );
 
   // `sourceId` backs the summary and skills: a kept point's id, or by
   // default the profile's measured result.
@@ -423,6 +446,7 @@ async function setup({
     cipher,
     trigger,
     documents,
+    matcher,
     request,
     draft,
     generate,
@@ -1449,6 +1473,148 @@ describe("resume generation and snapshots", () => {
         openingId: ctx.opening.id,
       })
     ).rejects.toMatchObject({ code: "NOT_FOUND" });
+  });
+
+  it("checks hand-written lines against the latest published profile: backed ones get their trace, the others keep the finding", async () => {
+    const ctx = await setup();
+    await ctx.generate("quick", {
+      drafts: [
+        ctx.draft([
+          {
+            text: "Led a team of 5 engineers.",
+            evidence_ids: [ctx.evidence[1].id],
+          },
+        ]),
+      ],
+      ratings: [9],
+    });
+    const userId = ctx.user.id;
+    const view = async () =>
+      (await ctx.documents.forOpening({ userId, openingId: ctx.opening.id }))
+        .documents[0].versions[0];
+    const clean = await view();
+    const entry = experienceOf(clean.content);
+    const typed = {
+      mentor: "Mentored two interns through their first year.",
+      inflated: "Mentored interns and cut onboarding time by 50%.",
+      rocket: "Built a rocket for the company.",
+    };
+    await ctx.documents.saveEdit({
+      userId,
+      versionId: clean.id,
+      baseSnapshotId: clean.snapshot.id,
+      content: {
+        ...resumeOf(clean.content),
+        sections: resumeOf(clean.content).sections.map((section) =>
+          section.kind === "experience"
+            ? {
+                ...section,
+                entries: [
+                  {
+                    ...entry,
+                    lines: [
+                      ...entry.lines,
+                      ...Object.entries(typed).map(([id, text]) => ({
+                        id,
+                        text,
+                        origin: { kind: "manual" as const },
+                      })),
+                    ],
+                  },
+                ],
+              }
+            : section
+        ),
+      },
+    });
+    const unbacked = async () =>
+      (await view()).coverage?.findings
+        .filter((finding) => finding.code === "notInProfile")
+        .map((finding) => finding.lineId);
+    expect(await unbacked()).toEqual(["mentor", "inflated", "rocket"]);
+
+    // The profile publishes the fact in other words; the document still
+    // reads version 1, and the matcher reads version 2.
+    await ctx.publishProfile(
+      profileMarkdown({
+        results: ["Mentored interns during their first year at the company."],
+      })
+    );
+    const backing = ctx.lineOf(
+      "Mentored interns during their first year at the company.",
+      await ctx.readCareer()
+    );
+    ctx.matcher.script = () => ({
+      lines: [
+        { lineId: "mentor", evidenceIds: [backing.id], missing: "" },
+        // The model says the profile backs it, but 50% isn't in the profile.
+        { lineId: "inflated", evidenceIds: [backing.id], missing: "" },
+        {
+          lineId: "rocket",
+          evidenceIds: [],
+          missing: "no work on rockets",
+        },
+      ],
+    });
+    const result = await ctx.documents.checkAgainstProfile({
+      userId,
+      versionId: clean.id,
+    });
+    expect(result.profileVersionNumber).toBe(2);
+    expect(result.lines).toEqual([
+      { lineId: "mentor", backed: true, missing: "", figures: [] },
+      { lineId: "inflated", backed: false, missing: "", figures: ["50%"] },
+      {
+        lineId: "rocket",
+        backed: false,
+        missing: "no work on rockets",
+        figures: [],
+      },
+    ]);
+    // One call, with the newer profile's lines.
+    expect(ctx.matcher.calls).toHaveLength(1);
+    expect(ctx.matcher.calls[0].system).toContain(backing.id);
+
+    const checked = await view();
+    expect(checked.profile).toEqual({ versionNumber: 2, newer: null });
+    expect(checked.snapshot.id).toBe(result.snapshotId);
+    expect(await unbacked()).toEqual(["inflated", "rocket"]);
+    expect(
+      experienceOf(checked.content).lines.find((row) => row.id === "mentor")
+        ?.origin
+    ).toEqual({ kind: "evidence", evidenceIds: [backing.id] });
+    expect(
+      experienceOf(checked.content).lines.find((row) => row.id === "rocket")
+        ?.origin
+    ).toEqual({ kind: "manual" });
+
+    // One line only: the call carries just that line, and nothing changes
+    // when the profile still doesn't back it.
+    ctx.matcher.script = () => ({
+      lines: [{ lineId: "rocket", evidenceIds: [], missing: "still none" }],
+    });
+    const again = await ctx.documents.checkAgainstProfile({
+      userId,
+      versionId: clean.id,
+      lineIds: ["rocket"],
+    });
+    expect(again.snapshotId).toBeNull();
+    expect(again.lines).toHaveLength(1);
+    expect(JSON.stringify(ctx.matcher.calls[1].messages)).not.toContain(
+      "inflated"
+    );
+
+    // A failed call leaves every line as it was.
+    ctx.matcher.script = () => {
+      throw new Error("provider down");
+    };
+    const failed = await ctx.documents.checkAgainstProfile({
+      userId,
+      versionId: clean.id,
+    });
+    expect(failed.snapshotId).toBeNull();
+    expect(failed.lines.every((line) => !line.backed)).toBe(true);
+    expect(await unbacked()).toEqual(["inflated", "rocket"]);
   });
 
   it("points out a typed line the profile doesn't back; Add to the profile proposes it, and Use version N drops it", async () => {

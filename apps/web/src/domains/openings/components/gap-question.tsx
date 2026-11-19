@@ -50,7 +50,11 @@ export function GapQuestion({
   const refresh = useRefreshOpenings();
   const [draft, setDraft] = useState(answer ?? "");
   // “I have it” asks where; “I don't have it” asks nothing more.
-  const [mode, setMode] = useState<"have" | "lack">(lacks ? "lack" : "have");
+  // Nothing chosen yet: the form opens once “I have it” or “I don't have
+  // it” is picked (a declared gap goes straight to telling what you did).
+  const [mode, setMode] = useState<"have" | "lack" | null>(
+    lacks ? "lack" : answer || question === null ? "have" : null
+  );
   // The user changed their mind after confirming they lack it.
   const [reopened, setReopened] = useState(false);
   // A checkbox wrapped in its label toggled twice per click (the label
@@ -142,18 +146,7 @@ export function GapQuestion({
               })}
             </p>
           )}
-          <Textarea
-            rows={2}
-            value={draft}
-            onChange={(event) => setDraft(event.target.value)}
-            placeholder={
-              mode === "have"
-                ? t.formatMessage({ defaultMessage: "Tell us what you did" })
-                : t.formatMessage({
-                    defaultMessage: "Optional: say it in your own words",
-                  })
-            }
-          />
+
           <div className={cn("flex gap-2", question === null && "hidden")}>
             <Button
               size="sm"
@@ -170,6 +163,20 @@ export function GapQuestion({
               {t.formatMessage({ defaultMessage: "I don't have it" })}
             </Button>
           </div>
+          {mode !== null && (
+            <Textarea
+              rows={2}
+              value={draft}
+              onChange={(event) => setDraft(event.target.value)}
+              placeholder={
+                mode === "have"
+                  ? t.formatMessage({ defaultMessage: "Tell us what you did" })
+                  : t.formatMessage({
+                      defaultMessage: "Optional: say it in your own words",
+                    })
+              }
+            />
+          )}
           {mode === "have" ? (
             <div className="grid gap-2 rounded-md border p-2.5">
               <Label>
@@ -267,7 +274,7 @@ export function GapQuestion({
                 </p>
               )}
             </div>
-          ) : (
+          ) : mode === "lack" ? (
             <div className="grid gap-1.5 rounded-md border p-2.5">
               <p className="text-muted-foreground text-xs">
                 {t.formatMessage({
@@ -290,7 +297,7 @@ export function GapQuestion({
                 {t.formatMessage({ defaultMessage: "Confirm I don't have it" })}
               </Button>
             </div>
-          )}
+          ) : null}
         </>
       )}
     </div>

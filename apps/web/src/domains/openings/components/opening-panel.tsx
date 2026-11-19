@@ -1,7 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
+import { PanelRight } from "lucide-react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
 import type { OpeningDetail } from "@repo/api/domains/openings/schemas/opening-view";
@@ -14,14 +15,7 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@repo/web/components/ui/sheet";
-import {
-  Tabs,
-  TabsContent,
-  TabsList,
-  TabsTrigger,
-} from "@repo/web/components/ui/tabs";
 
-import { ApplicationTracker } from "~/domains/applications/components/application-tracker";
 import { DocumentAgent } from "~/domains/documents/components/document-agent";
 import { DocumentAgentProvider } from "~/domains/documents/components/document-agent-context";
 import {
@@ -35,96 +29,171 @@ import { GenerateLetterDialog } from "~/domains/documents/components/generate-le
 import { GenerateResumeDialog } from "~/domains/documents/components/generate-resume-dialog";
 import { useSelectedVersion } from "~/domains/documents/hooks/use-selected-version";
 import { WorkspaceBody } from "~/domains/workspace/components/workspace-body";
-import { useDesktop } from "~/domains/workspace/hooks/use-desktop";
+import { useDesktop, useWide } from "~/domains/workspace/hooks/use-desktop";
 
-import { useOpening } from "../hooks/use-opening";
+import { useOpening, useRefreshOpenings } from "../hooks/use-opening";
 import {
   availableViews,
-  type OpeningView as Step,
+  type OpeningView as Page,
   resolveView,
 } from "../utils/opening-journey";
-import { FitSummary, pendingGaps } from "./fit-check-panel";
+import { pendingGaps } from "./fit-check-panel";
 import { OpeningHeader, useOpeningJourney } from "./opening-header";
-import { OpeningView } from "./opening-view";
+import {
+  ApplicationColumn,
+  DocumentPage,
+  OpeningPageBody,
+  type OpeningLayout,
+} from "./opening-view";
 
 /**
- * An opening's screen (workspace spec, "The opening page"): one header
- * with the journey's steps, the active step in the middle and, on the
- * right, a column that keeps its place in every step — the fit check and
- * the application as tabs, or, with a document open, that document's
- * side panel above them. Where the column has no room it opens as a
- * sheet.
+ * An opening's pages (workspace spec, "The opening page"): the opening
+ * itself on one screen with three columns, and the resume and the cover
+ * letter as full-screen pages of their own, all under one header with the
+ * switch between them.
  */
 export function OpeningBody({ openingId }: { openingId: string }) {
-  const t = useTranslation();
   const opening = useOpening(openingId);
+  if (!opening.data) return null;
+  return <OpeningScreen openingId={openingId} opening={opening.data} />;
+}
+
+function OpeningScreen({
+  openingId,
+  opening,
+}: {
+  openingId: string;
+  opening: OpeningDetail;
+}) {
+  const t = useTranslation();
+  const refresh = useRefreshOpenings();
   const searchParams = useSearchParams();
   const router = useRouter();
   const pathname = usePathname();
   const desktop = useDesktop();
-  const [panelOpen, setPanelOpen] = useState(false);
-  if (!opening.data) return null;
-  const data = opening.data;
+  const wide = useWide();
+  const journey = useOpeningJourney(openingId, opening);
+  const [sheetOpen, setSheetOpen] = useState(false);
   const view = resolveView(
     searchParams.get("view"),
-    availableViews({
-      status: data.status,
-      hasApplication: !!data.applicationId,
-    })
+    availableViews({ status: opening.status })
   );
-  const setView = (next: Step) => {
+  const setView = (next: Page) => {
     const params = new URLSearchParams(searchParams);
     params.set("view", next);
     router.replace(`${pathname}?${params.toString()}`, { scroll: false });
-    setPanelOpen(false);
+    setSheetOpen(false);
   };
-  const panel = (
-    <OpeningPanel
+
+  // The sidebar's list learns the title once the analysis ends.
+  const status = opening.status;
+  useEffect(() => {
+    if (status !== "processing") void refresh();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [status]);
+
+  // A generation just started opens its page: the progress is the page.
+  const wasGenerating = useRef({ resume: false, letter: false });
+  useEffect(() => {
+    const previous = wasGenerating.current;
+    if (journey.resumeGenerating && !previous.resume) setView("resume");
+    if (journey.letterGenerating && !previous.letter) setView("letter");
+    wasGenerating.current = {
+      resume: journey.resumeGenerating,
+      letter: journey.letterGenerating,
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [journey.resumeGenerating, journey.letterGenerating]);
+
+  const layout: OpeningLayout = wide ? "three" : desktop ? "two" : "stack";
+  const worked = opening.status === "analyzed" || opening.status === "closed";
+  // The application folds behind the header's button between `lg` and
+  // `xl`; under `lg` it is a block of the page.
+  const applicationFolded =
+    view === "opening" &&
+    layout === "two" &&
+    (worked || !!opening.applicationId);
+  const hasDocumentPanel =
+    worked &&
+    ((view === "resume" &&
+      !journey.resumeGenerating &&
+      (journey.resume?.versions.length ?? 0) > 0) ||
+      (view === "letter" && (journey.letter?.versions.length ?? 0) > 0));
+  const documentColumn = hasDocumentPanel && (
+    <DocumentColumn
       openingId={openingId}
-      opening={data}
+      opening={opening}
       view={view}
-      setView={setView}
+      journey={journey}
     />
   );
+
+  const showApplication = () => {
+    if (applicationFolded) setSheetOpen(true);
+    else {
+      document
+        .getElementById("application-column")
+        ?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+  };
+  const sideButton = applicationFolded
+    ? {
+        label: t.formatMessage({ defaultMessage: "Application" }),
+        icon: <PanelRight />,
+        onClick: () => setSheetOpen(true),
+      }
+    : view !== "opening" && !desktop && hasDocumentPanel
+      ? {
+          label: t.formatMessage({ defaultMessage: "Agent and versions" }),
+          icon: <PanelRight />,
+          onClick: () => setSheetOpen(true),
+        }
+      : undefined;
 
   return (
     <DocumentAgentProvider>
       <div className="flex min-h-0 flex-1 flex-col">
         <OpeningHeader
           openingId={openingId}
-          opening={data}
+          opening={opening}
           view={view}
           setView={setView}
-          onOpenPanel={() => setPanelOpen(true)}
+          sideButton={sideButton}
+          onShowApplication={showApplication}
         />
-        <WorkspaceBody
-          layoutId="opening"
-          chat={
-            <OpeningView
-              openingId={openingId}
-              opening={data}
-              view={view}
-              setView={setView}
-            />
-          }
-          // One mount only: the column, or the sheet on a narrow screen.
-          panel={desktop ? panel : undefined}
-        />
-        {!desktop && (
-          <Sheet open={panelOpen} onOpenChange={setPanelOpen}>
+        {view === "opening" ? (
+          <OpeningPageBody
+            openingId={openingId}
+            opening={opening}
+            layout={layout}
+          />
+        ) : (
+          <WorkspaceBody
+            layoutId="opening-documents"
+            chat={
+              <DocumentPage
+                openingId={openingId}
+                opening={opening}
+                page={view}
+                journey={journey}
+              />
+            }
+            // One mount only: the column, or the sheet on a narrow screen.
+            panel={desktop ? documentColumn || undefined : undefined}
+          />
+        )}
+        {sideButton && (
+          <Sheet open={sheetOpen} onOpenChange={setSheetOpen}>
             <SheetContent className="w-[min(100vw,24rem)] overflow-y-auto p-4 pt-10">
               <SheetHeader className="sr-only">
-                <SheetTitle>
-                  {t.formatMessage({ defaultMessage: "Fit and application" })}
-                </SheetTitle>
-                <SheetDescription>
-                  {t.formatMessage({
-                    defaultMessage:
-                      "The fit check and the application of this opening.",
-                  })}
-                </SheetDescription>
+                <SheetTitle>{sideButton.label}</SheetTitle>
+                <SheetDescription>{sideButton.label}</SheetDescription>
               </SheetHeader>
-              {panel}
+              {applicationFolded ? (
+                <ApplicationColumn openingId={openingId} />
+              ) : (
+                documentColumn
+              )}
             </SheetContent>
           </Sheet>
         )}
@@ -134,158 +203,110 @@ export function OpeningBody({ openingId }: { openingId: string }) {
 }
 
 /**
- * The right column: Fit and Application, in that order, in every step
- * (the Agent tab joins them with the opening agent); in a document step
- * the document's own panel sits above them.
+ * The document pages' right column: the agent, the preview and the
+ * versions of the selected document (no application controls here).
  */
-function OpeningPanel({
+function DocumentColumn({
   openingId,
   opening,
   view,
-  setView,
+  journey,
 }: {
   openingId: string;
   opening: OpeningDetail;
-  view: Step;
-  setView: (view: Step) => void;
+  view: Page;
+  journey: ReturnType<typeof useOpeningJourney>;
 }) {
   const t = useTranslation();
   const rowLabel = useVersionRowLabel();
-  const journey = useOpeningJourney(openingId, opening);
   const { resume, letter } = journey;
   const resumeVersions = resume?.versions ?? [];
   const resumeSelection = useSelectedVersion(resumeVersions, "resume");
   const letterSelection = useSelectedVersion(letter?.versions ?? [], "letter");
-  const analyzed = opening.status === "analyzed";
-  // The application starts with its first document; the tab says so.
-  const [tab, setTab] = useState(
-    opening.applicationId && view === "application" ? "application" : "fit"
-  );
 
-  const fixed = (
-    <Tabs value={tab} onValueChange={setTab} className="gap-3">
-      <TabsList className="w-full">
-        <TabsTrigger value="fit" className="flex-1">
-          {t.formatMessage({ defaultMessage: "Fit" })}
-        </TabsTrigger>
-        <TabsTrigger value="application" className="flex-1">
-          {t.formatMessage({ defaultMessage: "Application" })}
-        </TabsTrigger>
-      </TabsList>
-      <TabsContent value="fit">
-        <FitSummary opening={opening} onOpen={() => setView("fit")} />
-      </TabsContent>
-      <TabsContent value="application" className="flex flex-col gap-3">
-        <ApplicationTracker openingId={openingId} />
-        {view !== "application" && opening.applicationId && (
-          <Button
-            size="sm"
-            variant="ghost"
-            className="self-start"
-            onClick={() => setView("application")}
-          >
-            {t.formatMessage({ defaultMessage: "Open the Application step" })}
-          </Button>
-        )}
-      </TabsContent>
-    </Tabs>
-  );
-
-  if (
-    analyzed &&
-    view === "resume" &&
-    resume &&
-    resumeSelection.selected &&
-    !journey.resumeGenerating
-  ) {
+  if (view === "resume" && resume && resumeSelection.selected) {
     return (
-      <div className="flex h-full flex-col gap-6">
-        <DocumentSidePanel
-          version={resumeSelection.selected}
-          agent={
-            <DocumentAgent
-              documentId={resume.id}
-              kind="resume"
-              version={resumeSelection.selected}
-            />
-          }
-          versions={
-            <DocumentsPanel
-              openingId={openingId}
-              defaultLanguage={journey.language}
-              defaultTone={opening.suggestedTone ?? "your_style"}
-              pendingGaps={pendingGaps(opening)}
-              actions={(version) => (
-                <VersionActions
-                  version={version}
-                  versions={resumeVersions}
-                  onSelect={resumeSelection.select}
-                  generateAgain={(row, trigger) => (
-                    <GenerateResumeDialog
-                      openingId={openingId}
-                      defaultLanguage={row.language}
-                      defaultTone={journey.tone}
-                      versionId={row.id}
-                      pendingGaps={pendingGaps(opening)}
-                      trigger={trigger}
-                    />
-                  )}
-                />
-              )}
-            />
-          }
-        />
-        {fixed}
-      </div>
+      <DocumentSidePanel
+        version={resumeSelection.selected}
+        agent={
+          <DocumentAgent
+            documentId={resume.id}
+            kind="resume"
+            version={resumeSelection.selected}
+          />
+        }
+        versions={
+          <DocumentsPanel
+            openingId={openingId}
+            defaultLanguage={journey.language}
+            defaultTone={opening.suggestedTone ?? "your_style"}
+            pendingGaps={pendingGaps(opening)}
+            actions={(version) => (
+              <VersionActions
+                version={version}
+                versions={resumeVersions}
+                onSelect={resumeSelection.select}
+                generateAgain={(row, trigger) => (
+                  <GenerateResumeDialog
+                    openingId={openingId}
+                    defaultLanguage={row.language}
+                    defaultTone={journey.tone}
+                    versionId={row.id}
+                    pendingGaps={pendingGaps(opening)}
+                    trigger={trigger}
+                  />
+                )}
+              />
+            )}
+          />
+        }
+      />
     );
   }
-  if (analyzed && view === "letter" && letter && letterSelection.selected) {
+  if (view === "letter" && letter && letterSelection.selected) {
     return (
-      <div className="flex h-full flex-col gap-6">
-        <DocumentSidePanel
-          version={letterSelection.selected}
-          agent={
-            <DocumentAgent
-              documentId={letter.id}
-              kind="cover_letter"
-              version={letterSelection.selected}
-            />
-          }
-          versions={
-            <VersionsBlock
-              document={letter}
-              version={letterSelection.selected}
-              select={letterSelection.select}
-              label={rowLabel("cover_letter")}
-              newVersion={
-                <GenerateLetterDialog
-                  openingId={openingId}
-                  resumeVersions={resumeVersions}
-                  defaultLanguage={journey.language}
-                  defaultTone={journey.tone}
-                  trigger={
-                    <Button size="sm" variant="ghost">
-                      {t.formatMessage({ defaultMessage: "New version" })}
-                    </Button>
-                  }
-                />
-              }
-              generateAgain={(row, trigger) => (
-                <GenerateLetterDialog
-                  openingId={openingId}
-                  resumeVersions={resumeVersions}
-                  defaultLanguage={row.language}
-                  defaultTone={journey.tone}
-                  versionId={row.id}
-                  trigger={trigger}
-                />
-              )}
-            />
-          }
-        />
-        {fixed}
-      </div>
+      <DocumentSidePanel
+        version={letterSelection.selected}
+        agent={
+          <DocumentAgent
+            documentId={letter.id}
+            kind="cover_letter"
+            version={letterSelection.selected}
+          />
+        }
+        versions={
+          <VersionsBlock
+            document={letter}
+            version={letterSelection.selected}
+            select={letterSelection.select}
+            label={rowLabel("cover_letter")}
+            newVersion={
+              <GenerateLetterDialog
+                openingId={openingId}
+                resumeVersions={resumeVersions}
+                defaultLanguage={journey.language}
+                defaultTone={journey.tone}
+                trigger={
+                  <Button size="sm" variant="ghost">
+                    {t.formatMessage({ defaultMessage: "New version" })}
+                  </Button>
+                }
+              />
+            }
+            generateAgain={(row, trigger) => (
+              <GenerateLetterDialog
+                openingId={openingId}
+                resumeVersions={resumeVersions}
+                defaultLanguage={row.language}
+                defaultTone={journey.tone}
+                versionId={row.id}
+                trigger={trigger}
+              />
+            )}
+          />
+        }
+      />
     );
   }
-  return fixed;
+  return null;
 }

@@ -37,12 +37,15 @@ export function DocumentWorkspace({
   versions,
   select,
   notices,
+  aside,
 }: {
   version: VersionView;
   versions: VersionView[];
   select: (versionId: string) => void;
   /** What the document wants said above it (a letter's outdated resume). */
   notices?: ReactNode;
+  /** More for the left column: what applies to this document's opening. */
+  aside?: ReactNode;
 }) {
   return (
     <DocumentEditorProvider key={version.id} version={version}>
@@ -50,6 +53,7 @@ export function DocumentWorkspace({
         <aside className="hidden w-60 shrink-0 space-y-6 overflow-y-auto border-r p-4 md:block">
           <DocumentIndex />
           <DocumentFindings />
+          {aside}
         </aside>
         <div className="min-w-0 flex-1 overflow-y-auto">
           <DocumentToolbar versions={versions} select={select} />

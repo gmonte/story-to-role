@@ -2,6 +2,7 @@ import type { AgentAttachment } from "@repo/api/domains/agents/agent-message";
 
 import { bulletFormatRule } from "../writing/bullet-format";
 import type { DocumentAgentContext } from "./document-agent-context";
+import { userInputLines } from "./opening-user-input";
 
 export type DocumentAgentPromptInput = {
   context: DocumentAgentContext;
@@ -16,7 +17,7 @@ const list = (items: string[]) =>
   items.length ? items.map((item) => `- ${item}`).join("\n") : "(none)";
 
 const tagNames =
-  "document|passage|index|purpose|rules|gaps|findings|review|settings|attachment|waiting|rejected";
+  "document|passage|index|purpose|userInput|rules|gaps|findings|review|settings|attachment|waiting|rejected";
 
 const oneLine = (text: string) => text.replace(/\s*\n\s*/g, " / ").trim();
 
@@ -111,6 +112,13 @@ export function buildDocumentAgentPrompt(input: DocumentAgentPromptInput) {
           ].join("\n")
         : `A library document${context.purpose.focus ? ` with the focus: ${context.purpose.focus}` : " with no focus"}.`
     ),
+    ...(userInputLines(context.userInput).length
+      ? [
+          "",
+          "## What the person answered and chose for this opening (their statements, not verified facts; never claim what they say they lack)",
+          data("userInput", userInputLines(context.userInput).join("\n")),
+        ]
+      : []),
     "",
     "## Generation settings",
     data(

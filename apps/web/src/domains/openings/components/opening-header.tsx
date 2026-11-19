@@ -1,17 +1,20 @@
 "use client";
 
+import type { ReactNode } from "react";
+
 import { useMutation } from "@tanstack/react-query";
 import {
+  ArrowLeft,
   Ban,
   Ellipsis,
   ExternalLink,
   FileText,
   Loader2,
-  PanelRight,
   Send,
   TriangleAlert,
 } from "lucide-react";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 
 import type { OpeningDetail } from "@repo/api/domains/openings/schemas/opening-view";
 import type { DocumentView } from "@repo/api/domains/documents/schemas/document-view";
@@ -88,47 +91,54 @@ export function useOpeningJourney(openingId: string, opening: OpeningDetail) {
       letterGenerating: generating(letter),
       applicationStatus: opening.applicationStatus,
     }),
-    views: availableViews({
-      status: opening.status,
-      hasApplication: !!opening.applicationId,
-    }),
+    views: availableViews({ status: opening.status }),
   };
 }
 
+/** What the header's side button opens, where there is no room beside. */
+export type SideButton = {
+  label: string;
+  icon: ReactNode;
+  onClick: () => void;
+};
+
 /**
- * The opening page's header (workspace spec, "The opening page"): the
- * title and company, the state chips, the rare actions in a menu, one
- * primary action for the state, and the journey's steps as tabs.
+ * The opening pages' header (workspace spec, "The opening page"). On the
+ * opening itself: the title and company, the state chips, the rare
+ * actions in a menu, one primary action for the state and the switch
+ * between the pages. On a document page it is slim: the way back to the
+ * opening and the same switch.
  */
 export function OpeningHeader({
   openingId,
   opening,
   view,
   setView,
-  onOpenPanel,
+  sideButton,
+  onShowApplication,
 }: {
   openingId: string;
   opening: OpeningDetail;
   view: OpeningView;
   setView: (view: OpeningView) => void;
-  /** Opens the right column where there is no room for it. */
-  onOpenPanel: () => void;
+  /** Opens the column that has no room beside the page. */
+  sideButton?: SideButton;
+  /** Brings the application into view (its column, sheet or block). */
+  onShowApplication: () => void;
 }) {
   const t = useTranslation();
   const labels = useOpeningLabels();
   const trackerLabels = useTrackerLabels();
+  const pathname = usePathname();
   const journey = useOpeningJourney(openingId, opening);
-  const pending = pendingGaps(opening);
   const processing = opening.status === "processing";
+  const slim = view !== "opening";
   const stepLabels: Record<OpeningView, string> = {
     opening: t.formatMessage({ defaultMessage: "Opening" }),
-    fit: t.formatMessage({ defaultMessage: "Fit" }),
     resume: t.formatMessage({ defaultMessage: "Resume" }),
     letter: t.formatMessage({ defaultMessage: "Cover letter" }),
-    application: t.formatMessage({ defaultMessage: "Application" }),
   };
   const stepHints: Partial<Record<OpeningView, string | number>> = {
-    fit: pending > 0 ? pending : "",
     resume: journey.resumeGenerating
       ? "…"
       : (journey.resume?.versions.length ?? ""),
@@ -136,9 +146,70 @@ export function OpeningHeader({
       ? "…"
       : (journey.letter?.versions.length ?? ""),
   };
+  const switcher = journey.views.length > 1 && (
+    <Tabs
+      value={view}
+      onValueChange={(next) => setView(next as OpeningView)}
+      className="shrink-0"
+    >
+      <TabsList>
+        {openingViews.map((step) => (
+          <TabsTrigger
+            key={step}
+            value={step}
+            disabled={!journey.views.includes(step)}
+            className="gap-1.5"
+          >
+            {stepLabels[step]}
+            {stepHints[step] !== "" && stepHints[step] !== undefined && (
+              <span className="text-muted-foreground text-[11px]">
+                {stepHints[step]}
+              </span>
+            )}
+          </TabsTrigger>
+        ))}
+      </TabsList>
+    </Tabs>
+  );
+  const sideTrigger = sideButton && (
+    <Button
+      size="sm"
+      variant="outline"
+      onClick={sideButton.onClick}
+      aria-label={sideButton.label}
+    >
+      {sideButton.icon}
+      <span className="hidden sm:inline">{sideButton.label}</span>
+    </Button>
+  );
+
+  if (slim) {
+    return (
+      <div className="bg-background/95 z-10 flex shrink-0 flex-wrap items-center justify-between gap-x-4 gap-y-2 border-b px-4 py-2 backdrop-blur">
+        <Button
+          asChild
+          variant="ghost"
+          size="sm"
+          className="-ml-2 min-w-0 justify-start"
+        >
+          <Link href={`${pathname}?view=opening`} scroll={false}>
+            <ArrowLeft />
+            <span className="truncate">
+              {[opening.company, opening.title].filter(Boolean).join(" · ") ||
+                t.formatMessage({ defaultMessage: "Opening" })}
+            </span>
+          </Link>
+        </Button>
+        <div className="flex items-center gap-2">
+          {sideTrigger}
+          {switcher}
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div className="bg-background/95 z-10 flex shrink-0 flex-col gap-2 border-b px-4 pt-3 backdrop-blur">
+    <div className="bg-background/95 z-10 flex shrink-0 flex-col gap-2 border-b px-4 py-3 backdrop-blur">
       <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-2">
         {/* On a narrow screen the actions wrap under the title. */}
         <div className="min-w-0 basis-full sm:flex-1 sm:basis-0">
@@ -224,51 +295,20 @@ export function OpeningHeader({
             )}
           </div>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          {sideTrigger}
           <PrimaryActionButton
             action={journey.action}
             openingId={openingId}
             opening={opening}
             journey={journey}
             setView={setView}
+            onShowApplication={onShowApplication}
           />
           <OpeningMenu openingId={openingId} opening={opening} />
-          <Button
-            size="icon"
-            variant="outline"
-            className="lg:hidden"
-            aria-label={t.formatMessage({
-              defaultMessage: "Fit and application",
-            })}
-            onClick={onOpenPanel}
-          >
-            <PanelRight />
-          </Button>
+          {switcher}
         </div>
       </div>
-      <Tabs
-        value={view}
-        onValueChange={(next) => setView(next as OpeningView)}
-        className="-mx-4 overflow-x-auto px-4"
-      >
-        <TabsList className="bg-transparent p-0">
-          {openingViews.map((step) => (
-            <TabsTrigger
-              key={step}
-              value={step}
-              disabled={!journey.views.includes(step)}
-              className="data-[state=active]:bg-muted gap-1.5"
-            >
-              {stepLabels[step]}
-              {stepHints[step] !== "" && stepHints[step] !== undefined && (
-                <span className="text-muted-foreground text-[11px]">
-                  {stepHints[step]}
-                </span>
-              )}
-            </TabsTrigger>
-          ))}
-        </TabsList>
-      </Tabs>
     </div>
   );
 }
@@ -280,12 +320,14 @@ function PrimaryActionButton({
   opening,
   journey,
   setView,
+  onShowApplication,
 }: {
   action: PrimaryAction | null;
   openingId: string;
   opening: OpeningDetail;
   journey: ReturnType<typeof useOpeningJourney>;
   setView: (view: OpeningView) => void;
+  onShowApplication: () => void;
 }) {
   const t = useTranslation();
   const trpc = useTRPC();
@@ -325,7 +367,18 @@ function PrimaryActionButton({
       );
     case "answer_questions":
       return (
-        <Button size="sm" onClick={() => setView("fit")}>
+        <Button
+          size="sm"
+          onClick={() => {
+            // The first question waiting, in its requirement's card.
+            const next = opening.fitCheck?.items.find(
+              (item) => item.gapQuestion && !item.gapAnswer
+            );
+            document
+              .getElementById(next ? `fit-item-${next.id}` : "fit-column")
+              ?.scrollIntoView({ behavior: "smooth", block: "center" });
+          }}
+        >
           {t.formatMessage(
             {
               defaultMessage:
@@ -376,7 +429,7 @@ function PrimaryActionButton({
       );
     case "record_reply":
       return (
-        <Button size="sm" onClick={() => setView("application")}>
+        <Button size="sm" onClick={onShowApplication}>
           {t.formatMessage({ defaultMessage: "Record what happened" })}
         </Button>
       );

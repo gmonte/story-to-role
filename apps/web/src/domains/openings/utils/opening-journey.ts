@@ -4,20 +4,18 @@ import type {
   OpeningStatus,
 } from "@repo/api/domains/openings/schemas/opening";
 
-/** The journey's steps, which are also the page's tabs (`?view=`). */
-export const openingViews = [
-  "opening",
-  "fit",
-  "resume",
-  "letter",
-  "application",
-] as const;
+/**
+ * The opening's pages (`?view=`): the opening itself (application,
+ * description and fit on one screen) and the two documents, each a
+ * full-screen page of its own.
+ */
+export const openingViews = ["opening", "resume", "letter"] as const;
 export type OpeningView = (typeof openingViews)[number];
 
 /**
- * The step the URL opens. Every step is a tab in every state, so an
- * unknown or missing value falls back to the opening itself; a step the
- * state keeps closed (nothing analyzed yet) does too.
+ * The page the URL opens. An unknown or missing value (including the
+ * old Fit and Application tabs) falls back to the opening itself, and so
+ * does a page the state keeps closed (nothing analyzed yet).
  */
 export function resolveView(
   requested: string | null,
@@ -27,17 +25,15 @@ export function resolveView(
   return view && available.includes(view) ? view : "opening";
 }
 
-/** The steps a state lets the user open. */
+/** The pages a state lets the user open. */
 export function availableViews(input: {
   status: OpeningStatus;
-  hasApplication: boolean;
 }): readonly OpeningView[] {
   switch (input.status) {
     case "analyzed":
     case "closed":
       return openingViews;
     case "external":
-      return input.hasApplication ? ["opening", "application"] : ["opening"];
     case "processing":
     case "rejected":
       return ["opening"];

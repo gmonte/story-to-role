@@ -95,8 +95,8 @@ export function GapQuestion({
   );
 
   return (
-    <div className="flex flex-col gap-2 rounded-lg border p-3">
-      <p className="text-sm">{question}</p>
+    <div className="flex flex-col gap-2 border-t pt-2">
+      <p className="text-sm font-medium">{question}</p>
       {lacks && !reopened ? (
         <div className="flex flex-col items-start gap-2">
           <p className="text-muted-foreground flex flex-wrap gap-x-1 text-xs">

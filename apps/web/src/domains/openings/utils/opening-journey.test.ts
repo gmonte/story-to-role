@@ -20,50 +20,43 @@ const analyzed: JourneyState = {
 };
 
 describe("resolveView", () => {
-  it("opens the requested step", () => {
-    expect(resolveView("fit")).toBe("fit");
-    expect(resolveView("application")).toBe("application");
+  it("opens the requested page", () => {
+    expect(resolveView("resume")).toBe("resume");
+    expect(resolveView("letter")).toBe("letter");
   });
 
   it("falls back to the opening for a missing or unknown value", () => {
     expect(resolveView(null)).toBe("opening");
     expect(resolveView("documents")).toBe("opening");
+    // The old tabs now live on the opening page.
+    expect(resolveView("fit")).toBe("opening");
+    expect(resolveView("application")).toBe("opening");
   });
 
-  it("opens the resume step even before a resume exists", () => {
-    expect(resolveView("resume")).toBe("resume");
-  });
-
-  it("falls back when the state keeps the step closed", () => {
+  it("falls back when the state keeps the page closed", () => {
     expect(
-      resolveView(
-        "resume",
-        availableViews({ status: "processing", hasApplication: false })
-      )
+      resolveView("resume", availableViews({ status: "processing" }))
     ).toBe("opening");
-    expect(
-      resolveView(
-        "application",
-        availableViews({ status: "external", hasApplication: true })
-      )
-    ).toBe("application");
+    expect(resolveView("letter", availableViews({ status: "external" }))).toBe(
+      "opening"
+    );
   });
 });
 
 describe("availableViews", () => {
-  it("opens every step of an analyzed or closed opening", () => {
-    expect(
-      availableViews({ status: "analyzed", hasApplication: false })
-    ).toHaveLength(5);
-    expect(
-      availableViews({ status: "closed", hasApplication: true })
-    ).toHaveLength(5);
+  it("opens every page of an analyzed or closed opening", () => {
+    expect(availableViews({ status: "analyzed" })).toEqual([
+      "opening",
+      "resume",
+      "letter",
+    ]);
+    expect(availableViews({ status: "closed" })).toHaveLength(3);
   });
 
-  it("keeps a rejected or processing opening on its own step", () => {
-    expect(
-      availableViews({ status: "rejected", hasApplication: false })
-    ).toEqual(["opening"]);
+  it("keeps a rejected, processing or external opening on its own page", () => {
+    for (const status of ["rejected", "processing", "external"] as const) {
+      expect(availableViews({ status })).toEqual(["opening"]);
+    }
   });
 });
 

@@ -17,3 +17,7 @@ The document belongs to the user: they may write anything in it, and the agent w
 - Credits are reserved and settled per message, priced like a profile agent message.
 - The privacy notice already covers agent messages passing through Trigger.dev for up to 7 days; it names the document agent too.
 - The profile agent and the document agent share the chat plumbing (sessions, recovery, new conversation, attachments, slash commands); only their context and tools differ.
+
+## Addendum: the opening's user input
+
+Both document agents (the resume's and the cover letter's) read what the user answered and chose for the opening, compactly and as the user's own statements, not verified facts: the gap answers (have or lack, their words, the positions and projects they tied them to) and the application instructions kept; for a cover letter also the chosen story, the motivation points kept and the company facts approved. They work independently; there is no opening-level agent (ADR 0010, withdrawn).

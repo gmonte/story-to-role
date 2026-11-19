@@ -14,6 +14,8 @@ import { CareerService } from "@repo/api/domains/career/career-service";
 import { creditCap } from "@repo/api/domains/credits/credit-pricing";
 import { creditEntriesTable } from "@repo/api/domains/credits/db/credits-tables";
 import { getUserCipher } from "@repo/api/domains/encryption/user-cipher";
+import { MotivationRepository } from "@repo/api/domains/applications/motivation/motivation-repository";
+import { ResearchRepository } from "@repo/api/domains/applications/research/research-repository";
 import { OpeningsRepository } from "@repo/api/domains/openings/openings-repository";
 import { ProfileRepository } from "@repo/api/domains/profile/profile-repository";
 import { ProfileService } from "@repo/api/domains/profile/profile-service";
@@ -414,6 +416,11 @@ async function setup({ credits }: { credits?: number } = {}) {
     say,
     reported,
     position,
+    deploy,
+    opening,
+    profileId: profile.id,
+    terms,
+    openings,
     chats: new AgentChatService(db),
   };
 }
@@ -519,6 +526,112 @@ describe("the document agent", () => {
     expect(librarySystem).not.toContain("Hooli");
     // One conversation per document: the two chats differ.
     expect(letterChat.chatId).not.toBe(libraryChat.chatId);
+  });
+
+  it("gives both document agents what the person answered and chose for the opening", async () => {
+    const ctx = await setup();
+    const { db, cipher, opening, openings, terms, deploy, position } = ctx;
+    // The gap question for "Go": answered, tied to a position; and one
+    // the person says they lack.
+    const [fit] = await openings.latestFitChecks([opening.id]);
+    const items = await openings.listFitCheckItems(fit.id);
+    const go = items.find((item) => item.termId === terms[1].id)!;
+    await openings.answerFitCheckItem({
+      fitCheckItemId: go.id,
+      encryptedGapAnswer: cipher.encrypt("I wrote Go tools at night."),
+      gapLinks: {
+        positionIds: [position.id],
+        projectIds: [],
+        notTied: false,
+      },
+    });
+    const k8s = items.find((item) => item.termId === terms[0].id)!;
+    await openings.answerFitCheckItem({
+      fitCheckItemId: k8s.id,
+      lackConfirmedAt: new Date(),
+    });
+    // The letter's chosen story, motivation and approved company facts.
+    const letter = await ctx.insertLetter();
+    await new DocumentsRepository(db).insertGeneration({
+      profileId: ctx.profileId,
+      documentId: letter.document.id,
+      versionId: letter.version.id,
+      language: "en-US",
+      status: "completed",
+      storyLineId: deploy.id,
+      reviewDepth: "quick",
+      writingLevel: "standard",
+      tone: "direct",
+    });
+    const motivations = new MotivationRepository(db);
+    const interview = await motivations.replaceInterview({
+      profileId: ctx.profileId,
+      openingId: opening.id,
+      status: "finished",
+    });
+    await motivations.insertPoints([
+      {
+        profileId: ctx.profileId,
+        interviewId: interview.id,
+        kind: "goal",
+        encryptedText: cipher.encrypt("I want to build platforms at scale."),
+        status: "kept",
+      },
+      {
+        profileId: ctx.profileId,
+        interviewId: interview.id,
+        kind: "goal",
+        encryptedText: cipher.encrypt("A discarded point."),
+        status: "removed",
+      },
+    ]);
+    await new ResearchRepository(db).insertFacts([
+      {
+        profileId: ctx.profileId,
+        openingId: opening.id,
+        encryptedText: cipher.encrypt("Hooli runs on Kubernetes."),
+        encryptedSourceUrl: cipher.encrypt("https://hooli.example"),
+        encryptedSourceTitle: cipher.encrypt("Hooli"),
+        approvedAt: new Date(),
+      },
+      {
+        profileId: ctx.profileId,
+        openingId: opening.id,
+        encryptedText: cipher.encrypt("An unapproved fact."),
+        encryptedSourceUrl: cipher.encrypt("https://hooli.example"),
+        encryptedSourceTitle: cipher.encrypt("Hooli"),
+      },
+    ]);
+
+    const letterChat = await ctx.chats.current(ctx.user.id, {
+      kind: "document",
+      documentId: letter.document.id,
+    });
+    const letterModel = agentModel([], "Ok.");
+    await ctx.say(letterChat.chatId, "What did I tell you?", letterModel.model);
+    const letterSystem = systemOf(letterModel.prompts[0]);
+    expect(letterSystem).toContain("I wrote Go tools at night.");
+    expect(letterSystem).toContain("Tech Lead at Globex");
+    expect(letterSystem).toContain("the person says they do NOT have it");
+    expect(letterSystem).toContain("chosen story: Results: Cut deploy time");
+    expect(letterSystem).toContain("I want to build platforms at scale.");
+    expect(letterSystem).not.toContain("A discarded point.");
+    expect(letterSystem).toContain("Hooli runs on Kubernetes.");
+    expect(letterSystem).not.toContain("An unapproved fact.");
+
+    // The resume agent gets the gap answers, not the letter's inputs.
+    const resume = await ctx.insertResume("opening");
+    const resumeChat = await ctx.chats.current(ctx.user.id, {
+      kind: "document",
+      documentId: resume.document.id,
+    });
+    const resumeModel = agentModel([], "Ok.");
+    await ctx.say(resumeChat.chatId, "And here?", resumeModel.model);
+    const resumeSystem = systemOf(resumeModel.prompts[0]);
+    expect(resumeSystem).toContain("I wrote Go tools at night.");
+    expect(resumeSystem).not.toContain("chosen story");
+    expect(resumeSystem).not.toContain("Hooli runs on Kubernetes.");
+    expect(resumeSystem).not.toContain("I want to build platforms");
   });
 
   it("opens conversations only on the user's own documents, and only to their owner", async () => {

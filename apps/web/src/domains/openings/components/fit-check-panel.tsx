@@ -1,7 +1,7 @@
 "use client";
 
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { ChevronRight, RotateCw, TriangleAlert } from "lucide-react";
+import { RotateCw } from "lucide-react";
 import Link from "next/link";
 
 import type {
@@ -43,52 +43,47 @@ export function bandClassName(band: "high" | "medium" | "low") {
 }
 
 /**
- * The Fit step (workspace spec, "The opening page"): the fit check's band
- * (never a percentage), the job preferences it breaks and the method's
- * warning signs, each requirement with the profile passages behind it,
- * and the gap questions.
+ * The opening page's Fit column (workspace spec, "The opening page"): the
+ * fit check's band (never a percentage) with "Check again", the job
+ * preferences it breaks, and each requirement as a card with the profile
+ * passages behind it and, when the opening asks for something the profile
+ * doesn't show, its gap question inside the card.
  */
-export function FitStep({ opening }: { opening: OpeningDetail }) {
+export function FitColumn({ opening }: { opening: OpeningDetail }) {
   const t = useTranslation();
   const labels = useOpeningLabels();
   const fitCheck = opening.fitCheck;
-  const gaps = fitCheck?.items.filter((item) => item.gapQuestion) ?? [];
 
   return (
-    <div className="flex flex-col gap-6">
-      {opening.warnings.length > 0 && (
-        <div className="flex gap-2 rounded-lg border border-amber-500/40 bg-amber-500/5 p-3 text-sm">
-          <TriangleAlert className="mt-0.5 size-4 shrink-0 text-amber-600" />
-          <ul className="flex flex-col gap-1">
-            {opening.warnings.map((warning) => (
-              <li key={warning}>{labels.warning(warning)}</li>
-            ))}
-          </ul>
-        </div>
-      )}
+    <div className="flex flex-col gap-4">
+      <h2 className="font-medium">
+        {t.formatMessage({ defaultMessage: "Fit" })}
+      </h2>
       {fitCheck ? (
         <>
           <div
             className={cn(
-              "flex flex-wrap items-center justify-between gap-3 rounded-lg border p-4",
+              "flex flex-col gap-2 rounded-lg border p-3",
               bandClassName(fitCheck.band)
             )}
           >
-            {/* Its hint ("a hint from your profile") lives once, on the
-                header's chip. */}
-            <p className="font-medium">{labels.band(fitCheck.band)}</p>
-            {/* The check is worth running again only once the profile or
-                the preferences moved on. */}
-            {fitCheck.outdated && (
-              <div className="flex flex-wrap items-center gap-2 text-xs">
-                <span className="text-muted-foreground">
-                  {t.formatMessage({
-                    defaultMessage:
-                      "Your profile or your job preferences were published again since this check.",
-                  })}
-                </span>
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              {/* Its hint ("a hint from your profile") lives once, on the
+                  header's chip. */}
+              <p className="font-medium">{labels.band(fitCheck.band)}</p>
+              <div className="flex items-center gap-2">
                 <RunFitCheck openingId={opening.id} again enabled />
               </div>
+            </div>
+            {/* The check is worth running again once the profile or the
+                preferences moved on. */}
+            {fitCheck.outdated && (
+              <p className="text-muted-foreground text-xs">
+                {t.formatMessage({
+                  defaultMessage:
+                    "Your profile or your job preferences were published again since this check.",
+                })}
+              </p>
             )}
           </div>
           {fitCheck.preferenceConflicts.length > 0 && (
@@ -110,49 +105,18 @@ export function FitStep({ opening }: { opening: OpeningDetail }) {
               </ul>
             </div>
           )}
-          <section className="flex flex-col gap-2">
-            <h3 className="font-medium">
-              {t.formatMessage({ defaultMessage: "Requirements" })}
-            </h3>
-            <ul className="flex flex-col gap-2">
-              {[...fitCheck.items]
-                .sort(
-                  (a, b) => verdictOrder[a.verdict] - verdictOrder[b.verdict]
-                )
-                .map((item) => (
-                  <FitCheckItem key={item.id} item={item} />
-                ))}
-            </ul>
-          </section>
-          {gaps.length > 0 && (
-            <section id="gap-questions" className="flex flex-col gap-3">
-              <div>
-                <h3 className="font-medium">
-                  {t.formatMessage({
-                    defaultMessage: "Before writing for this opening",
-                  })}
-                </h3>
-                <p className="text-muted-foreground text-sm">
-                  {t.formatMessage({
-                    defaultMessage:
-                      "The opening asks for things your profile doesn't show yet. Tell us if you really lack them, or share a story.",
-                  })}
-                </p>
-              </div>
-              {gaps.map((item) => (
-                <GapQuestion
+          <ul className="flex flex-col gap-2">
+            {[...fitCheck.items]
+              .sort((a, b) => verdictOrder[a.verdict] - verdictOrder[b.verdict])
+              .map((item) => (
+                <FitCheckItem
                   key={item.id}
-                  fitCheckItemId={item.id}
-                  question={item.gapQuestion ?? ""}
-                  answer={item.gapAnswer}
-                  lacks={item.gapLack}
-                  links={item.gapLinks}
+                  item={item}
                   positions={fitCheck.positions}
                   projects={fitCheck.projects}
                 />
               ))}
-            </section>
-          )}
+          </ul>
         </>
       ) : opening.needsPublishedProfile ? (
         <div className="flex flex-col gap-2 rounded-lg border border-dashed p-4 text-sm">
@@ -187,128 +151,6 @@ export function FitStep({ opening }: { opening: OpeningDetail }) {
         </p>
       )}
     </div>
-  );
-}
-
-/**
- * The right column's Fit tab: the band and the counts, as a door to the
- * Fit step.
- */
-export function FitSummary({
-  opening,
-  onOpen,
-}: {
-  opening: OpeningDetail;
-  onOpen: () => void;
-}) {
-  const t = useTranslation();
-  const labels = useOpeningLabels();
-  const fitCheck = opening.fitCheck;
-  if (!fitCheck) {
-    return (
-      <div className="flex flex-col gap-2">
-        <p className="text-muted-foreground text-xs">
-          {opening.kind === "unsolicited"
-            ? t.formatMessage({
-                defaultMessage:
-                  "With no vacancy there are no requirements to compare, so there's no fit check.",
-              })
-            : opening.needsPublishedProfile
-              ? t.formatMessage({
-                  defaultMessage:
-                    "The fit check waits for a published profile.",
-                })
-              : t.formatMessage({
-                  defaultMessage: "No fit check for this opening.",
-                })}
-        </p>
-        <Button
-          size="sm"
-          variant="outline"
-          className="self-start"
-          onClick={onOpen}
-        >
-          {t.formatMessage({ defaultMessage: "Open the Fit step" })}
-          <ChevronRight />
-        </Button>
-      </div>
-    );
-  }
-  const count = (verdict: FitCheckItemView["verdict"]) =>
-    fitCheck.items.filter((item) => item.verdict === verdict).length;
-  const pending = pendingGaps(opening);
-  return (
-    <button
-      type="button"
-      onClick={onOpen}
-      className={cn(
-        "flex w-full flex-col gap-2 rounded-lg border p-3 text-left text-sm",
-        bandClassName(fitCheck.band)
-      )}
-    >
-      <span className="flex items-center justify-between font-medium">
-        {labels.band(fitCheck.band)}
-        <ChevronRight className="text-muted-foreground size-4" />
-      </span>
-      <span className="text-muted-foreground flex flex-wrap gap-x-3 gap-y-1 text-xs">
-        <span>
-          {t.formatMessage(
-            {
-              defaultMessage:
-                "{count, plural, =0 {none met} one {# met} other {# met}}",
-            },
-            { count: count("met") }
-          )}
-        </span>
-        <span>
-          {t.formatMessage(
-            {
-              defaultMessage:
-                "{count, plural, =0 {none partial} one {# partial} other {# partial}}",
-            },
-            { count: count("partial") }
-          )}
-        </span>
-        <span>
-          {t.formatMessage(
-            {
-              defaultMessage:
-                "{count, plural, =0 {no gaps} one {# gap} other {# gaps}}",
-            },
-            { count: count("gap") }
-          )}
-        </span>
-      </span>
-      {fitCheck.preferenceConflicts.length > 0 && (
-        <span className="text-xs text-red-600">
-          {t.formatMessage(
-            {
-              defaultMessage:
-                "{count, plural, =0 {Breaks no job preference} one {Breaks # job preference} other {Breaks # job preferences}}",
-            },
-            { count: fitCheck.preferenceConflicts.length }
-          )}
-        </span>
-      )}
-      {pending > 0 && (
-        <span className="text-xs font-medium">
-          {t.formatMessage(
-            {
-              defaultMessage:
-                "{count, plural, =0 {no questions to answer} one {# question to answer} other {# questions to answer}}",
-            },
-            { count: pending }
-          )}
-        </span>
-      )}
-      {fitCheck.outdated && (
-        <span className="text-muted-foreground text-xs">
-          {t.formatMessage({
-            defaultMessage: "Published again since this check.",
-          })}
-        </span>
-      )}
-    </button>
   );
 }
 
@@ -392,12 +234,23 @@ export function useExcludeCompany(openingId: string, company: string | null) {
   };
 }
 
-function FitCheckItem({ item }: { item: FitCheckItemView }) {
+function FitCheckItem({
+  item,
+  positions,
+  projects,
+}: {
+  item: FitCheckItemView;
+  positions: NonNullable<OpeningDetail["fitCheck"]>["positions"];
+  projects: NonNullable<OpeningDetail["fitCheck"]>["projects"];
+}) {
   const t = useTranslation();
   const labels = useOpeningLabels();
 
   return (
-    <li className="bg-background flex flex-col gap-1.5 rounded-lg border p-3">
+    <li
+      id={`fit-item-${item.id}`}
+      className="bg-background flex flex-col gap-1.5 rounded-lg border p-3"
+    >
       <div className="flex items-center gap-1.5">
         <Badge
           variant={
@@ -423,8 +276,9 @@ function FitCheckItem({ item }: { item: FitCheckItemView }) {
       {item.explanation && (
         <p className="text-muted-foreground text-xs">{item.explanation}</p>
       )}
-      {/* The user's own answer, when the verdict rests on it. */}
-      {item.citesAnswer && item.gapAnswer && (
+      {/* The user's own answer, when the verdict rests on it and there is
+          no question form showing it. */}
+      {item.citesAnswer && item.gapAnswer && !item.gapQuestion && (
         <p className="bg-muted/50 rounded px-2 py-1 text-xs whitespace-pre-wrap">
           <span className="text-muted-foreground block text-[11px]">
             {t.formatMessage({
@@ -443,13 +297,16 @@ function FitCheckItem({ item }: { item: FitCheckItemView }) {
           {passage.text}
         </p>
       ))}
-      {item.gapQuestion && !item.gapAnswer && !item.gapLack && (
-        <a
-          href="#gap-questions"
-          className="text-primary self-start text-xs underline underline-offset-2"
-        >
-          {t.formatMessage({ defaultMessage: "Answer its question below" })}
-        </a>
+      {item.gapQuestion && (
+        <GapQuestion
+          fitCheckItemId={item.id}
+          question={item.gapQuestion}
+          answer={item.gapAnswer}
+          lacks={item.gapLack}
+          links={item.gapLinks}
+          positions={positions}
+          projects={projects}
+        />
       )}
     </li>
   );

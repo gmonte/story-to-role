@@ -1,5 +1,7 @@
 "use client";
 
+import type { ReactNode } from "react";
+
 import type {
   DocumentView,
   VersionView,
@@ -18,16 +20,23 @@ import { TitleProposals } from "./title-proposals";
 export function ResumeWorkspace({
   versions,
   generation,
+  aside,
 }: {
   versions: VersionView[];
   generation?: DocumentView["generation"];
+  aside?: ReactNode;
 }) {
   const { selected, select } = useSelectedVersion(versions, "resume");
   if (generation?.status === "pending" || generation?.status === "running") {
     return (
-      <div className="flex min-h-0 flex-1 items-start justify-center overflow-y-auto p-6">
-        <div className="w-full max-w-xl">
-          <GenerationProgress generation={generation} />
+      <div className="flex min-h-0 flex-1">
+        <aside className="hidden w-60 shrink-0 space-y-6 overflow-y-auto border-r p-4 empty:hidden md:block">
+          {aside}
+        </aside>
+        <div className="flex min-w-0 flex-1 items-start justify-center overflow-y-auto p-6">
+          <div className="w-full max-w-xl">
+            <GenerationProgress generation={generation} />
+          </div>
         </div>
       </div>
     );
@@ -38,6 +47,7 @@ export function ResumeWorkspace({
       version={selected}
       versions={versions}
       select={select}
+      aside={aside}
       notices={
         selected.titleProposals.length > 0 ? (
           <TitleProposals version={selected} />

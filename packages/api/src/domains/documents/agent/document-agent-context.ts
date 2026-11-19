@@ -45,6 +45,10 @@ import type { DocumentContent } from "../schemas/document-content";
 import type { GenerationSettings } from "../schemas/generation-settings";
 import type { ResumeContent } from "../schemas/resume-content";
 import { decryptDocument } from "../snapshot-content";
+import {
+  loadOpeningUserInput,
+  type OpeningUserInput,
+} from "./opening-user-input";
 
 /** What the document agent knows for one turn (ADR 0009), never more. */
 export type DocumentAgentContext = {
@@ -85,6 +89,10 @@ export type DocumentAgentContext = {
         fitCheck: OpeningBrief["fitCheck"];
       }
     | { kind: "focus"; focus: string | null };
+  // What the person answered and chose for this opening (gap answers,
+  // instructions, a letter's story, motivation and approved facts); null
+  // for a library document.
+  userInput: OpeningUserInput | null;
   rules: CareerContext["rules"];
   // The language the profile is written in, and its translations
   // dictionary for the document's language (empty in the profile's own).
@@ -434,6 +442,17 @@ export async function loadDocumentAgentContext(input: {
           fitCheck: brief.fitCheck,
         }
       : { kind: "focus", focus },
+    userInput: openingId
+      ? await loadOpeningUserInput({
+          db,
+          cipher,
+          profileId: profile.id,
+          openingId,
+          kind: content.kind,
+          career,
+          storyLineId: written?.storyLineId ?? null,
+        })
+      : null,
     rules: career.rules,
     profileLanguage: career.profileLanguage,
     translations: career.translations,

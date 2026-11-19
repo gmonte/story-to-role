@@ -90,7 +90,7 @@ export function CoverLetterPrep({
     letter?.versions.length &&
     (data.status === "finished" || data.status === "skipped")
   ) {
-    return <CoverLetterWorkspace document={letter} />;
+    return <CoverLetterWorkspace document={letter} aside={aside} />;
   }
   if (!data.status || data.status === "failed") {
     return (

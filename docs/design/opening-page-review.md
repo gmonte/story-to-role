@@ -1,5 +1,14 @@
 # Revisão de UX — a tela da vaga (opening)
 
+> **Owner's revision (after seeing O1).** This review's proposal was adjusted; where it differs, these decisions win:
+>
+> - **No opening agent.** ADR 0010 is withdrawn. One agent per document; the resume's and the cover letter's agents each receive what the user answered and chose for the opening (gap answers with their links, the letter's story, motivation, approved company facts, application instructions) and work independently.
+> - **The opening page is one screen with three columns, no Opening/Fit tabs:** Application on the left (the full tracker summary), the opening's description in the center (warning signs marked), Fit on the right (band, Check again, preference conflicts, requirement cards with the gap question inside each card). The “Context” block is gone; the application instructions show in the resume and cover letter pages.
+> - **Header:** title and company, chips, `⋯` menu, one primary action per state and a compact switch **Opening · Resume · Cover letter** (replacing the five journey tabs).
+> - **Resume and Cover letter are full-screen pages** (document workspace: index, findings and instructions left, document center, agent, preview and versions right) without the application controls, with a slim header (“← Company · Title” and the switch); their empty states are full screen too.
+> - **Narrow screens:** below about 1280 px the Application column is a sheet behind a header button and Fit goes below the description; below `lg` everything stacks.
+> - **Later:** an Applications page with list and kanban views (plan, O2).
+
 Revisão de design da tela de uma vaga no StoryToRole: como ela está hoje, por que confunde, e uma proposta de estrutura única para todos os estados e abas. Baseada no código (`apps/web/src/domains/{openings,applications,documents,workspace}`), nas specs (`docs/specs/workspace.md`, `resume-and-cover-letter.md`, `tracker.md`) e em capturas do app rodando em `localhost:3000` com a usuária de teste Ana Souza (capturas em `/Users/monte/.claude/jobs/fde2d46e/tmp/ux-*.png`).
 
 A queixa do dono, resumida: *“à esquerda vejo o questionário antes da descrição; à direita o que bate ou não com o perfil e, lá embaixo, gerar currículo e pesquisar empresa; gerando o currículo, abre um formulário do tracker no alto à direita e o currículo/carta aparecem à esquerda em abas; vaga e carta mantêm a coluna direita, o currículo troca as duas colunas”*. Confirmei cada ponto no código e nas capturas. Ela está certa, e o problema é estrutural, não de polimento.

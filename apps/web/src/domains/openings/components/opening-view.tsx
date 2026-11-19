@@ -1,8 +1,6 @@
 "use client";
 
-import { useEffect, useRef, type ReactNode } from "react";
-
-import { ExternalLink, FileText } from "lucide-react";
+import { ExternalLink, FileText, TriangleAlert } from "lucide-react";
 import Link from "next/link";
 
 import type { OpeningDetail } from "@repo/api/domains/openings/schemas/opening-view";
@@ -18,188 +16,212 @@ import { ResumeWorkspace } from "~/domains/documents/components/resume-workspace
 import { SimilarDocuments } from "~/domains/documents/components/similar-documents";
 import { AiAtWork } from "~/domains/workspace/components/ai-at-work";
 
-import { useRefreshOpenings } from "../hooks/use-opening";
 import { useOpeningLabels } from "../hooks/use-opening-labels";
-import type { OpeningView as Step } from "../utils/opening-journey";
-import { FitStep, pendingGaps } from "./fit-check-panel";
-import { useOpeningJourney } from "./opening-header";
+import type { OpeningView as Page } from "../utils/opening-journey";
+import { FitColumn, pendingGaps } from "./fit-check-panel";
+import type { useOpeningJourney } from "./opening-header";
+
+/** How many columns the screen has room for. */
+export type OpeningLayout = "three" | "two" | "stack";
 
 /**
- * The center of the opening page: the active step's content. Every step
- * keeps the document workspace's three zones (a left column, the content,
- * the page's right column), so switching steps never moves anything.
+ * The opening itself, on one screen (workspace spec, "The opening page"):
+ * the application on the left, the opening's description in the middle and
+ * the fit on the right, each scrolling on its own. Where there is no room
+ * the application folds behind the header's button and the fit goes below
+ * the description; on a phone everything stacks.
  */
-export function OpeningView({
+export function OpeningPageBody({
   openingId,
   opening,
-  view,
-  setView,
+  layout,
 }: {
   openingId: string;
   opening: OpeningDetail;
-  view: Step;
-  setView: (view: Step) => void;
+  layout: OpeningLayout;
+}) {
+  const worked = opening.status === "analyzed" || opening.status === "closed";
+  const showFit = worked;
+  const showApplication = worked || !!opening.applicationId;
+  const description = <DescriptionColumn opening={opening} />;
+  const fit = showFit && (
+    <section id="fit-column">
+      <FitColumn opening={opening} />
+    </section>
+  );
+  const application = showApplication && (
+    <ApplicationColumn openingId={openingId} />
+  );
+
+  if (layout === "three") {
+    return (
+      <div className="flex min-h-0 flex-1">
+        {application && (
+          <aside
+            id="application-column"
+            className="bg-muted/30 w-80 shrink-0 overflow-y-auto border-r p-4"
+          >
+            {application}
+          </aside>
+        )}
+        <main className="min-w-0 flex-1 overflow-y-auto">
+          <div className="mx-auto flex w-full max-w-3xl flex-col gap-6 p-6">
+            {description}
+          </div>
+        </main>
+        {fit && (
+          <aside className="bg-muted/30 w-[26rem] shrink-0 overflow-y-auto border-l p-4">
+            {fit}
+          </aside>
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <main className="min-h-0 flex-1 overflow-y-auto">
+      <div className="mx-auto flex w-full max-w-3xl flex-col gap-8 p-4 sm:p-6">
+        {/* Under `lg` the application is a block of the page; from `lg` it
+            sits behind the header's button. */}
+        {layout === "stack" && application && (
+          <div id="application-column">{application}</div>
+        )}
+        {description}
+        {fit}
+      </div>
+    </main>
+  );
+}
+
+/**
+ * The opening's application as the full tracker (tracker spec): its
+ * status, "Mark as applied", what was sent and the next step, with the
+ * details, the timeline and giving up folded.
+ */
+export function ApplicationColumn({ openingId }: { openingId: string }) {
+  const t = useTranslation();
+  return (
+    <div className="flex flex-col gap-3">
+      <h2 className="font-medium">
+        {t.formatMessage({ defaultMessage: "Application" })}
+      </h2>
+      <ApplicationTracker openingId={openingId} />
+      <Button asChild variant="outline" size="sm" className="self-start">
+        <Link href="/app/tracker">
+          {t.formatMessage({ defaultMessage: "All applications" })}
+        </Link>
+      </Button>
+    </div>
+  );
+}
+
+/** A resume or a cover letter, full screen, without the application. */
+export function DocumentPage({
+  openingId,
+  opening,
+  page,
+  journey,
+}: {
+  openingId: string;
+  opening: OpeningDetail;
+  page: Exclude<Page, "opening">;
+  journey: ReturnType<typeof useOpeningJourney>;
 }) {
   const t = useTranslation();
-  const refresh = useRefreshOpenings();
-  const journey = useOpeningJourney(openingId, opening);
-
-  // The sidebar's list learns the title once the analysis ends.
-  const status = opening.status;
-  useEffect(() => {
-    if (status !== "processing") void refresh();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [status]);
-
-  // A generation just started opens its step: the progress is the page.
-  const wasGenerating = useRef({ resume: false, letter: false });
-  useEffect(() => {
-    const previous = wasGenerating.current;
-    if (journey.resumeGenerating && !previous.resume) setView("resume");
-    if (journey.letterGenerating && !previous.letter) setView("letter");
-    wasGenerating.current = {
-      resume: journey.resumeGenerating,
-      letter: journey.letterGenerating,
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [journey.resumeGenerating, journey.letterGenerating]);
-
-  const context = opening.status === "analyzed" && (
+  // The application instructions the AI uses, where they apply.
+  const instructions = opening.status !== "processing" && (
     <ApplicationContext openingId={openingId} />
   );
 
-  switch (view) {
-    case "opening":
-      return (
-        <StepFrame aside={context}>
-          <OpeningStep opening={opening} />
-        </StepFrame>
-      );
-    case "fit":
-      return (
-        <StepFrame aside={context}>
-          <FitStep opening={opening} />
-        </StepFrame>
-      );
-    case "resume": {
-      const versions = journey.resume?.versions ?? [];
-      if (versions.length > 0 || journey.resumeGenerating) {
-        return (
-          <ResumeWorkspace
-            versions={versions}
-            generation={journey.resume?.generation}
-          />
-        );
-      }
-      return (
-        <StepFrame aside={context}>
-          <div className="flex flex-col gap-6">
-            <div className="flex flex-col gap-3">
-              <h2 className="font-medium">
-                {t.formatMessage({
-                  defaultMessage: "No resume for this opening yet.",
-                })}
-              </h2>
-              <p className="text-muted-foreground text-sm">
-                {t.formatMessage({
-                  defaultMessage:
-                    "Written from your published profile only, whatever the fit check says; then you review every line.",
-                })}
-              </p>
-              {journey.resume?.generation?.status === "failed" && (
-                <p className="rounded-lg border border-red-500/40 bg-red-500/10 p-2.5 text-xs">
-                  {t.formatMessage({
-                    defaultMessage: "The last generation failed. Try again.",
-                  })}
-                </p>
-              )}
-              {journey.documents.data && (
-                <GenerateResumeDialog
-                  openingId={openingId}
-                  defaultLanguage={journey.language}
-                  defaultTone={journey.tone}
-                  pendingGaps={pendingGaps(opening)}
-                  existingLanguages={[]}
-                  application={journey.application}
-                  trigger={
-                    <Button className="self-start">
-                      <FileText />
-                      {t.formatMessage({ defaultMessage: "Generate resume" })}
-                    </Button>
-                  }
-                />
-              )}
-            </div>
-            <SimilarDocuments
+  if (page === "letter") {
+    return (
+      <CoverLetterPrep
+        openingId={openingId}
+        defaultLanguage={journey.language}
+        defaultTone={journey.tone}
+        aside={
+          <>
+            {instructions}
+            <CompanyResearch
               openingId={openingId}
-              defaultLanguage={journey.language}
-              defaultTone={journey.tone}
-              pendingGaps={pendingGaps(opening)}
+              hasCompany={!!opening.company}
             />
-          </div>
-        </StepFrame>
-      );
-    }
-    case "letter":
-      return (
-        <CoverLetterPrep
-          openingId={openingId}
-          defaultLanguage={journey.language}
-          defaultTone={journey.tone}
-          aside={
-            <>
-              {context}
-              <CompanyResearch
-                openingId={openingId}
-                hasCompany={!!opening.company}
-              />
-            </>
-          }
-        />
-      );
-    case "application":
-      return (
-        <StepFrame aside={context}>
-          <div className="flex flex-col gap-4">
-            <h2 className="font-medium">
-              {t.formatMessage({ defaultMessage: "Application" })}
-            </h2>
-            <ApplicationTracker openingId={openingId} />
-            <Button asChild variant="outline" size="sm" className="self-start">
-              <Link href="/app/tracker">
-                {t.formatMessage({ defaultMessage: "All applications" })}
-              </Link>
-            </Button>
-          </div>
-        </StepFrame>
-      );
+          </>
+        }
+      />
+    );
   }
-}
 
-/** The three zones of a step without a document: context, content. */
-function StepFrame({
-  aside,
-  children,
-}: {
-  aside: ReactNode;
-  children: ReactNode;
-}) {
+  const versions = journey.resume?.versions ?? [];
+  if (versions.length > 0 || journey.resumeGenerating) {
+    return (
+      <ResumeWorkspace
+        versions={versions}
+        generation={journey.resume?.generation}
+        aside={instructions}
+      />
+    );
+  }
   return (
     <div className="flex min-h-0 flex-1">
       <aside className="hidden w-60 shrink-0 space-y-6 overflow-y-auto border-r p-4 md:block">
-        {aside}
+        {instructions}
       </aside>
       <div className="min-w-0 flex-1 overflow-y-auto">
         <div className="mx-auto flex w-full max-w-3xl flex-col gap-6 p-6">
-          {children}
+          <div className="flex flex-col gap-3">
+            <h2 className="font-medium">
+              {t.formatMessage({
+                defaultMessage: "No resume for this opening yet.",
+              })}
+            </h2>
+            <p className="text-muted-foreground text-sm">
+              {t.formatMessage({
+                defaultMessage:
+                  "Written from your published profile only, whatever the fit check says; then you review every line.",
+              })}
+            </p>
+            {journey.resume?.generation?.status === "failed" && (
+              <p className="rounded-lg border border-red-500/40 bg-red-500/10 p-2.5 text-xs">
+                {t.formatMessage({
+                  defaultMessage: "The last generation failed. Try again.",
+                })}
+              </p>
+            )}
+            {journey.documents.data && (
+              <GenerateResumeDialog
+                openingId={openingId}
+                defaultLanguage={journey.language}
+                defaultTone={journey.tone}
+                pendingGaps={pendingGaps(opening)}
+                existingLanguages={[]}
+                application={journey.application}
+                trigger={
+                  <Button className="self-start">
+                    <FileText />
+                    {t.formatMessage({ defaultMessage: "Generate resume" })}
+                  </Button>
+                }
+              />
+            )}
+          </div>
+          <SimilarDocuments
+            openingId={openingId}
+            defaultLanguage={journey.language}
+            defaultTone={journey.tone}
+            pendingGaps={pendingGaps(opening)}
+          />
         </div>
       </div>
     </div>
   );
 }
 
-/** The Opening step: what the person pasted, first. */
-function OpeningStep({ opening }: { opening: OpeningDetail }) {
+/**
+ * The description column: the method's warning signs marked above what
+ * the person pasted (or the analysis' progress while it runs).
+ */
+function DescriptionColumn({ opening }: { opening: OpeningDetail }) {
   const t = useTranslation();
   const labels = useOpeningLabels();
 
@@ -282,6 +304,24 @@ function OpeningStep({ opening }: { opening: OpeningDetail }) {
       {opening.status === "rejected" && (
         <div className="rounded-lg border border-amber-500/40 bg-amber-500/10 p-4 text-sm">
           <p>{labels.rejection(opening.rejectionReason)}</p>
+        </div>
+      )}
+
+      {opening.warnings.length > 0 && (
+        <div className="flex gap-2 rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 text-sm">
+          <TriangleAlert className="mt-0.5 size-4 shrink-0 text-amber-600" />
+          <div className="flex flex-col gap-1">
+            <p className="font-medium">
+              {t.formatMessage({
+                defaultMessage: "Warning signs in this opening",
+              })}
+            </p>
+            <ul className="flex flex-col gap-1">
+              {opening.warnings.map((warning) => (
+                <li key={warning}>{labels.warning(warning)}</li>
+              ))}
+            </ul>
+          </div>
         </div>
       )}
 

@@ -12,7 +12,6 @@ import {
   ExternalLink,
   FileText,
   Loader2,
-  Send,
   TriangleAlert,
 } from "lucide-react";
 import Link from "next/link";
@@ -38,11 +37,9 @@ import {
 } from "@repo/web/components/ui/tooltip";
 import { cn } from "@repo/web/lib/utils";
 
-import { MarkAppliedDialog } from "~/domains/applications/components/application-tracker";
 import { useTrackerLabels } from "~/domains/applications/hooks/use-tracker-labels";
 import { CreditCost } from "~/domains/credits/components/credit-cost";
 import { useCredits } from "~/domains/credits/hooks/use-credits";
-import { GenerateResumeDialog } from "~/domains/documents/components/generate-resume-dialog";
 import { useOpeningDocuments } from "~/domains/documents/hooks/use-opening-documents";
 import { useTRPC } from "~/tools/trpc/client";
 
@@ -115,7 +112,6 @@ export function OpeningHeader({
   view,
   setView,
   sideButton,
-  onShowApplication,
 }: {
   openingId: string;
   opening: OpeningDetail;
@@ -123,8 +119,6 @@ export function OpeningHeader({
   setView: (view: OpeningView) => void;
   /** Opens the column that has no room beside the page. */
   sideButton?: SideButton;
-  /** Brings the application into view (its column, sheet or block). */
-  onShowApplication: () => void;
 }) {
   const t = useTranslation();
   const labels = useOpeningLabels();
@@ -293,8 +287,6 @@ export function OpeningHeader({
             openingId={openingId}
             opening={opening}
             journey={journey}
-            setView={setView}
-            onShowApplication={onShowApplication}
           />
           <OpeningMenu openingId={openingId} opening={opening} />
         </div>
@@ -310,15 +302,11 @@ function PrimaryActionButton({
   openingId,
   opening,
   journey,
-  setView,
-  onShowApplication,
 }: {
   action: PrimaryAction | null;
   openingId: string;
   opening: OpeningDetail;
   journey: ReturnType<typeof useOpeningJourney>;
-  setView: (view: OpeningView) => void;
-  onShowApplication: () => void;
 }) {
   const t = useTranslation();
   const trpc = useTRPC();
@@ -336,7 +324,18 @@ function PrimaryActionButton({
       onError: (error) => toast.error(error.message),
     })
   );
-  const pending = pendingGaps(opening);
+
+  // The tabs, the fit column and the application column already offer the
+  // next steps (owner): the header keeps only actions found nowhere else.
+  if (
+    action === "answer_questions" ||
+    action === "generate_resume" ||
+    action === "write_letter" ||
+    action === "mark_applied" ||
+    action === "record_reply"
+  ) {
+    return null;
+  }
 
   switch (action) {
     case null:
@@ -354,74 +353,6 @@ function PrimaryActionButton({
           <Link href="/app/career">
             {t.formatMessage({ defaultMessage: "Go to My career" })}
           </Link>
-        </Button>
-      );
-    case "answer_questions":
-      return (
-        <Button
-          size="sm"
-          onClick={() => {
-            // The first question waiting, in its requirement's card.
-            const next = opening.fitCheck?.items.find(
-              (item) => item.gapQuestion && !item.gapAnswer
-            );
-            document
-              .getElementById(next ? `fit-item-${next.id}` : "fit-column")
-              ?.scrollIntoView({ behavior: "smooth", block: "center" });
-          }}
-        >
-          {t.formatMessage(
-            {
-              defaultMessage:
-                "Answer {count, plural, =0 {no questions} one {# question} other {# questions}}",
-            },
-            { count: pending }
-          )}
-        </Button>
-      );
-    case "generate_resume":
-      // Its section choices start from the application's, once loaded.
-      if (!journey.documents.data) return null;
-      return (
-        <GenerateResumeDialog
-          openingId={openingId}
-          defaultLanguage={journey.language}
-          defaultTone={journey.tone}
-          pendingGaps={pending}
-          existingLanguages={[]}
-          application={journey.application}
-          trigger={
-            <Button size="sm">
-              <FileText />
-              {t.formatMessage({ defaultMessage: "Generate resume" })}
-            </Button>
-          }
-        />
-      );
-    case "write_letter":
-      return (
-        <Button size="sm" onClick={() => setView("letter")}>
-          {t.formatMessage({ defaultMessage: "Write the cover letter" })}
-        </Button>
-      );
-    case "mark_applied":
-      if (!opening.applicationId) return null;
-      return (
-        <MarkAppliedDialog
-          applicationId={opening.applicationId}
-          openingId={openingId}
-          trigger={
-            <Button size="sm">
-              <Send />
-              {t.formatMessage({ defaultMessage: "Mark as applied" })}
-            </Button>
-          }
-        />
-      );
-    case "record_reply":
-      return (
-        <Button size="sm" onClick={onShowApplication}>
-          {t.formatMessage({ defaultMessage: "Record what happened" })}
         </Button>
       );
     case "reopen":

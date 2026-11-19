@@ -128,14 +128,6 @@ function OpeningScreen({
     />
   );
 
-  const showApplication = () => {
-    if (applicationFolded) setSheetOpen(true);
-    else {
-      document
-        .getElementById("application-column")
-        ?.scrollIntoView({ behavior: "smooth", block: "start" });
-    }
-  };
   const sideButton = applicationFolded
     ? {
         label: t.formatMessage({ defaultMessage: "Application" }),
@@ -159,7 +151,6 @@ function OpeningScreen({
           view={view}
           setView={setView}
           sideButton={sideButton}
-          onShowApplication={showApplication}
         />
         {view === "opening" ? (
           <OpeningPageBody

@@ -247,7 +247,7 @@ function GenerationSettingsForm({
         <GenerationSettingsFields
           value={settings}
           onChange={setSettings}
-          letter
+          show="both"
         />
       </div>
       <Button

@@ -321,3 +321,47 @@ describe("an addition never makes a second heading of a section", () => {
     expect(headings(serializeBlocks(next))).toBe(1);
   });
 });
+
+describe("moving an experience to Projects", () => {
+  const removal = {
+    part: "experience:gama — júnior",
+    find: "### Gama — Júnior (2019-02 a 2022-02)\n\n- Tecnologias: Python\n- Resultados: relatórios diários [sem número].",
+    replace: "",
+  };
+  const addition = {
+    part: "projects",
+    find: "",
+    replace:
+      "### Gama (2019-02 a 2022-02)\n\n- Júnior: dev\n- Tecnologias: Python\n- Resultados: relatórios diários [sem número].",
+  };
+  const run = (doc: ReturnType<typeof blocks>, change: typeof removal) => {
+    const normalized = normalizeChange(doc, change);
+    expect(normalized).not.toBeNull();
+    return applyChange(doc, normalized!)!;
+  };
+
+  it("keeps the addition locatable after the removal is accepted", () => {
+    const afterRemoval = run(blocks(), removal);
+    expect(locateChange(afterRemoval, addition)).not.toBeNull();
+    expect(applyChange(afterRemoval, addition)).not.toBeNull();
+  });
+
+  it("places an addition whose anchor was removed in its part", () => {
+    const anchored = {
+      part: "projects",
+      find: "- Tecnologias: Python",
+      replace: "- Tecnologias: Python\n- Novo: item",
+    };
+    const afterRemoval = run(blocks(), removal);
+    const range = locateChange(afterRemoval, anchored);
+    expect(range).not.toBeNull();
+    const next = serializeBlocks(applyChange(afterRemoval, anchored)!);
+    expect(next).toContain("- Novo: item");
+    expect(next).not.toContain("- Tecnologias: Python\n- Tecnologias");
+  });
+
+  it("keeps the removal locatable after the addition is accepted", () => {
+    const afterAddition = run(blocks(), addition);
+    expect(locateChange(afterAddition, removal)).not.toBeNull();
+  });
+});

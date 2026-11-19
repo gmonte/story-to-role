@@ -52,6 +52,21 @@ export const trackerRouter = createTRPCRouter({
       new TrackerService(db).get({ userId: ctx.userId, ...input })
     ),
 
+  ensureForOpening: userProcedure
+    .meta(
+      openApiMeta(
+        "tracker",
+        "POST",
+        "/openings/by-id/{openingId}/application",
+        "Returns the opening's application, creating it if there is none yet"
+      )
+    )
+    .input(z.object({ openingId: z.uuid() }))
+    .output(z.object({ applicationId: z.uuid() }))
+    .mutation(({ ctx, input }) =>
+      new TrackerService(db).ensureForOpening({ userId: ctx.userId, ...input })
+    ),
+
   setStatus: userProcedure
     .meta(
       openApiMeta(
@@ -84,7 +99,8 @@ export const trackerRouter = createTRPCRouter({
     )
     .input(
       applicationInput.extend({
-        versionIds: z.array(z.uuid()).min(1).max(10),
+        // None is allowed: sent without a resume or letter from StoryToRole.
+        versionIds: z.array(z.uuid()).max(10),
         appliedAt: z.coerce.date().optional(),
         acknowledgeWarnings: z.boolean().optional(),
       })

@@ -4,6 +4,8 @@ import type { ReactNode } from "react";
 
 import { Loader2 } from "lucide-react";
 
+import { ResizableAside } from "~/domains/workspace/components/resizable-aside";
+
 import { useProfileDraftQuery } from "../hooks/use-profile-draft";
 import { DocumentSwitch } from "./document-switch";
 import { ProfileDocument } from "./profile-document";
@@ -40,15 +42,22 @@ export function ProfileEditorGate({ children }: { children: ReactNode }) {
 export function ProfileWorkspace() {
   return (
     <div className="flex min-h-0 flex-1">
-      <aside className="hidden w-60 shrink-0 space-y-6 overflow-y-auto border-r p-4 md:block">
+      <ResizableAside
+        storageKey="profile-index-width"
+        className="space-y-6 p-4"
+      >
         <DocumentSwitch current="profile" />
         <ProfileIndex />
         <ProfileFindings />
         <ProfileReview />
-      </aside>
+      </ResizableAside>
       <div className="min-w-0 flex-1 overflow-y-auto">
-        <ProfileToolbar />
-        <ProfileSuggestionsBar />
+        {/* The toolbar and, while suggestions wait, their bar stay pinned
+            to the top of the scrolling text. */}
+        <div className="sticky top-0 z-20">
+          <ProfileToolbar />
+          <ProfileSuggestionsBar />
+        </div>
         <ProfileDocument />
       </div>
     </div>

@@ -8,6 +8,7 @@ import {
   contentToBlocks,
   isEditableBlock,
   linesById,
+  moveSectionBlocks,
   type DocumentBlock,
 } from "./document-blocks";
 
@@ -424,6 +425,36 @@ describe("blocksToContent", () => {
       ],
       closing: "Bye",
     });
+  });
+});
+
+describe("moving a section", () => {
+  const kinds = (content: ResumeContent) =>
+    content.sections.map((section) => section.kind);
+
+  it("moves a section with its content and the content follows the order", () => {
+    const blocks = contentToBlocks(resume, "en-US");
+    const before = kinds(resume);
+    const projects = before.indexOf("projects");
+    const experience = before.indexOf("experience");
+    const moved = moveSectionBlocks(blocks, "projects", experience)!;
+    const content = blocksToContent(resume, moved);
+    const expected = [...before];
+    expected.splice(projects, 1);
+    expected.splice(experience, 0, "projects");
+    expect(kinds(content)).toEqual(expected);
+    // Nothing else changed: the sections only changed places.
+    expect(
+      content.sections.find((section) => section.kind === "projects")
+    ).toEqual(resume.sections.find((section) => section.kind === "projects"));
+    expect(content.header).toEqual(resume.header);
+  });
+
+  it("keeps the order the document has when nothing moves", () => {
+    const blocks = contentToBlocks(resume, "en-US");
+    expect(kinds(blocksToContent(resume, blocks))).toEqual(kinds(resume));
+    expect(moveSectionBlocks(blocks, "summary", 0)).toBeNull();
+    expect(moveSectionBlocks(blocks, "awards", 0)).toBeNull();
   });
 });
 

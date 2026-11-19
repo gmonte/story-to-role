@@ -3,6 +3,13 @@ import { randomBytes } from "node:crypto";
 import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { createAiClient } from "@repo/api/domains/ai/ai-client";
+import { loadPendingGapAnswers } from "@repo/api/domains/applications/load-gap-answers";
+import { instructionPointsTable } from "@repo/api/domains/applications/db/instructions-tables";
+import { careerProfilesTable } from "@repo/api/domains/career/db/career-tables";
+import {
+  loadOpeningUserInput,
+  userInputLines,
+} from "@repo/api/domains/documents/agent/opening-user-input";
 import { CareerService } from "@repo/api/domains/career/career-service";
 import { getUserCipher } from "@repo/api/domains/encryption/user-cipher";
 import { ProfileService } from "@repo/api/domains/profile/profile-service";
@@ -133,7 +140,31 @@ async function setup({ publish = true }: { publish?: boolean } = {}) {
     trigger: vi.fn(async () => ({ runId: "run", accessToken: "t" })),
   };
   const tasks = new TasksService(db, trigger);
-  const openings = new OpeningsService(db, tasks);
+  // The small AI call that rewrites a gap answer: scripted per test, and
+  // failing (so the answer stays as written) unless a test sets it.
+  const rewrite: {
+    script: (request: { system: string; messages: unknown }) => unknown;
+    calls: Array<{ system: string; messages: unknown }>;
+  } = {
+    script: () => {
+      throw new Error("provider down");
+    },
+    calls: [],
+  };
+  const openings = new OpeningsService(db, tasks, async () => {
+    const fake = fakeProviderPackage({
+      object: (request) => {
+        rewrite.calls.push(request as never);
+        return rewrite.script(request as never);
+      },
+    });
+    return createAiClient({
+      db,
+      userId: user.id,
+      funding: "credits",
+      providerPackage: fake.providerPackage,
+    });
+  });
   const profiles = new ProfileService(db, tasks);
 
   /** Saves and publishes one of the user's two documents. */
@@ -190,6 +221,7 @@ async function setup({ publish = true }: { publish?: boolean } = {}) {
     user,
     cipher,
     openings,
+    rewrite,
     profiles,
     publishDocument,
     analyze,
@@ -595,6 +627,102 @@ describe("openings and fit check", () => {
     expect((await ctx.detail(openingId)).fitCheck?.outdated).toBe(true);
   });
 
+  it("edits the description and reads the fit check as outdated", async () => {
+    const ctx = await setup();
+    const openingId = await ctx.add();
+    await ctx.analyze(openingId, fitScript(allMet, extraction));
+    expect((await ctx.detail(openingId)).fitCheck?.outdated).toBe(false);
+
+    await ctx.openings.updateDescription({
+      userId: ctx.user.id,
+      openingId,
+      description: "  # Platform Engineer\n\nNew text.  ",
+    });
+    const after = await ctx.detail(openingId);
+    expect(after.description).toBe("# Platform Engineer\n\nNew text.");
+    expect(after.fitCheck?.outdated).toBe(true);
+
+    const grace = await createTestUser("grace-edit@example.com");
+    await new CareerService(ctx.db).getOrCreateProfile({
+      userId: grace.id,
+      defaultLanguage: "en-US",
+    });
+    await expect(
+      ctx.openings.updateDescription({
+        userId: grace.id,
+        openingId,
+        description: "x",
+      })
+    ).rejects.toMatchObject({ code: "NOT_FOUND" });
+  });
+
+  it("reads the fit check as outdated after a gap answer, until it runs again", async () => {
+    const ctx = await setup();
+    const openingId = await ctx.add();
+    const allGaps = fitScript((terms) => ({
+      items: terms.map((term) => ({
+        term_id: term.termId,
+        verdict: "gap",
+        passage_ids: [],
+        explanation: "No",
+      })),
+    }));
+    await ctx.analyze(openingId, {
+      object: (request: { system: string }) =>
+        request.system.startsWith("Write")
+          ? {
+              questions: [
+                ...request.system.matchAll(/- ([0-9a-f-]{36}): (.*)/g),
+              ].map((m) => ({ term_id: m[1], question: `About ${m[2]}?` })),
+            }
+          : allGaps.object(request),
+    });
+    const check = (await ctx.detail(openingId)).fitCheck!;
+    expect(check.outdated).toBe(false);
+
+    await ctx.openings.answerGapQuestion({
+      userId: ctx.user.id,
+      fitCheckItemId: check.items.find((item) => item.gapQuestion)!.id,
+      lacks: true,
+    });
+    expect((await ctx.detail(openingId)).fitCheck?.outdated).toBe(true);
+
+    await ctx.openings.reanalyze({ userId: ctx.user.id, openingId });
+    await ctx.analyze(openingId, fitScript(allMet));
+    expect((await ctx.detail(openingId)).fitCheck?.outdated).toBe(false);
+  });
+
+  it("keeps an optional link per opening, set and cleared with the title", async () => {
+    const ctx = await setup();
+    const openingId = await ctx.add();
+    await ctx.openings.rename({
+      userId: ctx.user.id,
+      openingId,
+      title: "Platform Engineer",
+      sourceUrl: "https://jobs.example.com/42",
+    });
+    expect(await ctx.detail(openingId)).toMatchObject({
+      title: "Platform Engineer",
+      sourceUrl: "https://jobs.example.com/42",
+    });
+    // Renaming without it leaves the link; null removes it.
+    await ctx.openings.rename({
+      userId: ctx.user.id,
+      openingId,
+      title: "Staff Platform Engineer",
+    });
+    expect((await ctx.detail(openingId)).sourceUrl).toBe(
+      "https://jobs.example.com/42"
+    );
+    await ctx.openings.rename({
+      userId: ctx.user.id,
+      openingId,
+      title: "Staff Platform Engineer",
+      sourceUrl: null,
+    });
+    expect((await ctx.detail(openingId)).sourceUrl).toBeNull();
+  });
+
   it("keeps the opening and the gap answers when the check runs again", async () => {
     const ctx = await setup();
     const openingId = await ctx.add();
@@ -652,6 +780,62 @@ describe("openings and fit check", () => {
         gapAnswer: "I wrote our modules.",
       }
     );
+  });
+
+  it("keeps an answer already made into an instruction point when the check runs again", async () => {
+    const ctx = await setup();
+    const openingId = await ctx.add();
+    const allGaps = fitScript((terms) => ({
+      items: terms.map((term) => ({
+        term_id: term.termId,
+        verdict: "gap",
+        passage_ids: [],
+        explanation: "No",
+      })),
+    }));
+    await ctx.analyze(openingId, {
+      object: (request: { system: string }) =>
+        request.system.startsWith("Write")
+          ? {
+              questions: [
+                ...request.system.matchAll(/- ([0-9a-f-]{36}): (.*)/g),
+              ].map((m) => ({ term_id: m[1], question: `About ${m[2]}?` })),
+            }
+          : allGaps.object(request),
+    });
+    const before = (await ctx.detail(openingId)).fitCheck!.items.find(
+      (item) => item.term === "Terraform"
+    )!;
+    await ctx.openings.answerGapQuestion({
+      userId: ctx.user.id,
+      fitCheckItemId: before.id,
+      answer: "I wrote our modules.",
+      notTied: true,
+    });
+    // Generating a document made the answer an instruction point.
+    const [profileRow] = await ctx.db.select().from(careerProfilesTable);
+    const cipher = await getUserCipher(ctx.db, ctx.user.id);
+    await ctx.db.insert(instructionPointsTable).values({
+      profileId: profileRow.id,
+      openingId,
+      source: "gap_answer",
+      fitCheckItemId: before.id,
+      sequence: 1,
+      encryptedText: cipher.encrypt("Wrote the Terraform modules."),
+    });
+
+    await ctx.openings.reanalyze({ userId: ctx.user.id, openingId });
+    await ctx.analyze(openingId, fitScript(allMet));
+    const after = (await ctx.detail(openingId)).fitCheck!.items.find(
+      (item) => item.term === "Terraform"
+    )!;
+    expect(after).toMatchObject({
+      verdict: "met",
+      gapAnswer: "I wrote our modules.",
+    });
+    // The point follows the answer, so it is not split again.
+    const [point] = await ctx.db.select().from(instructionPointsTable);
+    expect(point.fitCheckItemId).toBe(after.id);
   });
 
   /** A profile with two positions and a project, a check with all gaps. */
@@ -779,6 +963,63 @@ describe("openings and fit check", () => {
     });
     // The answer stays with the opening, and the profile is untouched.
     expect(await draft()).toBe(before);
+  });
+
+  it("proposes the answer rewritten as one sentence appended to the end of the responsibilities text", async () => {
+    const { ctx, openingId, fitCheck, item, suggestions } = await gapSetup();
+    await ctx.publishDocument(
+      (
+        await ctx.profiles.getDraft({ userId: ctx.user.id, language: "en-US" })
+      ).markdown.replace(
+        "- Responsibilities:\n  - Kept the payment systems running.",
+        "- Responsibilities: Kept the payment systems running."
+      )
+    );
+    ctx.rewrite.script = () => ({
+      sentence: "I used Terraform to write our modules.",
+    });
+    const answer = "Yes, for example for our modules";
+    const globex = fitCheck.positions.find((p) => p.employer === "Globex")!;
+    await ctx.openings.answerGapQuestion({
+      userId: ctx.user.id,
+      fitCheckItemId: item("Terraform").id,
+      answer,
+      positionIds: [globex.positionId],
+    });
+    // The rewrite got the requirement, the question and the answer.
+    expect(ctx.rewrite.calls).toHaveLength(1);
+    const prompt = JSON.stringify(ctx.rewrite.calls[0].messages);
+    expect(prompt).toContain("Terraform");
+    expect(prompt).toContain("About Terraform?");
+    expect(prompt).toContain(answer);
+    expect(prompt).toContain("Kept the payment systems running.");
+    const [row] = await suggestions();
+    // The sentence ends the existing item: no sub-item, no raw answer.
+    expect(row.find).toBe(
+      "- Responsibilities: Kept the payment systems running."
+    );
+    expect(row.replace).toBe(
+      "- Responsibilities: Kept the payment systems running. I used Terraform to write our modules."
+    );
+    // The stored answer stays the user's own words.
+    expect(
+      (await ctx.detail(openingId)).fitCheck!.items.find(
+        (row) => row.term === "Terraform"
+      )!.gapAnswer
+    ).toBe(answer);
+  });
+
+  it("falls back to the raw answer when the rewrite fails, and still saves it", async () => {
+    const { ctx, item, suggestions } = await gapSetup();
+    const answer = "I ran our Terraform modules.";
+    await ctx.openings.answerGapQuestion({
+      userId: ctx.user.id,
+      fitCheckItemId: item("Terraform").id,
+      answer,
+      notTied: true,
+    });
+    expect(ctx.rewrite.calls).toHaveLength(1);
+    expect((await suggestions())[0].replace).toContain(`  - ${answer}`);
   });
 
   it("proposes an untied “I have it” answer as one general suggestion under Professional identity", async () => {
@@ -1103,5 +1344,201 @@ describe("openings and fit check", () => {
     await expect(
       ctx.openings.get({ userId: grace.id, openingId })
     ).rejects.toMatchObject({ code: "NOT_FOUND" });
+  });
+});
+
+describe("answering any gap", () => {
+  beforeEach(async () => {
+    await clearTestDatabase();
+  });
+
+  afterAll(async () => {
+    await closeTestDatabase();
+  });
+
+  const conditionExtraction = {
+    ...extraction,
+    requirements: [
+      ...extraction.requirements,
+      {
+        text: "Available to start the day at 7:00 Brazil local time",
+        category: "condition",
+        importance: "mandatory",
+      },
+    ],
+  };
+  const allGaps = fitScript(
+    (terms) => ({
+      items: terms.map((term) => ({
+        term_id: term.termId,
+        verdict: "gap",
+        passage_ids: [],
+        explanation: "No",
+      })),
+    }),
+    conditionExtraction
+  );
+
+  async function conditionSetup() {
+    const ctx = await setup();
+    const openingId = await ctx.add();
+    await ctx.analyze(openingId, allGaps);
+    const items = (await ctx.detail(openingId)).fitCheck!.items;
+    const item = (term: string) => items.find((i) => i.term.startsWith(term))!;
+    return { ctx, openingId, item };
+  }
+
+  it("asks no gap question of a condition, which is answered by its own stance", async () => {
+    const { item } = await conditionSetup();
+    expect(item("Available").category).toBe("condition");
+    expect(item("Available").gapQuestion).toBeNull();
+  });
+
+  it.each(["meets", "not_blocker", "blocker"] as const)(
+    "stores a %s answer, counts it as input and reads the check as outdated",
+    async (stance) => {
+      const { ctx, openingId, item } = await conditionSetup();
+      expect((await ctx.detail(openingId)).fitCheck!.outdated).toBe(false);
+      await ctx.openings.answerCondition({
+        userId: ctx.user.id,
+        fitCheckItemId: item("Available").id,
+        stance,
+        note: "I can start at 7:00 if needed",
+        language: "en-US",
+      });
+
+      const check = (await ctx.detail(openingId)).fitCheck!;
+      expect(check.outdated).toBe(true);
+      expect(
+        check.items.find((i) => i.id === item("Available").id)
+      ).toMatchObject({
+        conditionStance: stance,
+        gapAnswer: "I can start at 7:00 if needed",
+      });
+
+      const pending = await loadPendingGapAnswers({
+        db: ctx.db,
+        cipher: ctx.cipher,
+        openingId,
+      });
+      expect(pending).toHaveLength(1);
+      expect(pending[0].question).toContain("Available");
+      expect(pending[0].answer).toContain("I can start at 7:00 if needed");
+
+      const [career] = await ctx.db.select().from(careerProfilesTable);
+      const input = await loadOpeningUserInput({
+        db: ctx.db,
+        cipher: ctx.cipher,
+        profileId: career.id,
+        openingId,
+        kind: "resume",
+        career: {
+          positions: [],
+          projects: [],
+          evidence: [],
+          instructions: [],
+        } as never,
+        storyLineId: null,
+      });
+      expect(input.gapAnswers).toMatchObject([
+        {
+          requirement: "Available to start the day at 7:00 Brazil local time",
+          stance,
+        },
+      ]);
+      expect(userInputLines(input).join("\n")).toContain(
+        "condition “Available"
+      );
+    }
+  );
+
+  it("undoes a condition answer", async () => {
+    const { ctx, openingId, item } = await conditionSetup();
+    await ctx.openings.answerCondition({
+      userId: ctx.user.id,
+      fitCheckItemId: item("Available").id,
+      stance: "meets",
+      language: "en-US",
+    });
+    await ctx.openings.undoConditionAnswer({
+      userId: ctx.user.id,
+      fitCheckItemId: item("Available").id,
+    });
+    expect(
+      (await ctx.detail(openingId)).fitCheck!.items.find(
+        (i) => i.id === item("Available").id
+      )
+    ).toMatchObject({ conditionStance: null, gapAnswer: null });
+  });
+
+  it("refuses a condition answer on a skill", async () => {
+    const { ctx, item } = await conditionSetup();
+    await expect(
+      ctx.openings.answerCondition({
+        userId: ctx.user.id,
+        fitCheckItemId: item("Kubernetes").id,
+        stance: "meets",
+        language: "en-US",
+      })
+    ).rejects.toMatchObject({ code: "BAD_REQUEST" });
+  });
+
+  it("adds a blocker to the job preferences as a discard rule when asked", async () => {
+    const { ctx, item } = await conditionSetup();
+    const without = await ctx.openings.answerCondition({
+      userId: ctx.user.id,
+      fitCheckItemId: item("Available").id,
+      stance: "blocker",
+      language: "en-US",
+    });
+    expect(without.preferenceRule).toBeNull();
+    const result = await ctx.openings.answerCondition({
+      userId: ctx.user.id,
+      fitCheckItemId: item("Available").id,
+      stance: "blocker",
+      note: "I can't wake up that early",
+      addToPreferences: true,
+      language: "en-US",
+    });
+    expect(result.preferenceRule).toBe(
+      "Available to start the day at 7:00 Brazil local time: I can't wake up that early"
+    );
+    const draft = await ctx.profiles.getDraft({
+      userId: ctx.user.id,
+      language: "en-US",
+      kind: "preferences",
+    });
+    expect(draft.markdown).toContain(result.preferenceRule!);
+  });
+
+  it("answers a declared gap with “I have it”, with no question asked", async () => {
+    const ctx = await setup();
+    const openingId = await ctx.add();
+    // The profile declares Go as a known gap: no question, still answerable.
+    await ctx.analyze(
+      openingId,
+      fitScript(allMet, {
+        ...extraction,
+        keywords: [
+          { text: "Go", category: "hard_skill", importance: "desirable" },
+        ],
+      })
+    );
+    const go = (await ctx.detail(openingId)).fitCheck!.items.find(
+      (i) => i.term === "Go"
+    )!;
+    expect(go).toMatchObject({ verdict: "gap", gapQuestion: null });
+    const result = await ctx.openings.answerGapQuestion({
+      userId: ctx.user.id,
+      fitCheckItemId: go.id,
+      answer: "I shipped a Go service at Acme.",
+      notTied: true,
+    });
+    expect(result.profileSuggestionIds).toHaveLength(1);
+    const after = (await ctx.detail(openingId)).fitCheck!;
+    expect(after.items.find((i) => i.id === go.id)).toMatchObject({
+      gapAnswer: "I shipped a Go service at Acme.",
+    });
+    expect(after.outdated).toBe(true);
   });
 });

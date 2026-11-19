@@ -27,7 +27,12 @@ import {
   listDocumentParts,
   locateInLines,
 } from "./document-change";
-import { proposeChange, readChangeContent } from "./propose-change";
+import {
+  proposeChange,
+  proposeSectionMove,
+  readChangeContent,
+} from "./propose-change";
+import type { SectionMove } from "./section-order";
 
 vi.mock("@repo/common/env/web.env", () => ({
   env: {
@@ -981,5 +986,147 @@ describe("proposed changes", () => {
       "At Globex I was in charge of deploys.",
       "I would be glad to talk.",
     ]);
+  });
+
+  describe("section moves", () => {
+    const kindsOf = (
+      content: ResumeContent | CoverLetterContent | { kind: string }
+    ) =>
+      "sections" in content
+        ? content.sections.map((section) => section.kind)
+        : [];
+    const proposeMove = (
+      ctx: Awaited<ReturnType<typeof setup>>,
+      move: SectionMove
+    ) =>
+      proposeSectionMove({
+        db: ctx.db,
+        cipher: ctx.cipher,
+        versionId: ctx.version.id,
+        snapshotId: ctx.snapshot.id,
+        content: ctx.content,
+        origin: "document_agent",
+        move,
+        reason: "Your experience reads stronger first.",
+      });
+
+    it("suggests a move, written to the snapshot only when accepted", async () => {
+      const ctx = await setup();
+      const move = await proposeMove(ctx, {
+        kind: "experience",
+        placement: "above",
+        anchor: "skills",
+      });
+      if (!move.ok) throw new Error("not proposed");
+      expect(await ctx.listPending()).toHaveLength(1);
+      expect(kindsOf(await ctx.latest())).toEqual([
+        "summary",
+        "skills",
+        "experience",
+      ]);
+      const listed = await ctx.changes.listChanges({
+        userId: ctx.user.id,
+        versionId: ctx.version.id,
+      });
+      expect(listed.map((change) => change.stale)).toEqual([false]);
+
+      const result = await ctx.changes.acceptChanges({
+        userId: ctx.user.id,
+        versionId: ctx.version.id,
+        baseSnapshotId: ctx.snapshot.id,
+      });
+      expect(result.accepted).toEqual([move.change.id]);
+      const content = await ctx.latest();
+      expect(kindsOf(content)).toEqual(["summary", "experience", "skills"]);
+      // The section moves with its content.
+      expect(
+        content.kind === "resume" && content.sections[1].kind === "experience"
+          ? content.sections[1].entries[0].lines.length
+          : 0
+      ).toBe(2);
+      expect(await ctx.listPending()).toHaveLength(0);
+    });
+
+    it("leaves the order alone when the suggestion is rejected", async () => {
+      const ctx = await setup();
+      const move = await proposeMove(ctx, {
+        kind: "skills",
+        placement: "below",
+        anchor: "experience",
+      });
+      if (!move.ok) throw new Error("not proposed");
+      await ctx.changes.rejectChanges({
+        userId: ctx.user.id,
+        versionId: ctx.version.id,
+        documentChangeIds: [move.change.id],
+      });
+      expect(await ctx.listPending()).toHaveLength(0);
+      expect(kindsOf(await ctx.latest())).toEqual([
+        "summary",
+        "skills",
+        "experience",
+      ]);
+    });
+
+    it("refuses a move to where the section already sits or to a section that isn't printed", async () => {
+      const ctx = await setup();
+      const same = await proposeMove(ctx, {
+        kind: "skills",
+        placement: "below",
+        anchor: "summary",
+      });
+      expect(same).toEqual({ ok: false, refusal: { kind: "unchanged" } });
+      const missing = await proposeMove(ctx, {
+        kind: "projects",
+        placement: "above",
+        anchor: "experience",
+      });
+      expect(missing).toEqual({ ok: false, refusal: { kind: "noSuchPart" } });
+    });
+
+    it("replaces a waiting move of the same section", async () => {
+      const ctx = await setup();
+      const first = await proposeMove(ctx, {
+        kind: "experience",
+        placement: "above",
+        anchor: "skills",
+      });
+      const second = await proposeMove(ctx, {
+        kind: "experience",
+        placement: "above",
+        anchor: "summary",
+      });
+      if (!first.ok || !second.ok) throw new Error("not proposed");
+      expect(second.supersededIds).toEqual([]);
+      const again = await proposeSectionMove({
+        db: ctx.db,
+        cipher: ctx.cipher,
+        versionId: ctx.version.id,
+        snapshotId: ctx.snapshot.id,
+        content: ctx.content,
+        origin: "document_agent",
+        move: { kind: "experience", placement: "above", anchor: "summary" },
+        reason: "Again.",
+        pending: (await ctx.listPending()).map((row) => ({
+          id: row.id,
+          ...readChangeContent(ctx.cipher, row),
+        })),
+      });
+      if (!again.ok) throw new Error("not proposed");
+      expect(again.supersededIds).toHaveLength(2);
+    });
+
+    it("is stale once the section sits there already", async () => {
+      const ctx = await setup();
+      const move = await proposeMove(ctx, {
+        kind: "experience",
+        placement: "above",
+        anchor: "skills",
+      });
+      if (!move.ok) throw new Error("not proposed");
+      const moved = applyDocumentChange(ctx.content, move.change);
+      expect(moved).not.toBeNull();
+      expect(applyDocumentChange(moved!, move.change)).toBeNull();
+    });
   });
 });

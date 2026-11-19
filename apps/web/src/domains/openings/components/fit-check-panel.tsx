@@ -1,9 +1,10 @@
 "use client";
 
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { Ban, RotateCw, TriangleAlert } from "lucide-react";
+import { RotateCw } from "lucide-react";
 import Link from "next/link";
 
+import { conditionCategories } from "@repo/api/domains/openings/schemas/opening";
 import type {
   FitCheckItemView,
   OpeningDetail,
@@ -14,18 +15,34 @@ import { Button } from "@repo/web/components/ui/button";
 import { toast } from "@repo/web/components/ui/sonner";
 import { cn } from "@repo/web/lib/utils";
 
-import { ApplicationContext } from "~/domains/applications/components/application-context";
 import { CreditCost } from "~/domains/credits/components/credit-cost";
 import { useCredits } from "~/domains/credits/hooks/use-credits";
-import { CompanyResearch } from "~/domains/applications/components/company-research";
-import { DocumentsPanel } from "~/domains/documents/components/documents-panel";
-import { SimilarDocuments } from "~/domains/documents/components/similar-documents";
 import { useTRPC } from "~/tools/trpc/client";
 
-import { useOpening, useRefreshOpenings } from "../hooks/use-opening";
+import { useRefreshOpenings } from "../hooks/use-opening";
 import { useOpeningLabels } from "../hooks/use-opening-labels";
+import { ConditionAnswer } from "./condition-answer";
+import { GapQuestion } from "./gap-question";
 
 const verdictOrder = { gap: 0, partial: 1, met: 2 } as const;
+const importanceOrder = { mandatory: 0, desirable: 1 } as const;
+
+type FitItem = NonNullable<OpeningDetail["fitCheck"]>["items"][number];
+
+/**
+ * The requirements in a fixed order, the same on every load: gaps first,
+ * then partial, then met; within each, mandatory before desirable, then by
+ * kind and name.
+ */
+export function byFitOrder(a: FitItem, b: FitItem) {
+  return (
+    verdictOrder[a.verdict] - verdictOrder[b.verdict] ||
+    importanceOrder[a.importance] - importanceOrder[b.importance] ||
+    a.category.localeCompare(b.category) ||
+    a.term.localeCompare(b.term) ||
+    a.id.localeCompare(b.id)
+  );
+}
 
 /** Gap questions the user hasn't answered yet. */
 export function pendingGaps(opening: OpeningDetail) {
@@ -36,155 +53,160 @@ export function pendingGaps(opening: OpeningDetail) {
   );
 }
 
+/** The band's colors, on a chip or a block. */
+export function bandClassName(band: "high" | "medium" | "low") {
+  return cn(
+    band === "high" && "border-emerald-500/40 bg-emerald-500/10",
+    band === "medium" && "border-amber-500/40 bg-amber-500/10",
+    band === "low" && "border-red-500/40 bg-red-500/10"
+  );
+}
+
 /**
- * The side panel's Analysis block: the fit check's band (never a
- * percentage), the job preferences it breaks and the method's warning
- * signs, then each requirement with the profile passages behind it.
+ * The opening page's Fit column (workspace spec, "The opening page"): the
+ * fit check's band (never a percentage) with "Check again", the job
+ * preferences it breaks, and each requirement as a card with the profile
+ * passages behind it and, when the opening asks for something the profile
+ * doesn't show, its gap question inside the card.
  */
-export function FitCheckPanel({ openingId }: { openingId: string }) {
+export function FitColumn({ opening }: { opening: OpeningDetail }) {
   const t = useTranslation();
   const labels = useOpeningLabels();
-  const opening = useOpening(openingId);
-  const fitCheck = opening.data?.fitCheck;
-
-  if (!opening.data || opening.data.status === "processing") return null;
+  const fitCheck = opening.fitCheck;
+  const blockers =
+    fitCheck?.items.filter((item) => item.conditionStance === "blocker")
+      .length ?? 0;
 
   return (
-    <div className="flex flex-col gap-6">
-      <section className="flex flex-col gap-2">
-        <h3 className="text-sm font-medium">
-          {t.formatMessage({ defaultMessage: "Analysis" })}
-        </h3>
-        {opening.data.warnings.length > 0 && (
-          <div className="flex gap-2 rounded-lg border border-amber-500/40 bg-amber-500/5 p-3 text-xs">
-            <TriangleAlert className="mt-0.5 size-3.5 shrink-0 text-amber-600" />
-            <ul className="flex flex-col gap-1">
-              {opening.data.warnings.map((warning) => (
-                <li key={warning}>{labels.warning(warning)}</li>
+    <div className="flex flex-col gap-4">
+      <h2 className="font-medium">
+        {t.formatMessage({ defaultMessage: "Fit" })}
+      </h2>
+      {fitCheck ? (
+        <>
+          <div
+            className={cn(
+              "flex flex-col gap-2 rounded-lg border p-3",
+              bandClassName(fitCheck.band)
+            )}
+          >
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              {/* Its hint ("a hint from your profile") lives once, on the
+                  header's chip. */}
+              <p className="font-medium">{labels.band(fitCheck.band)}</p>
+              <div className="flex items-center gap-2">
+                <RunFitCheck
+                  openingId={opening.id}
+                  again
+                  enabled
+                  highlight={fitCheck.outdated}
+                />
+              </div>
+            </div>
+            <div className="flex flex-wrap gap-1.5">
+              {(["met", "partial", "gap"] as const).map((verdict) => (
+                <Badge
+                  key={verdict}
+                  variant={
+                    verdict === "gap"
+                      ? "destructive"
+                      : verdict === "met"
+                        ? "default"
+                        : "secondary"
+                  }
+                >
+                  {cn(
+                    t.formatNumber(
+                      fitCheck.items.filter((item) => item.verdict === verdict)
+                        .length
+                    ),
+                    labels.verdict(verdict)
+                  )}
+                </Badge>
               ))}
-            </ul>
-          </div>
-        )}
-        {fitCheck ? (
-          <>
-            <div
-              className={cn(
-                "rounded-lg border p-3 text-sm font-medium",
-                fitCheck.band === "high" &&
-                  "border-emerald-500/40 bg-emerald-500/10",
-                fitCheck.band === "medium" &&
-                  "border-amber-500/40 bg-amber-500/10",
-                fitCheck.band === "low" && "border-red-500/40 bg-red-500/10"
-              )}
-            >
-              {labels.band(fitCheck.band)}
-              <p className="text-muted-foreground mt-1 text-xs font-normal">
+            </div>
+            {blockers > 0 && (
+              <p className="text-xs font-medium text-red-600 dark:text-red-400">
+                {t.formatMessage(
+                  {
+                    defaultMessage:
+                      "{count, plural, =0 {No blockers} one {You marked # blocker} other {You marked # blockers}}",
+                  },
+                  { count: blockers }
+                )}
+              </p>
+            )}
+            {/* The check is worth running again once what it read changed. */}
+            {fitCheck.outdated && (
+              <p className="text-xs font-medium">
                 {t.formatMessage({
                   defaultMessage:
-                    "A hint from your published profile. You can apply whatever it says.",
+                    "This check is outdated: you answered questions, edited the description, or published your profile or job preferences again since it ran. Its status and totals don’t count that yet. Check again to include it.",
                 })}
               </p>
-            </div>
-            {fitCheck.preferenceConflicts.length > 0 && (
-              <div className="rounded-lg border border-red-500/40 bg-red-500/5 p-3 text-xs">
-                <p className="font-medium">
-                  {t.formatMessage({
-                    defaultMessage: "It breaks your job preferences:",
-                  })}
-                </p>
-                <ul className="mt-1 flex flex-col gap-1">
-                  {fitCheck.preferenceConflicts.map((conflict) => (
-                    <li key={conflict.rule}>
-                      <span className="font-medium">{conflict.rule}</span>
-                      <span className="text-muted-foreground block">
-                        {conflict.explanation}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
             )}
-            {fitCheck.outdated && (
-              <div className="flex flex-wrap items-center gap-2 text-xs">
-                <span className="text-muted-foreground">
-                  {t.formatMessage({
-                    defaultMessage:
-                      "Your profile or your job preferences were published again since this check.",
-                  })}
-                </span>
-                <RunFitCheck openingId={openingId} again enabled />
-              </div>
-            )}
-            <ul className="flex flex-col gap-2">
-              {[...fitCheck.items]
-                .sort(
-                  (a, b) => verdictOrder[a.verdict] - verdictOrder[b.verdict]
-                )
-                .map((item) => (
-                  <FitCheckItem key={item.id} item={item} />
-                ))}
-            </ul>
-          </>
-        ) : opening.data.needsPublishedProfile ? (
-          <div className="flex flex-col gap-2 rounded-lg border border-dashed p-3 text-xs">
-            <p>
-              {t.formatMessage({
-                defaultMessage:
-                  "The fit check reads your published profile, and you haven't published one yet. Review and publish it in My career, then run the check.",
-              })}
-            </p>
-            <div className="flex flex-wrap items-center gap-2">
-              <Button asChild size="sm" variant="outline" className="h-7">
-                <Link href="/app/career">
-                  {t.formatMessage({ defaultMessage: "Go to My career" })}
-                </Link>
-              </Button>
-              <RunFitCheck
-                openingId={openingId}
-                enabled={opening.data.profilePublished}
-              />
-            </div>
           </div>
-        ) : (
-          <p className="text-muted-foreground text-xs">
-            {opening.data.kind === "unsolicited"
-              ? t.formatMessage({
-                  defaultMessage:
-                    "With no vacancy there are no requirements to compare, so there's no fit check.",
-                })
-              : t.formatMessage({
-                  defaultMessage: "No analysis for this opening.",
+          {fitCheck.preferenceConflicts.length > 0 && (
+            <div className="rounded-lg border border-red-500/40 bg-red-500/5 p-3 text-sm">
+              <p className="font-medium">
+                {t.formatMessage({
+                  defaultMessage: "It breaks your job preferences:",
                 })}
-          </p>
-        )}
-        {opening.data.status === "analyzed" && opening.data.company && (
-          <ExcludeCompany
-            openingId={openingId}
-            company={opening.data.company}
-          />
-        )}
-      </section>
-
-      {opening.data.status === "analyzed" && (
-        <>
-          <DocumentsPanel
-            openingId={openingId}
-            defaultLanguage={opening.data.language ?? "en-US"}
-            defaultTone={opening.data.suggestedTone ?? "your_style"}
-            pendingGaps={pendingGaps(opening.data)}
-          />
-          <SimilarDocuments
-            openingId={openingId}
-            defaultLanguage={opening.data.language ?? "en-US"}
-            defaultTone={opening.data.suggestedTone ?? "your_style"}
-            pendingGaps={pendingGaps(opening.data)}
-          />
-          <ApplicationContext openingId={openingId} />
-          <CompanyResearch
-            openingId={openingId}
-            hasCompany={!!opening.data.company}
-          />
+              </p>
+              <ul className="mt-1 flex flex-col gap-1 text-xs">
+                {fitCheck.preferenceConflicts.map((conflict) => (
+                  <li key={conflict.rule}>
+                    <span className="font-medium">{conflict.rule}</span>
+                    <span className="text-muted-foreground block">
+                      {conflict.explanation}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+          <ul className="flex flex-col gap-2">
+            {[...fitCheck.items].sort(byFitOrder).map((item) => (
+              <FitCheckItem
+                key={item.id}
+                item={item}
+                positions={fitCheck.positions}
+                projects={fitCheck.projects}
+              />
+            ))}
+          </ul>
         </>
+      ) : opening.needsPublishedProfile ? (
+        <div className="flex flex-col gap-2 rounded-lg border border-dashed p-4 text-sm">
+          <p>
+            {t.formatMessage({
+              defaultMessage:
+                "The fit check reads your published profile, and you haven't published one yet. Review and publish it in My career, then run the check.",
+            })}
+          </p>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button asChild size="sm" variant="outline">
+              <Link href="/app/career">
+                {t.formatMessage({ defaultMessage: "Go to My career" })}
+              </Link>
+            </Button>
+            <RunFitCheck
+              openingId={opening.id}
+              enabled={opening.profilePublished}
+            />
+          </div>
+        </div>
+      ) : (
+        <p className="text-muted-foreground text-sm">
+          {opening.kind === "unsolicited"
+            ? t.formatMessage({
+                defaultMessage:
+                  "With no vacancy there are no requirements to compare, so there's no fit check.",
+              })
+            : t.formatMessage({
+                defaultMessage: "No fit check for this opening.",
+              })}
+        </p>
       )}
     </div>
   );
@@ -195,11 +217,13 @@ function RunFitCheck({
   openingId,
   again = false,
   enabled,
+  highlight = false,
 }: {
   openingId: string;
   again?: boolean;
   // Nothing to check against until a profile is published.
   enabled: boolean;
+  highlight?: boolean;
 }) {
   const t = useTranslation();
   const trpc = useTRPC();
@@ -215,7 +239,7 @@ function RunFitCheck({
     <>
       <Button
         size="sm"
-        variant="outline"
+        variant={highlight ? "default" : "outline"}
         className="h-7"
         disabled={run.isPending || !enabled}
         onClick={() => run.mutate({ openingId })}
@@ -231,13 +255,7 @@ function RunFitCheck({
 }
 
 /** Adds the opening's company to the job preferences' excluded companies. */
-function ExcludeCompany({
-  openingId,
-  company,
-}: {
-  openingId: string;
-  company: string;
-}) {
+export function useExcludeCompany(openingId: string, company: string | null) {
   const t = useTranslation();
   const trpc = useTRPC();
   const queryClient = useQueryClient();
@@ -265,35 +283,34 @@ function ExcludeCompany({
       onError: (error) => toast.error(error.message),
     })
   );
-  return (
-    <Button
-      size="sm"
-      variant="ghost"
-      className="text-muted-foreground h-7 self-start text-xs"
-      disabled={exclude.isPending || exclude.isSuccess}
-      // The day in the user's own calendar, written next to the company.
-      onClick={() =>
-        exclude.mutate({
-          openingId,
-          date: new Date().toLocaleDateString("sv-SE"),
-        })
-      }
-    >
-      <Ban className="size-3" />
-      {t.formatMessage(
-        { defaultMessage: "Never recommend {company} again" },
-        { company }
-      )}
-    </Button>
-  );
+  return {
+    disabled: !company || exclude.isPending || exclude.isSuccess,
+    // The day in the user's own calendar, written next to the company.
+    exclude: () =>
+      exclude.mutate({
+        openingId,
+        date: new Date().toLocaleDateString("sv-SE"),
+      }),
+  };
 }
 
-function FitCheckItem({ item }: { item: FitCheckItemView }) {
+function FitCheckItem({
+  item,
+  positions,
+  projects,
+}: {
+  item: FitCheckItemView;
+  positions: NonNullable<OpeningDetail["fitCheck"]>["positions"];
+  projects: NonNullable<OpeningDetail["fitCheck"]>["projects"];
+}) {
   const t = useTranslation();
   const labels = useOpeningLabels();
 
   return (
-    <li className="bg-background flex flex-col gap-1.5 rounded-lg border p-2.5">
+    <li
+      id={`fit-item-${item.id}`}
+      className="bg-background flex flex-col gap-1.5 rounded-lg border p-3"
+    >
       <div className="flex items-center gap-1.5">
         <Badge
           variant={
@@ -319,8 +336,9 @@ function FitCheckItem({ item }: { item: FitCheckItemView }) {
       {item.explanation && (
         <p className="text-muted-foreground text-xs">{item.explanation}</p>
       )}
-      {/* The user's own answer, when the verdict rests on it. */}
-      {item.citesAnswer && item.gapAnswer && (
+      {/* The user's own answer, when the verdict rests on it and there is
+          no question form showing it. */}
+      {item.citesAnswer && item.gapAnswer && !item.gapQuestion && (
         <p className="bg-muted/50 rounded px-2 py-1 text-xs whitespace-pre-wrap">
           <span className="text-muted-foreground block text-[11px]">
             {t.formatMessage({
@@ -339,6 +357,26 @@ function FitCheckItem({ item }: { item: FitCheckItemView }) {
           {passage.text}
         </p>
       ))}
+      {item.verdict !== "met" &&
+        conditionCategories.includes(item.category) && (
+          <ConditionAnswer
+            fitCheckItemId={item.id}
+            stance={item.conditionStance}
+            note={item.gapAnswer}
+          />
+        )}
+      {item.verdict !== "met" &&
+        !conditionCategories.includes(item.category) && (
+          <GapQuestion
+            fitCheckItemId={item.id}
+            question={item.gapQuestion}
+            answer={item.gapAnswer}
+            lacks={item.gapLack}
+            links={item.gapLinks}
+            positions={positions}
+            projects={projects}
+          />
+        )}
     </li>
   );
 }

@@ -1,15 +1,20 @@
 "use client";
 
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Send } from "lucide-react";
+import { CheckCircle2, ChevronRight, Loader2, Send } from "lucide-react";
 import { useRouter } from "next/navigation";
 
 import type { MotivationView } from "@repo/api/domains/applications/schemas/motivation";
 import { useTranslation } from "@repo/intl/use-translation";
 import { Button } from "@repo/web/components/ui/button";
 import { Checkbox } from "@repo/web/components/ui/checkbox";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@repo/web/components/ui/collapsible";
 import { toast } from "@repo/web/components/ui/sonner";
 import { Textarea } from "@repo/web/components/ui/textarea";
 import { cn } from "@repo/web/lib/utils";
@@ -19,16 +24,18 @@ import type { Tone } from "@repo/api/domains/openings/schemas/opening";
 
 import { AiAtWork } from "~/domains/workspace/components/ai-at-work";
 import { VoiceInputButton } from "~/domains/career/components/voice-input-button";
+import { DocumentAgent } from "~/domains/documents/components/document-agent";
 import { CoverLetterWorkspace } from "~/domains/documents/components/cover-letter-workspace";
 import {
   chosenStory,
   LetterStoryPicker,
   useLetterStories,
 } from "~/domains/documents/components/letter-story-picker";
-import { GenerateLetterDialog } from "~/domains/documents/components/generate-letter-dialog";
+import { GenerateLetterNow } from "~/domains/documents/components/generate-letter-dialog";
 import { useOpeningDocuments } from "~/domains/documents/hooks/use-opening-documents";
 import { useTimeline } from "~/domains/career/hooks/use-career-queries";
 import { useTRPC } from "~/tools/trpc/client";
+import { ResizableAside } from "~/domains/workspace/components/resizable-aside";
 
 function useRefreshMotivation() {
   const trpc = useTRPC();
@@ -49,10 +56,14 @@ export function CoverLetterPrep({
   openingId,
   defaultLanguage,
   defaultTone,
+  aside,
 }: {
   openingId: string;
   defaultLanguage: OutputLanguage;
   defaultTone: Tone;
+  /** The left column beside the steps (the page's context), as the
+   * document workspace has its index there. */
+  aside?: ReactNode;
 }) {
   const trpc = useTRPC();
   const motivation = useQuery({
@@ -60,6 +71,8 @@ export function CoverLetterPrep({
     refetchInterval: (query) => (query.state.data?.thinking ? 1500 : false),
   });
   const documents = useOpeningDocuments(openingId);
+  // The motivation answer being written: the agent may fill it.
+  const [answerText, setAnswerText] = useState("");
   const data = motivation.data;
   if (!data) return null;
   const letter = documents.data?.documents.find(
@@ -86,11 +99,21 @@ export function CoverLetterPrep({
     letter?.versions.length &&
     (data.status === "finished" || data.status === "skipped")
   ) {
-    return <CoverLetterWorkspace document={letter} />;
+    return <CoverLetterWorkspace document={letter} aside={aside} />;
   }
+  const agent = (
+    <LetterPrepAgent
+      openingId={openingId}
+      onUseAnswer={
+        data.status === "in_progress" && !data.thinking
+          ? setAnswerText
+          : undefined
+      }
+    />
+  );
   if (!data.status || data.status === "failed") {
     return (
-      <Prep>
+      <Prep aside={aside} agent={agent}>
         <MotivationStart
           openingId={openingId}
           failed={data.status === "failed"}
@@ -100,7 +123,7 @@ export function CoverLetterPrep({
   }
   if (data.status === "skipped") {
     return (
-      <Prep>
+      <Prep aside={aside} agent={agent}>
         <div className="flex flex-col gap-4">
           <Skipped openingId={openingId} />
           {writeLetter}
@@ -110,31 +133,164 @@ export function CoverLetterPrep({
   }
   if (data.status === "in_progress") {
     return (
-      <Prep>
-        <Interview openingId={openingId} motivation={data} />
+      <Prep aside={aside} agent={agent}>
+        <Interview
+          openingId={openingId}
+          motivation={data}
+          text={answerText}
+          setText={setAnswerText}
+        />
+      </Prep>
+    );
+  }
+  const review = (
+    <PointsReview
+      key={data.points.map((point) => `${point.id}:${point.status}`).join()}
+      openingId={openingId}
+      motivation={data}
+    />
+  );
+  // Points left to confirm come first; once confirmed the interview is over
+  // and writing the letter is the step (owner), the interview folded away.
+  if (data.points.some((point) => point.status === "draft")) {
+    return (
+      <Prep aside={aside} agent={agent}>
+        {review}
       </Prep>
     );
   }
   return (
-    <Prep>
-      <div className="flex flex-col gap-6">
-        <PointsReview
-          key={data.points.map((point) => `${point.id}:${point.status}`).join()}
-          openingId={openingId}
-          motivation={data}
-        />
-        {!data.points.some((point) => point.status === "draft") && writeLetter}
-      </div>
+    <Prep aside={aside} agent={agent}>
+      <InterviewDone points={data.points.length} writeLetter={writeLetter}>
+        {review}
+      </InterviewDone>
     </Prep>
   );
 }
 
-/** The steps before the letter, read in the column's width. */
-function Prep({ children }: { children: ReactNode }) {
+/** The interview over: the letter to write, the interview a click away. */
+function InterviewDone({
+  points,
+  writeLetter,
+  children,
+}: {
+  points: number;
+  writeLetter: ReactNode;
+  children: ReactNode;
+}) {
+  const t = useTranslation();
+  const [open, setOpen] = useState(false);
   return (
-    <div className="min-h-0 flex-1 overflow-y-auto">
-      <div className="mx-auto w-full max-w-3xl p-6">{children}</div>
+    <div className="flex flex-col gap-6">
+      <section className="flex flex-col gap-3 rounded-lg border p-5">
+        <div className="flex flex-col gap-1">
+          <h2 className="flex items-center gap-2 font-medium">
+            <CheckCircle2 className="size-4 text-emerald-600" />
+            {t.formatMessage({ defaultMessage: "Your interview is done" })}
+          </h2>
+          <p className="text-muted-foreground text-sm">
+            {t.formatMessage(
+              {
+                defaultMessage:
+                  "{count, plural, =0 {Nothing you told it} one {The # point you told it} other {The # points you told it}} go into the letter, with your profile and the company facts you picked.",
+              },
+              { count: points }
+            )}
+          </p>
+        </div>
+        {writeLetter}
+      </section>
+      <Collapsible open={open} onOpenChange={setOpen}>
+        <CollapsibleTrigger asChild>
+          <Button variant="ghost" size="sm" className="self-start">
+            <ChevronRight
+              className={cn("transition-transform", open && "rotate-90")}
+            />
+            {t.formatMessage({ defaultMessage: "Review the interview" })}
+          </Button>
+        </CollapsibleTrigger>
+        <CollapsibleContent className="pt-3">{children}</CollapsibleContent>
+      </Collapsible>
     </div>
+  );
+}
+
+/**
+ * The steps before the letter, read in the column's width, in the same
+ * three zones as the document workspace so the page doesn't jump.
+ */
+function Prep({
+  children,
+  aside,
+  agent,
+}: {
+  children: ReactNode;
+  aside?: ReactNode;
+  /** The cover letter's agent, in the right column. */
+  agent?: ReactNode;
+}) {
+  return (
+    <div className="flex min-h-0 flex-1">
+      {aside && (
+        <ResizableAside
+          storageKey="document-index-width"
+          className="space-y-6 p-4"
+        >
+          {aside}
+        </ResizableAside>
+      )}
+      <div className="min-w-0 flex-1 overflow-y-auto">
+        <div className="mx-auto w-full max-w-3xl p-6">{children}</div>
+      </div>
+      {agent && (
+        <ResizableAside
+          storageKey="letter-agent-width"
+          defaultWidth={384}
+          side="right"
+          from="lg"
+          className="bg-muted/30"
+        >
+          {agent}
+        </ResizableAside>
+      )}
+    </div>
+  );
+}
+
+/**
+ * The cover letter's agent while the letter is prepared: the letter's
+ * document is made empty so the agent has its conversation, which goes on
+ * beside the letter once it is generated.
+ */
+function LetterPrepAgent({
+  openingId,
+  onUseAnswer,
+}: {
+  openingId: string;
+  onUseAnswer?: (text: string) => void;
+}) {
+  const trpc = useTRPC();
+  const document = useMutation(
+    trpc.documents.letterAgentDocument.mutationOptions()
+  );
+  const { mutate } = document;
+  useEffect(() => {
+    mutate({ openingId });
+  }, [mutate, openingId]);
+  if (!document.data) {
+    return (
+      <div className="flex h-full items-center justify-center">
+        <Loader2 className="text-muted-foreground size-5 animate-spin" />
+      </div>
+    );
+  }
+  return (
+    <DocumentAgent
+      documentId={document.data.documentId}
+      kind="cover_letter"
+      version={null}
+      onUseAnswer={onUseAnswer}
+    />
   );
 }
 
@@ -173,16 +329,11 @@ function WriteLetter({
           })}
         </p>
       )}
-      <GenerateLetterDialog
+      <GenerateLetterNow
         openingId={openingId}
         resumeVersions={resumeVersions}
         defaultLanguage={defaultLanguage}
         defaultTone={defaultTone}
-        trigger={
-          <Button>
-            {t.formatMessage({ defaultMessage: "Generate cover letter" })}
-          </Button>
-        }
       />
     </section>
   );
@@ -297,15 +448,18 @@ function Skipped({ openingId }: { openingId: string }) {
 function Interview({
   openingId,
   motivation,
+  text,
+  setText,
 }: {
   openingId: string;
   motivation: MotivationView;
+  text: string;
+  setText: (text: string) => void;
 }) {
   const t = useTranslation();
   const trpc = useTRPC();
   const refresh = useRefreshMotivation();
   const timeline = useTimeline();
-  const [text, setText] = useState("");
   const answer = useMutation(
     trpc.motivation.answer.mutationOptions({
       onSuccess: async () => {

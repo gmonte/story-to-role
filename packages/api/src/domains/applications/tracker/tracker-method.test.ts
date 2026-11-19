@@ -4,9 +4,14 @@ import { eq } from "drizzle-orm";
 import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { CareerRepository } from "@repo/api/domains/career/career-repository";
-import { documentsTable } from "@repo/api/domains/documents/db/documents-tables";
+import {
+  documentsTable,
+  generationsTable,
+  reviewRoundsTable,
+} from "@repo/api/domains/documents/db/documents-tables";
 import { DocumentsRepository } from "@repo/api/domains/documents/documents-repository";
 import { getUserCipher } from "@repo/api/domains/encryption/user-cipher";
+import { fitChecksTable } from "@repo/api/domains/openings/db/openings-tables";
 import { ProfileService } from "@repo/api/domains/profile/profile-service";
 import { createTestUser } from "@repo/api/test/create-test-user";
 import {
@@ -44,6 +49,7 @@ describe("metrics math", () => {
     status: "applied",
     changes: [],
     resumes: [],
+    sentResume: null,
     fitBand: null,
     ...over,
   });
@@ -96,10 +102,9 @@ describe("metrics math", () => {
       daysToResponseSample: 2,
       highFit: { total: 2, interviews: 1 },
     });
-    expect(month.byResume).toEqual([
-      expect.objectContaining({ versionId: a, sent: 2, responded: 2 }),
-      expect.objectContaining({ versionId: b, sent: 2, responded: 0 }),
-      expect.objectContaining({ versionId: null, sent: 1, responded: 0 }),
+    expect(month.byFit).toEqual([
+      { band: null, sent: 3, responded: 0 },
+      { band: "high", sent: 2, responded: 2 },
     ]);
     expect(month.bySource).toEqual([
       { source: "linkedin", sent: 2, responded: 2 },
@@ -117,6 +122,59 @@ describe("metrics math", () => {
     expect(
       computeMetrics({ rows: [row({})], period: "all", now })
     ).toMatchObject({ medianDaysToResponse: null, daysToResponseSample: 0 });
+  });
+
+  it("pools openings by resume origin, score band and fit band", () => {
+    const lib = "00000000-0000-4000-8000-0000000000c1";
+    const sent = (
+      rating: number | null,
+      library: { documentId: string; label: string | null } | null = null
+    ) => ({ library, generated: !library, rating });
+    const rows = [
+      row({ sentResume: sent(9), status: "offer", fitBand: "high" }),
+      row({ sentResume: sent(7), fitBand: "medium" }),
+      row({
+        sentResume: sent(8, { documentId: lib, label: "Backend" }),
+        status: "rejected",
+        fitBand: "medium",
+      }),
+      row({ sentResume: sent(null, { documentId: lib, label: "Backend" }) }),
+      row({ sentResume: null }),
+    ];
+    const metrics = computeMetrics({ rows, period: "all", now });
+    expect(metrics.byOrigin).toEqual([
+      {
+        origin: "generated",
+        libraryDocumentId: null,
+        label: null,
+        sent: 2,
+        responded: 1,
+      },
+      {
+        origin: "library",
+        libraryDocumentId: lib,
+        label: "Backend",
+        sent: 2,
+        responded: 1,
+      },
+      {
+        origin: "unknown",
+        libraryDocumentId: null,
+        label: null,
+        sent: 1,
+        responded: 0,
+      },
+    ]);
+    expect(metrics.byScore).toEqual([
+      { band: "reached", sent: 2, responded: 2 },
+      { band: "none", sent: 2, responded: 0 },
+      { band: "below", sent: 1, responded: 0 },
+    ]);
+    expect(metrics.byFit).toEqual([
+      { band: "medium", sent: 2, responded: 1 },
+      { band: null, sent: 2, responded: 0 },
+      { band: "high", sent: 1, responded: 1 },
+    ]);
   });
 });
 
@@ -226,13 +284,143 @@ describe("tracker, the method's fields", () => {
       interviews: 1,
       bySource: [{ source: "linkedin", sent: 1, responded: 1 }],
     });
-    expect(metrics.byResume).toEqual([
-      expect.objectContaining({ versionId: version.id, sent: 1, responded: 1 }),
+    expect(metrics.byOrigin).toEqual([
+      expect.objectContaining({ origin: "generated", sent: 1, responded: 1 }),
     ]);
+    expect(metrics.byScore).toEqual([{ band: "none", sent: 1, responded: 1 }]);
+    expect(metrics.byFit).toEqual([{ band: null, sent: 1, responded: 1 }]);
     expect(metrics.medianDaysToResponse).toBeCloseTo(3, 0);
   });
 
-  it("encrypts the free text and picks the resume by hand only when external", async () => {
+  it("groups the metrics by resume origin, score band and fit band", async () => {
+    const ctx = await setup();
+    const documents = new DocumentsRepository(ctx.db);
+    const cipher = await getUserCipher(ctx.db, ctx.user.id);
+    const [library] = await ctx.db
+      .insert(documentsTable)
+      .values({
+        profileId: ctx.profile.id,
+        kind: "resume",
+        encryptedFocus: cipher.encrypt("Backend roles"),
+      })
+      .returning();
+    const libraryVersion = await documents.insertVersion({
+      documentId: library.id,
+      language: "en-US",
+    });
+
+    // Applies with a resume written for the opening, rated 9, high fit.
+    const first = await ctx.external();
+    const firstApplication = await documents.findOrInsertApplication({
+      profileId: ctx.profile.id,
+      openingId: first.openingId,
+    });
+    const firstDocument = await documents.findOrInsertApplicationDocument({
+      profileId: ctx.profile.id,
+      applicationId: firstApplication.id,
+      kind: "resume",
+    });
+    const generated = await documents.insertVersion({
+      documentId: firstDocument.id,
+      language: "en-US",
+    });
+    const [generation] = await ctx.db
+      .insert(generationsTable)
+      .values({
+        profileId: ctx.profile.id,
+        documentId: firstDocument.id,
+        versionId: generated.id,
+        language: "en-US",
+        reviewDepth: "quick",
+        writingLevel: "standard",
+        tone: "formal",
+        status: "completed",
+      })
+      .returning();
+    await ctx.db.insert(reviewRoundsTable).values([
+      {
+        generationId: generation.id,
+        round: 0,
+        rating: 6,
+        inputTokens: 1,
+        outputTokens: 1,
+      },
+      {
+        generationId: generation.id,
+        round: 1,
+        rating: 9,
+        inputTokens: 1,
+        outputTokens: 1,
+        kept: true,
+      },
+    ]);
+    await ctx.db
+      .insert(fitChecksTable)
+      .values({ openingId: first.openingId, band: "high" });
+    await ctx.tracker.updateDetails({
+      userId: ctx.user.id,
+      applicationId: first.applicationId,
+      applicationType: "external",
+      resumeVersionId: generated.id,
+    });
+
+    // Applies with a copy of the library resume, not rated, never checked.
+    const second = await ctx.external();
+    const secondApplication = await documents.findOrInsertApplication({
+      profileId: ctx.profile.id,
+      openingId: second.openingId,
+    });
+    const secondDocument = await documents.findOrInsertApplicationDocument({
+      profileId: ctx.profile.id,
+      applicationId: secondApplication.id,
+      kind: "resume",
+    });
+    const copy = await documents.insertVersion({
+      documentId: secondDocument.id,
+      language: "en-US",
+      libraryVersionId: libraryVersion.id,
+    });
+    await ctx.tracker.updateDetails({
+      userId: ctx.user.id,
+      applicationId: second.applicationId,
+      applicationType: "external",
+      resumeVersionId: copy.id,
+    });
+
+    const metrics = await ctx.tracker.metrics({
+      userId: ctx.user.id,
+      period: "all",
+      now,
+    });
+    expect(metrics.byOrigin).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          origin: "generated",
+          sent: 1,
+        }),
+        expect.objectContaining({
+          origin: "library",
+          libraryDocumentId: library.id,
+          label: "Backend roles",
+          sent: 1,
+        }),
+      ])
+    );
+    expect(metrics.byScore).toEqual(
+      expect.arrayContaining([
+        { band: "reached", sent: 1, responded: 0 },
+        { band: "none", sent: 1, responded: 0 },
+      ])
+    );
+    expect(metrics.byFit).toEqual(
+      expect.arrayContaining([
+        { band: "high", sent: 1, responded: 0 },
+        { band: null, sent: 1, responded: 0 },
+      ])
+    );
+  });
+
+  it("encrypts the free text and picks the resume by hand only when none was recorded", async () => {
     const ctx = await setup();
     const { applicationId } = await ctx.external();
     const documents = new DocumentsRepository(ctx.db);
@@ -292,8 +480,8 @@ describe("tracker, the method's fields", () => {
           period: "all",
           now,
         })
-      ).byResume[0]
-    ).toMatchObject({ versionId: version.id, sent: 1 });
+      ).byOrigin[0]
+    ).toMatchObject({ origin: "library", sent: 1 });
 
     // Null clears; an omitted field stays.
     await ctx.tracker.updateDetails({
@@ -308,10 +496,11 @@ describe("tracker, the method's fields", () => {
     expect(cleared.notes).toBeNull();
     expect(cleared.nextStep).not.toBeNull();
 
-    // An application with documents records its own: no hand-picking.
+    // One still in preparation records its own: no hand-picking. (Applied
+    // without a resume, it picks by hand like an external one.)
     await ctx.db
       .update(applicationsTable)
-      .set({ external: false })
+      .set({ external: false, status: "in_preparation" })
       .where(eq(applicationsTable.id, applicationId));
     await expect(
       ctx.tracker.updateDetails({

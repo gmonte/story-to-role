@@ -191,6 +191,29 @@ export class TrackerService {
   }
 
   /**
+   * The opening's application, created if there is none: an opening can be
+   * applied to, and its status moved, without any document written for it.
+   */
+  async ensureForOpening(input: { userId: string; openingId: string }) {
+    const profile = await this.requireProfile(input.userId);
+    return this.db.transaction(async (tx) => {
+      const opening = await new OpeningsRepository(tx).findOpening({
+        profileId: profile.id,
+        openingId: input.openingId,
+      });
+      if (!opening) throw new TRPCError({ code: "NOT_FOUND" });
+      const application = await new DocumentsRepository(
+        tx
+      ).findOrInsertApplication({
+        profileId: profile.id,
+        openingId: opening.id,
+      });
+      if (!application) throw new TRPCError({ code: "NOT_FOUND" });
+      return { applicationId: application.id };
+    });
+  }
+
+  /**
    * Moves an application to another status, recorded on its timeline.
    * "Applied" goes through markApplied (it records what was sent), except
    * for an external application, which has no documents.
@@ -266,7 +289,7 @@ export class TrackerService {
         (version) =>
           input.versionIds.includes(version.versionId) && version.snapshotId
       );
-      if (sent.length !== input.versionIds.length || sent.length === 0) {
+      if (sent.length !== input.versionIds.length) {
         throw new TRPCError({ code: "BAD_REQUEST" });
       }
       // Sending is the document leaving the platform: a resume with
@@ -425,8 +448,8 @@ export class TrackerService {
 
   /**
    * The method's fields on an application (tracker spec): `undefined` keeps
-   * a field, `null` clears it. The resume sent is only picked by hand for an
-   * external application; one sent from StoryToRole records itself.
+   * a field, `null` clears it. The resume sent is only picked by hand when none
+   * was recorded; one sent from StoryToRole records itself.
    */
   async updateDetails(input: {
     userId: string;
@@ -448,7 +471,17 @@ export class TrackerService {
         const owned = await repository.resumeVersions(profile.id, [
           input.resumeVersionId,
         ]);
-        if (!row.application.external || owned.length === 0) {
+        // Sent from StoryToRole, it records itself; with nothing recorded
+        // (external, or applied without a resume) it is picked by hand.
+        const submissions = await repository.listSubmissions(
+          row.application.id
+        );
+        if (
+          submissions.length > 0 ||
+          owned.length === 0 ||
+          (!row.application.external &&
+            row.application.status === "in_preparation")
+        ) {
           throw new TRPCError({ code: "BAD_REQUEST" });
         }
       }
@@ -510,6 +543,41 @@ export class TrackerService {
         versionRef(cipher, row),
       ])
     );
+    const origins = await repository.versionOrigins(versionIds);
+    const libraryOf = new Map(
+      origins.libraries.map((l) => [
+        l.versionId,
+        {
+          documentId: l.documentId,
+          label:
+            open(cipher, l.encryptedFocus) ?? open(cipher, l.encryptedLabel),
+        },
+      ])
+    );
+    // The rating of the kept round of the latest judged snapshot, as the
+    // review view reads it.
+    const ratingOf = (versionId: string) => {
+      const rounds = origins.rounds.filter((r) => r.versionId === versionId);
+      if (rounds.length === 0) return null;
+      const judged = (r: (typeof rounds)[number]) =>
+        r.snapshotId ?? r.generationSnapshotId;
+      const latest = judged(rounds[rounds.length - 1]);
+      const group = rounds.filter((r) => judged(r) === latest);
+      return (group.find((r) => r.kept) ?? group[group.length - 1]).rating;
+    };
+    const sentResumeOf = (versionId: string | undefined) => {
+      if (!versionId) return null;
+      const libraryVersionId = origins.versions.find(
+        (v) => v.versionId === versionId
+      )?.libraryVersionId;
+      return {
+        library: libraryVersionId
+          ? (libraryOf.get(libraryVersionId) ?? null)
+          : null,
+        generated: !libraryVersionId,
+        rating: ratingOf(versionId),
+      };
+    };
     const rows: MetricsRow[] = data.applications.map((application) => {
       const sent = data.submissions
         .filter((s) => s.applicationId === application.id)
@@ -526,6 +594,7 @@ export class TrackerService {
         status: application.status,
         changes: data.changes.filter((c) => c.applicationId === application.id),
         resumes: resumeIds.flatMap((id) => versions.get(id) ?? []),
+        sentResume: sentResumeOf(resumeIds[resumeIds.length - 1]),
         // Rows come newest first: the first is the latest check.
         fitBand:
           data.bands.find((b) => b.openingId === application.openingId)?.band ??

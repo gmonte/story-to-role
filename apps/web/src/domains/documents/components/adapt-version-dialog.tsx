@@ -127,7 +127,7 @@ function AdaptForm({
         <DialogTitle>
           {target
             ? t.formatMessage(
-                { defaultMessage: "Recreate {version}" },
+                { defaultMessage: "Adapt {version}" },
                 { version: labels.version(target) }
               )
             : t.formatMessage({ defaultMessage: "New version" })}
@@ -235,7 +235,7 @@ function AdaptForm({
               }
             >
               {target
-                ? t.formatMessage({ defaultMessage: "Recreate" })
+                ? t.formatMessage({ defaultMessage: "Adapt" })
                 : t.formatMessage({ defaultMessage: "Adapt" })}
             </Button>
           </>

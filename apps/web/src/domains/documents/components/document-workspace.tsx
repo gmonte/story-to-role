@@ -14,9 +14,11 @@ import { Tabs, TabsList, TabsTrigger } from "@repo/web/components/ui/tabs";
 import { cn } from "@repo/web/lib/utils";
 
 import { useTRPC } from "~/tools/trpc/client";
+import { ResizableAside } from "~/domains/workspace/components/resizable-aside";
 
 import { useDocumentLabels } from "../hooks/use-document-labels";
 import { useRefreshDocuments } from "../hooks/use-opening-documents";
+import { CoverageScoreBadge } from "./coverage-score";
 import { DocumentChangesBar } from "./document-changes-bar";
 import { DocumentEditor } from "./document-editor";
 import {
@@ -37,20 +39,27 @@ export function DocumentWorkspace({
   versions,
   select,
   notices,
+  aside,
 }: {
   version: VersionView;
   versions: VersionView[];
   select: (versionId: string) => void;
   /** What the document wants said above it (a letter's outdated resume). */
   notices?: ReactNode;
+  /** More for the left column: what applies to this document's opening. */
+  aside?: ReactNode;
 }) {
   return (
     <DocumentEditorProvider key={version.id} version={version}>
       <div className="flex min-h-0 flex-1">
-        <aside className="hidden w-60 shrink-0 space-y-6 overflow-y-auto border-r p-4 md:block">
+        <ResizableAside
+          storageKey="document-index-width"
+          className="space-y-6 p-4"
+        >
           <DocumentIndex />
           <DocumentFindings />
-        </aside>
+          {aside}
+        </ResizableAside>
         <div className="min-w-0 flex-1 overflow-y-auto">
           <DocumentToolbar versions={versions} select={select} />
           <DocumentChangesBar />
@@ -185,6 +194,7 @@ function DocumentToolbar({
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-1">
+          <CoverageScoreBadge version={version} />
           <span
             className={cn(
               "px-2 text-xs",

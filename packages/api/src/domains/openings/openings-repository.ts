@@ -9,7 +9,7 @@ import {
   openingTermsTable,
   openingsTable,
 } from "./db/openings-tables";
-import type { OpeningStatus } from "./schemas/opening";
+import type { ConditionStance, OpeningStatus } from "./schemas/opening";
 import type { GapLinks } from "./schemas/opening-view";
 
 type Insert<T extends { $inferInsert: unknown }> = T["$inferInsert"];
@@ -189,6 +189,7 @@ export class OpeningsRepository {
     encryptedGapAnswer?: string;
     gapLinks?: GapLinks;
     lackConfirmedAt?: Date | null;
+    conditionStance?: ConditionStance | null;
   }) {
     await this.tx
       .update(fitCheckItemsTable)
@@ -200,6 +201,39 @@ export class OpeningsRepository {
         ...(input.lackConfirmedAt !== undefined
           ? { lackConfirmedAt: input.lackConfirmedAt }
           : {}),
+        ...(input.conditionStance !== undefined
+          ? { conditionStance: input.conditionStance }
+          : {}),
+        answeredAt: new Date(),
+      })
+      .where(eq(fitCheckItemsTable.id, input.fitCheckItemId));
+  }
+
+  /** Takes back the user's answer to a condition. */
+  async clearCondition(fitCheckItemId: string) {
+    await this.tx
+      .update(fitCheckItemsTable)
+      .set({
+        conditionStance: null,
+        encryptedGapAnswer: null,
+        answeredAt: new Date(),
+      })
+      .where(eq(fitCheckItemsTable.id, fitCheckItemId));
+  }
+
+  /** Records how the user stands on a condition; the note is optional. */
+  async answerCondition(input: {
+    fitCheckItemId: string;
+    conditionStance: ConditionStance;
+    encryptedNote: string | null;
+  }) {
+    await this.tx
+      .update(fitCheckItemsTable)
+      .set({
+        conditionStance: input.conditionStance,
+        encryptedGapAnswer: input.encryptedNote,
+        gapLinks: null,
+        lackConfirmedAt: null,
         answeredAt: new Date(),
       })
       .where(eq(fitCheckItemsTable.id, input.fitCheckItemId));

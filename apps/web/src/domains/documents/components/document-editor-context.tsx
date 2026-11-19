@@ -14,10 +14,12 @@ import {
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEditor, type Editor } from "@tiptap/react";
 
+import { sectionMoveOf } from "@repo/api/domains/documents/changes/section-order";
 import {
   coverageFindingKey,
   reviewNoteKey,
 } from "@repo/api/domains/documents/coverage-review/finding-key";
+import type { ResumeSectionKind } from "@repo/api/domains/documents/schemas/resume-content";
 import type { ListedDocumentChange } from "@repo/api/domains/documents/schemas/document-change";
 import type {
   CoverageView,
@@ -40,6 +42,7 @@ import {
   changeWidget,
   removedWordsClass,
   replacedBlockClass,
+  sectionMoveWidget,
 } from "../utils/change-widget";
 import { locateChangeInBlocks } from "../utils/document-changes";
 import { findPassage, type PassageTarget } from "../utils/passages";
@@ -47,6 +50,7 @@ import {
   blocksToContent,
   contentToBlocks,
   linesById,
+  moveSectionBlocks,
   type DocumentBlock,
   type EditableContent,
 } from "../utils/document-blocks";
@@ -90,6 +94,13 @@ export type SaveStatus = "saved" | "pending" | "saving" | "error";
  * What a "not in your profile" finding offers: adding the line to the
  * profile's draft, or, once sent, where it stands there.
  */
+export type ProfileCheckReason = {
+  // The line as it was checked: the reason is stale once the text changes.
+  text: string;
+  missing: string;
+  figures: string[];
+};
+
 export type ProfileAction =
   | { kind: "add"; run: () => void; pending: boolean }
   // "Add translation" of a "not translated" finding: the field as printed,
@@ -133,6 +144,17 @@ type DocumentEditorState = {
   fixFor: (finding: DocumentFinding) => (() => void) | null;
   /** "Add to the profile" of a "not in your profile" finding. */
   profileActionFor: (finding: DocumentFinding) => ProfileAction | null;
+  /**
+   * "Check against my profile": a small AI check of the lines the profile
+   * doesn't back against the profile published now (the given lines, or all
+   * of them). The ones it backs are traced; the others keep the finding.
+   */
+  checkProfile: (lineIds?: string[]) => void;
+  /** The check is running, or the document can't take it yet. */
+  checkingProfile: boolean;
+  profileCheckBusy: boolean;
+  /** Why a checked line is still not in the profile, by line id. */
+  profileCheckReasons: Map<string, ProfileCheckReason>;
   /** Scrolls to a block and selects its text (or the given span of it). */
   goToBlock: (index: number, range?: { from: number; to: number }) => void;
   goToLine: (lineId: string, range?: { from: number; to: number }) => void;
@@ -141,6 +163,12 @@ type DocumentEditorState = {
   goToFinding: (finding: DocumentFinding) => void;
   goToNote: (note: ReviewNote) => void;
   addBullet: (ownerId: string) => void;
+  /**
+   * Moves a section, with its content, to a place among the sections (the
+   * header stays first). Saved at once as a snapshot of its own, so undo
+   * restores the old order.
+   */
+  moveSection: (kind: ResumeSectionKind, toIndex: number) => void;
   /** The agent's changes waiting in the text (ADR 0009). */
   changes: LocatedChange[];
   acceptChanges: (documentChangeIds?: string[]) => void;
@@ -305,6 +333,26 @@ export function DocumentEditorProvider({
       }, readDelayMs);
     },
   });
+
+  const moveSection = useCallback(
+    (kind: ResumeSectionKind, toIndex: number) => {
+      if (!editor || editor.isDestroyed) return;
+      const next = moveSectionBlocks(
+        docToBlocks(editor.state.doc),
+        kind,
+        toIndex
+      );
+      if (!next) return;
+      clearTimeout(readTimer.current);
+      clearTimeout(saveTimer.current);
+      resetDocument(editor, next);
+      setBlocks(next);
+      latest.current = next;
+      setSaveStatus("pending");
+      void flush();
+    },
+    [editor, flush]
+  );
 
   // A new official snapshot from elsewhere (undo, restore, a generation, a
   // sync) replaces the text; our own save only refreshes the origins.
@@ -667,6 +715,64 @@ export function DocumentEditorProvider({
     })
   );
   const { mutate: sendLine, isPending: sending } = addToProfile;
+  const [profileCheckReasons, setProfileCheckReasons] = useState(
+    () => new Map<string, ProfileCheckReason>()
+  );
+  const profileCheck = useMutation(
+    trpc.documents.checkAgainstProfile.mutationOptions({
+      onSuccess: async ({ lines, profileVersionNumber }) => {
+        const textOf = new Map(
+          findings.flatMap((finding) =>
+            finding.lineId ? [[finding.lineId, finding.text] as const] : []
+          )
+        );
+        setProfileCheckReasons((previous) => {
+          const next = new Map(previous);
+          for (const line of lines) {
+            if (line.backed) next.delete(line.lineId);
+            else
+              next.set(line.lineId, {
+                text: textOf.get(line.lineId) ?? "",
+                missing: line.missing,
+                figures: line.figures,
+              });
+          }
+          return next;
+        });
+        await refresh();
+        const backed = lines.filter((line) => line.backed).length;
+        toast.success(
+          lines.length === 0
+            ? t.formatMessage({
+                defaultMessage: "No line needed checking.",
+              })
+            : t.formatMessage(
+                {
+                  defaultMessage:
+                    "Checked against profile version {number}: {backed, plural, =0 {no line is} one {# line is} other {# lines are}} backed by it.",
+                },
+                { number: profileVersionNumber, backed }
+              )
+        );
+      },
+      onError: (error) =>
+        toast.error(
+          error.data?.code === "CONFLICT"
+            ? t.formatMessage({
+                defaultMessage:
+                  "The document changed while checking: try again.",
+              })
+            : t.formatMessage({
+                defaultMessage: "The check against your profile failed.",
+              })
+        ),
+    })
+  );
+  const { mutate: runProfileCheck } = profileCheck;
+  const checkProfile = useCallback(
+    (lineIds?: string[]) => runProfileCheck({ versionId: version.id, lineIds }),
+    [runProfileCheck, version.id]
+  );
   // "Add translation": the entry becomes a suggestion on the profile's
   // translations line for this language.
   const addTranslation = useMutation(
@@ -829,6 +935,39 @@ export function DocumentEditorProvider({
     for (const change of changes) {
       const { range } = change;
       if (!range) continue;
+      const move = sectionMoveOf(change);
+      if (move) {
+        // A section move is a banner on the section's title.
+        const titleOf = (kind: string) =>
+          blocks.find(
+            (block) => block.type === "sectionTitle" && block.kind === kind
+          );
+        const anchor = titleOf(move.anchor);
+        const summary = t.formatMessage(
+          {
+            defaultMessage:
+              "{placement, select, above {Suggested: move this section above {anchor}} other {Suggested: move this section below {anchor}}}",
+          },
+          {
+            placement: move.placement,
+            anchor: anchor && "text" in anchor ? anchor.text : move.anchor,
+          }
+        );
+        specs.push({
+          kind: "widget",
+          at: positions[range.start],
+          interactive: true,
+          element: () =>
+            sectionMoveWidget(change, summary, changeLabels, {
+              accept: (documentChangeId) =>
+                changeHandlers.current?.accept(documentChangeId),
+              reject: (documentChangeId) =>
+                changeHandlers.current?.reject(documentChangeId),
+            }),
+          key: `change-${change.id}`,
+        });
+        continue;
+      }
       const replaced = blocks
         .slice(range.start, range.end)
         .map((block) =>
@@ -992,12 +1131,17 @@ export function DocumentEditorProvider({
     restoreNote: (note) => setKeyIgnored(reviewNoteKey(note), false),
     fixFor,
     profileActionFor,
+    checkProfile,
+    checkingProfile: profileCheck.isPending,
+    profileCheckBusy: profileCheck.isPending || saveStatus !== "saved",
+    profileCheckReasons,
     goToBlock,
     goToLine: (lineId, range) => goToBlock(indexOfLine(lineId), range),
     goToOwner: (ownerId) => goToBlock(indexOfOwner(ownerId)),
     goToFinding,
     goToNote,
     addBullet: (ownerId) => editor && appendBullet(editor, ownerId),
+    moveSection,
     changes,
     acceptChanges: (documentChangeIds) => void acceptChanges(documentChangeIds),
     rejectChanges,

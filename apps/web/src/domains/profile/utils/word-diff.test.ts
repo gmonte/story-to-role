@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { lineDiff, wordDiff } from "./word-diff";
+import { lineDiff, unchangedEnds, wordDiff } from "./word-diff";
 
 const changed = (segments: Array<{ text: string; changed: boolean }>) =>
   segments.filter((s) => s.changed).map((s) => s.text);
@@ -78,5 +78,25 @@ describe("lineDiff", () => {
     const diff = lineDiff([], ["New line"]);
     expect(diff.fallback).toBe(true);
     expect(diff.new).toEqual([[{ text: "New line", changed: false }]]);
+  });
+});
+
+describe("unchangedEnds", () => {
+  it("leaves the parent alone when a sub-item is appended", () => {
+    expect(unchangedEnds(["parent"], ["parent", "child"])).toEqual({
+      prefix: 1,
+      suffix: 0,
+    });
+  });
+
+  it("finds unchanged lines on both ends", () => {
+    expect(unchangedEnds(["a", "b", "c"], ["a", "x", "c"])).toEqual({
+      prefix: 1,
+      suffix: 1,
+    });
+  });
+
+  it("never counts a line on both ends", () => {
+    expect(unchangedEnds(["a"], ["a", "a"])).toEqual({ prefix: 1, suffix: 0 });
   });
 });

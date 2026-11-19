@@ -10,6 +10,10 @@ import {
   summaryPart,
   type DocumentChange,
 } from "@repo/api/domains/documents/changes/document-change";
+import {
+  moveSectionNextTo,
+  sectionMoveOf,
+} from "@repo/api/domains/documents/changes/section-order";
 
 import type { DocumentBlock } from "./document-blocks";
 
@@ -63,6 +67,17 @@ export function locateChangeInBlocks(
   blocks: DocumentBlock[],
   change: Pick<DocumentChange, "part" | "find" | "replace">
 ): { start: number; end: number } | null {
+  const move = sectionMoveOf(change);
+  if (move) {
+    // A section move sits on the section's title; stale when it no longer
+    // changes anything (the section moved already, or is gone).
+    const titles = blocks.flatMap((block, index) =>
+      block.type === "sectionTitle" ? [{ kind: block.kind, index }] : []
+    );
+    if (!moveSectionNextTo(titles, move)) return null;
+    const at = titles.find((title) => title.kind === move.kind)!.index;
+    return { start: at, end: at + 1 };
+  }
   const indices = blocks.flatMap((block, index) =>
     blockInPart(block, change.part) ? [index] : []
   );

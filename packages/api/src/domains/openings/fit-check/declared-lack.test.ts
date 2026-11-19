@@ -43,4 +43,14 @@ describe("what the profile declares the person lacks", () => {
     // Either of two: one being lacking is not a gap.
     expect(declaredLack("React or React Native", profile)).toBeNull();
   });
+
+  it("lacks only the label of a labelled line, not what its comment names", () => {
+    const profile = {
+      studied: [],
+      gaps: ["Kubernetes: nunca mexi; só Docker."],
+      notDone: [],
+    };
+    expect(declaredLack("Docker", profile)).toBeNull();
+    expect(declaredLack("Kubernetes", profile)?.kind).toBe("gap");
+  });
 });

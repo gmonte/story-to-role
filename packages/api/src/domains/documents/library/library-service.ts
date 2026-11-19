@@ -328,6 +328,7 @@ export class LibraryService {
       const version = await repository.insertVersion({
         documentId: document.id,
         language: source.language,
+        libraryVersionId: from.applicationId ? null : source.id,
       });
       await repository.insertSnapshot({
         versionId: version.id,

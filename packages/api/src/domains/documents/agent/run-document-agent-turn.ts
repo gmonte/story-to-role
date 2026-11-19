@@ -19,9 +19,16 @@ import { limitQuestions } from "@repo/api/domains/agents/question-limit";
 import { getUserCipher } from "@repo/api/domains/encryption/user-cipher";
 import { partText } from "@repo/api/domains/profile/truth/suggestions";
 
-import { proposeChange, type ChangeRefusal } from "../changes/propose-change";
+import {
+  proposeChange,
+  proposeSectionMove,
+  type ChangeRefusal,
+} from "../changes/propose-change";
+import { resumeSectionKindSchema } from "../schemas/resume-content";
 import { loadDocumentAgentContext } from "./document-agent-context";
 import { buildDocumentAgentPrompt } from "./document-agent-prompt";
+import { loadLetterPrepContext } from "./letter-prep-context";
+import { buildLetterPrepPrompt } from "./letter-prep-prompt";
 
 export type { OpenTurn };
 
@@ -111,7 +118,19 @@ export async function runDocumentAgentTurn(
     documentId: chat.documentId,
     versionId,
   });
-  if (!context) throw new Error("The document has nothing to talk about yet");
+  // A cover letter before its first version: the agent helps with the
+  // preparation, with no document to change.
+  const prep = context
+    ? null
+    : await loadLetterPrepContext({
+        db,
+        cipher,
+        userId,
+        documentId: chat.documentId,
+      });
+  if (!context && !prep) {
+    throw new Error("The document has nothing to talk about yet");
+  }
 
   const message = lastText(input.messages, "user")?.trim() ?? "";
   const guarded = await guardAgentTurn(deps, {
@@ -122,7 +141,10 @@ export async function runDocumentAgentTurn(
     // Fixed replies follow the user's message; the document's language
     // decides when the message doesn't say.
     replyLanguage:
-      detectLanguage(splitAgentMessage(message).text) ?? context.language,
+      detectLanguage(splitAgentMessage(message).text) ??
+      context?.language ??
+      prep?.language ??
+      "en-US",
   });
   if (guarded.kind === "fixed") {
     return { result: guarded.result, turn: guarded.turn };
@@ -130,7 +152,51 @@ export async function runDocumentAgentTurn(
   const { model, turn } = guarded;
 
   try {
-    const blocks = context.profile?.blocks ?? [];
+    const blocks = (context ?? prep)?.profile?.blocks ?? [];
+    const readPart = tool({
+      description:
+        "Read one part of the profile version (a section or one experience) by its key from the index.",
+      inputSchema: z.object({
+        part: z.string().describe("The part's key, exactly as in the index"),
+      }),
+      execute: ({ part }) => {
+        const text = partText(blocks, part);
+        return text === null
+          ? { error: "No such part; use a key from the index." }
+          : { text };
+      },
+    });
+    if (!context && prep) {
+      return {
+        result: deps.streamText({
+          model,
+          system: buildLetterPrepPrompt({
+            context: prep,
+            today: new Date().toISOString().slice(0, 10),
+            attachment: last?.attachment ?? null,
+          }),
+          messages: startingWithUser(
+            withoutReasoning(
+              historyWindow(input.messages, agentSettings.historyWindow)
+            )
+          ),
+          tools: { read_part: readPart },
+          stopWhen: stepCountIs(agentSettings.maxSteps),
+          prepareStep: ({ stepNumber }) =>
+            stepNumber >= agentSettings.maxSteps - 1
+              ? { toolChoice: "none" as const }
+              : undefined,
+          maxOutputTokens: agentSettings.maxOutputTokens,
+          abortSignal: input.signal,
+          experimental_transform: limitQuestions(
+            agentSettings.maxQuestionsPerMessage
+          ),
+          experimental_telemetry: { isEnabled: false },
+        }),
+        turn,
+      };
+    }
+    if (!context) throw new Error("The document has nothing to talk about yet");
     const sources = said.map((message) => message.text);
     // What waits for the user, this turn's suggestions included: a newer
     // one on the same lines takes the older one's place.
@@ -138,19 +204,7 @@ export async function runDocumentAgentTurn(
     const turnChangeIds = new Set<string>();
     let proposing: Promise<unknown> = Promise.resolve();
     const tools = {
-      read_part: tool({
-        description:
-          "Read one part of the profile version the document froze (a section or one experience) by its key from the index.",
-        inputSchema: z.object({
-          part: z.string().describe("The part's key, exactly as in the index"),
-        }),
-        execute: ({ part }) => {
-          const text = partText(blocks, part);
-          return text === null
-            ? { error: "No such part; use a key from the index." }
-            : { text };
-        },
-      }),
+      read_part: readPart,
       propose_change: tool({
         description:
           "Propose one change to the document: one line replaced, added or removed in one part (a bullet, a paragraph, the summary, a skills line, a header line, a position's employer, title or context). It is shown in the text as a tracked change the person accepts or rejects; nothing changes until they accept. A locked fact (the header, a position's employer, title or context) only when the person asked for that change: then `requestedBy` quotes their words.",
@@ -251,6 +305,65 @@ export async function runDocumentAgentTurn(
         },
       }),
     };
+    // A letter has no sections: the call is refused there.
+    const sectionTool = {
+      propose_section_move: tool({
+        description:
+          "Propose moving one resume section, with all its content, above or below another section (for example Projects above Professional experience). It waits as a suggestion the person accepts or rejects; nothing changes until they accept. Use the section names of the “## …” headings.",
+        inputSchema: z.object({
+          section: resumeSectionKindSchema.describe("The section to move"),
+          placement: z
+            .enum(["above", "below"])
+            .describe("Where it goes relative to `anchor`"),
+          anchor: resumeSectionKindSchema.describe(
+            "The section it goes next to"
+          ),
+          reason: z
+            .string()
+            .describe(
+              "One short sentence shown to the person with the suggestion, in their language"
+            ),
+        }),
+        execute: ({ section, placement, anchor, reason }) => {
+          const result = proposing.then(async () => {
+            const proposed = await proposeSectionMove({
+              db,
+              cipher,
+              versionId: context.versionId,
+              snapshotId: context.snapshotId,
+              content: context.content,
+              origin: "document_agent",
+              move: { kind: section, placement, anchor },
+              reason,
+              pending: waiting,
+            });
+            if (!proposed.ok) {
+              return {
+                error:
+                  proposed.refusal.kind === "unchanged"
+                    ? "The section already sits there."
+                    : "Both sections must be printed in the resume; use the names of its “## …” headings.",
+              };
+            }
+            waiting = [
+              ...waiting.filter(
+                (other) => !proposed.supersededIds.includes(other.id)
+              ),
+              proposed.change,
+            ];
+            turnChangeIds.add(proposed.change.id);
+            deps.reportChange?.(proposed.change.id);
+            return {
+              proposed: true,
+              documentChangeId: proposed.change.id,
+              note: "It waits for the person on the section; nothing changed yet.",
+            };
+          });
+          proposing = result.catch(() => undefined);
+          return result;
+        },
+      }),
+    };
     return {
       result: deps.streamText({
         model,
@@ -266,7 +379,7 @@ export async function runDocumentAgentTurn(
             historyWindow(input.messages, agentSettings.historyWindow)
           )
         ),
-        tools,
+        tools: { ...tools, ...sectionTool },
         stopWhen: stepCountIs(agentSettings.maxSteps),
         // The last step answers in words: a turn spent reading and
         // suggesting would otherwise end without a reply to the user.

@@ -331,7 +331,7 @@ export function VersionActions({
           trigger={
             <Button size="sm" variant="ghost">
               <Languages />
-              {t.formatMessage({ defaultMessage: "Recreate from…" })}
+              {t.formatMessage({ defaultMessage: "Adapt from…" })}
             </Button>
           }
         />

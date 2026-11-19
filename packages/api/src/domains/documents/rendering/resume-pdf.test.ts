@@ -1,6 +1,7 @@
 import { extractText } from "unpdf";
 import { describe, expect, it } from "vitest";
 
+import { resumeText } from "../generation/resume-checks";
 import type { ResumeContent } from "../schemas/resume-content";
 import { fitToPages } from "./fit-to-pages";
 import { renderResumeFitted, renderResumePdf } from "./resume-pdf";
@@ -78,6 +79,60 @@ describe("rendering a resume PDF", () => {
     expect(printed.text).toContain("Founder");
     expect(printed.text).toContain("Jan/2024 – Present");
     expect(printed.text).toContain("https://side.example.com");
+  });
+
+  it("prints sections in the order the content has them, projects first when moved", async () => {
+    const withProjects: ResumeContent = {
+      ...resume(1),
+      sections: [
+        ...resume(1).sections,
+        {
+          kind: "projects",
+          entries: [
+            {
+              projectId: "00000000-0000-4000-8000-0000000000aa",
+              name: "Side Product",
+              startDate: null,
+              endDate: null,
+              role: null,
+              link: null,
+              lines: [
+                { id: "p1", text: "Built it.", origin: { kind: "manual" } },
+              ],
+            },
+          ],
+        },
+      ],
+    };
+    const moved: ResumeContent = {
+      ...withProjects,
+      sections: [
+        withProjects.sections[0],
+        withProjects.sections[2],
+        withProjects.sections[1],
+      ],
+    };
+    const text = async (content: ResumeContent) =>
+      (
+        await extractText(
+          new Uint8Array(
+            (await renderResumePdf({ content, language: "en-US" })).bytes
+          ),
+          { mergePages: true }
+        )
+      ).text;
+    const usual = await text(withProjects);
+    expect(usual.indexOf("EXPERIENCE")).toBeLessThan(usual.indexOf("PROJECTS"));
+    const reordered = await text(moved);
+    expect(reordered.indexOf("PROJECTS")).toBeLessThan(
+      reordered.indexOf("EXPERIENCE")
+    );
+    // The plain text (copy, ATS, vectors) follows the same order.
+    const plain = resumeText(moved);
+    expect(plain.indexOf("Side Product")).toBeLessThan(plain.indexOf("Globex"));
+    expect(resumeText(withProjects).indexOf("Globex")).toBeLessThan(
+      resumeText(withProjects).indexOf("Side Product")
+    );
   });
 
   it("measures the real number of pages", async () => {

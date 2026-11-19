@@ -1,6 +1,6 @@
 "use client";
 
-import type { ComponentProps } from "react";
+import type { ReactNode, ComponentProps } from "react";
 
 import { useMutation, useQuery } from "@tanstack/react-query";
 
@@ -31,11 +31,14 @@ export function SimilarDocuments({
   defaultLanguage,
   defaultTone,
   pendingGaps,
+  separator,
 }: {
   openingId: string;
   defaultLanguage: OutputLanguage;
   defaultTone: Tone;
   pendingGaps: number;
+  // Shown above the list only when there are similar documents.
+  separator?: ReactNode;
 }) {
   const t = useTranslation();
   const trpc = useTRPC();
@@ -44,53 +47,37 @@ export function SimilarDocuments({
   );
   const documents = useOpeningDocuments(openingId);
   if (!similar.data?.length) return null;
-  const resume = documents.data?.documents.find((d) => d.kind === "resume");
 
   return (
-    <section className="flex flex-col gap-2">
-      <div>
-        <h3 className="text-sm font-medium">
-          {t.formatMessage({ defaultMessage: "Similar documents" })}
-        </h3>
-        <p className="text-muted-foreground text-xs">
-          {t.formatMessage({
-            defaultMessage:
-              "Use one as is, adjust it for this opening, or generate a new version from your published profile.",
-          })}
-        </p>
-      </div>
-      <ul className="flex flex-col gap-1.5">
-        {similar.data.map((document) => (
-          <SimilarRow
-            key={document.versionId}
-            openingId={openingId}
-            document={document}
-            defaultLanguage={defaultLanguage}
-            defaultTone={defaultTone}
-            pendingGaps={pendingGaps}
-            application={documents.data?.application ?? null}
-          />
-        ))}
-      </ul>
-      {/* Its section choices start from the application's, once loaded. */}
-      {documents.data && (
-        <GenerateResumeDialog
-          openingId={openingId}
-          defaultLanguage={defaultLanguage}
-          defaultTone={documents.data.application?.tone ?? defaultTone}
-          pendingGaps={pendingGaps}
-          existingLanguages={(resume?.versions ?? []).map(
-            (version) => version.language
-          )}
-          application={documents.data.application}
-          trigger={
-            <Button size="sm" variant="outline" className="self-start">
-              {t.formatMessage({ defaultMessage: "Generate a new version" })}
-            </Button>
-          }
-        />
-      )}
-    </section>
+    <>
+      {separator}
+      <section className="flex flex-col gap-2">
+        <div>
+          <h3 className="text-sm font-medium">
+            {t.formatMessage({ defaultMessage: "Similar documents" })}
+          </h3>
+          <p className="text-muted-foreground text-xs">
+            {t.formatMessage({
+              defaultMessage:
+                "Start from a resume you already have: use it as it is, or adjust it for this opening.",
+            })}
+          </p>
+        </div>
+        <ul className="flex flex-col gap-1.5">
+          {similar.data.map((document) => (
+            <SimilarRow
+              key={document.versionId}
+              openingId={openingId}
+              document={document}
+              defaultLanguage={defaultLanguage}
+              defaultTone={defaultTone}
+              pendingGaps={pendingGaps}
+              application={documents.data?.application ?? null}
+            />
+          ))}
+        </ul>
+      </section>
+    </>
   );
 }
 

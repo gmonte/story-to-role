@@ -10,6 +10,7 @@ import {
   Languages,
   Loader2,
   MessageSquare,
+  SearchCheck,
   Send,
   UserPlus,
   Wand2,
@@ -212,6 +213,10 @@ export function DocumentFindings() {
     restoreNote,
     fixFor,
     profileActionFor,
+    checkProfile,
+    checkingProfile,
+    profileCheckBusy,
+    profileCheckReasons,
     findingKey,
     noteKey,
     activeFinding,
@@ -260,6 +265,52 @@ export function DocumentFindings() {
     })
   );
 
+  const checkButton = (lineIds?: string[]) => (
+    <Button
+      size="sm"
+      variant="outline"
+      className="h-6 px-2 text-xs"
+      disabled={profileCheckBusy}
+      title={t.formatMessage({
+        defaultMessage:
+          "Checks again, against the profile published now, whether it backs the lines you wrote or edited",
+      })}
+      onClick={() => checkProfile(lineIds)}
+    >
+      {checkingProfile ? (
+        <Loader2 className="size-3 animate-spin" />
+      ) : (
+        <SearchCheck className="size-3" />
+      )}
+      {t.formatMessage({ defaultMessage: "Check against my profile" })}
+    </Button>
+  );
+  const unbackedLineIds = findings.flatMap((finding) =>
+    finding.code === "notInProfile" && finding.lineId ? [finding.lineId] : []
+  );
+  const reasonOf = (finding: DocumentFinding) => {
+    const reason = finding.lineId
+      ? profileCheckReasons.get(finding.lineId)
+      : undefined;
+    if (reason?.text !== finding.text) return null;
+    return reason.figures.length > 0
+      ? t.formatMessage(
+          {
+            defaultMessage:
+              "Still not in your profile: {figures} isn't marked as measured there.",
+          },
+          { figures: reason.figures.join(", ") }
+        )
+      : reason.missing
+        ? t.formatMessage(
+            { defaultMessage: "Still not in your profile: {missing}" },
+            { missing: reason.missing }
+          )
+        : t.formatMessage({
+            defaultMessage: "Still not in your profile.",
+          });
+  };
+
   const findingItem = (finding: DocumentFinding) => {
     const fix = fixFor(finding);
     const key = findingKey(finding);
@@ -277,9 +328,17 @@ export function DocumentFindings() {
         >
           {text}
         </button>
+        {reasonOf(finding) && (
+          <p className="text-muted-foreground px-2 text-xs">
+            {reasonOf(finding)}
+          </p>
+        )}
         {
           <div className="flex flex-wrap items-center gap-1 px-2 pb-1">
             <ProfileActionButton action={profileActionFor(finding)} />
+            {finding.code === "notInProfile" &&
+              finding.lineId &&
+              checkButton([finding.lineId])}
             {fix && (
               <Button
                 size="sm"
@@ -465,6 +524,9 @@ export function DocumentFindings() {
           { count }
         )}
       </button>
+      {open && unbackedLineIds.length > 1 && (
+        <div className="mb-1 px-2">{checkButton(unbackedLineIds)}</div>
+      )}
       {open && (
         <ul className="space-y-0.5">
           {findings.map(findingItem)}

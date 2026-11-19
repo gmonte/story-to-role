@@ -52,7 +52,7 @@ import { LetterService } from "./letter/letter-service";
 import { runGenerateLetter } from "./letter/run-generate-letter";
 import { runUpdateLetter } from "./letter/run-update-letter";
 import type { CoverLetterContent } from "./schemas/cover-letter-content";
-import { generationsTable } from "./db/documents-tables";
+import { generationsTable, reviewRoundsTable } from "./db/documents-tables";
 import { DocumentsRepository } from "./documents-repository";
 import { DocumentsService } from "./documents-service";
 import type { AdjustDraft } from "./generation/adjust-resume";
@@ -62,6 +62,9 @@ import {
   coverageRating,
   runGenerateResume,
 } from "./generation/run-generate-resume";
+import type { Inconsistency } from "./schemas/review-inconsistency";
+import { reviewViewOf } from "./generation/review-view";
+import { runReviewResume } from "./generation/run-review-resume";
 import { PdfService } from "./rendering/pdf-service";
 import { runRenderPdf } from "./rendering/run-render-pdf";
 import type { DocumentContent } from "./schemas/document-content";
@@ -144,12 +147,15 @@ ${(extra.rules ?? []).map((line) => `- ${line}\n`).join("")}`;
  * A review whose coverage rates the draft `rating` out of 10: that many
  * requirements shown strongly, the rest not proven.
  */
-const reviewRated = (rating: number) => ({
+const reviewRated = (
+  rating: number,
+  inconsistencies: Inconsistency[] = []
+) => ({
   coverage: Array.from({ length: 10 }, (_, index) => ({
     requirement: `Requirement ${index + 1}`,
     level: index < rating ? ("strong" as const) : ("not_proven" as const),
   })),
-  inconsistencies: [],
+  inconsistencies,
   advice: ["Be more concrete"],
 });
 
@@ -308,7 +314,30 @@ async function setup({
     );
   }
 
-  const documents = new DocumentsService(db, tasks);
+  // The small AI call that matches hand-written lines to the profile:
+  // scripted per test, and failing (every line stays unbacked) by default.
+  const matcher: {
+    script: (request: { system: string; messages: unknown }) => unknown;
+    calls: Array<{ system: string; messages: unknown }>;
+  } = {
+    script: () => {
+      throw new Error("provider down");
+    },
+    calls: [],
+  };
+  const documents = new DocumentsService(db, tasks, undefined, async () =>
+    createAiClient({
+      db,
+      userId: user.id,
+      funding: "credits",
+      providerPackage: fakeProviderPackage({
+        object: (request) => {
+          matcher.calls.push(request as never);
+          return matcher.script(request as never);
+        },
+      }).providerPackage,
+    })
+  );
 
   // `sourceId` backs the summary and skills: a kept point's id, or by
   // default the profile's measured result.
@@ -336,6 +365,8 @@ async function setup({
   type Script = {
     drafts: Array<ResumeDraft | AdjustDraft>;
     ratings: number[];
+    /** What each review reports as contradicting the profile, in order. */
+    contradictions?: Array<Parameters<typeof reviewRated>[1]>;
     /** This month (YYYY-MM), for what "recent" is measured from. */
     today?: string;
     /** The coverage review, given the resume's lines by text. */
@@ -364,6 +395,7 @@ async function setup({
   async function runScripted(generationId: string, script: Script) {
     const drafts = [...script.drafts];
     const ratings = [...script.ratings];
+    const contradictions = [...(script.contradictions ?? [])];
     const filter = await loadNeverIncludeFilter({
       db,
       cipher,
@@ -372,7 +404,7 @@ async function setup({
     const fake = fakeProviderPackage({
       object: ({ system }) => {
         if (system.startsWith("You review")) {
-          return reviewRated(ratings.shift() ?? 5);
+          return reviewRated(ratings.shift() ?? 5, contradictions.shift());
         }
         if (system.startsWith("You audit")) {
           if (script.coverageFails) throw new Error("provider down");
@@ -414,6 +446,7 @@ async function setup({
     cipher,
     trigger,
     documents,
+    matcher,
     request,
     draft,
     generate,
@@ -519,6 +552,34 @@ describe("resume generation and snapshots", () => {
       contacts: ["ada@example.com"],
       city: "Belo Horizonte, MG",
     });
+    // The rating shows: each round's, and the kept one's.
+    expect(version.review).toMatchObject({
+      rating: 8,
+      target: 8,
+      rounds: [
+        {
+          round: 0,
+          rating: 6,
+          kept: false,
+          inconsistencies: [],
+          advice: ["Be more concrete"],
+          partial: [],
+          notProven: [
+            "Requirement 7",
+            "Requirement 8",
+            "Requirement 9",
+            "Requirement 10",
+          ],
+        },
+        {
+          round: 1,
+          rating: 8,
+          kept: true,
+          advice: ["Be more concrete"],
+          notProven: ["Requirement 9", "Requirement 10"],
+        },
+      ],
+    });
     // What the kept draft emphasizes, in at most five lines.
     expect(version.emphasis).toEqual({
       lines: ["One", "Two", "Three", "Four", "Five"],
@@ -567,6 +628,101 @@ describe("resume generation and snapshots", () => {
     // Strategist, one editor, two reviews, the keyword spelling repair, the
     // coverage review.
     expect(fake.generateObject).toHaveBeenCalledTimes(6);
+  });
+
+  it("keeps a draft without contradictions over a better-rated one with, and never stops early on it", async () => {
+    const ctx = await setup();
+    const line = {
+      text: "Led a team of 5 engineers.",
+      evidence_ids: [ctx.evidence[1].id],
+    };
+    const wrong = {
+      // Whitespace and case are normalised when the quote is looked up.
+      quote: "led a team  of 5 ENGINEERS",
+      profileLine: "Took part in a team of 5 engineers.",
+      kind: "overstated_authorship" as const,
+    };
+    const { generationId, fake } = await ctx.generate("thorough", {
+      drafts: [ctx.draft([line]), ctx.draft([line]), ctx.draft([line])],
+      ratings: [9, 6, 5],
+      contradictions: [[wrong], []],
+    });
+    const rounds = await new DocumentsRepository(ctx.db).listReviewRounds(
+      generationId
+    );
+    // The 9 didn't end the loop; the 6 without contradictions is the one kept.
+    expect(rounds.map((r) => [r.rating, r.kept])).toEqual([
+      [9, false],
+      [6, true],
+    ]);
+    // Strategist, one editor, two reviews, the keyword repair, the coverage.
+    expect(fake.generateObject).toHaveBeenCalledTimes(6);
+  });
+
+  it("drops a contradiction whose quote isn't in the draft, and shows old text-only ones", async () => {
+    const ctx = await setup();
+    const line = {
+      text: "Led a team of 5 engineers.",
+      evidence_ids: [ctx.evidence[1].id],
+    };
+    const found = [
+      {
+        quote: "Founded the company in 2015",
+        profileLine: "Never a founder.",
+        kind: "wrong_fact" as const,
+      },
+      {
+        quote: "Led a team of 5 engineers.",
+        profileLine: "Took part in a team of 5.",
+        kind: "other" as const,
+      },
+    ];
+    await ctx.generate("quick", {
+      drafts: [ctx.draft([line]), ctx.draft([line])],
+      ratings: [9, 9],
+      contradictions: [found, found],
+    });
+    const [version] = (
+      await ctx.documents.forOpening({
+        userId: ctx.user.id,
+        openingId: ctx.opening.id,
+      })
+    ).documents[0].versions;
+    expect(version.review?.inconsistencies).toBe(1);
+    expect(version.review?.rounds[0].inconsistencies).toMatchObject([
+      { quote: "Led a team of 5 engineers.", kind: "other" },
+    ]);
+
+    // A review stored with plain strings still reads, as text only.
+    const legacy = reviewViewOf(
+      [
+        {
+          round: 0,
+          snapshotId: null,
+          rating: 5,
+          kept: true,
+          encryptedReview: ctx.cipher.encrypt(
+            JSON.stringify({
+              coverage: [],
+              inconsistencies: ["Says 2019 where the profile says 2021"],
+              advice: [],
+            })
+          ),
+        },
+      ],
+      ctx.cipher,
+      "opening",
+      { latestId: "x", generationSnapshotId: null }
+    );
+    expect(legacy?.inconsistencies).toBe(1);
+    expect(legacy?.rounds[0].inconsistencies).toEqual([
+      {
+        quote: "",
+        profileLine: "",
+        kind: "other",
+        text: "Says 2019 where the profile says 2021",
+      },
+    ]);
   });
 
   it("skips review rounds when the first draft already reaches the target", async () => {
@@ -1153,6 +1309,140 @@ describe("resume generation and snapshots", () => {
     expect(await load()).toHaveLength(1);
   });
 
+  it("says the review judged the generated text once edited, and Review again rates the latest snapshot", async () => {
+    const ctx = await setup();
+    const line = {
+      text: "Led a team of 5 engineers.",
+      evidence_ids: [ctx.evidence[1].id],
+    };
+    await ctx.generate("quick", {
+      drafts: [ctx.draft([line])],
+      ratings: [6],
+    });
+    const load = async () =>
+      (
+        await ctx.documents.forOpening({
+          userId: ctx.user.id,
+          openingId: ctx.opening.id,
+        })
+      ).documents[0].versions[0];
+    const generated = await load();
+    expect(generated.review).toMatchObject({ rating: 6, current: true });
+    expect(generated.reviewing).toBeNull();
+    // Nothing to review again while the review judged the latest snapshot.
+    await expect(
+      ctx.documents.reviewAgain({
+        userId: ctx.user.id,
+        versionId: generated.id,
+      })
+    ).rejects.toMatchObject({ code: "PRECONDITION_FAILED" });
+
+    const edited = structuredClone(resumeOf(generated.content));
+    experienceOf(edited).lines[0].text = "Led and mentored 5 engineers.";
+    await ctx.documents.saveEdit({
+      userId: ctx.user.id,
+      versionId: generated.id,
+      baseSnapshotId: generated.snapshot.id,
+      content: edited,
+    });
+    const stale = await load();
+    expect(stale.review).toMatchObject({ rating: 6, current: false });
+    expect(stale.coverage).toMatchObject({ current: false });
+
+    // Only the owner may ask for it.
+    const stranger = await createTestUser("eve@example.com");
+    await new CareerService(ctx.db).getOrCreateProfile({
+      userId: stranger.id,
+      defaultLanguage: "en-US",
+    });
+    await expect(
+      ctx.documents.reviewAgain({ userId: stranger.id, versionId: stale.id })
+    ).rejects.toMatchObject({ code: "NOT_FOUND" });
+    await expect(
+      runReviewResume({
+        db: ctx.db,
+        ai: createAiClient({
+          db: ctx.db,
+          userId: stranger.id,
+          funding: "credits",
+          providerPackage: fakeProviderPackage({ object: () => undefined })
+            .providerPackage,
+        }),
+        cipher: ctx.cipher,
+        userId: stranger.id,
+        snapshotId: stale.snapshot.id,
+      })
+    ).rejects.toThrow();
+
+    const started = await ctx.documents.reviewAgain({
+      userId: ctx.user.id,
+      versionId: stale.id,
+    });
+    expect(started.snapshotId).toBe(stale.snapshot.id);
+    expect(ctx.trigger.trigger).toHaveBeenCalledWith(
+      "review_document",
+      expect.anything()
+    );
+    // Under way: the view says so, and a second ask is refused.
+    expect((await load()).reviewing).not.toBeNull();
+    await expect(
+      ctx.documents.reviewAgain({ userId: ctx.user.id, versionId: stale.id })
+    ).rejects.toMatchObject({ code: "CONFLICT" });
+
+    const fake = fakeProviderPackage({
+      object: ({ system }) => {
+        if (system.startsWith("You review")) return reviewRated(9);
+        if (system.startsWith("You audit")) return emptyCoverage;
+        throw new Error("a re-review rewrites nothing");
+      },
+    });
+    await runReviewResume({
+      db: ctx.db,
+      ai: createAiClient({
+        db: ctx.db,
+        userId: ctx.user.id,
+        funding: "credits",
+        providerPackage: fake.providerPackage,
+        neverIncludeFilter: await loadNeverIncludeFilter({
+          db: ctx.db,
+          cipher: ctx.cipher,
+          profileId: ctx.profile.id,
+        }),
+      }),
+      cipher: ctx.cipher,
+      userId: ctx.user.id,
+      snapshotId: started.snapshotId,
+    });
+
+    const reviewed = await load();
+    // The edited snapshot is unchanged and now judged: rating and coverage.
+    expect(reviewed.snapshot.id).toBe(stale.snapshot.id);
+    expect(reviewed.review).toMatchObject({
+      rating: 9,
+      current: true,
+      ofEdit: true,
+      rounds: [{ rating: 9, kept: true }],
+    });
+    expect(reviewed.coverage).toMatchObject({
+      current: true,
+      reviewedSnapshotId: stale.snapshot.id,
+    });
+    // The generation's own rounds stay stored.
+    const rounds = await ctx.db.select().from(reviewRoundsTable);
+    expect(rounds.map((round) => round.rating).sort()).toEqual([6, 9]);
+
+    // Edited again, it reads as outdated again.
+    const again = structuredClone(resumeOf(reviewed.content));
+    experienceOf(again).lines[0].text = "Led 5 engineers.";
+    await ctx.documents.saveEdit({
+      userId: ctx.user.id,
+      versionId: reviewed.id,
+      baseSnapshotId: reviewed.snapshot.id,
+      content: again,
+    });
+    expect((await load()).review).toMatchObject({ rating: 9, current: false });
+  });
+
   it("refuses another user's versions", async () => {
     const ctx = await setup();
     const line = {
@@ -1183,6 +1473,148 @@ describe("resume generation and snapshots", () => {
         openingId: ctx.opening.id,
       })
     ).rejects.toMatchObject({ code: "NOT_FOUND" });
+  });
+
+  it("checks hand-written lines against the latest published profile: backed ones get their trace, the others keep the finding", async () => {
+    const ctx = await setup();
+    await ctx.generate("quick", {
+      drafts: [
+        ctx.draft([
+          {
+            text: "Led a team of 5 engineers.",
+            evidence_ids: [ctx.evidence[1].id],
+          },
+        ]),
+      ],
+      ratings: [9],
+    });
+    const userId = ctx.user.id;
+    const view = async () =>
+      (await ctx.documents.forOpening({ userId, openingId: ctx.opening.id }))
+        .documents[0].versions[0];
+    const clean = await view();
+    const entry = experienceOf(clean.content);
+    const typed = {
+      mentor: "Mentored two interns through their first year.",
+      inflated: "Mentored interns and cut onboarding time by 50%.",
+      rocket: "Built a rocket for the company.",
+    };
+    await ctx.documents.saveEdit({
+      userId,
+      versionId: clean.id,
+      baseSnapshotId: clean.snapshot.id,
+      content: {
+        ...resumeOf(clean.content),
+        sections: resumeOf(clean.content).sections.map((section) =>
+          section.kind === "experience"
+            ? {
+                ...section,
+                entries: [
+                  {
+                    ...entry,
+                    lines: [
+                      ...entry.lines,
+                      ...Object.entries(typed).map(([id, text]) => ({
+                        id,
+                        text,
+                        origin: { kind: "manual" as const },
+                      })),
+                    ],
+                  },
+                ],
+              }
+            : section
+        ),
+      },
+    });
+    const unbacked = async () =>
+      (await view()).coverage?.findings
+        .filter((finding) => finding.code === "notInProfile")
+        .map((finding) => finding.lineId);
+    expect(await unbacked()).toEqual(["mentor", "inflated", "rocket"]);
+
+    // The profile publishes the fact in other words; the document still
+    // reads version 1, and the matcher reads version 2.
+    await ctx.publishProfile(
+      profileMarkdown({
+        results: ["Mentored interns during their first year at the company."],
+      })
+    );
+    const backing = ctx.lineOf(
+      "Mentored interns during their first year at the company.",
+      await ctx.readCareer()
+    );
+    ctx.matcher.script = () => ({
+      lines: [
+        { lineId: "mentor", evidenceIds: [backing.id], missing: "" },
+        // The model says the profile backs it, but 50% isn't in the profile.
+        { lineId: "inflated", evidenceIds: [backing.id], missing: "" },
+        {
+          lineId: "rocket",
+          evidenceIds: [],
+          missing: "no work on rockets",
+        },
+      ],
+    });
+    const result = await ctx.documents.checkAgainstProfile({
+      userId,
+      versionId: clean.id,
+    });
+    expect(result.profileVersionNumber).toBe(2);
+    expect(result.lines).toEqual([
+      { lineId: "mentor", backed: true, missing: "", figures: [] },
+      { lineId: "inflated", backed: false, missing: "", figures: ["50%"] },
+      {
+        lineId: "rocket",
+        backed: false,
+        missing: "no work on rockets",
+        figures: [],
+      },
+    ]);
+    // One call, with the newer profile's lines.
+    expect(ctx.matcher.calls).toHaveLength(1);
+    expect(ctx.matcher.calls[0].system).toContain(backing.id);
+
+    const checked = await view();
+    expect(checked.profile).toEqual({ versionNumber: 2, newer: null });
+    expect(checked.snapshot.id).toBe(result.snapshotId);
+    expect(await unbacked()).toEqual(["inflated", "rocket"]);
+    expect(
+      experienceOf(checked.content).lines.find((row) => row.id === "mentor")
+        ?.origin
+    ).toEqual({ kind: "evidence", evidenceIds: [backing.id] });
+    expect(
+      experienceOf(checked.content).lines.find((row) => row.id === "rocket")
+        ?.origin
+    ).toEqual({ kind: "manual" });
+
+    // One line only: the call carries just that line, and nothing changes
+    // when the profile still doesn't back it.
+    ctx.matcher.script = () => ({
+      lines: [{ lineId: "rocket", evidenceIds: [], missing: "still none" }],
+    });
+    const again = await ctx.documents.checkAgainstProfile({
+      userId,
+      versionId: clean.id,
+      lineIds: ["rocket"],
+    });
+    expect(again.snapshotId).toBeNull();
+    expect(again.lines).toHaveLength(1);
+    expect(JSON.stringify(ctx.matcher.calls[1].messages)).not.toContain(
+      "inflated"
+    );
+
+    // A failed call leaves every line as it was.
+    ctx.matcher.script = () => {
+      throw new Error("provider down");
+    };
+    const failed = await ctx.documents.checkAgainstProfile({
+      userId,
+      versionId: clean.id,
+    });
+    expect(failed.snapshotId).toBeNull();
+    expect(failed.lines.every((line) => !line.backed)).toBe(true);
+    expect(await unbacked()).toEqual(["inflated", "rocket"]);
   });
 
   it("points out a typed line the profile doesn't back; Add to the profile proposes it, and Use version N drops it", async () => {
@@ -3325,6 +3757,8 @@ describe("resume generation and snapshots", () => {
       lines: ["Team leadership first", "Node.js before Kubernetes"],
       adjusted: true,
     });
+    // Nothing was rated, so the version shows no rating.
+    expect(adjusted.review).toBeNull();
     // Nothing was judged, so no round is stored and none is the best.
     const repository = new DocumentsRepository(ctx.db);
     expect(await repository.listReviewRounds(generationId)).toEqual([]);
@@ -4869,7 +5303,11 @@ describe("resume generation and snapshots", () => {
 describe("a draft's rating by its coverage", () => {
   const review = (
     levels: Array<"strong" | "partial" | "not_proven">,
-    inconsistencies: string[] = []
+    inconsistencies: Array<{
+      quote: string;
+      profileLine: string;
+      kind: "wrong_fact";
+    }> = []
   ) => ({
     coverage: levels.map((level, index) => ({
       requirement: `Requirement ${index + 1}`,
@@ -4920,10 +5358,16 @@ describe("a draft's rating by its coverage", () => {
     ).toBe(1);
   });
 
-  it("caps a draft that disagrees with the profile at 4", () => {
-    const wrong = ["Says 2019 where the profile says 2021"];
-    expect(coverageRating(review(["strong", "strong"], wrong), [])).toBe(4);
-    expect(coverageRating(review(["strong", "not_proven"], wrong), [])).toBe(4);
+  it("doesn't cap a draft that disagrees with the profile: the score is only the match", () => {
+    const wrong = [
+      {
+        quote: "Since 2019",
+        profileLine: "Since 2021",
+        kind: "wrong_fact" as const,
+      },
+    ];
+    expect(coverageRating(review(["strong", "strong"], wrong), [])).toBe(10);
+    expect(coverageRating(review(["strong", "not_proven"], wrong), [])).toBe(5);
     expect(
       coverageRating(review(["partial", "not_proven", "not_proven"], wrong), [])
     ).toBe(2);

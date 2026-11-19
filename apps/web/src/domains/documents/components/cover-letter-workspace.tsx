@@ -1,5 +1,7 @@
 "use client";
 
+import type { ReactNode } from "react";
+
 import { useMutation } from "@tanstack/react-query";
 
 import type { CoverLetterContent } from "@repo/api/domains/documents/schemas/cover-letter-content";
@@ -21,7 +23,13 @@ import { DocumentWorkspace } from "./document-workspace";
  * letter, every paragraph editable and traced to its sources; outdated
  * once its resume changes, with the update offered as a proposal.
  */
-export function CoverLetterWorkspace({ document }: { document: DocumentView }) {
+export function CoverLetterWorkspace({
+  document,
+  aside,
+}: {
+  document: DocumentView;
+  aside?: ReactNode;
+}) {
   const t = useTranslation();
   const trpc = useTRPC();
   const refresh = useRefreshDocuments();
@@ -109,6 +117,7 @@ export function CoverLetterWorkspace({ document }: { document: DocumentView }) {
       version={version}
       versions={document.versions}
       select={select}
+      aside={aside}
       notices={notices.length > 0 ? notices : null}
     />
   );

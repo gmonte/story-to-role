@@ -161,11 +161,21 @@ export async function runAdaptDocument(deps: {
       const existing = generation.versionId
         ? await repository.findVersion(generation.versionId)
         : null;
+      const source = generation.sourceVersionId
+        ? await repository.findVersion(generation.sourceVersionId)
+        : null;
+      const sourceDocument = source
+        ? await repository.findDocument(source.documentId)
+        : null;
       const version =
         existing ??
         (await repository.insertVersion({
           documentId: generation.documentId,
           language: generation.language,
+          libraryVersionId:
+            source && sourceDocument && !sourceDocument.applicationId
+              ? source.id
+              : null,
         }));
       // Recreating lands on top; earlier snapshots stay in history.
       await repository.lockVersion(version.id);
@@ -183,9 +193,6 @@ export async function runAdaptDocument(deps: {
       // One link per pair, within one document (a version reused from
       // another document stays independent): recreating a version from
       // the one adapted from it turns the link around, never a cycle.
-      const source = generation.sourceVersionId
-        ? await repository.findVersion(generation.sourceVersionId)
-        : null;
       if (source?.documentId === version.documentId) {
         if (source.adaptedFromVersionId === version.id) {
           await repository.updateVersion(source.id, {

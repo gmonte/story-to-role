@@ -1,5 +1,7 @@
 import { TRPCError } from "@trpc/server";
 
+import type { AiClient } from "@repo/api/domains/ai/ai-client";
+import { smallCallAi } from "@repo/api/domains/ai/small-call-ai";
 import { CareerRepository } from "@repo/api/domains/career/career-repository";
 import {
   getUserCipher,
@@ -12,6 +14,7 @@ import { TasksRepository } from "@repo/api/domains/tasks/tasks-repository";
 import { loadProfileSource } from "@repo/api/domains/documents/generation/load-profile-source";
 import { ProfileRepository } from "@repo/api/domains/profile/profile-repository";
 import {
+  readTargetText,
   suggestLine,
   type SuggestionTarget,
 } from "@repo/api/domains/profile/suggestions/suggest-line";
@@ -19,6 +22,8 @@ import { ProfileService } from "@repo/api/domains/profile/profile-service";
 import type { ProfileLanguage } from "@repo/api/domains/profile/truth/sections";
 
 import type { openingsTable } from "./db/openings-tables";
+import { conditionCategories, type ConditionStance } from "./schemas/opening";
+import { rewriteGapAnswer } from "./fit-check/rewrite-gap-answer";
 import { OpeningsRepository } from "./openings-repository";
 import {
   preferenceConflictsSchema,
@@ -45,7 +50,12 @@ const open = (cipher: UserCipher, value: string | null) =>
 export class OpeningsService {
   constructor(
     private readonly db: DbClient,
-    private readonly tasks = new TasksService(db)
+    private readonly tasks = new TasksService(db),
+    // The AI client for the small calls made outside a task.
+    private readonly aiFor: (
+      userId: string,
+      cipher: UserCipher
+    ) => Promise<AiClient> = (userId, cipher) => smallCallAi(db, userId, cipher)
   ) {}
 
   private async requireProfile(userId: string) {
@@ -219,6 +229,7 @@ export class OpeningsService {
               gapQuestion: open(cipher, item.encryptedGapQuestion),
               gapAnswer: open(cipher, item.encryptedGapAnswer),
               gapLack: !!item.lackConfirmedAt,
+              conditionStance: item.conditionStance ?? null,
               gapLinks: item.gapLinks ?? null,
               citesAnswer: item.citesAnswer,
             };
@@ -254,11 +265,20 @@ export class OpeningsService {
               })),
             };
           })()),
+          // An answer saved after the check: its status and totals read
+          // the opening before it.
           outdated:
-            !!profileDocument?.publishedVersionId &&
-            (fitCheck.profileVersionId !== profileDocument.publishedVersionId ||
-              fitCheck.preferencesVersionId !==
-                (preferencesDocument?.publishedVersionId ?? null)),
+            checkItems.some(
+              (item) =>
+                !!item.answeredAt && item.answeredAt > fitCheck.createdAt
+            ) ||
+            (!!row.descriptionEditedAt &&
+              row.descriptionEditedAt > fitCheck.createdAt) ||
+            (!!profileDocument?.publishedVersionId &&
+              (fitCheck.profileVersionId !==
+                profileDocument.publishedVersionId ||
+                fitCheck.preferencesVersionId !==
+                  (preferencesDocument?.publishedVersionId ?? null))),
         };
       }
 
@@ -427,12 +447,36 @@ export class OpeningsService {
     });
   }
 
+  /** The description is the user's to edit; nothing runs again by itself. */
+  async updateDescription(input: {
+    userId: string;
+    openingId: string;
+    description: string;
+  }) {
+    const profile = await this.requireProfile(input.userId);
+    await this.db.transaction(async (tx) => {
+      const openings = new OpeningsRepository(tx);
+      const row = await openings.findOpening({
+        profileId: profile.id,
+        openingId: input.openingId,
+      });
+      if (!row) throw notFound();
+      const description = input.description.trim();
+      const cipher = await getUserCipher(tx, input.userId);
+      await openings.updateOpening(row.id, {
+        encryptedDescription: description ? cipher.encrypt(description) : null,
+        descriptionEditedAt: new Date(),
+      });
+    });
+  }
+
   /** The title is shortened by the AI and editable by the user. */
   async rename(input: {
     userId: string;
     openingId: string;
     title: string;
     company?: string;
+    sourceUrl?: string | null;
   }) {
     const profile = await this.requireProfile(input.userId);
     await this.db.transaction(async (tx) => {
@@ -448,8 +492,46 @@ export class OpeningsService {
         ...(input.company?.trim()
           ? { encryptedCompany: cipher.encrypt(input.company.trim()) }
           : {}),
+        ...(input.sourceUrl !== undefined
+          ? {
+              encryptedSourceUrl: input.sourceUrl
+                ? cipher.encrypt(input.sourceUrl)
+                : null,
+            }
+          : {}),
       });
     });
+  }
+
+  /** The answer as the sentence to propose for a target (or the answer). */
+  private async sentenceFor(input: {
+    cipher: UserCipher;
+    careerProfileId: string;
+    userId: string;
+    target: SuggestionTarget;
+    requirement: string;
+    question: string;
+    answer: string;
+  }) {
+    try {
+      const { language, existing } = await readTargetText({
+        db: this.db,
+        cipher: input.cipher,
+        userId: input.userId,
+        careerProfileId: input.careerProfileId,
+        target: input.target,
+      });
+      return await rewriteGapAnswer({
+        ai: await this.aiFor(input.userId, input.cipher),
+        requirement: input.requirement,
+        question: input.question,
+        answer: input.answer,
+        existing,
+        language,
+      });
+    } catch {
+      return input.answer;
+    }
   }
 
   /**
@@ -492,7 +574,9 @@ export class OpeningsService {
           profileId: profile.id,
           openingId: found.openingId,
         }));
-      if (!found?.item.encryptedGapQuestion || !opening) throw notFound();
+      // Any gap or partial card can be answered, with or without a question
+      // (a declared gap has none); a condition has its own answer.
+      if (!found || !opening || found.item.verdict === "met") throw notFound();
       if (!input.lacks) {
         const cipher = await getUserCipher(tx, input.userId);
         await openings.answerFitCheckItem({
@@ -500,6 +584,7 @@ export class OpeningsService {
           encryptedGapAnswer: cipher.encrypt(answer!),
           gapLinks: { positionIds, projectIds, notTied: !!input.notTied },
           lackConfirmedAt: null,
+          conditionStance: null,
         });
       }
       return { item: found.item, openingId: opening.id };
@@ -558,11 +643,32 @@ export class OpeningsService {
         ),
         ...(input.notTied ? [{ kind: "identityAreas" } as const] : []),
       ];
+      const term = (await openings.listTerms(openingId)).find(
+        (row) => row.id === item.termId
+      );
+      const requirement = term ? cipher.decrypt(term.encryptedText) : "";
+      const question = item.encryptedGapQuestion
+        ? cipher.decrypt(item.encryptedGapQuestion)
+        : requirement;
       const ids: string[] = [];
       for (const target of targets) {
-        const id = await propose(
+        // The answer is the user's own words, kept as they are with the
+        // opening; the profile gets it as one sentence that stands alone,
+        // appended to the end of the field's text.
+        const sentence = await this.sentenceFor({
+          cipher,
+          careerProfileId: profile.id,
+          userId: input.userId,
           target,
-          answer!,
+          requirement,
+          question,
+          answer: answer!,
+        });
+        const id = await propose(
+          target.kind === "experience" || target.kind === "project"
+            ? { ...target, append: true }
+            : target,
+          sentence,
           reason,
           // An entry the draft no longer has: the fact still has a place.
           target.kind === "identityAreas"
@@ -595,8 +701,78 @@ export class OpeningsService {
     await openings.answerFitCheckItem({
       fitCheckItemId: item.id,
       lackConfirmedAt: new Date(),
+      conditionStance: null,
     });
     return { profileSuggestionIds: id ? [id] : [] };
+  }
+
+  /** Takes back the answer to a condition (the check reads as outdated). */
+  async undoConditionAnswer(input: { userId: string; fitCheckItemId: string }) {
+    const profile = await this.requireProfile(input.userId);
+    await this.db.transaction(async (tx) => {
+      const openings = new OpeningsRepository(tx);
+      const found = await openings.findFitCheckItem(input.fitCheckItemId);
+      const opening =
+        found &&
+        (await openings.findOpening({
+          profileId: profile.id,
+          openingId: found.openingId,
+        }));
+      if (!found || !opening || !found.item.conditionStance) throw notFound();
+      await openings.clearCondition(found.item.id);
+    });
+  }
+
+  /**
+   * Answers a condition requirement (work model, schedule, location,
+   * travel…): the user meets it, doesn't but it is no blocker, or it is a
+   * blocker. The note is optional. For a blocker, the user can add it to
+   * the job preferences as a discard rule. Nothing re-runs: the check reads
+   * as outdated until the user checks again.
+   */
+  async answerCondition(input: {
+    userId: string;
+    fitCheckItemId: string;
+    stance: ConditionStance;
+    note?: string;
+    addToPreferences?: boolean;
+    language: ProfileLanguage;
+  }): Promise<{ preferenceRule: string | null }> {
+    const profile = await this.requireProfile(input.userId);
+    const note = input.note?.trim() ?? "";
+    const cipher = await getUserCipher(this.db, input.userId);
+    const requirement = await this.db.transaction(async (tx) => {
+      const openings = new OpeningsRepository(tx);
+      const found = await openings.findFitCheckItem(input.fitCheckItemId);
+      const opening =
+        found &&
+        (await openings.findOpening({
+          profileId: profile.id,
+          openingId: found.openingId,
+        }));
+      if (!found || !opening || found.item.verdict === "met") throw notFound();
+      const term = (await openings.listTerms(opening.id)).find(
+        (row) => row.id === found.item.termId
+      );
+      if (!term || !conditionCategories.includes(term.category)) {
+        throw new TRPCError({ code: "BAD_REQUEST" });
+      }
+      await openings.answerCondition({
+        fitCheckItemId: found.item.id,
+        conditionStance: input.stance,
+        encryptedNote: note ? cipher.encrypt(note) : null,
+      });
+      return cipher.decrypt(term.encryptedText);
+    });
+    if (input.stance !== "blocker" || !input.addToPreferences) {
+      return { preferenceRule: null };
+    }
+    const rule = await new ProfileService(this.db, this.tasks).addDiscardRule({
+      userId: input.userId,
+      text: note ? `${requirement}: ${note}` : requirement,
+      language: input.language,
+    });
+    return { preferenceRule: rule.text };
   }
 }
 

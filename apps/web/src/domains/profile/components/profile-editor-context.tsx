@@ -53,6 +53,7 @@ import {
 } from "@repo/api/domains/profile/truth/structure";
 import {
   applyChange,
+  containsLines,
   listParts,
   locateChange,
   parseFragment,
@@ -84,7 +85,7 @@ import {
   editorScrollMargins,
 } from "../utils/editor-extensions";
 import { suggestionWidget } from "../utils/suggestion-widget";
-import { lineDiff } from "../utils/word-diff";
+import { lineDiff, lineKey, unchangedEnds } from "../utils/word-diff";
 
 // The most of a passage a message quotes.
 export const maxQuoteCharacters = 1500;
@@ -376,6 +377,27 @@ export function ProfileEditorProvider({
   const { mutate: resolveSuggestions } = useMutation(
     trpc.profile.resolveSuggestions.mutationOptions()
   );
+  // A removal whose lines are already gone is done, not stale (the move's
+  // removal accepted by hand, or the lines deleted): recorded as accepted.
+  const settledRemovals = useRef(new Set<string>());
+  useEffect(() => {
+    if (!suggestionsQuery.isSuccess) return;
+    const done = suggestions.filter(
+      (suggestion) =>
+        !suggestion.range &&
+        !suggestion.replace.trim() &&
+        suggestion.find.trim() &&
+        !settledRemovals.current.has(suggestion.id) &&
+        !containsLines(blocks, suggestion.find)
+    );
+    if (!done.length) return;
+    for (const suggestion of done) settledRemovals.current.add(suggestion.id);
+    const ids = done.map((suggestion) => suggestion.id);
+    forgetSuggestions(ids);
+    resolveSuggestions({ resolution: "accepted", profileSuggestionIds: ids });
+    // forgetSuggestions and resolveSuggestions are stable enough here.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [suggestions, blocks, suggestionsQuery.isSuccess]);
   const [agentTopic, setAgentTopic] = useState<AgentTopic | null>(null);
   // The widgets in the text call the latest handlers.
   const suggestionHandlers = useRef<{
@@ -428,11 +450,23 @@ export function ProfileEditorProvider({
     // Each suggestion as a tracked change: the lines it replaces struck
     // through, and what it writes below them with Accept and Reject.
     for (const suggestion of suggestions) {
-      const { range } = suggestion;
-      if (!range) continue;
+      if (!suggestion.range) continue;
+      // Lines it leaves alone at either end are neither struck nor shown
+      // again (a sub-item added under an unchanged parent).
+      const written = parseFragment(suggestion.replace);
+      const ends = unchangedEnds(
+        blocks.slice(suggestion.range.start, suggestion.range.end).map(lineKey),
+        written.map(lineKey)
+      );
+      const range = {
+        start: suggestion.range.start + ends.prefix,
+        end: suggestion.range.end - ends.suffix,
+      };
       const diff = lineDiff(
         blocks.slice(range.start, range.end).map((block) => block.text),
-        parseFragment(suggestion.replace).map((block) => block.text)
+        written
+          .slice(ends.prefix, written.length - ends.suffix)
+          .map((block) => block.text)
       );
       for (let line = range.start; line < range.end; line++) {
         const from = positions[line];

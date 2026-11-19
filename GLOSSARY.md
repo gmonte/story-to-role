@@ -40,12 +40,8 @@ _Avoid_: Draft fact, proposal, edit
 The AI the user talks to about a passage of their profile; it interviews per the method and changes the profile only through suggestions.
 _Avoid_: Interviewer, career chat, orchestrator
 
-**Opening agent**:
-The AI the user talks to about one opening — its fit, gap questions, company and next steps — with the published profile in view; it never spends credits for the user and sends profile facts as suggestions.
-_Avoid_: Job chat, opening chat
-
 **Document agent**:
-The AI the user talks to about one generated document (a resume or a cover letter), with the profile version it froze in view; it changes the document only through suggestions, grounded on the profile and on what the user asks.
+The AI the user talks to about one generated document (a resume or a cover letter), with the profile version it froze in view and what the user answered and chose for that opening (gap answers, instructions, and for a letter the story, motivation and company facts); it changes the document only through suggestions, grounded on the profile and on what the user asks. There is one per document and no agent for the opening itself.
 _Avoid_: Resume chat, editor assistant
 
 **Experience**:
@@ -63,6 +59,10 @@ _Avoid_: Qualification, certificate, diploma
 **Locked fact**:
 An employer, title or date of an experience that code prevents the AI from altering in any generated text.
 _Avoid_: Fixed field, protected field
+
+**Condition**:
+A requirement of an opening that is a term of the job, not a skill (work model, schedule or availability, location, travel, contract type, start date, salary). The user answers it with how they stand: meets it, doesn't but it is not a blocker, or it is a blocker.
+_Avoid_: Soft requirement
 
 **Known gap**:
 Something the user does not have or has not done, stated in the profile (in an experience's "what I did not do" or in Known gaps); it counts as a gap, never as coverage.
@@ -97,7 +97,7 @@ A target the user may apply to at one company: a posted vacancy, or a company th
 _Avoid_: Job, vacancy, role, posting, target
 
 **Application**:
-The user's pursuit of one opening, which starts when its first document is generated or copied (or is registered by hand as an external application) and closes hired, rejected, withdrawn or with no response.
+The user's pursuit of one opening, which starts when its first document is generated or copied, when the user marks the opening as applied or moves its status without any document, or when it is registered by hand as an external application and closes hired, rejected, withdrawn or with no response.
 _Avoid_: Candidacy, job, tracker entry
 
 **External application**:

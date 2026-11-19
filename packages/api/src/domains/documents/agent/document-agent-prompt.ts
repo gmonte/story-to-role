@@ -2,6 +2,7 @@ import type { AgentAttachment } from "@repo/api/domains/agents/agent-message";
 
 import { bulletFormatRule } from "../writing/bullet-format";
 import type { DocumentAgentContext } from "./document-agent-context";
+import { userInputLines } from "./opening-user-input";
 
 export type DocumentAgentPromptInput = {
   context: DocumentAgentContext;
@@ -12,23 +13,53 @@ export type DocumentAgentPromptInput = {
   attachment: AgentAttachment | null;
 };
 
-const list = (items: string[]) =>
+export const list = (items: string[]) =>
   items.length ? items.map((item) => `- ${item}`).join("\n") : "(none)";
 
 const tagNames =
-  "document|passage|index|purpose|rules|gaps|findings|review|settings|attachment|waiting|rejected";
+  "resume|interview|profile|document|passage|index|purpose|userInput|rules|gaps|findings|review|settings|attachment|reviewers|waiting|rejected";
 
-const oneLine = (text: string) => text.replace(/\s*\n\s*/g, " / ").trim();
+export const oneLine = (text: string) =>
+  text.replace(/\s*\n\s*/g, " / ").trim();
 
 /**
  * The person's text between tags, as data: a tag of ours written inside it
  * is dropped, so it can't close its block and speak as instructions.
  */
-const data = (tag: string, text: string) =>
+export const data = (tag: string, text: string) =>
   `<${tag}>\n${text.replace(new RegExp(`</?(?:${tagNames})>`, "gi"), "")}\n</${tag}>`;
 
-const languageName = (language: string) =>
+export const languageName = (language: string) =>
   language === "pt-BR" ? "Brazilian Portuguese" : "English";
+
+const attachmentNames = {
+  finding: "finding",
+  review: "review note",
+  reviewer: "reviewer feedback",
+} as const;
+
+const short = (text: string, max = 300) =>
+  text.length > max ? `${text.slice(0, max - 1)}…` : text;
+
+/** The latest review compactly: each reviewer's rating and feedback. */
+export function reviewersText(
+  reviewers: NonNullable<DocumentAgentContext["reviewers"]>
+) {
+  return [
+    `Rating kept: ${reviewers.rating}/10 (target ${reviewers.target}).`,
+    ...reviewers.rounds.flatMap((round, index) => [
+      `Reviewer ${index + 1}: ${round.rating}/10${round.kept ? " (kept)" : ""}`,
+      ...round.inconsistencies.map((item) =>
+        item.quote
+          ? `- Contradiction: “${short(item.quote)}”${item.profileLine ? ` — profile: ${short(item.profileLine)}` : ""}`
+          : `- Contradiction: ${short(item.text ?? "")}`
+      ),
+      ...round.advice.map((item) => `- Advice: ${short(item)}`),
+      ...round.partial.map((item) => `- Partly covered: ${short(item)}`),
+      ...round.notProven.map((item) => `- Not shown: ${short(item)}`),
+    ]),
+  ].join("\n");
+}
 
 /**
  * The document agent's instructions for one turn (ADR 0009, resume spec,
@@ -55,6 +86,7 @@ export function buildDocumentAgentPrompt(input: DocumentAgentPromptInput) {
     "## What you do in this conversation",
     "- Answer questions about the document: why a line is there, what it rests on, how it reads for the opening, what could be stronger, how the review or a finding should be read.",
     "- When the person wants a change, or you see one worth making, propose it with propose_change instead of describing it: it appears in the text as a tracked change they accept or reject, and nothing changes until they accept. The person's own requests come as suggestions they accept too (“add one more bullet to X”, “change my title to Y”): you never write into the document directly, so propose at once and tell them it waits in the text. One call per bullet or paragraph: a suggestion the person can judge on its own. Moving or swapping bullets of a part is ONE suggestion, never one per bullet: `find` holds all the affected consecutive lines and `replace` the same lines, unchanged, in the new order (two suggestions that swap lines would conflict: accepting one makes the other impossible). Copy `find` from the line's words exactly (without its id); write `replace` as the whole new line. Leave `find` empty to add a line at the end of a position's bullets or of the letter; leave `replace` empty to remove one. The header's lines and a position's facts are replaced one for one, never added or removed. When the person asks, you may also add to the summary (leave `find` empty to append a sentence to it, or quote the summary and write it with the new sentence) and to the skills (leave `find` empty to add a new group at the end, or quote a group and write it followed by the new “Label: item, item” line to add one after it). The summary and the skills are never emptied, and a skills group keeps its label.",
+    "- A resume's sections (the “## …” headings below, in the order they print) may be reordered, each with its content: “move Projects before Professional experience”. Propose it with propose_section_move (the section to move, above or below which other section): it waits for the person as a suggestion they accept or reject, like any other. Section order isn't a locked fact, so it needs no `requestedBy`. The header stays first. Leave the order alone unless the person asks, or a different one clearly serves the opening.",
     "- When you propose or write a resume or LinkedIn bullet (experience or project, not the summary, the letter or a skills group), follow the product's bullet format:\n" +
       bulletFormatRule,
     "- Name in `profilePassages` the profile lines a suggestion rests on, copied from read_part, so the document keeps its trace. A fact the person told you in this conversation needs none: write it when they ask for it.",
@@ -73,6 +105,7 @@ export function buildDocumentAgentPrompt(input: DocumentAgentPromptInput) {
     "",
     "## A passage, a finding or a review note being discussed",
     "- The person's message may open with quoted lines (“> …”): the passage of the document they selected, which is also below. A line that starts “~ [finding] …” is a finding of the document's checks, “~ [review] …” a note of the coverage review, and they are asking about it: say what it means in a sentence, then how to resolve it (ask what you need first, if you must). With no words of their own, propose the resolution right away.",
+    "- A line that starts “~ [reviewer] …” is feedback from one of the resume's reviewers (the AI reviewers that rated it; their latest review is below), in a section: contradiction (with the resume passage and the profile line it contradicts), advice, partial or not shown. The person wants to talk about it. You may agree or disagree with the reviewer, and say why, grounded on the document and the profile: a reviewer can be wrong. Explain what it means in plain words. Propose a change only as a suggestion (propose_change) when it makes the document better, under all the rules above: never invent a fact or a figure, and never touch a locked fact unless the person asked for it. A contradiction means the passage says what the profile does not back: the fix is to reword it to what the profile says, or, if the passage is true, for the person to add the fact to their profile.",
     "",
     "## How you answer",
     "- In the language of the person's last message. Plain text, no Markdown. Short: this is a side panel. After proposing, don't repeat the new wording: the person sees it in the text.",
@@ -111,6 +144,13 @@ export function buildDocumentAgentPrompt(input: DocumentAgentPromptInput) {
           ].join("\n")
         : `A library document${context.purpose.focus ? ` with the focus: ${context.purpose.focus}` : " with no focus"}.`
     ),
+    ...(userInputLines(context.userInput).length
+      ? [
+          "",
+          "## What the person answered and chose for this opening (their statements, not verified facts; never claim what they say they lack)",
+          data("userInput", userInputLines(context.userInput).join("\n")),
+        ]
+      : []),
     "",
     "## Generation settings",
     data(
@@ -206,9 +246,16 @@ export function buildDocumentAgentPrompt(input: DocumentAgentPromptInput) {
         ]
       : []),
     "",
+    ...(context.reviewers
+      ? [
+          `## What the resume's reviewers said${context.reviewers.current ? "" : " (of an earlier snapshot of this version)"}`,
+          data("reviewers", reviewersText(context.reviewers)),
+          "",
+        ]
+      : []),
     ...(input.attachment
       ? [
-          `## The ${input.attachment.kind === "finding" ? "finding" : "review note"} the person asked about`,
+          `## The ${attachmentNames[input.attachment.kind]} the person asked about`,
           data("attachment", input.attachment.text),
           "",
         ]

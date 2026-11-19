@@ -14,6 +14,8 @@ import {
   documentsTable,
   documentSnapshotsTable,
   documentVersionsTable,
+  generationsTable,
+  reviewRoundsTable,
 } from "@repo/api/domains/documents/db/documents-tables";
 import {
   fitChecksTable,
@@ -187,6 +189,74 @@ export class TrackerRepository {
         )
       )
       .orderBy(desc(documentVersionsTable.createdAt));
+  }
+
+  /**
+   * Where each sent resume version came from and how it was rated, for the
+   * metrics by origin and by score: the library document it was copied or
+   * adapted from, and the kept round of the review that judged its latest
+   * judged snapshot (as `reviewViewOf` reads it). Versions without a
+   * review have no rating.
+   */
+  async versionOrigins(versionIds: string[]) {
+    if (versionIds.length === 0) {
+      return { versions: [], libraries: [], rounds: [] };
+    }
+    // A version of a library document (outside any application, one
+    // picked by hand) is its own library source.
+    const versions = (
+      await this.tx
+        .select({
+          versionId: documentVersionsTable.id,
+          libraryVersionId: documentVersionsTable.libraryVersionId,
+          applicationId: documentsTable.applicationId,
+        })
+        .from(documentVersionsTable)
+        .innerJoin(
+          documentsTable,
+          eq(documentsTable.id, documentVersionsTable.documentId)
+        )
+        .where(inArray(documentVersionsTable.id, versionIds))
+    ).map((v) => ({
+      versionId: v.versionId,
+      libraryVersionId:
+        v.libraryVersionId ?? (v.applicationId ? null : v.versionId),
+    }));
+    const libraryIds = versions.flatMap((v) =>
+      v.libraryVersionId ? [v.libraryVersionId] : []
+    );
+    const libraries =
+      libraryIds.length === 0
+        ? []
+        : await this.tx
+            .select({
+              versionId: documentVersionsTable.id,
+              documentId: documentsTable.id,
+              encryptedLabel: documentVersionsTable.encryptedLabel,
+              encryptedFocus: documentsTable.encryptedFocus,
+            })
+            .from(documentVersionsTable)
+            .innerJoin(
+              documentsTable,
+              eq(documentsTable.id, documentVersionsTable.documentId)
+            )
+            .where(inArray(documentVersionsTable.id, libraryIds));
+    const rounds = await this.tx
+      .select({
+        versionId: generationsTable.versionId,
+        generationSnapshotId: generationsTable.snapshotId,
+        snapshotId: reviewRoundsTable.snapshotId,
+        rating: reviewRoundsTable.rating,
+        kept: reviewRoundsTable.kept,
+      })
+      .from(reviewRoundsTable)
+      .innerJoin(
+        generationsTable,
+        eq(generationsTable.id, reviewRoundsTable.generationId)
+      )
+      .where(inArray(generationsTable.versionId, versionIds))
+      .orderBy(asc(reviewRoundsTable.createdAt), asc(reviewRoundsTable.round));
+    return { versions, libraries, rounds };
   }
 
   /** What the metrics read: sent applications and their structured facts. */

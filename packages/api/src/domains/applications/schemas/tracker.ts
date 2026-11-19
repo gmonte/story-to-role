@@ -4,6 +4,7 @@ import {
   documentKindSchema,
   outputLanguageSchema,
 } from "@repo/api/domains/documents/schemas/document";
+import { fitBandSchema } from "@repo/api/domains/openings/schemas/opening";
 
 import {
   applicationSourceSchema,
@@ -120,15 +121,23 @@ export const trackerMetricsSchema = z.object({
   sent: z.number().int(),
   responded: z.number().int(),
   interviews: z.number().int(),
-  byResume: z.array(
+  // The resume sent, by where it came from: written for the opening, copied
+  // or adapted from a library document (one row per document), or not
+  // recorded.
+  byOrigin: z.array(
     z.object({
-      // Null groups the applications whose resume isn't recorded.
-      versionId: z.uuid().nullable(),
+      origin: z.enum(["generated", "library", "unknown"]),
+      libraryDocumentId: z.uuid().nullable(),
       label: z.string().nullable(),
-      language: outputLanguageSchema.nullable(),
       ...metricsGroup,
     })
   ),
+  // The resume sent, by its review score against the target.
+  byScore: z.array(
+    z.object({ band: z.enum(["reached", "below", "none"]), ...metricsGroup })
+  ),
+  // The opening's fit band when it was applied to; null when never checked.
+  byFit: z.array(z.object({ band: fitBandSchema.nullable(), ...metricsGroup })),
   bySource: z.array(
     z.object({ source: applicationSourceSchema.nullable(), ...metricsGroup })
   ),

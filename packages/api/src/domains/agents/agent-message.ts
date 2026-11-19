@@ -1,11 +1,14 @@
 const partLine = /^\[part: (.+)\]$/;
 const versionLine = /^\[version: ([0-9a-f-]{36})\]$/;
-const attachmentHead = /^~ \[(finding|review)\] ?(.*)$/;
+const attachmentHead = /^~ \[(finding|review|reviewer)\] ?(.*)$/;
 
 // The most of a finding's or review's text a message carries.
-export const maxAttachmentCharacters = 600;
+export const maxAttachmentCharacters = 1500;
 
-export type AgentAttachment = { kind: "finding" | "review"; text: string };
+export type AgentAttachment = {
+  kind: "finding" | "review" | "reviewer";
+  text: string;
+};
 
 /**
  * A message about a passage carries the passage as leading quote lines

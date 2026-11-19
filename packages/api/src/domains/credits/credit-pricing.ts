@@ -83,6 +83,9 @@ export function creditCap(type: TaskType, hints: CapHints = {}): number {
       return 20;
     case "adapt_document":
       return 10 * level;
+    case "review_document":
+      // One reviewer and the coverage review, rewriting nothing.
+      return 10;
     case "generate_document": {
       // A LinkedIn text is priced like a cover letter: one writer call and
       // the coverage review.

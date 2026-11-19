@@ -24,6 +24,8 @@ import { getStorage, type Storage } from "@repo/api/tools/storage/storage";
 import { triggerClient } from "@repo/api/tools/trigger/trigger-client";
 import { MotivationRepository } from "@repo/api/domains/applications/motivation/motivation-repository";
 import { ResearchRepository } from "@repo/api/domains/applications/research/research-repository";
+import type { AiClient } from "@repo/api/domains/ai/ai-client";
+import { smallCallAi } from "@repo/api/domains/ai/small-call-ai";
 
 import { DocumentsRepository } from "./documents-repository";
 import { outdatedVersions } from "./adaptation/sync-status";
@@ -34,7 +36,8 @@ import {
   ownWordsFacts,
 } from "./coverage-review/coverage-review";
 import { tracesToProfile } from "./coverage-review/check-document";
-import { retraceContent } from "./coverage-review/retrace-lines";
+import { matchProfileLines } from "./coverage-review/match-profile-lines";
+import { attachTraces, retraceContent } from "./coverage-review/retrace-lines";
 import { reprintFields } from "./translation/reprint-fields";
 import { sendLineToProfile } from "./coverage-review/send-to-profile";
 import {
@@ -66,6 +69,7 @@ import {
 import { applyUserEdit, LockedFactEditError } from "./editing/apply-user-edit";
 import { atsCheck } from "./generation/ats-check";
 import { freezeGeneration } from "./generation/generation-request";
+import { reviewViewOf } from "./generation/review-view";
 import { loadProfileSource } from "./generation/load-profile-source";
 import {
   defaultGenerationSettings,
@@ -107,7 +111,12 @@ export class DocumentsService {
   constructor(
     private readonly db: DbClient,
     private readonly tasks = new TasksService(db),
-    private readonly storage?: Storage
+    private readonly storage?: Storage,
+    // The AI client for the small calls made outside a task.
+    private readonly aiFor: (
+      userId: string,
+      cipher: UserCipher
+    ) => Promise<AiClient> = (userId, cipher) => smallCallAi(db, userId, cipher)
   ) {}
 
   private async requireProfile(userId: string, db: DbClient = this.db) {
@@ -244,6 +253,33 @@ export class DocumentsService {
       () => failGeneration(this.db, generation.id)
     );
     return { generationId: generation.id, realtime };
+  }
+
+  /**
+   * The opening's cover letter document, created empty when there is none:
+   * the letter's agent is keyed by the document, so it can help during the
+   * preparation and the same conversation goes on beside the letter.
+   */
+  async letterAgentDocument(input: { userId: string; openingId: string }) {
+    const profile = await this.requireProfile(input.userId);
+    return this.db.transaction(async (tx) => {
+      const opening = await new OpeningsRepository(tx).findOpening({
+        profileId: profile.id,
+        openingId: input.openingId,
+      });
+      if (!opening) throw notFound();
+      const repository = new DocumentsRepository(tx);
+      const application = await repository.findOrInsertApplication({
+        profileId: profile.id,
+        openingId: opening.id,
+      });
+      const document = await repository.findOrInsertApplicationDocument({
+        profileId: profile.id,
+        applicationId: application.id,
+        kind: "cover_letter",
+      });
+      return { documentId: document.id };
+    });
   }
 
   /** The opening's application and documents, each version official. */
@@ -412,6 +448,19 @@ export class DocumentsService {
               adjusted: !!written.referenceSnapshotId,
             }
           : null,
+        review:
+          isResume && written
+            ? reviewViewOf(
+                await repository.listReviewRounds(written.id),
+                cipher,
+                openingId ? "opening" : "focus",
+                {
+                  latestId: latest.id,
+                  generationSnapshotId: written.snapshotId,
+                }
+              )
+            : null,
+        reviewing: isResume ? await this.reviewing(tx, latest.id) : null,
         trace: evidenceTrace(content, frozen),
         instructionTrace: trace.instructionsFor(content),
         coverage: await this.coverageView(repository, cipher, version, latest, {
@@ -669,31 +718,15 @@ export class DocumentsService {
         });
       }
       const cipher = await getUserCipher(tx, input.userId);
-      const contexts = new FrozenContexts(tx, cipher, profile.id);
-      const openingId = await contexts.openingOf(document.applicationId);
-      // `untranslated`: the version as the profile wrote it, in its own
-      // language (no dictionaries applied).
-      const load = (profileVersionId: string | null, untranslated = false) =>
-        contexts.load({
-          profileVersionId,
-          openingId,
-          language: untranslated ? undefined : version.language,
-        });
-      const from = await load(latest.profileVersionId);
-      // The same version untranslated: a field a document printed before
-      // translations existed still reads as the profile wrote it.
-      const fromSource = await load(latest.profileVersionId, true);
-      const to = await load(published.id);
-      const retraced = retraceContent(decryptDocument(cipher, latest), {
-        from,
-        to,
+      const { content } = await this.rebasedContent({
+        db: tx,
+        cipher,
+        profileId: profile.id,
+        document,
+        version,
+        latest,
+        published,
       });
-      // A translations dictionary entry published since applies to the
-      // fields code printed and the user left as printed.
-      const content =
-        retraced.kind === "resume"
-          ? reprintFields(retraced, to, from, fromSource)
-          : retraced;
       const snapshot = await repository.insertSnapshot({
         versionId: version.id,
         sequence: latest.sequence + 1,
@@ -709,6 +742,154 @@ export class DocumentsService {
         profileVersionNumber: published.number,
       };
     });
+  }
+
+  /**
+   * The latest snapshot's content traced again against the published
+   * profile version (the traces of "Use version N"), with the contexts it
+   * was read from. No model is called.
+   */
+  private async rebasedContent(input: {
+    db: DbClient;
+    cipher: UserCipher;
+    profileId: string;
+    document: { applicationId: string | null };
+    version: { language: OutputLanguage };
+    latest: NonNullable<
+      Awaited<ReturnType<DocumentsRepository["latestSnapshot"]>>
+    >;
+    published: { id: string };
+  }) {
+    const { cipher, latest, version } = input;
+    const contexts = new FrozenContexts(input.db, cipher, input.profileId);
+    const openingId = await contexts.openingOf(input.document.applicationId);
+    // `untranslated`: the version as the profile wrote it, in its own
+    // language (no dictionaries applied).
+    const load = (profileVersionId: string | null, untranslated = false) =>
+      contexts.load({
+        profileVersionId,
+        openingId,
+        language: untranslated ? undefined : version.language,
+      });
+    const from = await load(latest.profileVersionId);
+    // The same version untranslated: a field a document printed before
+    // translations existed still reads as the profile wrote it.
+    const fromSource = await load(latest.profileVersionId, true);
+    const to = await load(input.published.id);
+    const retraced = retraceContent(decryptDocument(cipher, latest), {
+      from,
+      to,
+    });
+    // A translations dictionary entry published since applies to the
+    // fields code printed and the user left as printed.
+    const content =
+      retraced.kind === "resume"
+        ? reprintFields(retraced, to, from, fromSource)
+        : retraced;
+    return { content, to };
+  }
+
+  /**
+   * "Check against my profile" (resume spec, "Document workspace"): the
+   * lines the profile didn't back (the user's own, or edited by hand) are
+   * checked by a small model call against the profile published now, not
+   * only the version the document froze. The document moves to that
+   * version as "Use version N" does (the traces of the other lines are
+   * found again by code); a line the model shows the profile backs gets
+   * its trace and stops being pointed out, in a new snapshot that records
+   * the version used. The others stay, with what the profile doesn't say.
+   * One call for all the lines, spending no credit (the user's own key on
+   * a paid plan, else StoryToRole pays), like rewriting a gap answer.
+   */
+  async checkAgainstProfile(input: {
+    userId: string;
+    versionId: string;
+    // Only these lines; every unbacked line by default.
+    lineIds?: string[];
+  }) {
+    const { version, document, profile } = await requireUserVersion(
+      this.db,
+      input.userId,
+      input.versionId
+    );
+    const repository = new DocumentsRepository(this.db);
+    const latest = await repository.latestSnapshot(version.id);
+    if (!latest) throw notFound();
+    const published = await this.publishedProfileVersion(this.db, input.userId);
+    if (!published) {
+      throw new TRPCError({
+        code: "PRECONDITION_FAILED",
+        message: "There is no published profile to check against.",
+      });
+    }
+    const cipher = await getUserCipher(this.db, input.userId);
+    const { content, to } = await this.rebasedContent({
+      db: this.db,
+      cipher,
+      profileId: profile.id,
+      document,
+      version,
+      latest,
+      published,
+    });
+    const wanted = input.lineIds ? new Set(input.lineIds) : null;
+    const lines = documentLines(content)
+      .filter(
+        (line) =>
+          line.text.trim() &&
+          !tracesToProfile(line.origin, to) &&
+          (!wanted || wanted.has(line.id))
+      )
+      .map((line) => ({ id: line.id, text: line.text }));
+    const matches = await matchProfileLines({
+      ai: await this.aiFor(input.userId, cipher),
+      lines,
+      context: to,
+    });
+    const traces = new Map(
+      [...matches].flatMap(([lineId, match]) =>
+        match.evidenceIds.length ? [[lineId, match.evidenceIds] as const] : []
+      )
+    );
+    const traced = attachTraces(content, traces);
+    const moved = published.id !== latest.profileVersionId;
+    let snapshotId: string | null = null;
+    if (moved || traces.size > 0) {
+      snapshotId = await this.db.transaction(async (tx) => {
+        const locked = new DocumentsRepository(tx);
+        await requireUserVersion(tx, input.userId, input.versionId, {
+          lock: true,
+        });
+        const current = await locked.latestSnapshot(version.id);
+        if (current?.id !== latest.id) {
+          throw new TRPCError({ code: "CONFLICT" });
+        }
+        const snapshot = await locked.insertSnapshot({
+          versionId: version.id,
+          sequence: latest.sequence + 1,
+          parentSnapshotId: latest.id,
+          origin: "rebased",
+          author: "user",
+          encryptedContent: cipher.encrypt(JSON.stringify(traced)),
+          profileVersionId: published.id,
+          ...resumeLinkOf(latest),
+        });
+        return snapshot.id;
+      });
+    }
+    return {
+      snapshotId,
+      profileVersionNumber: published.number,
+      lines: lines.map((line) => {
+        const match = matches.get(line.id)!;
+        return {
+          lineId: line.id,
+          backed: match.evidenceIds.length > 0,
+          missing: match.missing,
+          figures: match.figures,
+        };
+      }),
+    };
   }
 
   /** The opening's keywords, each backed or not by fit check evidence. */
@@ -827,6 +1008,14 @@ export class DocumentsService {
         );
       },
     };
+  }
+
+  /** The re-review of a snapshot under way, with what it last reported. */
+  private async reviewing(tx: DbClient, snapshotId: string) {
+    const tasks = new TasksRepository(tx);
+    return (await tasks.activeTask(snapshotId, "review_document"))
+      ? { progress: await tasks.latestProgress(snapshotId, "review_document") }
+      : null;
   }
 
   /**
@@ -1054,6 +1243,49 @@ export class DocumentsService {
       await repository.updateVersion(version.id, { dismissedFindings });
       return { dismissedFindings };
     });
+  }
+
+  /**
+   * "Review again" (resume spec, "Review rounds"): one reviewer and the
+   * coverage review judge the resume's latest snapshot as it is, in a
+   * task, rewriting nothing. Only for a resume the profile wrote, whose
+   * latest snapshot no review judged yet.
+   */
+  async reviewAgain(input: { userId: string; versionId: string }) {
+    const { version, document } = await requireUserVersion(
+      this.db,
+      input.userId,
+      input.versionId
+    );
+    const repository = new DocumentsRepository(this.db);
+    const latest = await repository.latestSnapshot(version.id);
+    const written = await repository.latestWrittenGeneration(version.id);
+    if (document.kind !== "resume" || !latest || !written) {
+      throw new TRPCError({ code: "BAD_REQUEST" });
+    }
+    const cipher = await getUserCipher(this.db, input.userId);
+    const review = reviewViewOf(
+      await repository.listReviewRounds(written.id),
+      cipher,
+      "opening",
+      { latestId: latest.id, generationSnapshotId: written.snapshotId }
+    );
+    if (review?.current) throw new TRPCError({ code: "PRECONDITION_FAILED" });
+    const active = await new TasksRepository(this.db).activeTask(
+      latest.id,
+      "review_document"
+    );
+    if (active) throw new TRPCError({ code: "CONFLICT" });
+    await this.tasks.assertAffordable({
+      userId: input.userId,
+      type: "review_document",
+    });
+    const { realtime } = await this.tasks.start({
+      userId: input.userId,
+      type: "review_document",
+      subjectId: latest.id,
+    });
+    return { snapshotId: latest.id, realtime };
   }
 
   /**

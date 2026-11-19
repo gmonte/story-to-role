@@ -52,6 +52,8 @@ export function useOpeningLabels() {
           return t.formatMessage({ defaultMessage: "Location" });
         case "work_model":
           return t.formatMessage({ defaultMessage: "Work model" });
+        case "condition":
+          return t.formatMessage({ defaultMessage: "Condition" });
         case "other":
           return t.formatMessage({ defaultMessage: "Requirement" });
       }

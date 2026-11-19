@@ -5,6 +5,7 @@ import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { CareerRepository } from "@repo/api/domains/career/career-repository";
 import { DocumentsRepository } from "@repo/api/domains/documents/documents-repository";
 import { getUserCipher } from "@repo/api/domains/encryption/user-cipher";
+import { OpeningsRepository } from "@repo/api/domains/openings/openings-repository";
 import { OpeningsService } from "@repo/api/domains/openings/openings-service";
 import { createTestUser } from "@repo/api/test/create-test-user";
 import {
@@ -311,5 +312,95 @@ describe("tracker", () => {
     await expect(
       ctx.tracker.get({ userId: other.id, applicationId })
     ).rejects.toMatchObject({ code: "NOT_FOUND" });
+  });
+
+  describe("without a resume or letter", () => {
+    async function bareOpening() {
+      const ctx = await setup();
+      const opening = await new OpeningsRepository(ctx.db).insertOpening({
+        profileId: ctx.profile.id,
+        kind: "posted",
+        status: "analyzed",
+      });
+      return { ...ctx, openingId: opening.id };
+    }
+
+    it("marks an opening applied with no documents, and tracks it", async () => {
+      const ctx = await bareOpening();
+      const { applicationId } = await ctx.tracker.ensureForOpening({
+        userId: ctx.user.id,
+        openingId: ctx.openingId,
+      });
+      // Calling again finds the same application.
+      expect(
+        await ctx.tracker.ensureForOpening({
+          userId: ctx.user.id,
+          openingId: ctx.openingId,
+        })
+      ).toEqual({ applicationId });
+
+      await ctx.tracker.markApplied({
+        userId: ctx.user.id,
+        applicationId,
+        versionIds: [],
+        now,
+      });
+
+      const detail = await ctx.tracker.get({
+        userId: ctx.user.id,
+        applicationId,
+        now,
+      });
+      expect(detail).toMatchObject({ status: "applied", resumeSent: null });
+      expect(detail.submissions).toEqual([]);
+      const list = await ctx.tracker.list(ctx.user.id, now);
+      expect(list).toHaveLength(1);
+      expect(list[0]).toMatchObject({ id: applicationId, status: "applied" });
+      const metrics = await ctx.tracker.metrics({
+        userId: ctx.user.id,
+        period: "30d",
+        now,
+      });
+      expect(metrics.sent).toBe(1);
+      expect(metrics.byScore).toEqual([
+        { band: "none", sent: 1, responded: 0 },
+      ]);
+    });
+
+    it("moves the status without any document", async () => {
+      const ctx = await bareOpening();
+      const { applicationId } = await ctx.tracker.ensureForOpening({
+        userId: ctx.user.id,
+        openingId: ctx.openingId,
+      });
+      await ctx.tracker.setStatus({
+        userId: ctx.user.id,
+        applicationId,
+        status: "in_process",
+        now,
+      });
+      const detail = await ctx.tracker.get({
+        userId: ctx.user.id,
+        applicationId,
+        now,
+      });
+      expect(detail.status).toBe("in_process");
+      expect(detail.submissions).toEqual([]);
+    });
+
+    it("does not give another user's opening an application", async () => {
+      const ctx = await bareOpening();
+      const other = await createTestUser("grace@example.com");
+      await new CareerRepository(ctx.db).insertProfileIfMissing({
+        userId: other.id,
+        interviewLanguage: "en-US",
+      });
+      await expect(
+        ctx.tracker.ensureForOpening({
+          userId: other.id,
+          openingId: ctx.openingId,
+        })
+      ).rejects.toMatchObject({ code: "NOT_FOUND" });
+    });
   });
 });

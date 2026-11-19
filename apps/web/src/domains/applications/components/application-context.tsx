@@ -6,9 +6,10 @@ import { useApplicationInstructions } from "../hooks/use-application-instruction
 import { ConfirmedInstructions } from "./instructions-review";
 
 /**
- * The side panel's Context block (workspace spec): what the AI uses for
- * this application besides the profile: the instructions and the
- * locked-fact overrides.
+ * The application's instructions, in the left column of the resume and
+ * the cover letter, where they apply: what the AI uses for this
+ * application besides the profile (the instructions and the locked-fact
+ * overrides).
  */
 export function ApplicationContext({ openingId }: { openingId: string }) {
   const t = useTranslation();
@@ -18,7 +19,7 @@ export function ApplicationContext({ openingId }: { openingId: string }) {
   return (
     <section className="flex flex-col gap-2">
       <h3 className="text-sm font-medium">
-        {t.formatMessage({ defaultMessage: "Context" })}
+        {t.formatMessage({ defaultMessage: "Application instructions" })}
       </h3>
       <ConfirmedInstructions
         openingId={openingId}

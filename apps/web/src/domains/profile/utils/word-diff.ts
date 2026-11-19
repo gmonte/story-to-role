@@ -149,3 +149,36 @@ export function lineDiff(before: string[], after: string[]): LineDiff {
     fallback: false,
   };
 }
+
+/**
+ * How many whole lines a change leaves alone at its start and at its end
+ * (compared as keys: the line's kind, depth and text). A suggestion that
+ * only appends a sub-item after its parent shows just the new line, not
+ * the parent struck and written again.
+ */
+export function unchangedEnds(before: string[], after: string[]) {
+  let prefix = 0;
+  while (
+    prefix < before.length &&
+    prefix < after.length &&
+    before[prefix] === after[prefix]
+  ) {
+    prefix++;
+  }
+  let suffix = 0;
+  while (
+    suffix < before.length - prefix &&
+    suffix < after.length - prefix &&
+    before[before.length - 1 - suffix] === after[after.length - 1 - suffix]
+  ) {
+    suffix++;
+  }
+  return { prefix, suffix };
+}
+
+/** A block's key for `unchangedEnds`. */
+export const lineKey = (block: {
+  type: string;
+  text: string;
+  depth?: number;
+}) => `${block.type}:${block.depth ?? 0}:${block.text}`;

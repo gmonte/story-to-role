@@ -104,13 +104,23 @@
 }
 /* With a word diff the block only carries a marker and is muted; the
    removed words are struck. */
+/* The removed and the suggested blocks share one shape (a left bar and a
+   tint) so their text wraps at the same width. */
 .profile-editor .profile-suggestion-old.profile-suggestion-old-diff {
-  background: transparent;
+  background: color-mix(in oklab, var(--destructive) 6%, transparent);
   text-decoration: none;
   border-left: 3px solid
     color-mix(in oklab, var(--destructive) 60%, transparent);
-  padding-left: 0.5rem;
+  padding: 0.125rem 0.5rem;
   color: var(--muted-foreground);
+}
+.profile-editor
+  .profile-suggestion-old.profile-suggestion-old-diff[data-profile-item] {
+  padding-left: 1.75rem;
+}
+.profile-editor
+  .profile-suggestion-old.profile-suggestion-old-diff[data-profile-item]::before {
+  left: 0.75rem;
 }
 .profile-editor .profile-suggestion-removed {
   background: color-mix(in oklab, var(--destructive) 18%, transparent);
@@ -136,11 +146,25 @@
 }
 .profile-editor .profile-suggestion {
   margin: 0.25rem 0 0.5rem;
-  padding: 0.5rem 0.75rem;
-  border: 1px solid color-mix(in oklab, #10b981 40%, transparent);
-  border-radius: 0.5rem;
+  padding: 0.125rem 0.5rem 0.5rem;
+  border-left: 3px solid color-mix(in oklab, #10b981 60%, transparent);
   background: color-mix(in oklab, #10b981 8%, transparent);
   user-select: none;
+}
+/* A suggested item hangs under its bullet like the editor's items. */
+.profile-editor .profile-suggestion-item {
+  position: relative;
+  padding-left: 1.25rem;
+}
+.profile-editor .profile-suggestion-item::before {
+  content: "•";
+  position: absolute;
+  left: 0.25rem;
+  color: var(--muted-foreground);
+}
+.profile-editor .profile-suggestion-item[data-depth="1"]::before,
+.profile-editor .profile-suggestion-item[data-depth="3"]::before {
+  content: "◦";
 }
 .profile-editor .profile-suggestion-new {
   color: color-mix(in oklab, #047857 85%, var(--foreground));
@@ -179,4 +203,42 @@
 .profile-editor .profile-locked-heading {
   cursor: default;
   caret-color: transparent;
+}
+
+.description-editor {
+  font-size: 15px;
+  line-height: 1.75rem;
+}
+.description-editor h1 {
+  margin: 1rem 0 0.5rem;
+  font-size: 1.5rem;
+  line-height: 2rem;
+  font-weight: 600;
+}
+.description-editor h2 {
+  margin: 1rem 0 0.25rem;
+  font-size: 1.25rem;
+  line-height: 1.75rem;
+  font-weight: 600;
+}
+.description-editor h3 {
+  margin: 0.75rem 0 0.25rem;
+  font-size: 1rem;
+  font-weight: 600;
+}
+.description-editor p {
+  margin: 0.25rem 0;
+}
+.description-editor ul {
+  margin: 0.25rem 0;
+  padding-left: 1.25rem;
+  list-style: disc;
+}
+.description-editor ol {
+  margin: 0.25rem 0;
+  padding-left: 1.25rem;
+  list-style: decimal;
+}
+.description-editor li > p {
+  margin: 0;
 }

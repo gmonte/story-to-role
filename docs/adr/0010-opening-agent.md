@@ -1,3 +1,5 @@
+> **Withdrawn.** The owner decided on one agent per document instead of an agent per opening: the resume's and the cover letter's agents (ADR 0009) each receive what the user answered and chose for that opening (gap answers with their links, the letter's chosen story, motivation answers, approved company facts, application instructions), and work independently. The opening page has no agent column. See the workspace spec, “The opening page”, and the owner's revision in [docs/design/opening-page-review.md](../design/opening-page-review.md).
+
 # Each opening has its own agent, on chat.agent like the profile's and the documents'
 
 The opening page gets a fixed right column — Agent · Fit · Application — in every step (workspace spec, “The opening page”). In the Resume and Cover letter steps the agent is the document's (ADR 0009); in the Opening, Fit and Application steps it is the **opening agent**: one conversation per opening, on Trigger.dev `chat.agent`, sharing the profile and document agents' plumbing and privacy model (transcript encrypted in our tables, no client data in traces, 7-day session deadline, ownership checked on our server, charged per message).

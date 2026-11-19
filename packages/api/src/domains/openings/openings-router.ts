@@ -11,6 +11,7 @@ import {
 } from "@repo/api/tools/trpc";
 
 import { openingLimits, OpeningsService } from "./openings-service";
+import { conditionStanceSchema } from "./schemas/opening";
 import {
   openingDetailSchema,
   openingSummarySchema,
@@ -204,7 +205,7 @@ export const openingsRouter = createTRPCRouter({
         "openings",
         "PUT",
         "/openings/by-id/{openingId}",
-        "Edits an opening's title and company"
+        "Edits an opening's title, company and link"
       )
     )
     .input(
@@ -212,11 +213,41 @@ export const openingsRouter = createTRPCRouter({
         openingId: z.uuid(),
         title: z.string().trim().min(1).max(200),
         company: z.string().trim().max(200).optional(),
+        // The posting's address; null removes it, absent leaves it.
+        sourceUrl: z
+          .url({ protocol: /^https?$/ })
+          .max(2000)
+          .nullable()
+          .optional(),
       })
     )
     .output(okSchema)
     .mutation(async ({ ctx, input }) => {
       await new OpeningsService(db).rename({ userId: ctx.userId, ...input });
+      return ok;
+    }),
+
+  updateDescription: userProcedure
+    .meta(
+      openApiMeta(
+        "openings",
+        "PUT",
+        "/openings/by-id/{openingId}/description",
+        "Edits an opening's description; its fit check then reads as outdated"
+      )
+    )
+    .input(
+      z.object({
+        openingId: z.uuid(),
+        description: z.string().max(openingLimits.maxDescriptionCharacters),
+      })
+    )
+    .output(okSchema)
+    .mutation(async ({ ctx, input }) => {
+      await new OpeningsService(db).updateDescription({
+        userId: ctx.userId,
+        ...input,
+      });
       return ok;
     }),
 
@@ -248,6 +279,52 @@ export const openingsRouter = createTRPCRouter({
       new OpeningsService(db).answerGapQuestion({
         userId: ctx.userId,
         ...input,
+      })
+    ),
+
+  undoConditionAnswer: userProcedure
+    .meta(
+      openApiMeta(
+        "openings",
+        "DELETE",
+        "/fit-check-items/by-id/{fitCheckItemId}/condition",
+        "Takes back the answer to a condition requirement"
+      )
+    )
+    .input(z.object({ fitCheckItemId: z.uuid() }))
+    .output(okSchema)
+    .mutation(async ({ ctx, input }) => {
+      await new OpeningsService(db).undoConditionAnswer({
+        userId: ctx.userId,
+        ...input,
+      });
+      return ok;
+    }),
+
+  answerCondition: userProcedure
+    .meta(
+      openApiMeta(
+        "openings",
+        "PUT",
+        "/fit-check-items/by-id/{fitCheckItemId}/condition",
+        "Answers a condition requirement: the user meets it, doesn't but it is not a blocker, or it is a blocker"
+      )
+    )
+    .input(
+      z.object({
+        fitCheckItemId: z.uuid(),
+        stance: conditionStanceSchema,
+        note: z.string().trim().max(1000).optional(),
+        // For a blocker: add it to the job preferences as a discard rule.
+        addToPreferences: z.boolean().default(false),
+      })
+    )
+    .output(z.object({ preferenceRule: z.string().nullable() }))
+    .mutation(({ ctx, input }) =>
+      new OpeningsService(db).answerCondition({
+        userId: ctx.userId,
+        ...input,
+        language: templateLanguage(ctx),
       })
     ),
 });

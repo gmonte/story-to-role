@@ -24,17 +24,17 @@ const limits = generationSettingsFields.shape;
 /**
  * The generation settings as a form (resume spec, "Generation settings"):
  * the user's defaults in the writing settings, and what they change for
- * one document when generating it. The cover letter's fields show only
- * where a letter is concerned.
+ * one document when generating it. A document shows only its own fields:
+ * a resume the resume's, a cover letter the letter's; the defaults both.
  */
 export function GenerationSettingsFields({
   value,
   onChange,
-  letter = false,
+  show = "resume",
 }: {
   value: GenerationSettings;
   onChange: (value: GenerationSettings) => void;
-  letter?: boolean;
+  show?: "resume" | "letter" | "both";
 }) {
   const t = useTranslation();
   const veryOldId = useId();
@@ -51,76 +51,82 @@ export function GenerationSettingsFields({
 
   return (
     <div className="grid gap-2.5">
-      {number(
-        "bulletsRecent",
-        t.formatMessage({ defaultMessage: "Bullets per recent experience" })
-      )}
-      {number(
-        "recentYears",
-        t.formatMessage({ defaultMessage: "What counts as recent (years)" }),
-        t.formatMessage({
-          defaultMessage:
-            "An experience you are in now, or one that ended at most this many years ago.",
-        })
-      )}
-      {number(
-        "bulletsOlder",
-        t.formatMessage({ defaultMessage: "Bullets per older experience" })
-      )}
-      <div className="grid gap-1.5 text-sm">
-        <Label htmlFor={veryOldId} className="font-normal">
-          {t.formatMessage({ defaultMessage: "Very old experiences" })}
-        </Label>
-        <Select
-          value={value.veryOld}
-          onValueChange={(next) =>
-            onChange({
-              ...value,
-              veryOld: next as GenerationSettings["veryOld"],
+      {show !== "letter" && (
+        <>
+          {number(
+            "bulletsRecent",
+            t.formatMessage({ defaultMessage: "Bullets per recent experience" })
+          )}
+          {number(
+            "recentYears",
+            t.formatMessage({
+              defaultMessage: "What counts as recent (years)",
+            }),
+            t.formatMessage({
+              defaultMessage:
+                "An experience you are in now, or one that ended at most this many years ago.",
             })
-          }
-        >
-          <SelectTrigger id={veryOldId} size="sm" className="w-full">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="relevant_only">
+          )}
+          {number(
+            "bulletsOlder",
+            t.formatMessage({ defaultMessage: "Bullets per older experience" })
+          )}
+          <div className="grid gap-1.5 text-sm">
+            <Label htmlFor={veryOldId} className="font-normal">
+              {t.formatMessage({ defaultMessage: "Very old experiences" })}
+            </Label>
+            <Select
+              value={value.veryOld}
+              onValueChange={(next) =>
+                onChange({
+                  ...value,
+                  veryOld: next as GenerationSettings["veryOld"],
+                })
+              }
+            >
+              <SelectTrigger id={veryOldId} size="sm" className="w-full">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="relevant_only">
+                  {t.formatMessage({
+                    defaultMessage: "Left out, unless relevant to the document",
+                  })}
+                </SelectItem>
+                <SelectItem value="leave_out">
+                  {t.formatMessage({ defaultMessage: "Always left out" })}
+                </SelectItem>
+                <SelectItem value="keep">
+                  {t.formatMessage({ defaultMessage: "Kept like older ones" })}
+                </SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          {number(
+            "veryOldYears",
+            t.formatMessage({
+              defaultMessage: "What counts as very old (years)",
+            }),
+            t.formatMessage({
+              defaultMessage:
+                "An experience that ended this many years ago or more.",
+            })
+          )}
+          {value.veryOldYears <= value.recentYears && (
+            <p className="text-destructive text-xs" role="alert">
               {t.formatMessage({
-                defaultMessage: "Left out, unless relevant to the document",
+                defaultMessage:
+                  "What counts as very old must be more years than what counts as recent.",
               })}
-            </SelectItem>
-            <SelectItem value="leave_out">
-              {t.formatMessage({ defaultMessage: "Always left out" })}
-            </SelectItem>
-            <SelectItem value="keep">
-              {t.formatMessage({ defaultMessage: "Kept like older ones" })}
-            </SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
-      {number(
-        "veryOldYears",
-        t.formatMessage({
-          defaultMessage: "What counts as very old (years)",
-        }),
-        t.formatMessage({
-          defaultMessage:
-            "An experience that ended this many years ago or more.",
-        })
+            </p>
+          )}
+          {number(
+            "resumeMaxPages",
+            t.formatMessage({ defaultMessage: "Resume pages, at most" })
+          )}
+        </>
       )}
-      {value.veryOldYears <= value.recentYears && (
-        <p className="text-destructive text-xs" role="alert">
-          {t.formatMessage({
-            defaultMessage:
-              "What counts as very old must be more years than what counts as recent.",
-          })}
-        </p>
-      )}
-      {number(
-        "resumeMaxPages",
-        t.formatMessage({ defaultMessage: "Resume pages, at most" })
-      )}
-      {letter && (
+      {show !== "resume" && (
         <>
           {number(
             "letterMaxParagraphs",

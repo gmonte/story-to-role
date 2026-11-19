@@ -1,0 +1,1 @@
+ALTER TABLE "openings" ADD COLUMN IF NOT EXISTS "descriptionEditedAt" timestamp with time zone;

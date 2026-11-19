@@ -47,6 +47,24 @@ export const documentsRouter = createTRPCRouter({
       new DocumentsService(db).forOpening({ userId: ctx.userId, ...input })
     ),
 
+  letterAgentDocument: userProcedure
+    .meta(
+      openApiMeta(
+        "documents",
+        "POST",
+        "/openings/by-id/{openingId}/letter-agent",
+        "Returns the opening's cover letter document, whose agent helps before the letter exists"
+      )
+    )
+    .input(z.object({ openingId: z.uuid() }))
+    .output(z.object({ documentId: z.uuid() }))
+    .mutation(({ ctx, input }) =>
+      new DocumentsService(db).letterAgentDocument({
+        userId: ctx.userId,
+        ...input,
+      })
+    ),
+
   generateResume: userProcedure
     .use(rateLimited("taskStart"))
     .meta(
@@ -197,6 +215,24 @@ export const documentsRouter = createTRPCRouter({
     .output(z.object({ rejected: z.array(z.uuid()) }))
     .mutation(({ ctx, input }) =>
       new ChangesService(db).rejectChanges({ userId: ctx.userId, ...input })
+    ),
+
+  reviewAgain: userProcedure
+    .use(rateLimited("taskStart"))
+    .meta(
+      openApiMeta(
+        "documents",
+        "POST",
+        "/document-versions/by-id/{versionId}/review",
+        "Reviews the resume's latest snapshot again, rewriting nothing"
+      )
+    )
+    .input(z.object({ versionId: z.uuid() }))
+    .output(
+      z.object({ snapshotId: z.uuid(), realtime: realtimeSubscriptionSchema })
+    )
+    .mutation(({ ctx, input }) =>
+      new DocumentsService(db).reviewAgain({ userId: ctx.userId, ...input })
     ),
 
   undo: userProcedure
@@ -387,6 +423,43 @@ export const documentsRouter = createTRPCRouter({
     )
     .mutation(({ ctx, input }) =>
       new DocumentsService(db).useProfileVersion({
+        userId: ctx.userId,
+        ...input,
+      })
+    ),
+
+  checkAgainstProfile: userProcedure
+    .use(rateLimited("pdfRender"))
+    .meta(
+      openApiMeta(
+        "documents",
+        "POST",
+        "/document-versions/by-id/{versionId}/profile-check",
+        "Checks the lines the profile doesn't back against the profile published now, tracing the ones it backs"
+      )
+    )
+    .input(
+      z.object({
+        versionId: z.uuid(),
+        lineIds: z.array(z.string()).max(200).optional(),
+      })
+    )
+    .output(
+      z.object({
+        snapshotId: z.uuid().nullable(),
+        profileVersionNumber: z.number().int(),
+        lines: z.array(
+          z.object({
+            lineId: z.string(),
+            backed: z.boolean(),
+            missing: z.string(),
+            figures: z.array(z.string()),
+          })
+        ),
+      })
+    )
+    .mutation(({ ctx, input }) =>
+      new DocumentsService(db).checkAgainstProfile({
         userId: ctx.userId,
         ...input,
       })

@@ -81,7 +81,13 @@ describe("prompts", () => {
   it("carry the bullet format", () => {
     const prompts = [
       strategistPrompt("m", settings),
-      reviewerPrompt({ material: "m", resume: "r", pages: 1, maxPages: 2 }),
+      reviewerPrompt({
+        material: "m",
+        resume: "r",
+        pages: 1,
+        maxPages: 2,
+        feedbackLanguage: "English",
+      }),
       editorPrompt({
         material: "m",
         settings,

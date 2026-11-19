@@ -1,6 +1,7 @@
 import type { Line, LineOrigin } from "../schemas/document";
 import type { DocumentChangeContent } from "../schemas/document-change";
 import type { CoverLetterContent } from "../schemas/cover-letter-content";
+import { applySectionMove, sectionMoveOf } from "./section-order";
 import type {
   ResumeContent,
   ResumeSection,
@@ -278,6 +279,20 @@ export function locateInLines(
     : { start: at, end: at + wanted.length };
 }
 
+/** Whether a change still applies to the content as it is now. */
+export function changeApplies(
+  content: ChangeableContent,
+  change: DocumentChange
+) {
+  const move = sectionMoveOf(change);
+  if (move) {
+    return (
+      content.kind === "resume" && applySectionMove(content, move) !== null
+    );
+  }
+  return locateDocumentChange(content, change) !== null;
+}
+
 export function locateDocumentChange(
   content: ChangeableContent,
   change: DocumentChange
@@ -444,6 +459,10 @@ export function applyDocumentChange(
   change: DocumentChange,
   evidenceIds: string[] = []
 ): ChangeableContent | null {
+  const move = sectionMoveOf(change);
+  if (move) {
+    return content.kind === "resume" ? applySectionMove(content, move) : null;
+  }
   const located = locateDocumentChange(content, change);
   if (!located) return null;
   const { part, start, end } = located;

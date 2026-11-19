@@ -13,6 +13,7 @@ import type {
   OpeningKind,
   OpeningRejectionReason,
   OpeningStatus,
+  ConditionStance,
   OpeningTermCategory,
   OpeningTermImportance,
   OpeningTermKind,
@@ -45,6 +46,9 @@ export const openingsTable = createTable(
     // for an unsolicited opening, the intended role or area.
     encryptedTitle: d.text(),
     encryptedDescription: d.text(),
+    // When the user last edited the description: a fit check made before
+    // it read other text, so it is outdated.
+    descriptionEditedAt: d.timestamp({ withTimezone: true }),
     encryptedNotes: d.text(),
     encryptedSourceUrl: d.text(),
     // Why it was refused (not a job posting, unreadable link…), no content.
@@ -164,6 +168,8 @@ export const fitCheckItemsTable = createTable(
     // The user confirmed they really lack it: it was suggested for "what I
     // did not do" or the known gaps (resume spec, "Gap questions").
     lackConfirmedAt: d.timestamp({ withTimezone: true }),
+    // How the user stands on a condition (the note, if any, is the answer).
+    conditionStance: d.text().$type<ConditionStance>(),
   }),
   (t) => [index("fit_check_items_fit_check_id_idx").on(t.fitCheckId)]
 );

@@ -78,7 +78,7 @@ export function OutdatedNotice({
             target={version}
             trigger={
               <Button size="sm" variant="secondary">
-                {t.formatMessage({ defaultMessage: "Recreate" })}
+                {t.formatMessage({ defaultMessage: "Adapt again" })}
               </Button>
             }
           />

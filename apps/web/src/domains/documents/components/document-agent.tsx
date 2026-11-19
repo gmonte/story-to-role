@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { skipToken, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { UIMessage } from "ai";
 import { Loader2, Sparkles } from "lucide-react";
 
@@ -11,6 +11,7 @@ import { agentSettings } from "@repo/api/domains/agents/agent-settings";
 import type { documentAgent } from "@repo/api/domains/documents/tasks/document-agent";
 import type { VersionView } from "@repo/api/domains/documents/schemas/document-view";
 import { useTranslation } from "@repo/intl/use-translation";
+import { Button } from "@repo/web/components/ui/button";
 import { toast } from "@repo/web/components/ui/sonner";
 
 import { topmostNewSuggestion } from "~/domains/profile/utils/topmost-new-suggestion";
@@ -49,11 +50,15 @@ export function DocumentAgent({
   documentId,
   kind,
   version,
+  onUseAnswer,
 }: {
   documentId: string;
   kind: "resume" | "cover_letter";
-  // The version the user is on: each message says.
-  version: VersionView;
+  // The version the user is on: each message says. Null while the letter
+  // is still being prepared: there is nothing to change yet.
+  version: VersionView | null;
+  // Preparation only: the last reply, put in the motivation answer box.
+  onUseAnswer?: (text: string) => void;
 }) {
   const queryKey = ["document-chat", documentId];
   // Loaded afresh on every visit: what the agent said while the page was
@@ -77,7 +82,8 @@ export function DocumentAgent({
       key={loaded.data.chatId}
       documentId={documentId}
       kind={kind}
-      versionId={version.id}
+      versionId={version?.id ?? null}
+      onUseAnswer={onUseAnswer}
       chatId={loaded.data.chatId}
       initialMessages={loaded.data.messages}
       session={loaded.data.session}
@@ -102,6 +108,7 @@ function Conversation({
   documentId,
   kind,
   versionId,
+  onUseAnswer,
   chatId,
   initialMessages,
   session,
@@ -109,7 +116,8 @@ function Conversation({
 }: {
   documentId: string;
   kind: "resume" | "cover_letter";
-  versionId: string;
+  versionId: string | null;
+  onUseAnswer?: (text: string) => void;
   chatId: string;
   initialMessages: UIMessage[];
   session: ChatSession | null;
@@ -130,7 +138,9 @@ function Conversation({
     if (focusOnMount) input.current?.focus();
   }, [focusOnMount]);
   // The changes waiting in the text, to say which suggestion was answered.
-  const waiting = useQuery(trpc.documents.changes.queryOptions({ versionId }));
+  const waiting = useQuery(
+    trpc.documents.changes.queryOptions(versionId ? { versionId } : skipToken)
+  );
   const waitingIds = new Set((waiting.data ?? []).map((change) => change.id));
   const staleIds = new Set(
     (waiting.data ?? []).filter((change) => change.stale).map((c) => c.id)
@@ -232,6 +242,15 @@ function Conversation({
     agent?.clearAttachment();
   }
 
+  // The last reply's words, for the motivation answer box.
+  const lastReply =
+    last?.role === "assistant"
+      ? last.parts
+          .flatMap((part) => (part.type === "text" ? [part.text] : []))
+          .join("\n")
+          .trim()
+      : "";
+
   // What the agent is doing right now, in words: never a still label.
   const running =
     last?.role === "assistant"
@@ -262,7 +281,9 @@ function Conversation({
       />
       <div className="min-h-0 flex-1 overflow-y-auto">
         <ol className="flex flex-col gap-3 p-4">
-          {messages.length === 0 && <Introduction kind={kind} />}
+          {messages.length === 0 && (
+            <Introduction kind={kind} preparing={!versionId} />
+          )}
           {messages.map((message) =>
             message.role === "user" ? (
               <UserMessage key={message.id} message={message} />
@@ -317,6 +338,19 @@ function Conversation({
                 })}
               </li>
             )
+          )}
+          {onUseAnswer && !busy && lastReply && (
+            <li className="self-start">
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => onUseAnswer(lastReply)}
+              >
+                {t.formatMessage({
+                  defaultMessage: "Use this reply as my answer",
+                })}
+              </Button>
+            </li>
           )}
           {busy && !streamingText && (
             <ActivityRow phase={watchdog.phase} activity={activity} />
@@ -389,8 +423,30 @@ function Conversation({
 }
 
 /** The empty conversation: what the agent does. */
-function Introduction({ kind }: { kind: "resume" | "cover_letter" }) {
+function Introduction({
+  kind,
+  preparing,
+}: {
+  kind: "resume" | "cover_letter";
+  preparing: boolean;
+}) {
   const t = useTranslation();
+  if (preparing) {
+    return (
+      <li className="flex flex-col items-center gap-3 px-2 py-8 text-center">
+        <Sparkles className="text-primary size-5" />
+        <h2 className="font-display text-lg font-semibold tracking-tight">
+          {t.formatMessage({ defaultMessage: "Your cover letter's agent" })}
+        </h2>
+        <p className="text-muted-foreground text-sm">
+          {t.formatMessage({
+            defaultMessage:
+              "I'm ready while you prepare the letter: ask me to phrase an answer, explain a company fact or suggest what to emphasise. I know your profile, this opening and what you chose so far, and I never invent a fact or a number.",
+          })}
+        </p>
+      </li>
+    );
+  }
   return (
     <li className="flex flex-col items-center gap-3 px-2 py-8 text-center">
       <Sparkles className="text-primary size-5" />

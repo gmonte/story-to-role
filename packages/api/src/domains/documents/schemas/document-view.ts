@@ -17,6 +17,7 @@ import {
 import { coverageFindingCodes } from "../coverage-review/check-document";
 import { documentContentSchema } from "./document-content";
 import { resumeSectionKindSchema } from "./resume-content";
+import { inconsistencyViewSchema } from "./review-inconsistency";
 
 /**
  * A profile line a document line cites (resume spec, "Trace in the
@@ -163,6 +164,38 @@ export const versionViewSchema = z.object({
   emphasis: z
     .object({ lines: z.array(z.string()), adjusted: z.boolean() })
     .nullable(),
+  // The coverage rating of the generation that wrote the version, with the
+  // rating of each review round; null without rounds (adjustment, copy,
+  // letter).
+  review: z
+    .object({
+      rating: z.number().int(),
+      target: z.number().int(),
+      rounds: z.array(
+        z.object({
+          round: z.number().int(),
+          rating: z.number().int(),
+          kept: z.boolean(),
+          inconsistencies: z.array(inconsistencyViewSchema),
+          advice: z.array(z.string()),
+          partial: z.array(z.string()),
+          notProven: z.array(z.string()),
+        })
+      ),
+      coveredStrong: z.number().int(),
+      coveredPartial: z.number().int(),
+      judged: z.number().int(),
+      inconsistencies: z.number().int(),
+      // Library resumes are written for a focus, not an opening.
+      purpose: z.enum(["opening", "focus"]),
+      // Whether the rating judged the version's latest snapshot, and
+      // whether it is a re-review of an edited text.
+      current: z.boolean(),
+      ofEdit: z.boolean(),
+    })
+    .nullable(),
+  // A re-review of the latest snapshot at work: its progress.
+  reviewing: z.object({ progress: taskProgressSchema.nullable() }).nullable(),
   trace: z.array(evidenceTraceSchema),
   instructionTrace: z.array(
     z.object({ instructionId: z.uuid(), text: z.string() })

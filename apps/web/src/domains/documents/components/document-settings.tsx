@@ -26,7 +26,7 @@ export function DocumentSettings({
   /** Undefined until the user's defaults are read. */
   value: GenerationSettings | undefined;
   onChange: (value: GenerationSettings) => void;
-  /** A cover letter: shows the letter's fields. */
+  /** A cover letter: shows only the letter's fields. */
   letter?: boolean;
 }) {
   const t = useTranslation();
@@ -43,7 +43,7 @@ export function DocumentSettings({
         <GenerationSettingsFields
           value={value}
           onChange={onChange}
-          letter={letter}
+          show={letter ? "letter" : "resume"}
         />
         <p className="text-muted-foreground text-xs">
           {t.formatMessage({

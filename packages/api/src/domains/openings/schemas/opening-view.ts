@@ -10,6 +10,7 @@ import {
   openingKindSchema,
   openingRejectionReasonSchema,
   openingStatusSchema,
+  conditionStanceSchema,
   openingTermCategorySchema,
   openingTermImportanceSchema,
   openingTermKindSchema,
@@ -53,6 +54,8 @@ export const fitCheckItemViewSchema = z.object({
   gapAnswer: z.string().nullable(),
   // The user confirmed they really lack it: suggested to their profile.
   gapLack: z.boolean(),
+  // How the user stands on a condition requirement (null when unanswered).
+  conditionStance: conditionStanceSchema.nullable(),
   // Where the answer happened, as last saved (null when not answered).
   gapLinks: gapLinksSchema.nullable(),
   // The verdict rests on the user's answer for this opening.

@@ -26,6 +26,12 @@ import {
   type DocumentChange as ProposedChange,
 } from "./document-change";
 import { userRequested, type UserRequest } from "./requested-change";
+import {
+  applySectionMove,
+  sectionMovePart,
+  sectionMoveText,
+  type SectionMove,
+} from "./section-order";
 
 const sameLines = (a: string[], b: string[]) =>
   a.length === b.length &&
@@ -282,6 +288,76 @@ export async function proposeChange(input: {
     ok: true,
     supersededIds: [...new Set(supersededIds)],
     unmatchedPassages: unmatched,
+    change: {
+      id: row.id,
+      versionId: row.versionId,
+      origin: row.origin,
+      createdAt: row.createdAt,
+      ...content,
+    },
+  };
+}
+
+/**
+ * Proposes moving a resume section, with its content, above or below
+ * another (resume spec, "Document workspace"): a pending suggestion like
+ * any other, never written until the user accepts. Section order isn't a
+ * locked fact, so it needs no `requestedBy`. Refused when a section isn't
+ * printed, or it already sits there. A pending move of the same section
+ * is superseded by the new one.
+ */
+export async function proposeSectionMove(input: {
+  db: DbClient;
+  cipher: UserCipher;
+  versionId: string;
+  snapshotId: string;
+  content: ChangeableContent;
+  origin: DocumentChangeOrigin;
+  move: SectionMove;
+  reason: string;
+  pending?: Array<DocumentChangeContent & { id: string }>;
+}): Promise<
+  | { ok: true; change: DocumentChange; supersededIds: string[] }
+  | { ok: false; refusal: ChangeRefusal }
+> {
+  if (input.content.kind !== "resume") {
+    return { ok: false, refusal: { kind: "noSuchPart" } };
+  }
+  const kinds = input.content.sections.map((section) => section.kind);
+  if (!kinds.includes(input.move.kind) || !kinds.includes(input.move.anchor)) {
+    return { ok: false, refusal: { kind: "noSuchPart" } };
+  }
+  if (!applySectionMove(input.content, input.move)) {
+    return { ok: false, refusal: { kind: "unchanged" } };
+  }
+  const part = sectionMovePart(input.move.kind);
+  const content: DocumentChangeContent = {
+    part,
+    find: "",
+    replace: sectionMoveText(input.move),
+    reason: input.reason.trim(),
+    evidenceIds: [],
+  };
+  const supersededIds = (input.pending ?? [])
+    .filter((other) => other.part === part)
+    .map((other) => other.id);
+  const row = await input.db.transaction(async (tx) => {
+    const repository = new DocumentsRepository(tx);
+    await repository.resolveChanges({
+      versionId: input.versionId,
+      resolution: "superseded",
+      documentChangeIds: supersededIds,
+    });
+    return repository.insertChange({
+      versionId: input.versionId,
+      snapshotId: input.snapshotId,
+      origin: input.origin,
+      encryptedContent: input.cipher.encrypt(JSON.stringify(content)),
+    });
+  });
+  return {
+    ok: true,
+    supersededIds,
     change: {
       id: row.id,
       versionId: row.versionId,

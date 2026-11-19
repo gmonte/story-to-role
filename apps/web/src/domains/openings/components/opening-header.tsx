@@ -8,6 +8,7 @@ import {
   Briefcase,
   Mail,
   Pencil,
+  Download,
   Ellipsis,
   ExternalLink,
   FileText,
@@ -17,7 +18,10 @@ import {
 import Link from "next/link";
 
 import type { OpeningDetail } from "@repo/api/domains/openings/schemas/opening-view";
-import type { DocumentView } from "@repo/api/domains/documents/schemas/document-view";
+import type {
+  DocumentView,
+  VersionView,
+} from "@repo/api/domains/documents/schemas/document-view";
 import { useTranslation } from "@repo/intl/use-translation";
 import { Badge } from "@repo/web/components/ui/badge";
 import { Button } from "@repo/web/components/ui/button";
@@ -40,6 +44,7 @@ import { cn } from "@repo/web/lib/utils";
 import { useTrackerLabels } from "~/domains/applications/hooks/use-tracker-labels";
 import { CreditCost } from "~/domains/credits/components/credit-cost";
 import { useCredits } from "~/domains/credits/hooks/use-credits";
+import { useDownloadZip } from "~/domains/documents/components/download-zip-button";
 import { useOpeningDocuments } from "~/domains/documents/hooks/use-opening-documents";
 import { useTRPC } from "~/tools/trpc/client";
 
@@ -288,7 +293,13 @@ export function OpeningHeader({
             opening={opening}
             journey={journey}
           />
-          <OpeningMenu openingId={openingId} opening={opening} />
+          <OpeningMenu
+            openingId={openingId}
+            opening={opening}
+            versions={(journey.documents.data?.documents ?? []).flatMap(
+              (document) => document.versions
+            )}
+          />
         </div>
       </div>
       {switcher}
@@ -394,11 +405,16 @@ function PrimaryActionButton({
 function OpeningMenu({
   openingId,
   opening,
+  versions,
 }: {
   openingId: string;
   opening: OpeningDetail;
+  /** Every document version of the application, for the ZIP. */
+  versions: VersionView[];
 }) {
   const t = useTranslation();
+  const zip = useDownloadZip(openingId, versions);
+  const canZip = versions.length > 0;
   const trpc = useTRPC();
   const refresh = useRefreshOpenings();
   const setClosed = useMutation(
@@ -410,65 +426,78 @@ function OpeningMenu({
   const excludeCompany = useExcludeCompany(openingId, opening.company);
   const canClose = opening.status === "analyzed" || opening.status === "closed";
   const canExclude = opening.status === "analyzed" && !!opening.company;
-  if (!canClose && !canExclude && !opening.sourceUrl) return null;
+  if (!canClose && !canExclude && !canZip && !opening.sourceUrl) return null;
 
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button
-          size="icon"
-          variant="outline"
-          aria-label={t.formatMessage({ defaultMessage: "More actions" })}
-        >
-          <Ellipsis />
-        </Button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end">
-        {opening.sourceUrl && (
-          <DropdownMenuItem asChild>
-            <a
-              href={opening.sourceUrl}
-              target="_blank"
-              rel="noreferrer noopener"
-            >
-              <ExternalLink />
-              {t.formatMessage({ defaultMessage: "Open the opening’s page" })}
-            </a>
-          </DropdownMenuItem>
-        )}
-        {canClose && (
-          <DropdownMenuItem
-            disabled={setClosed.isPending}
-            onSelect={() =>
-              setClosed.mutate({
-                openingId,
-                closed: opening.status !== "closed",
-              })
-            }
+    <>
+      {zip.dialog}
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button
+            size="icon"
+            variant="outline"
+            aria-label={t.formatMessage({ defaultMessage: "More actions" })}
           >
-            {opening.status === "closed"
-              ? t.formatMessage({ defaultMessage: "Reopen the opening" })
-              : t.formatMessage({ defaultMessage: "Close the opening" })}
-          </DropdownMenuItem>
-        )}
-        {canExclude && (
-          <>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem
-              variant="destructive"
-              disabled={excludeCompany.disabled}
-              onSelect={excludeCompany.exclude}
-            >
-              <Ban />
-              {t.formatMessage(
-                { defaultMessage: "Never recommend {company} again" },
-                { company: opening.company }
-              )}
+            <Ellipsis />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end">
+          {opening.sourceUrl && (
+            <DropdownMenuItem asChild>
+              <a
+                href={opening.sourceUrl}
+                target="_blank"
+                rel="noreferrer noopener"
+              >
+                <ExternalLink />
+                {t.formatMessage({ defaultMessage: "Open the opening’s page" })}
+              </a>
             </DropdownMenuItem>
-          </>
-        )}
-      </DropdownMenuContent>
-    </DropdownMenu>
+          )}
+          {canZip && (
+            <DropdownMenuItem disabled={zip.busy} onSelect={zip.run}>
+              {zip.rendering ? (
+                <Loader2 className="animate-spin" />
+              ) : (
+                <Download />
+              )}
+              {zip.label}
+            </DropdownMenuItem>
+          )}
+          {canClose && (
+            <DropdownMenuItem
+              disabled={setClosed.isPending}
+              onSelect={() =>
+                setClosed.mutate({
+                  openingId,
+                  closed: opening.status !== "closed",
+                })
+              }
+            >
+              {opening.status === "closed"
+                ? t.formatMessage({ defaultMessage: "Reopen the opening" })
+                : t.formatMessage({ defaultMessage: "Close the opening" })}
+            </DropdownMenuItem>
+          )}
+          {canExclude && (
+            <>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                variant="destructive"
+                disabled={excludeCompany.disabled}
+                onSelect={excludeCompany.exclude}
+              >
+                <Ban />
+                {t.formatMessage(
+                  { defaultMessage: "Never recommend {company} again" },
+                  { company: opening.company }
+                )}
+              </DropdownMenuItem>
+            </>
+          )}
+        </DropdownMenuContent>
+      </DropdownMenu>
+    </>
   );
 }
 

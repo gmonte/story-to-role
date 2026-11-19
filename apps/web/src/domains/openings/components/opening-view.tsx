@@ -22,6 +22,8 @@ import { ApplicationContext } from "~/domains/applications/components/applicatio
 import { ApplicationTracker } from "~/domains/applications/components/application-tracker";
 import { CompanyResearch } from "~/domains/applications/components/company-research";
 import { CoverLetterPrep } from "~/domains/applications/components/cover-letter-prep";
+import { DownloadZipButton } from "~/domains/documents/components/download-zip-button";
+import { useOpeningDocuments } from "~/domains/documents/hooks/use-opening-documents";
 import { GenerateResumeDialog } from "~/domains/documents/components/generate-resume-dialog";
 import { ResumeWorkspace } from "~/domains/documents/components/resume-workspace";
 import { SimilarDocuments } from "~/domains/documents/components/similar-documents";
@@ -192,12 +194,19 @@ export function OpeningPageBody({
  */
 export function ApplicationColumn({ openingId }: { openingId: string }) {
   const t = useTranslation();
+  const documents = useOpeningDocuments(openingId);
+  const versions = (documents.data?.documents ?? []).flatMap(
+    (document) => document.versions
+  );
   return (
     <div className="flex flex-col gap-3">
       <h2 className="font-medium">
         {t.formatMessage({ defaultMessage: "Application" })}
       </h2>
       <ApplicationTracker openingId={openingId} />
+      {versions.length > 0 && (
+        <DownloadZipButton openingId={openingId} versions={versions} />
+      )}
     </div>
   );
 }

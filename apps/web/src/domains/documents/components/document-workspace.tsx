@@ -18,6 +18,7 @@ import { ResizableAside } from "~/domains/workspace/components/resizable-aside";
 
 import { useDocumentLabels } from "../hooks/use-document-labels";
 import { useRefreshDocuments } from "../hooks/use-opening-documents";
+import { CoverageScoreBadge } from "./coverage-score";
 import { DocumentChangesBar } from "./document-changes-bar";
 import { DocumentEditor } from "./document-editor";
 import {
@@ -193,6 +194,7 @@ function DocumentToolbar({
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-1">
+          <CoverageScoreBadge version={version} />
           <span
             className={cn(
               "px-2 text-xs",

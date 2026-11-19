@@ -10,6 +10,11 @@ import { Badge } from "@repo/web/components/ui/badge";
 import { cn } from "@repo/web/lib/utils";
 
 import { coverageScoreBand, roundsTrail } from "../utils/coverage-score";
+import {
+  ReviewAgainButton,
+  ReviewProgress,
+  StaleReviewNotice,
+} from "./review-again";
 
 const badgeVariant = {
   good: "default",
@@ -29,6 +34,9 @@ export function CoverageScore({ version }: { version: VersionView }) {
   const [open, setOpen] = useState(false);
   const review = version.review;
   if (!review) return null;
+  if (version.reviewing) {
+    return <ReviewProgress progress={version.reviewing.progress} />;
+  }
 
   const band = coverageScoreBand(review);
   const purpose = review.purpose;
@@ -71,6 +79,13 @@ export function CoverageScore({ version }: { version: VersionView }) {
         </span>
       </button>
 
+      {!review.current && (
+        <div className="flex flex-col gap-2">
+          <StaleReviewNotice />
+          <ReviewAgainButton version={version} />
+        </div>
+      )}
+
       {open && (
         <div className="text-muted-foreground flex flex-col gap-1.5">
           <p>
@@ -83,18 +98,26 @@ export function CoverageScore({ version }: { version: VersionView }) {
             )}
           </p>
           <p>
-            {review.rounds.length > 1
+            {review.ofEdit
               ? t.formatMessage(
                   {
                     defaultMessage:
-                      "{count} reviewers ({trail}); the highest score is kept.",
+                      "Review of the current text: {count, plural, =0 {no reviewers} one {# reviewer} other {# reviewers}}.",
                   },
-                  {
-                    count: review.rounds.length,
-                    trail: roundsTrail(review.rounds),
-                  }
+                  { count: review.rounds.length }
                 )
-              : t.formatMessage({ defaultMessage: "One reviewer." })}
+              : review.rounds.length > 1
+                ? t.formatMessage(
+                    {
+                      defaultMessage:
+                        "{count} reviewers ({trail}); the highest score is kept.",
+                    },
+                    {
+                      count: review.rounds.length,
+                      trail: roundsTrail(review.rounds),
+                    }
+                  )
+                : t.formatMessage({ defaultMessage: "One reviewer." })}
           </p>
           {review.rounds.length > 1 && (
             <p>

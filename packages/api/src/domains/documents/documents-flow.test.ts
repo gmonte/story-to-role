@@ -52,7 +52,7 @@ import { LetterService } from "./letter/letter-service";
 import { runGenerateLetter } from "./letter/run-generate-letter";
 import { runUpdateLetter } from "./letter/run-update-letter";
 import type { CoverLetterContent } from "./schemas/cover-letter-content";
-import { generationsTable } from "./db/documents-tables";
+import { generationsTable, reviewRoundsTable } from "./db/documents-tables";
 import { DocumentsRepository } from "./documents-repository";
 import { DocumentsService } from "./documents-service";
 import type { AdjustDraft } from "./generation/adjust-resume";
@@ -62,6 +62,7 @@ import {
   coverageRating,
   runGenerateResume,
 } from "./generation/run-generate-resume";
+import { runReviewResume } from "./generation/run-review-resume";
 import { PdfService } from "./rendering/pdf-service";
 import { runRenderPdf } from "./rendering/run-render-pdf";
 import type { DocumentContent } from "./schemas/document-content";
@@ -1160,6 +1161,140 @@ describe("resume generation and snapshots", () => {
     ]);
     await ctx.documents.deleteVersion({ userId: ctx.user.id, versionId });
     expect(await load()).toHaveLength(1);
+  });
+
+  it("says the review judged the generated text once edited, and Review again rates the latest snapshot", async () => {
+    const ctx = await setup();
+    const line = {
+      text: "Led a team of 5 engineers.",
+      evidence_ids: [ctx.evidence[1].id],
+    };
+    await ctx.generate("quick", {
+      drafts: [ctx.draft([line])],
+      ratings: [6],
+    });
+    const load = async () =>
+      (
+        await ctx.documents.forOpening({
+          userId: ctx.user.id,
+          openingId: ctx.opening.id,
+        })
+      ).documents[0].versions[0];
+    const generated = await load();
+    expect(generated.review).toMatchObject({ rating: 6, current: true });
+    expect(generated.reviewing).toBeNull();
+    // Nothing to review again while the review judged the latest snapshot.
+    await expect(
+      ctx.documents.reviewAgain({
+        userId: ctx.user.id,
+        versionId: generated.id,
+      })
+    ).rejects.toMatchObject({ code: "PRECONDITION_FAILED" });
+
+    const edited = structuredClone(resumeOf(generated.content));
+    experienceOf(edited).lines[0].text = "Led and mentored 5 engineers.";
+    await ctx.documents.saveEdit({
+      userId: ctx.user.id,
+      versionId: generated.id,
+      baseSnapshotId: generated.snapshot.id,
+      content: edited,
+    });
+    const stale = await load();
+    expect(stale.review).toMatchObject({ rating: 6, current: false });
+    expect(stale.coverage).toMatchObject({ current: false });
+
+    // Only the owner may ask for it.
+    const stranger = await createTestUser("eve@example.com");
+    await new CareerService(ctx.db).getOrCreateProfile({
+      userId: stranger.id,
+      defaultLanguage: "en-US",
+    });
+    await expect(
+      ctx.documents.reviewAgain({ userId: stranger.id, versionId: stale.id })
+    ).rejects.toMatchObject({ code: "NOT_FOUND" });
+    await expect(
+      runReviewResume({
+        db: ctx.db,
+        ai: createAiClient({
+          db: ctx.db,
+          userId: stranger.id,
+          funding: "credits",
+          providerPackage: fakeProviderPackage({ object: () => undefined })
+            .providerPackage,
+        }),
+        cipher: ctx.cipher,
+        userId: stranger.id,
+        snapshotId: stale.snapshot.id,
+      })
+    ).rejects.toThrow();
+
+    const started = await ctx.documents.reviewAgain({
+      userId: ctx.user.id,
+      versionId: stale.id,
+    });
+    expect(started.snapshotId).toBe(stale.snapshot.id);
+    expect(ctx.trigger.trigger).toHaveBeenCalledWith(
+      "review_document",
+      expect.anything()
+    );
+    // Under way: the view says so, and a second ask is refused.
+    expect((await load()).reviewing).not.toBeNull();
+    await expect(
+      ctx.documents.reviewAgain({ userId: ctx.user.id, versionId: stale.id })
+    ).rejects.toMatchObject({ code: "CONFLICT" });
+
+    const fake = fakeProviderPackage({
+      object: ({ system }) => {
+        if (system.startsWith("You review")) return reviewRated(9);
+        if (system.startsWith("You audit")) return emptyCoverage;
+        throw new Error("a re-review rewrites nothing");
+      },
+    });
+    await runReviewResume({
+      db: ctx.db,
+      ai: createAiClient({
+        db: ctx.db,
+        userId: ctx.user.id,
+        funding: "credits",
+        providerPackage: fake.providerPackage,
+        neverIncludeFilter: await loadNeverIncludeFilter({
+          db: ctx.db,
+          cipher: ctx.cipher,
+          profileId: ctx.profile.id,
+        }),
+      }),
+      cipher: ctx.cipher,
+      userId: ctx.user.id,
+      snapshotId: started.snapshotId,
+    });
+
+    const reviewed = await load();
+    // The edited snapshot is unchanged and now judged: rating and coverage.
+    expect(reviewed.snapshot.id).toBe(stale.snapshot.id);
+    expect(reviewed.review).toMatchObject({
+      rating: 9,
+      current: true,
+      ofEdit: true,
+      rounds: [{ rating: 9, kept: true }],
+    });
+    expect(reviewed.coverage).toMatchObject({
+      current: true,
+      reviewedSnapshotId: stale.snapshot.id,
+    });
+    // The generation's own rounds stay stored.
+    const rounds = await ctx.db.select().from(reviewRoundsTable);
+    expect(rounds.map((round) => round.rating).sort()).toEqual([6, 9]);
+
+    // Edited again, it reads as outdated again.
+    const again = structuredClone(resumeOf(reviewed.content));
+    experienceOf(again).lines[0].text = "Led 5 engineers.";
+    await ctx.documents.saveEdit({
+      userId: ctx.user.id,
+      versionId: reviewed.id,
+      baseSnapshotId: reviewed.snapshot.id,
+      content: again,
+    });
+    expect((await load()).review).toMatchObject({ rating: 9, current: false });
   });
 
   it("refuses another user's versions", async () => {

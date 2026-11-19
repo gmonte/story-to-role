@@ -1,5 +1,3 @@
-import { z } from "zod";
-
 import {
   KeyUnusableError,
   type AiUsage,
@@ -12,7 +10,6 @@ import { OpeningsRepository } from "@repo/api/domains/openings/openings-reposito
 import type { TaskProgress } from "@repo/api/domains/tasks/schemas/task";
 import type { DbClient } from "@repo/api/tools/db-client";
 import { logger } from "@repo/common/tools/logger";
-import { foldAccents } from "@repo/api/utils/text/fold-accents";
 import type { Storage } from "@repo/api/tools/storage/storage";
 
 import { decryptResume } from "../snapshot-content";
@@ -44,6 +41,7 @@ import {
   resumeDraftSchema,
 } from "./assemble-resume";
 import { reviewLoopSettings } from "./review-loop-settings";
+import { coverageRating, judgeResume, type Review } from "./review-resume";
 import { loadCareerContext } from "./load-career-context";
 import {
   adjusterPrompt,
@@ -52,7 +50,6 @@ import {
   type OpeningBrief,
   purposesOf,
   resumeMaterial,
-  reviewerPrompt,
   strategistPrompt,
 } from "./resume-prompts";
 import {
@@ -60,22 +57,7 @@ import {
   findForbiddenLines,
   lockedFactViolations,
   resumeLines,
-  resumeText,
 } from "./resume-checks";
-
-const reviewSchema = z.object({
-  coverage: z
-    .array(
-      z.object({
-        requirement: z.string(),
-        level: z.enum(["strong", "partial", "not_proven"]),
-      })
-    )
-    .catch([]),
-  inconsistencies: z.array(z.string()).catch([]),
-  advice: z.array(z.string()).catch([]),
-});
-type Review = z.infer<typeof reviewSchema>;
 
 type Candidate = {
   round: number;
@@ -90,37 +72,13 @@ type Candidate = {
   outputTokens: number;
 };
 
+/** Re-exported for the generation's tests. */
+export { coverageRating };
+
 const tokens = (usages: AiUsage[]) => ({
   inputTokens: usages.reduce((sum, u) => sum + u.inputTokens, 0),
   outputTokens: usages.reduce((sum, u) => sum + u.outputTokens, 0),
 });
-
-const normalize = (text: string) => foldAccents(text).toLowerCase().trim();
-
-/**
- * A draft's rating, from 1 to 10, by how much of its purpose it covers
- * (resume spec, "Review rounds"): strong coverage counts whole, partial
- * half. What the fit check found to be a gap is left out of the count: a
- * resume must not cover it, so it can't be held against it. A draft that
- * disagrees with the profile is never a good one.
- */
-export function coverageRating(review: Review, gaps: string[]) {
-  const lacking = new Set(gaps.map(normalize));
-  const judged = review.coverage.filter(
-    (item) => !lacking.has(normalize(item.requirement))
-  );
-  if (judged.length === 0) return 5;
-  const covered = judged.reduce(
-    (sum, item) =>
-      sum + (item.level === "strong" ? 1 : item.level === "partial" ? 0.5 : 0),
-    0
-  );
-  const rating = Math.min(
-    10,
-    Math.max(1, Math.round((10 * covered) / judged.length))
-  );
-  return review.inconsistencies.length > 0 ? Math.min(rating, 4) : rating;
-}
 
 /**
  * Generates a resume for an opening or a library focus, from the profile
@@ -292,24 +250,13 @@ export async function runGenerateResume(deps: {
       round: number,
       usages: AiUsage[]
     ): Promise<Candidate> => {
-      const { object, usage } = await ai.generateObject({
-        purpose: "resume_review",
-        role: "writing",
-        maxTokens: reviewLoopSettings.reviewMaxTokens,
-        schema: reviewSchema,
-        system: reviewerPrompt({
-          material,
-          resume: resumeText(evaluated.content),
-          pages: evaluated.pages,
-          maxPages: settings.resumeMaxPages,
-        }),
-        messages: [{ role: "user", content: "Review the resume." }],
+      const { judged, usage } = await judgeResume({
+        ai,
+        material,
+        content: evaluated.content,
+        pages: evaluated.pages,
+        maxPages: settings.resumeMaxPages,
       });
-      const judged = object ?? {
-        coverage: [],
-        inconsistencies: [],
-        advice: [],
-      };
       return {
         ...evaluated,
         round,

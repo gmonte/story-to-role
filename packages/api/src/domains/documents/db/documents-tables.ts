@@ -238,6 +238,11 @@ export const reviewRoundsTable = createTable(
       .uuid()
       .notNull()
       .references(() => generationsTable.id, { onDelete: "cascade" }),
+    // The snapshot a re-review judged; null for the rounds of a
+    // generation, which judged the snapshot it wrote.
+    snapshotId: d
+      .uuid()
+      .references(() => documentSnapshotsTable.id, { onDelete: "cascade" }),
     round: d.integer().notNull(),
     rating: d.integer().notNull(),
     inputTokens: d.integer().notNull(),

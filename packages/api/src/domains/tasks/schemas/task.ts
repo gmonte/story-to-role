@@ -7,6 +7,7 @@ export const taskTypes = [
   "extract_style_profile",
   "split_instructions",
   "adapt_document",
+  "review_document",
   "render_pdf",
   "research_company",
   "motivation_turn",

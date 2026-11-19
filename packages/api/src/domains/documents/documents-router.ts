@@ -217,6 +217,24 @@ export const documentsRouter = createTRPCRouter({
       new ChangesService(db).rejectChanges({ userId: ctx.userId, ...input })
     ),
 
+  reviewAgain: userProcedure
+    .use(rateLimited("taskStart"))
+    .meta(
+      openApiMeta(
+        "documents",
+        "POST",
+        "/document-versions/by-id/{versionId}/review",
+        "Reviews the resume's latest snapshot again, rewriting nothing"
+      )
+    )
+    .input(z.object({ versionId: z.uuid() }))
+    .output(
+      z.object({ snapshotId: z.uuid(), realtime: realtimeSubscriptionSchema })
+    )
+    .mutation(({ ctx, input }) =>
+      new DocumentsService(db).reviewAgain({ userId: ctx.userId, ...input })
+    ),
+
   undo: userProcedure
     .meta(
       openApiMeta(

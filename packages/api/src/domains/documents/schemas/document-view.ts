@@ -183,8 +183,14 @@ export const versionViewSchema = z.object({
       inconsistencies: z.number().int(),
       // Library resumes are written for a focus, not an opening.
       purpose: z.enum(["opening", "focus"]),
+      // Whether the rating judged the version's latest snapshot, and
+      // whether it is a re-review of an edited text.
+      current: z.boolean(),
+      ofEdit: z.boolean(),
     })
     .nullable(),
+  // A re-review of the latest snapshot at work: its progress.
+  reviewing: z.object({ progress: taskProgressSchema.nullable() }).nullable(),
   trace: z.array(evidenceTraceSchema),
   instructionTrace: z.array(
     z.object({ instructionId: z.uuid(), text: z.string() })

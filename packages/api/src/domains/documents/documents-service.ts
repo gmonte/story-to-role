@@ -445,9 +445,14 @@ export class DocumentsService {
             ? reviewViewOf(
                 await repository.listReviewRounds(written.id),
                 cipher,
-                openingId ? "opening" : "focus"
+                openingId ? "opening" : "focus",
+                {
+                  latestId: latest.id,
+                  generationSnapshotId: written.snapshotId,
+                }
               )
             : null,
+        reviewing: isResume ? await this.reviewing(tx, latest.id) : null,
         trace: evidenceTrace(content, frozen),
         instructionTrace: trace.instructionsFor(content),
         coverage: await this.coverageView(repository, cipher, version, latest, {
@@ -865,6 +870,14 @@ export class DocumentsService {
     };
   }
 
+  /** The re-review of a snapshot under way, with what it last reported. */
+  private async reviewing(tx: DbClient, snapshotId: string) {
+    const tasks = new TasksRepository(tx);
+    return (await tasks.activeTask(snapshotId, "review_document"))
+      ? { progress: await tasks.latestProgress(snapshotId, "review_document") }
+      : null;
+  }
+
   /**
    * A resume version's coverage (resume spec, "Coverage review"): the code
    * checks on the official snapshot and the latest AI review, its ids
@@ -1090,6 +1103,49 @@ export class DocumentsService {
       await repository.updateVersion(version.id, { dismissedFindings });
       return { dismissedFindings };
     });
+  }
+
+  /**
+   * "Review again" (resume spec, "Review rounds"): one reviewer and the
+   * coverage review judge the resume's latest snapshot as it is, in a
+   * task, rewriting nothing. Only for a resume the profile wrote, whose
+   * latest snapshot no review judged yet.
+   */
+  async reviewAgain(input: { userId: string; versionId: string }) {
+    const { version, document } = await requireUserVersion(
+      this.db,
+      input.userId,
+      input.versionId
+    );
+    const repository = new DocumentsRepository(this.db);
+    const latest = await repository.latestSnapshot(version.id);
+    const written = await repository.latestWrittenGeneration(version.id);
+    if (document.kind !== "resume" || !latest || !written) {
+      throw new TRPCError({ code: "BAD_REQUEST" });
+    }
+    const cipher = await getUserCipher(this.db, input.userId);
+    const review = reviewViewOf(
+      await repository.listReviewRounds(written.id),
+      cipher,
+      "opening",
+      { latestId: latest.id, generationSnapshotId: written.snapshotId }
+    );
+    if (review?.current) throw new TRPCError({ code: "PRECONDITION_FAILED" });
+    const active = await new TasksRepository(this.db).activeTask(
+      latest.id,
+      "review_document"
+    );
+    if (active) throw new TRPCError({ code: "CONFLICT" });
+    await this.tasks.assertAffordable({
+      userId: input.userId,
+      type: "review_document",
+    });
+    const { realtime } = await this.tasks.start({
+      userId: input.userId,
+      type: "review_document",
+      subjectId: latest.id,
+    });
+    return { snapshotId: latest.id, realtime };
   }
 
   /**

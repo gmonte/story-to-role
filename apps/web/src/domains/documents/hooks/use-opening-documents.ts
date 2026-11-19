@@ -32,4 +32,6 @@ export function useRefreshDocuments() {
 export const isProducing = (document: DocumentView) =>
   document.generation?.status === "pending" ||
   document.generation?.status === "running" ||
-  document.versions.some((version) => version.pdf.rendering);
+  document.versions.some(
+    (version) => version.pdf.rendering || version.reviewing
+  );

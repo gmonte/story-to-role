@@ -65,6 +65,7 @@ export const creditSummarySchema = z.object({
     linkedin: z.number().int(),
     fitCheck: z.number().int(),
     adaptation: z.number().int(),
+    reReview: z.number().int(),
     research: z.number().int(),
     styleProfile: z.number().int(),
     motivationTurn: z.number().int(),

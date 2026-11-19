@@ -29,6 +29,7 @@ import { findPassage, type PassageTarget } from "../utils/passages";
 import { oldestWithBullets } from "../utils/version-checks";
 import { useDocumentAgent } from "./document-agent-context";
 import { ProfilePassage } from "./line-trace";
+import { StaleReviewNotice } from "./review-again";
 
 type Finding = CoverageView["findings"][number];
 
@@ -77,7 +78,10 @@ export function CoverageReviewBlock({ version }: { version: VersionView }) {
 
       {review ? (
         <>
-          {!coverage.current && (
+          {!coverage.current && version.content.kind === "resume" && (
+            <StaleReviewNotice />
+          )}
+          {!coverage.current && version.content.kind !== "resume" && (
             <p className="text-muted-foreground">
               {t.formatMessage({
                 defaultMessage:

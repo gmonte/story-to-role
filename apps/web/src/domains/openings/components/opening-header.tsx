@@ -1,12 +1,13 @@
 "use client";
 
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 
 import { useMutation } from "@tanstack/react-query";
 import {
   Ban,
   Briefcase,
   Mail,
+  Pencil,
   Ellipsis,
   ExternalLink,
   FileText,
@@ -21,6 +22,7 @@ import type { DocumentView } from "@repo/api/domains/documents/schemas/document-
 import { useTranslation } from "@repo/intl/use-translation";
 import { Badge } from "@repo/web/components/ui/badge";
 import { Button } from "@repo/web/components/ui/button";
+import { Input } from "@repo/web/components/ui/input";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -201,12 +203,13 @@ export function OpeningHeader({
       <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-2">
         {/* On a narrow screen the actions wrap under the title. */}
         <div className="min-w-0 basis-full sm:flex-1 sm:basis-0">
-          <h1 className="font-display text-2xl font-semibold tracking-tight sm:text-3xl">
-            {processing
-              ? t.formatMessage({ defaultMessage: "Reading the opening…" })
-              : (opening.title ??
-                t.formatMessage({ defaultMessage: "Opening" }))}
-          </h1>
+          {processing ? (
+            <h1 className="font-display text-2xl font-semibold tracking-tight sm:text-3xl">
+              {t.formatMessage({ defaultMessage: "Reading the opening…" })}
+            </h1>
+          ) : (
+            <OpeningTitle openingId={openingId} opening={opening} />
+          )}
           <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
             {opening.company && (
               <p className="text-muted-foreground text-sm">{opening.company}</p>
@@ -535,5 +538,111 @@ function OpeningMenu({
         )}
       </DropdownMenuContent>
     </DropdownMenu>
+  );
+}
+
+/**
+ * The opening's title, renamed in place as a GitHub issue's: the pencil
+ * opens the title and company for editing; Enter saves, Escape cancels.
+ */
+function OpeningTitle({
+  openingId,
+  opening,
+}: {
+  openingId: string;
+  opening: OpeningDetail;
+}) {
+  const t = useTranslation();
+  const trpc = useTRPC();
+  const refresh = useRefreshOpenings();
+  const [editing, setEditing] = useState(false);
+  const [title, setTitle] = useState("");
+  const [company, setCompany] = useState("");
+  const rename = useMutation(
+    trpc.openings.rename.mutationOptions({
+      onSuccess: async () => {
+        await refresh();
+        setEditing(false);
+      },
+      onError: (error) => toast.error(error.message),
+    })
+  );
+  const shown = opening.title ?? t.formatMessage({ defaultMessage: "Opening" });
+
+  function start() {
+    setTitle(opening.title ?? "");
+    setCompany(opening.company ?? "");
+    setEditing(true);
+  }
+  function save() {
+    if (!title.trim()) return;
+    rename.mutate({ openingId, title: title.trim(), company: company.trim() });
+  }
+
+  if (!editing) {
+    return (
+      <div className="group flex items-start gap-2">
+        <h1 className="font-display text-2xl font-semibold tracking-tight sm:text-3xl">
+          {shown}
+        </h1>
+        <Button
+          size="icon"
+          variant="ghost"
+          className="text-muted-foreground mt-1 size-7 shrink-0"
+          aria-label={t.formatMessage({ defaultMessage: "Edit title" })}
+          title={t.formatMessage({ defaultMessage: "Edit title" })}
+          onClick={start}
+        >
+          <Pencil />
+        </Button>
+      </div>
+    );
+  }
+
+  return (
+    <form
+      className="flex flex-col gap-2"
+      onSubmit={(event) => {
+        event.preventDefault();
+        save();
+      }}
+      onKeyDown={(event) => {
+        if (event.key === "Escape") setEditing(false);
+      }}
+    >
+      <Input
+        autoFocus
+        value={title}
+        maxLength={200}
+        onChange={(event) => setTitle(event.target.value)}
+        aria-label={t.formatMessage({ defaultMessage: "Title" })}
+        className="h-10 text-lg font-semibold"
+      />
+      <div className="flex flex-wrap items-center gap-2">
+        <Input
+          value={company}
+          maxLength={200}
+          onChange={(event) => setCompany(event.target.value)}
+          placeholder={t.formatMessage({ defaultMessage: "Company" })}
+          aria-label={t.formatMessage({ defaultMessage: "Company" })}
+          className="h-8 max-w-xs text-sm"
+        />
+        <Button
+          size="sm"
+          type="submit"
+          disabled={!title.trim() || rename.isPending}
+        >
+          {t.formatMessage({ defaultMessage: "Save" })}
+        </Button>
+        <Button
+          size="sm"
+          variant="ghost"
+          type="button"
+          onClick={() => setEditing(false)}
+        >
+          {t.formatMessage({ defaultMessage: "Cancel" })}
+        </Button>
+      </div>
+    </form>
   );
 }

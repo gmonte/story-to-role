@@ -133,7 +133,31 @@ async function setup({ publish = true }: { publish?: boolean } = {}) {
     trigger: vi.fn(async () => ({ runId: "run", accessToken: "t" })),
   };
   const tasks = new TasksService(db, trigger);
-  const openings = new OpeningsService(db, tasks);
+  // The small AI call that rewrites a gap answer: scripted per test, and
+  // failing (so the answer stays as written) unless a test sets it.
+  const rewrite: {
+    script: (request: { system: string; messages: unknown }) => unknown;
+    calls: Array<{ system: string; messages: unknown }>;
+  } = {
+    script: () => {
+      throw new Error("provider down");
+    },
+    calls: [],
+  };
+  const openings = new OpeningsService(db, tasks, async () => {
+    const fake = fakeProviderPackage({
+      object: (request) => {
+        rewrite.calls.push(request as never);
+        return rewrite.script(request as never);
+      },
+    });
+    return createAiClient({
+      db,
+      userId: user.id,
+      funding: "credits",
+      providerPackage: fake.providerPackage,
+    });
+  });
   const profiles = new ProfileService(db, tasks);
 
   /** Saves and publishes one of the user's two documents. */
@@ -190,6 +214,7 @@ async function setup({ publish = true }: { publish?: boolean } = {}) {
     user,
     cipher,
     openings,
+    rewrite,
     profiles,
     publishDocument,
     analyze,
@@ -844,6 +869,63 @@ describe("openings and fit check", () => {
     });
     // The answer stays with the opening, and the profile is untouched.
     expect(await draft()).toBe(before);
+  });
+
+  it("proposes the answer rewritten as one sentence appended to the end of the responsibilities text", async () => {
+    const { ctx, openingId, fitCheck, item, suggestions } = await gapSetup();
+    await ctx.publishDocument(
+      (
+        await ctx.profiles.getDraft({ userId: ctx.user.id, language: "en-US" })
+      ).markdown.replace(
+        "- Responsibilities:\n  - Kept the payment systems running.",
+        "- Responsibilities: Kept the payment systems running."
+      )
+    );
+    ctx.rewrite.script = () => ({
+      sentence: "I used Terraform to write our modules.",
+    });
+    const answer = "Yes, for example for our modules";
+    const globex = fitCheck.positions.find((p) => p.employer === "Globex")!;
+    await ctx.openings.answerGapQuestion({
+      userId: ctx.user.id,
+      fitCheckItemId: item("Terraform").id,
+      answer,
+      positionIds: [globex.positionId],
+    });
+    // The rewrite got the requirement, the question and the answer.
+    expect(ctx.rewrite.calls).toHaveLength(1);
+    const prompt = JSON.stringify(ctx.rewrite.calls[0].messages);
+    expect(prompt).toContain("Terraform");
+    expect(prompt).toContain("About Terraform?");
+    expect(prompt).toContain(answer);
+    expect(prompt).toContain("Kept the payment systems running.");
+    const [row] = await suggestions();
+    // The sentence ends the existing item: no sub-item, no raw answer.
+    expect(row.find).toBe(
+      "- Responsibilities: Kept the payment systems running."
+    );
+    expect(row.replace).toBe(
+      "- Responsibilities: Kept the payment systems running. I used Terraform to write our modules."
+    );
+    // The stored answer stays the user's own words.
+    expect(
+      (await ctx.detail(openingId)).fitCheck!.items.find(
+        (row) => row.term === "Terraform"
+      )!.gapAnswer
+    ).toBe(answer);
+  });
+
+  it("falls back to the raw answer when the rewrite fails, and still saves it", async () => {
+    const { ctx, item, suggestions } = await gapSetup();
+    const answer = "I ran our Terraform modules.";
+    await ctx.openings.answerGapQuestion({
+      userId: ctx.user.id,
+      fitCheckItemId: item("Terraform").id,
+      answer,
+      notTied: true,
+    });
+    expect(ctx.rewrite.calls).toHaveLength(1);
+    expect((await suggestions())[0].replace).toContain(`  - ${answer}`);
   });
 
   it("proposes an untied “I have it” answer as one general suggestion under Professional identity", async () => {

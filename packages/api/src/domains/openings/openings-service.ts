@@ -1,5 +1,8 @@
 import { TRPCError } from "@trpc/server";
 
+import { createAiClient, type AiClient } from "@repo/api/domains/ai/ai-client";
+import { resolveAiFunding } from "@repo/api/domains/ai/ai-funding";
+import { decideFunding } from "@repo/api/domains/credits/credit-funding";
 import { CareerRepository } from "@repo/api/domains/career/career-repository";
 import {
   getUserCipher,
@@ -12,6 +15,7 @@ import { TasksRepository } from "@repo/api/domains/tasks/tasks-repository";
 import { loadProfileSource } from "@repo/api/domains/documents/generation/load-profile-source";
 import { ProfileRepository } from "@repo/api/domains/profile/profile-repository";
 import {
+  readTargetText,
   suggestLine,
   type SuggestionTarget,
 } from "@repo/api/domains/profile/suggestions/suggest-line";
@@ -19,6 +23,7 @@ import { ProfileService } from "@repo/api/domains/profile/profile-service";
 import type { ProfileLanguage } from "@repo/api/domains/profile/truth/sections";
 
 import type { openingsTable } from "./db/openings-tables";
+import { rewriteGapAnswer } from "./fit-check/rewrite-gap-answer";
 import { OpeningsRepository } from "./openings-repository";
 import {
   preferenceConflictsSchema,
@@ -45,7 +50,12 @@ const open = (cipher: UserCipher, value: string | null) =>
 export class OpeningsService {
   constructor(
     private readonly db: DbClient,
-    private readonly tasks = new TasksService(db)
+    private readonly tasks = new TasksService(db),
+    // The AI client for the small calls made outside a task.
+    private readonly aiFor: (
+      userId: string,
+      cipher: UserCipher
+    ) => Promise<AiClient> = (userId, cipher) => smallCallAi(db, userId, cipher)
   ) {}
 
   private async requireProfile(userId: string) {
@@ -484,6 +494,37 @@ export class OpeningsService {
     });
   }
 
+  /** The answer as the sentence to propose for a target (or the answer). */
+  private async sentenceFor(input: {
+    cipher: UserCipher;
+    careerProfileId: string;
+    userId: string;
+    target: SuggestionTarget;
+    requirement: string;
+    question: string;
+    answer: string;
+  }) {
+    try {
+      const { language, existing } = await readTargetText({
+        db: this.db,
+        cipher: input.cipher,
+        userId: input.userId,
+        careerProfileId: input.careerProfileId,
+        target: input.target,
+      });
+      return await rewriteGapAnswer({
+        ai: await this.aiFor(input.userId, input.cipher),
+        requirement: input.requirement,
+        question: input.question,
+        answer: input.answer,
+        existing,
+        language,
+      });
+    } catch {
+      return input.answer;
+    }
+  }
+
   /**
    * The answer to a gap question (resume spec, "Gap questions"). "I have
    * it": a story, kept with the opening (an application instruction) and
@@ -590,11 +631,30 @@ export class OpeningsService {
         ),
         ...(input.notTied ? [{ kind: "identityAreas" } as const] : []),
       ];
+      const term = (await openings.listTerms(openingId)).find(
+        (row) => row.id === item.termId
+      );
+      const requirement = term ? cipher.decrypt(term.encryptedText) : "";
+      const question = cipher.decrypt(item.encryptedGapQuestion!);
       const ids: string[] = [];
       for (const target of targets) {
-        const id = await propose(
+        // The answer is the user's own words, kept as they are with the
+        // opening; the profile gets it as one sentence that stands alone,
+        // appended to the end of the field's text.
+        const sentence = await this.sentenceFor({
+          cipher,
+          careerProfileId: profile.id,
+          userId: input.userId,
           target,
-          answer!,
+          requirement,
+          question,
+          answer: answer!,
+        });
+        const id = await propose(
+          target.kind === "experience" || target.kind === "project"
+            ? { ...target, append: true }
+            : target,
+          sentence,
           reason,
           // An entry the draft no longer has: the fact still has a place.
           target.kind === "identityAreas"
@@ -630,6 +690,27 @@ export class OpeningsService {
     });
     return { profileSuggestionIds: id ? [id] : [] };
   }
+}
+
+/**
+ * An AI client for a small call made outside a task, with no credit spent
+ * (the cap is zero: the user's own key on a paid plan, else StoryToRole
+ * pays); its usage is recorded against the user with no task.
+ */
+async function smallCallAi(db: DbClient, userId: string, cipher: UserCipher) {
+  const funding = await decideFunding(db, {
+    userId,
+    cap: 0,
+    scope: "any",
+    now: new Date(),
+  });
+  const { providerPackage } = await resolveAiFunding({
+    db,
+    userId,
+    cipher,
+    funding,
+  });
+  return createAiClient({ db, userId, funding, providerPackage });
 }
 
 /** The opening's application in the tracker, if it has one. */

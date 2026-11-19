@@ -27,9 +27,21 @@ import { proposeSuggestion, readSuggestionContent } from "./propose-suggestion";
 /** Where in the profile a line a user stated is proposed to go. */
 export type SuggestionTarget =
   // A labelled field of one experience, found by the position's derived id.
-  | { kind: "experience"; positionId: string; field: ExperienceField }
+  // `append`: the line is a sentence added at the end of the field's text
+  // (a word-diff insertion on the existing item) instead of a sub-item.
+  | {
+      kind: "experience";
+      positionId: string;
+      field: ExperienceField;
+      append?: boolean;
+    }
   // A labelled field of one project, found by the project's derived id.
-  | { kind: "project"; projectId: string; field: ExperienceField }
+  | {
+      kind: "project";
+      projectId: string;
+      field: ExperienceField;
+      append?: boolean;
+    }
   // The end of a section (its known gaps, its competencies).
   | { kind: "section"; section: "gaps" | "competencies" }
   // The career direction line of Professional identity.
@@ -51,6 +63,66 @@ const identityAreasLabels: Record<ProfileLanguage, string> = {
   "en-US": "Seniority and areas",
 };
 const identityAreasAliases = ["seniority and areas", "senioridade e areas"];
+
+/** The experience or project a target names, in the parsed draft. */
+function findEntry(
+  structure: ReturnType<typeof readStructure>,
+  careerProfileId: string,
+  target: SuggestionTarget & { kind: "experience" | "project" }
+) {
+  const isProject = target.kind === "project";
+  const index = isProject
+    ? structure.projects.findIndex(
+        (project) =>
+          project.parsed &&
+          projectIdOf(careerProfileId, project.parsed) === target.projectId
+      )
+    : structure.experiences.findIndex(
+        (experience) =>
+          experience.parsed &&
+          positionIdOf(careerProfileId, experience.parsed) === target.positionId
+      );
+  if (index < 0) return null;
+  return {
+    isProject,
+    index,
+    entry: isProject ? structure.projects[index] : structure.experiences[index],
+  };
+}
+
+/**
+ * The draft's language and the text a target's field already has (its
+ * line's value and the items under it), so a sentence written for it can
+ * match the wording and not repeat; empty for targets without a field.
+ */
+export async function readTargetText(input: {
+  db: DbClient;
+  cipher: UserCipher;
+  userId: string;
+  careerProfileId: string;
+  target: SuggestionTarget;
+}): Promise<{ language: ProfileLanguage; existing: string }> {
+  const document = await new ProfileRepository(input.db).findDocument(
+    input.userId,
+    "profile"
+  );
+  if (!document) throw new TRPCError({ code: "NOT_FOUND" });
+  const blocks = parseBlocks(input.cipher.decrypt(document.encryptedDraft));
+  const structure = readStructure(blocks);
+  const { target } = input;
+  if (target.kind !== "experience" && target.kind !== "project") {
+    return { language: structure.language, existing: "" };
+  }
+  const found = findEntry(structure, input.careerProfileId, target);
+  const field = found?.entry.fields[target.field];
+  const existing = field
+    ? [field.value, ...field.children.map((line) => blocks[line].text)]
+        .map((line) => line.trim())
+        .filter(Boolean)
+        .join("\n")
+    : "";
+  return { language: structure.language, existing };
+}
 
 const depthOf = (block: ProfileBlock) =>
   block.type === "item" ? block.depth : 0;
@@ -100,32 +172,34 @@ export async function suggestLine(input: {
   /** The change for a target, or null when the draft lacks its place. */
   const changeFor = (target: SuggestionTarget): ProfileChange | null => {
     if (target.kind === "experience" || target.kind === "project") {
-      const isProject = target.kind === "project";
-      const index = isProject
-        ? structure.projects.findIndex(
-            (project) =>
-              project.parsed &&
-              projectIdOf(input.careerProfileId, project.parsed) ===
-                target.projectId
-          )
-        : structure.experiences.findIndex(
-            (experience) =>
-              experience.parsed &&
-              positionIdOf(input.careerProfileId, experience.parsed) ===
-                target.positionId
-          );
-      if (index < 0) return null;
+      const found = findEntry(structure, input.careerProfileId, target);
+      if (!found) return null;
+      const { isProject, index, entry } = found;
       const part = (
         isProject ? projectKeys(structure) : experienceKeys(structure)
       )[index];
-      const entry = isProject
-        ? structure.projects[index]
-        : structure.experiences[index];
       const field = entry.fields[target.field];
       const labels = isProject ? projectFieldLabels : experienceFieldLabels;
       // After the field's last item, or under the field itself when it has
       // none; a draft without the field gets it at the end of the entry.
       const last = field?.children.at(-1);
+      if (target.append && field && (field.value.trim() || !last)) {
+        // The sentence ends the field's prose, written on its line (or
+        // starts it when the field is empty); a field listing items gets
+        // one more item instead.
+        const block = blocks[field.line];
+        if (block.type === "item") {
+          const base = block.text.trimEnd();
+          return {
+            part,
+            find: blockToLine(block),
+            replace: blockToLine({
+              ...block,
+              text: `${base}${/[.!?:;]$/.test(base) ? "" : "."} ${text}`,
+            }),
+          };
+        }
+      }
       const anchor =
         last !== undefined ? blocks[last] : field ? blocks[field.line] : null;
       if (!anchor) {
@@ -272,7 +346,10 @@ export async function suggestLine(input: {
     (input.fallback ? changeFor(input.fallback) : null);
   if (!change) throw badRequest("The draft no longer has this place.");
   // Accepted already: the profile has it.
-  if (blocks.some((block) => block.text.trim() === text)) {
+  if (
+    blocks.some((block) => block.text.trim() === text) ||
+    change.find?.includes(text)
+  ) {
     throw new TRPCError({
       code: "CONFLICT",
       message: "Your profile already has this line.",

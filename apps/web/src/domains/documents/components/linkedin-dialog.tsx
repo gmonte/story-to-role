@@ -117,7 +117,7 @@ function LinkedinForm({
         <DialogDescription>
           {t.formatMessage({
             defaultMessage:
-              "The About section and the text of each experience, written from your published profile. You copy what you approve: nothing is changed on LinkedIn.",
+              "Your headline options, About, experiences, projects, education, certifications and languages, written from your published profile. You copy what you approve: nothing is changed on LinkedIn.",
           })}
         </DialogDescription>
       </DialogHeader>

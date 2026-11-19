@@ -3,13 +3,18 @@
 import { useEffect, useState, type ReactNode } from "react";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Loader2, Send } from "lucide-react";
+import { CheckCircle2, ChevronRight, Loader2, Mail, Send } from "lucide-react";
 import { useRouter } from "next/navigation";
 
 import type { MotivationView } from "@repo/api/domains/applications/schemas/motivation";
 import { useTranslation } from "@repo/intl/use-translation";
 import { Button } from "@repo/web/components/ui/button";
 import { Checkbox } from "@repo/web/components/ui/checkbox";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@repo/web/components/ui/collapsible";
 import { toast } from "@repo/web/components/ui/sonner";
 import { Textarea } from "@repo/web/components/ui/textarea";
 import { cn } from "@repo/web/lib/utils";
@@ -138,17 +143,75 @@ export function CoverLetterPrep({
       </Prep>
     );
   }
+  const review = (
+    <PointsReview
+      key={data.points.map((point) => `${point.id}:${point.status}`).join()}
+      openingId={openingId}
+      motivation={data}
+    />
+  );
+  // Points left to confirm come first; once confirmed the interview is over
+  // and writing the letter is the step (owner), the interview folded away.
+  if (data.points.some((point) => point.status === "draft")) {
+    return (
+      <Prep aside={aside} agent={agent}>
+        {review}
+      </Prep>
+    );
+  }
   return (
     <Prep aside={aside} agent={agent}>
-      <div className="flex flex-col gap-6">
-        <PointsReview
-          key={data.points.map((point) => `${point.id}:${point.status}`).join()}
-          openingId={openingId}
-          motivation={data}
-        />
-        {!data.points.some((point) => point.status === "draft") && writeLetter}
-      </div>
+      <InterviewDone points={data.points.length} writeLetter={writeLetter}>
+        {review}
+      </InterviewDone>
     </Prep>
+  );
+}
+
+/** The interview over: the letter to write, the interview a click away. */
+function InterviewDone({
+  points,
+  writeLetter,
+  children,
+}: {
+  points: number;
+  writeLetter: ReactNode;
+  children: ReactNode;
+}) {
+  const t = useTranslation();
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="flex flex-col gap-6">
+      <section className="flex flex-col gap-3 rounded-lg border p-5">
+        <div className="flex flex-col gap-1">
+          <h2 className="flex items-center gap-2 font-medium">
+            <CheckCircle2 className="size-4 text-emerald-600" />
+            {t.formatMessage({ defaultMessage: "Your interview is done" })}
+          </h2>
+          <p className="text-muted-foreground text-sm">
+            {t.formatMessage(
+              {
+                defaultMessage:
+                  "{count, plural, =0 {Nothing you told it} one {The # point you told it} other {The # points you told it}} go into the letter, with your profile and the company facts you picked.",
+              },
+              { count: points }
+            )}
+          </p>
+        </div>
+        {writeLetter}
+      </section>
+      <Collapsible open={open} onOpenChange={setOpen}>
+        <CollapsibleTrigger asChild>
+          <Button variant="ghost" size="sm" className="self-start">
+            <ChevronRight
+              className={cn("transition-transform", open && "rotate-90")}
+            />
+            {t.formatMessage({ defaultMessage: "Review the interview" })}
+          </Button>
+        </CollapsibleTrigger>
+        <CollapsibleContent className="pt-3">{children}</CollapsibleContent>
+      </Collapsible>
+    </div>
   );
 }
 
@@ -272,7 +335,8 @@ function WriteLetter({
         defaultLanguage={defaultLanguage}
         defaultTone={defaultTone}
         trigger={
-          <Button>
+          <Button size="lg">
+            <Mail />
             {t.formatMessage({ defaultMessage: "Generate cover letter" })}
           </Button>
         }

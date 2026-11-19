@@ -44,6 +44,37 @@ export const linkedinRouter = createTRPCRouter({
       new LinkedinService(db).generate({ userId: ctx.userId, ...input })
     ),
 
+  regenerateSection: userProcedure
+    .use(rateLimited("taskStart"))
+    .meta(
+      openApiMeta(
+        "linkedin",
+        "POST",
+        "/linkedin/versions/by-id/{versionId}/sections",
+        "Writes one section of the LinkedIn text again, priced as an adjustment"
+      )
+    )
+    .input(
+      z.object({
+        versionId: z.uuid(),
+        // `headline`, `about`, or the id of the position, project or
+        // education whose text to write again.
+        section: z.string().min(1).max(64),
+      })
+    )
+    .output(
+      z.object({
+        generationId: z.uuid(),
+        realtime: realtimeSubscriptionSchema,
+      })
+    )
+    .mutation(({ ctx, input }) =>
+      new LinkedinService(db).regenerateSection({
+        userId: ctx.userId,
+        ...input,
+      })
+    ),
+
   sectionText: userProcedure
     .meta(
       openApiMeta(

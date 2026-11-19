@@ -19,7 +19,7 @@ import { requireUserVersion } from "../require-version";
 import type { OutputLanguage, WritingLevel } from "../schemas/document";
 import type { GenerationSettings } from "../schemas/generation-settings";
 import { decryptDocument } from "../snapshot-content";
-import { sectionText } from "./linkedin-resume";
+import { redoableSection, sectionText } from "./linkedin-resume";
 
 const notFound = () => new TRPCError({ code: "NOT_FOUND" });
 
@@ -128,6 +128,67 @@ export class LinkedinService {
       generationId: generation.id,
       realtime,
     };
+  }
+
+  /**
+   * Writes one section of a version again (resume spec, "LinkedIn"): the
+   * headline options, the About, one experience, one project or one
+   * education's description, from the profile version the text froze and
+   * with the settings it was written with, priced as an adjustment. Its
+   * snapshot replaces that section only.
+   */
+  async regenerateSection(input: {
+    userId: string;
+    versionId: string;
+    section: string;
+  }): Promise<{ generationId: string; realtime: RealtimeSubscription }> {
+    const { version, document, profile } = await requireUserVersion(
+      this.db,
+      input.userId,
+      input.versionId
+    );
+    if (document.kind !== "linkedin") throw notFound();
+    const repository = new DocumentsRepository(this.db);
+    const latest = await repository.latestSnapshot(version.id);
+    const written = await repository.latestWrittenGeneration(version.id);
+    if (!latest || !written) throw notFound();
+    const cipher = await getUserCipher(this.db, input.userId);
+    const content = decryptDocument(cipher, latest);
+    if (content.kind !== "linkedin" || !redoableSection(content, input.section))
+      throw notFound();
+    const hints = {
+      documentKind: "linkedin" as const,
+      linkedinSection: true,
+      maximum: written.writingLevel === "maximum",
+    };
+    await this.tasks.assertAffordable({
+      userId: input.userId,
+      type: "generate_document",
+      hints,
+    });
+    const generation = await repository.insertGeneration({
+      profileId: profile.id,
+      documentId: document.id,
+      versionId: version.id,
+      kind: "linkedin_section",
+      section: input.section,
+      profileVersionId: latest.profileVersionId ?? written.profileVersionId,
+      settings: written.settings,
+      language: version.language,
+      reviewDepth: "quick",
+      writingLevel: written.writingLevel,
+      tone: written.tone,
+    });
+    const { realtime } = await this.tasks.startOrUndo(
+      {
+        userId: input.userId,
+        type: "generate_document",
+        subjectId: generation.id,
+        hints,
+      },
+      () => failGeneration(this.db, generation.id)
+    );
+    return { generationId: generation.id, realtime };
   }
 
   /**

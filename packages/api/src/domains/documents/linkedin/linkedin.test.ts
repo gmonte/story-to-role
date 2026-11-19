@@ -494,6 +494,112 @@ describe("LinkedIn text", () => {
     });
   });
 
+  it("redoes one section as an adjustment, keeping the other sections and the user's edits", async () => {
+    const ctx = await setup();
+    const deploy = ctx.lineOf("Cut deploy time by 40%");
+    const team = ctx.lineOf("Led a team of 5 engineers");
+    const { version, documentId } = await ctx.generate({
+      ...writer(ctx),
+      headlines: [{ text: "Tech Lead | Platform", evidence_ids: [team.id] }],
+    });
+    const content = linkedinOf(version.content);
+    // The user rewords the About.
+    await ctx.documents.saveEdit({
+      userId: ctx.user.id,
+      versionId: version.id,
+      baseSnapshotId: version.snapshot.id,
+      content: {
+        ...content,
+        about: { ...content.about, text: "I lead platform teams, my way." },
+      },
+    });
+    const latest = async () =>
+      (await ctx.documents.libraryDocument({ userId: ctx.user.id, documentId }))
+        .versions[0];
+
+    const redo = await ctx.service.regenerateSection({
+      userId: ctx.user.id,
+      versionId: version.id,
+      section: ctx.globex.id,
+    });
+    const fake = await ctx.run(redo.generationId, {
+      ...writer(ctx),
+      headlines: [{ text: "Another headline", evidence_ids: [team.id] }],
+      about: { paragraphs: ["Something else."], evidence_ids: [team.id] },
+      experience: [
+        {
+          position_id: ctx.globex.id,
+          bullets: [
+            {
+              text: "Led 5 engineers and cut deploy time by 40%.",
+              evidence_ids: [team.id, deploy.id],
+            },
+          ],
+        },
+      ],
+    });
+    const redone = await latest();
+    const next = linkedinOf(redone.content);
+    expect(next.experiences[0].lines.map((line) => line.text)).toEqual([
+      "Led 5 engineers and cut deploy time by 40%.",
+    ]);
+    expect(next.about.text).toBe("I lead platform teams, my way.");
+    expect(next.headline?.text).toBe("Tech Lead | Platform");
+    expect(redone.snapshot).toMatchObject({ sequence: 3, origin: "generated" });
+    // One writer call asked for that section only; no coverage review.
+    expect(fake.generateObject).toHaveBeenCalledTimes(1);
+    expect(fake.generateObject.mock.calls[0][0].system).toContain(
+      "Write only the experience text of the position"
+    );
+
+    // Undo brings the section back as it was.
+    await ctx.documents.undo({ userId: ctx.user.id, versionId: version.id });
+    expect(
+      linkedinOf((await latest()).content).experiences[0].lines.map(
+        (line) => line.text
+      )
+    ).toEqual(["Cut deploy time by 40%.", "Led a team of 5 engineers."]);
+
+    // The headline options are redone together; a section the text
+    // doesn't have, or a credential code prints, can't be.
+    const headline = await ctx.service.regenerateSection({
+      userId: ctx.user.id,
+      versionId: version.id,
+      section: "headline",
+    });
+    await ctx.run(headline.generationId, {
+      ...writer(ctx),
+      headlines: [
+        { text: "Platform Tech Lead", evidence_ids: [team.id] },
+        { text: "Engineering lead", evidence_ids: [team.id] },
+      ],
+    });
+    const withHeadlines = linkedinOf((await latest()).content);
+    expect(withHeadlines.headlineOptions.map((line) => line.text)).toEqual([
+      "Platform Tech Lead",
+      "Engineering lead",
+    ]);
+    expect(withHeadlines.headline?.text).toBe("Platform Tech Lead");
+    expect(withHeadlines.about.text).toBe("I lead platform teams, my way.");
+    for (const section of ["languages", "no-such-section"]) {
+      await expect(
+        ctx.service.regenerateSection({
+          userId: ctx.user.id,
+          versionId: version.id,
+          section,
+        })
+      ).rejects.toMatchObject({ code: "NOT_FOUND" });
+    }
+
+    // Priced as an adjustment.
+    expect(
+      creditCap("generate_document", {
+        documentKind: "linkedin",
+        linkedinSection: true,
+      })
+    ).toBe(creditCap("adapt_document"));
+  });
+
   it("keeps it to its owner and refuses what isn't LinkedIn text", async () => {
     const ctx = await setup();
     const { version, documentId } = await ctx.generate(writer(ctx));

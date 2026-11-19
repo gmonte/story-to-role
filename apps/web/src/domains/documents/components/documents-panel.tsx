@@ -185,15 +185,42 @@ export function DocumentsPanel({
 /** A generation at work: its steps, the review round under way. */
 export function GenerationProgress({
   generation,
+  title,
 }: {
   generation: {
     kind: GenerationKind;
     adjusted: boolean;
     progress: TaskProgress | null;
   };
+  /** What is being written, when not a resume (the LinkedIn text). */
+  title?: string;
 }) {
   const t = useTranslation();
   const { progress } = generation;
+  if (generation.kind === "linkedin_section") {
+    return (
+      <AiAtWork
+        title={t.formatMessage({
+          defaultMessage: "Writing this section again",
+        })}
+        current={progress?.label ?? "drafting"}
+        steps={[
+          {
+            key: "drafting",
+            label: t.formatMessage({
+              defaultMessage: "Drafting from your published profile",
+            }),
+          },
+          {
+            key: "saving",
+            label: t.formatMessage({
+              defaultMessage: "Checking facts and saving the version",
+            }),
+          },
+        ]}
+      />
+    );
+  }
   if (generation.kind === "adapt" || generation.kind === "sync") {
     return (
       <AiAtWork
@@ -245,9 +272,10 @@ export function GenerationProgress({
   return (
     <AiAtWork
       title={
-        generation.adjusted
+        title ??
+        (generation.adjusted
           ? t.formatMessage({ defaultMessage: "Adjusting your resume" })
-          : t.formatMessage({ defaultMessage: "Writing your resume" })
+          : t.formatMessage({ defaultMessage: "Writing your resume" }))
       }
       current={progress?.label ?? "drafting"}
       // An adjustment runs no review round: it drafts, then saves.

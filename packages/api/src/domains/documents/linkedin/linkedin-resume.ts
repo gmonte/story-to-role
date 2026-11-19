@@ -175,3 +175,18 @@ export function sectionText(
     content.projects.find((row) => row.projectId === section);
   return entry ? experienceText(entry) : null;
 }
+
+/**
+ * Whether a section is one the AI writes and the text has, so it can be
+ * written again: `headline`, `about`, or a position's, project's or
+ * education's id. Certifications and languages are printed by code.
+ */
+export function redoableSection(content: LinkedinContent, section: string) {
+  return (
+    section === "headline" ||
+    section === "about" ||
+    content.experiences.some((row) => row.positionId === section) ||
+    content.projects.some((row) => row.projectId === section) ||
+    content.education.some((row) => row.credentialId === section)
+  );
+}

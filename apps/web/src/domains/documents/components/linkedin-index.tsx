@@ -2,11 +2,20 @@
 
 import { useState } from "react";
 
-import { useQueryClient } from "@tanstack/react-query";
-import { Copy } from "lucide-react";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { Copy, Sparkles } from "lucide-react";
 
 import { useTranslation } from "@repo/intl/use-translation";
 import { Button } from "@repo/web/components/ui/button";
+import {
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@repo/web/components/ui/dialog";
 import { toast } from "@repo/web/components/ui/sonner";
 import {
   Tooltip,
@@ -14,8 +23,11 @@ import {
   TooltipTrigger,
 } from "@repo/web/components/ui/tooltip";
 
+import { CreditCost } from "~/domains/credits/components/credit-cost";
+import { useCredits } from "~/domains/credits/hooks/use-credits";
 import { useTRPC } from "~/tools/trpc/client";
 
+import { useRefreshDocuments } from "../hooks/use-opening-documents";
 import { hasWarnings } from "../utils/version-checks";
 import { useDocumentEditor } from "./document-editor-context";
 import { WarningsDialog } from "./warnings-dialog";
@@ -25,16 +37,24 @@ type Row = {
   title: string;
   // What Copy text copies (`linkedin.sectionText`), when there is any.
   copy: string | null;
+  // The section Generate this section again writes, when the AI writes it.
+  redo: string | null;
   children: Row[];
 };
 
 /**
  * The LinkedIn text's index (resume spec, "LinkedIn"): its sections in
  * LinkedIn's order and, under them, each experience, project and
- * education, every one with Copy text for what LinkedIn takes there. A
- * dot marks a section with a finding.
+ * education, every one with Copy text for what LinkedIn takes there and,
+ * where the AI writes it, Generate this section again. A dot marks a
+ * section with a finding.
  */
-export function LinkedinIndex() {
+export function LinkedinIndex({
+  busy,
+}: {
+  /** A generation is running: nothing is written again meanwhile. */
+  busy: boolean;
+}) {
   const t = useTranslation();
   const { blocks, content, findings, goToBlock } = useDocumentEditor();
   if (content.kind !== "linkedin") return null;
@@ -53,7 +73,9 @@ export function LinkedinIndex() {
             : block.kind === "certifications" || block.kind === "languages"
               ? block.kind
               : null;
-      rows.push({ index, title: block.text, copy, children: [] });
+      const redo =
+        block.kind === "headline" || block.kind === "about" ? block.kind : null;
+      rows.push({ index, title: block.text, copy, redo, children: [] });
       return;
     }
     const parent = rows[rows.length - 1];
@@ -71,6 +93,7 @@ export function LinkedinIndex() {
               )
             : block.text,
         copy: block.ownerId,
+        redo: block.ownerId,
         children: [],
       });
     }
@@ -83,6 +106,7 @@ export function LinkedinIndex() {
           index,
           title: education.title,
           copy: education.description ? education.credentialId : null,
+          redo: education.credentialId,
           children: [],
         });
       }
@@ -125,6 +149,9 @@ export function LinkedinIndex() {
                     <span className="bg-destructive size-1.5 shrink-0 rounded-full" />
                   )}
                 </button>
+                {row.redo && (
+                  <RedoSectionButton section={row.redo} busy={busy} />
+                )}
                 {row.copy && <CopyTextButton section={row.copy} />}
               </div>
               {row.children.length > 0 && (
@@ -141,6 +168,9 @@ export function LinkedinIndex() {
                       >
                         {child.title}
                       </button>
+                      {child.redo && (
+                        <RedoSectionButton section={child.redo} busy={busy} />
+                      )}
                       {child.copy && <CopyTextButton section={child.copy} />}
                     </li>
                   ))}
@@ -215,6 +245,85 @@ function CopyTextButton({ section }: { section: string }) {
         confirmLabel={t.formatMessage({ defaultMessage: "Copy anyway" })}
         onConfirm={() => void copy(true)}
       />
+    </>
+  );
+}
+
+/**
+ * Generate this section again (resume spec, "LinkedIn"): its cost first,
+ * then one section rewritten from the profile the text froze, as a new
+ * snapshot that leaves the other sections and their edits alone.
+ */
+function RedoSectionButton({
+  section,
+  busy,
+}: {
+  section: string;
+  busy: boolean;
+}) {
+  const t = useTranslation();
+  const trpc = useTRPC();
+  const refresh = useRefreshDocuments();
+  const credits = useCredits();
+  const { version, saveStatus } = useDocumentEditor();
+  const [open, setOpen] = useState(false);
+  const label = t.formatMessage({
+    defaultMessage: "Generate this section again",
+  });
+  const redo = useMutation(
+    trpc.linkedin.regenerateSection.mutationOptions({
+      onSuccess: async () => {
+        setOpen(false);
+        await refresh();
+      },
+      onError: (error) => toast.error(error.message),
+    })
+  );
+  return (
+    <>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Button
+            size="icon"
+            variant="ghost"
+            className="size-6 shrink-0 opacity-60 group-hover:opacity-100 focus-visible:opacity-100"
+            aria-label={label}
+            disabled={busy || saveStatus !== "saved"}
+            onClick={() => setOpen(true)}
+          >
+            <Sparkles className="size-3.5" />
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent>{label}</TooltipContent>
+      </Tooltip>
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{label}</DialogTitle>
+            <DialogDescription>
+              {t.formatMessage({
+                defaultMessage:
+                  "The AI writes this section again from your profile. The other sections, and your edits in them, stay as they are; Undo brings this one back.",
+              })}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="items-center gap-2">
+            <CreditCost credits={credits.data?.estimates.adaptation} />
+            <DialogClose asChild>
+              <Button variant="ghost">
+                {t.formatMessage({ defaultMessage: "Cancel" })}
+              </Button>
+            </DialogClose>
+            <Button
+              disabled={redo.isPending}
+              onClick={() => redo.mutate({ versionId: version.id, section })}
+            >
+              <Sparkles />
+              {t.formatMessage({ defaultMessage: "Generate again" })}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </>
   );
 }

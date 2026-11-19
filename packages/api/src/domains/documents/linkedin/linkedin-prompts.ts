@@ -79,3 +79,21 @@ export function linkedinPrompt(
     material,
   ].join("\n");
 }
+
+/**
+ * What a LinkedIn section written again asks of the writer (resume spec,
+ * "LinkedIn"): that section alone, by the same rules.
+ */
+export function linkedinSectionInstruction(
+  section: string,
+  kind: "headline" | "about" | "position" | "project" | "education"
+) {
+  const what = {
+    headline: "the headline options",
+    about: "the About section",
+    position: `the experience text of the position ${section}`,
+    project: `the text of the project ${section}`,
+    education: `the description of the education ${section}`,
+  }[kind];
+  return `Write only ${what}, fresh, by the rules above; leave every other field empty. The person asked to write it again, so word it differently from a first attempt while keeping to the profile.`;
+}

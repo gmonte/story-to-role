@@ -115,7 +115,10 @@ function LinkedinView({ documentId }: { documentId: string }) {
     <div className="flex min-h-0 flex-1 flex-col">
       {running && (
         <div className="p-6">
-          <GenerationProgress generation={generation} />
+          <GenerationProgress
+            generation={generation}
+            title={t.formatMessage({ defaultMessage: "Writing your LinkedIn" })}
+          />
         </div>
       )}
       {generation?.status === "failed" && versions.length === 0 && (
@@ -140,7 +143,7 @@ function LinkedinView({ documentId }: { documentId: string }) {
           version={selected}
           versions={versions}
           select={select}
-          index={<LinkedinIndex />}
+          index={<LinkedinIndex busy={running} />}
           notices={<LinkedinNotices version={selected} />}
         />
       )}

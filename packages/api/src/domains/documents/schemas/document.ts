@@ -60,6 +60,8 @@ export const generationKindSchema = z.enum([
   "sync",
   // A cover letter adjusted to what changed in its resume (a proposal).
   "letter_update",
+  // One section of the LinkedIn text written again (`generations.section`).
+  "linkedin_section",
 ]);
 export type GenerationKind = z.infer<typeof generationKindSchema>;
 

@@ -53,6 +53,7 @@ import {
 } from "@repo/api/domains/profile/truth/structure";
 import {
   applyChange,
+  containsLines,
   listParts,
   locateChange,
   parseFragment,
@@ -376,6 +377,27 @@ export function ProfileEditorProvider({
   const { mutate: resolveSuggestions } = useMutation(
     trpc.profile.resolveSuggestions.mutationOptions()
   );
+  // A removal whose lines are already gone is done, not stale (the move's
+  // removal accepted by hand, or the lines deleted): recorded as accepted.
+  const settledRemovals = useRef(new Set<string>());
+  useEffect(() => {
+    if (!suggestionsQuery.isSuccess) return;
+    const done = suggestions.filter(
+      (suggestion) =>
+        !suggestion.range &&
+        !suggestion.replace.trim() &&
+        suggestion.find.trim() &&
+        !settledRemovals.current.has(suggestion.id) &&
+        !containsLines(blocks, suggestion.find)
+    );
+    if (!done.length) return;
+    for (const suggestion of done) settledRemovals.current.add(suggestion.id);
+    const ids = done.map((suggestion) => suggestion.id);
+    forgetSuggestions(ids);
+    resolveSuggestions({ resolution: "accepted", profileSuggestionIds: ids });
+    // forgetSuggestions and resolveSuggestions are stable enough here.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [suggestions, blocks, suggestionsQuery.isSuccess]);
   const [agentTopic, setAgentTopic] = useState<AgentTopic | null>(null);
   // The widgets in the text call the latest handlers.
   const suggestionHandlers = useRef<{

@@ -120,6 +120,14 @@ function matches(
   return found;
 }
 
+/** Whether the lines appear consecutively anywhere in the document. */
+export function containsLines(blocks: ProfileBlock[], markdown: string) {
+  const wanted = parseFragment(markdown);
+  return (
+    wanted.length > 0 && matches(blocks, wanted, 0, blocks.length).length > 0
+  );
+}
+
 /**
  * Where a new experience (or project) goes: before the first one that
  * started earlier.
@@ -175,6 +183,37 @@ export function missingSection(blocks: ProfileBlock[], part: string) {
  * Lines are matched by their text, whatever their list marker or depth.
  */
 export function locateChange(
+  blocks: ProfileBlock[],
+  change: ProfileChange
+): { start: number; end: number } | null {
+  const direct = locateAnchored(blocks, change);
+  if (direct) return direct;
+  // An addition written after an anchor line whose anchor is gone (a move's
+  // removal was accepted first) still goes where its part says.
+  const added = anchorlessAddition(change);
+  return added ? locateAnchored(blocks, added) : null;
+}
+
+/**
+ * An insertion after anchor lines (`replace` starts with `find`) as the
+ * plain addition of the lines after the anchor, or null when it isn't one.
+ */
+export function anchorlessAddition(
+  change: ProfileChange
+): ProfileChange | null {
+  if (!change.find.trim() || !change.replace.trim()) return null;
+  const anchor = parseFragment(change.find);
+  const written = parseFragment(change.replace);
+  if (written.length <= anchor.length) return null;
+  if (!anchor.every((block, at) => sameText(block, written[at]))) return null;
+  return {
+    part: change.part,
+    find: "",
+    replace: written.slice(anchor.length).map(blockToLine).join("\n"),
+  };
+}
+
+function locateAnchored(
   blocks: ProfileBlock[],
   change: ProfileChange
 ): { start: number; end: number } | null {
@@ -310,6 +349,11 @@ export function applyChange(
   blocks: ProfileBlock[],
   change: ProfileChange
 ): ProfileBlock[] | null {
+  if (!locateAnchored(blocks, change)) {
+    const added = anchorlessAddition(change);
+    if (added && locateAnchored(blocks, added))
+      return applyChange(blocks, added);
+  }
   const range = locateChange(blocks, change);
   if (!range) return null;
   const created = change.find.trim()

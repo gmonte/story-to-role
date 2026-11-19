@@ -611,7 +611,7 @@ describe("proposed changes", () => {
           : []
       );
     const applied = (change: Parameters<typeof applyDocumentChange>[1]) =>
-      applyDocumentChange(ctx.content, change, []) as ResumeContent;
+      applyDocumentChange(ctx.content, change, [])!;
     expect(lines(applied(appended.change))).toEqual([
       "Was responsible for cutting deploy time by 40% with Kubernetes.",
       "Mentored two interns.",
@@ -724,11 +724,7 @@ describe("proposed changes", () => {
     });
     expect(requested.ok).toBe(true);
     if (!requested.ok) return;
-    const applied = applyDocumentChange(
-      ctx.content,
-      requested.change,
-      []
-    ) as ResumeContent;
+    const applied = applyDocumentChange(ctx.content, requested.change, [])!;
     expect(
       applied.sections.flatMap((section) =>
         section.kind === "experience"

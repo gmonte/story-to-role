@@ -204,6 +204,9 @@ export const generationsTable = createTable(
     // A cover letter's story: the results line of the frozen profile the
     // user chose (by its derived id).
     storyLineId: d.uuid(),
+    // A LinkedIn section written again: `headline`, `about`, or the id of
+    // the position, project or education whose text it rewrites.
+    section: d.text(),
     encryptedSyncPlan: d.text(),
     encryptedProposal: d.text(),
     // The published profile version the document was written from, frozen

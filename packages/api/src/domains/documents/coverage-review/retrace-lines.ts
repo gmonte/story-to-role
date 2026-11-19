@@ -63,7 +63,16 @@ function mapLines<T extends DocumentContent>(
     case "linkedin":
       return {
         ...content,
+        headline: content.headline && retrace(content.headline, "evidence"),
+        headlineOptions: content.headlineOptions.map((line) =>
+          retrace(line, "evidence")
+        ),
         about: retrace(content.about, "evidence"),
+        education: content.education.map((entry) => ({
+          ...entry,
+          description:
+            entry.description && retrace(entry.description, "evidence"),
+        })),
         experiences: content.experiences.map((entry) => ({
           ...entry,
           lines: entry.lines.map((line) => retrace(line, "evidence")),

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import type { CoverLetterContent } from "@repo/api/domains/documents/schemas/cover-letter-content";
+import type { LinkedinContent } from "@repo/api/domains/documents/schemas/linkedin-content";
 import type { ResumeContent } from "@repo/api/domains/documents/schemas/resume-content";
 
 import {
@@ -468,5 +469,119 @@ describe("linesById", () => {
       "p1",
     ]);
     expect([...linesById(letter).keys()]).toEqual(["l1", "l2"]);
+  });
+});
+
+describe("LinkedIn text as blocks", () => {
+  const traced = { kind: "evidence" as const, evidenceIds: [evidenceId] };
+  const credential = {
+    institution: null,
+    level: null,
+    startDate: null,
+    endDate: null,
+    inProgress: false,
+  };
+  const linkedin: LinkedinContent = {
+    kind: "linkedin",
+    headline: { id: "h1", text: "Tech Lead | Platform", origin: traced },
+    headlineOptions: [
+      { id: "h1", text: "Tech Lead | Platform", origin: traced },
+      { id: "h2", text: "Platform engineer", origin: traced },
+    ],
+    about: {
+      id: "about",
+      text: "I lead platform teams.\n\nI like Kubernetes.",
+      origin: traced,
+    },
+    experiences: [
+      {
+        positionId,
+        employer: "Globex",
+        title: "Tech Lead",
+        startDate: "2021-03",
+        endDate: null,
+        lines: [{ id: "b1", text: "Cut deploy time by 40%.", origin: traced }],
+      },
+    ],
+    projects: [],
+    education: [
+      {
+        ...credential,
+        credentialId,
+        title: "BSc in Computer Science",
+        institution: "State University",
+        description: null,
+      },
+    ],
+    certifications: [],
+    languages: [
+      {
+        ...credential,
+        credentialId: projectId,
+        title: "English",
+        level: "C1",
+        proficiency: "full_professional",
+      },
+    ],
+  };
+
+  it("shows LinkedIn's sections in its order, with its facts and credentials locked", () => {
+    const blocks = contentToBlocks(linkedin, "en-US");
+    expect(
+      blocks
+        .filter((block) => block.type === "sectionTitle")
+        .map((block) => block.text)
+    ).toEqual(["Headline", "About", "Experience", "Education", "Languages"]);
+    expect(blocks).toContainEqual({
+      type: "headline",
+      lineId: "h1",
+      text: "Tech Lead | Platform",
+    });
+    // The About's paragraphs are blocks of their own.
+    expect(
+      blocks.filter((block) => block.type === "paragraph").map((b) => b.text)
+    ).toEqual(["I lead platform teams.", "I like Kubernetes."]);
+    const employer = blocks.find((block) => block.type === "entry")!;
+    expect(isEditableBlock(employer)).toBe(false);
+    expect(blocks).toContainEqual({
+      type: "credential",
+      credentialId: projectId,
+      text: "English — Full professional proficiency",
+    });
+    // An education without a description gets an empty one to write in.
+    const description = blocks.find((block) => block.type === "description");
+    expect(description).toMatchObject({ ownerId: credentialId, text: "" });
+    expect(isEditableBlock(description!)).toBe(true);
+  });
+
+  it("writes the edited blocks back: About joined, empty description and headline left out", () => {
+    const blocks = contentToBlocks(linkedin, "en-US").map(
+      (block): DocumentBlock => {
+        if (block.type === "headline") return { ...block, text: "" };
+        if (block.type === "paragraph" && block.text === "I like Kubernetes.")
+          return { ...block, text: "I love Kubernetes." };
+        if (block.type === "description")
+          return { ...block, text: "Thesis on distributed systems." };
+        // A locked fact typed over keeps the profile's.
+        if (block.type === "entry") return { ...block, text: "Initech" };
+        return block;
+      }
+    );
+    const next = blocksToContent(linkedin, blocks);
+    expect(next.headline).toBeNull();
+    expect(next.headlineOptions).toEqual(linkedin.headlineOptions);
+    expect(next.about).toEqual({
+      ...linkedin.about,
+      text: "I lead platform teams.\n\nI love Kubernetes.",
+    });
+    expect(next.experiences[0].employer).toBe("Globex");
+    expect(next.education[0].description).toMatchObject({
+      text: "Thesis on distributed systems.",
+      origin: { kind: "manual" },
+    });
+    expect(next.languages).toEqual(linkedin.languages);
+    expect([...linesById(next).keys()]).toEqual(
+      expect.arrayContaining(["about", "b1"])
+    );
   });
 });

@@ -21,6 +21,7 @@ import {
 import type { OutputLanguage } from "../schemas/document";
 import { loadLetterOwnSources } from "../letter/letter-own-sources";
 import { decryptDocument } from "../snapshot-content";
+import { linkedinSettings } from "../linkedin/linkedin-prompts";
 import { linkedinAsResume } from "../linkedin/linkedin-resume";
 import { checkDocument } from "./check-document";
 import { checkLetter } from "./check-letter";
@@ -193,12 +194,12 @@ export async function snapshotCoverage(input: {
   const findings =
     content.kind === "linkedin"
       ? // The resume's checks on LinkedIn's view as a resume. A LinkedIn
-        // text has no requirement to justify a very old experience, and no
-        // page limit.
+        // text has no requirement to justify a very old experience, no
+        // page limit, and its own bullet count.
         checkDocument({
           content: linkedinAsResume(content),
           context,
-          settings,
+          settings: linkedinSettings(settings),
           today: input.today ?? new Date().toISOString().slice(0, 7),
           purposes: [],
           targetTitle: null,

@@ -99,7 +99,7 @@ describe("prompts", () => {
         pages: 1,
       }),
       adjusterPrompt({ material: "m", settings, reference: resume }),
-      linkedinPrompt("m", settings),
+      linkedinPrompt("m", settings, []),
     ];
     for (const prompt of prompts) expect(prompt).toContain(bulletFormatRule);
   });

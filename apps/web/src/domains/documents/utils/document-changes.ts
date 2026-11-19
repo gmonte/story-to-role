@@ -1,8 +1,11 @@
 import {
+  aboutPart,
   closingPart,
+  educationPart,
   factsPart,
   greetingPart,
   headerPart,
+  headlinePart,
   letterPart,
   locateInLines,
   skillLine,
@@ -15,7 +18,7 @@ import {
   sectionMoveOf,
 } from "@repo/api/domains/documents/changes/section-order";
 
-import type { DocumentBlock } from "./document-blocks";
+import { type DocumentBlock, isResumeSection } from "./document-blocks";
 
 /**
  * Whether a block is a line of a part. A position's or project's bullets
@@ -45,8 +48,13 @@ export function blockInPart(block: DocumentBlock, part: string) {
       return part === factsPart(block.ownerId);
     case "greeting":
       return part === greetingPart;
+    // A letter's paragraphs, or a LinkedIn text's About.
     case "paragraph":
-      return part === letterPart;
+      return part === letterPart || part === aboutPart;
+    case "headline":
+      return part === headlinePart;
+    case "description":
+      return part === educationPart(block.ownerId);
     case "closing":
       return part === closingPart;
     default:
@@ -72,7 +80,9 @@ export function locateChangeInBlocks(
     // A section move sits on the section's title; stale when it no longer
     // changes anything (the section moved already, or is gone).
     const titles = blocks.flatMap((block, index) =>
-      block.type === "sectionTitle" ? [{ kind: block.kind, index }] : []
+      block.type === "sectionTitle" && isResumeSection(block.kind)
+        ? [{ kind: block.kind, index }]
+        : []
     );
     if (!moveSectionNextTo(titles, move)) return null;
     const at = titles.find((title) => title.kind === move.kind)!.index;

@@ -17,6 +17,9 @@ import {
   getTestDatabase,
 } from "@repo/api/test/pglite";
 
+import { loadDocumentAgentContext } from "../agent/document-agent-context";
+import { ChangesService } from "../changes/changes-service";
+import { proposeChange } from "../changes/propose-change";
 import type { CoverageReviewDraft } from "../coverage-review/coverage-review";
 import { DocumentsService } from "../documents-service";
 import { loadCareerContext } from "../generation/load-career-context";
@@ -69,7 +72,11 @@ const profileMarkdown = `# Profile
 
 ## Education
 
+- BSc in Computer Science — State University — completed in 2010-12
+
 ## Certifications
+
+- Certified Kubernetes Administrator — CNCF — 2023-05 — valid
 
 ## Competencies
 
@@ -79,6 +86,8 @@ const profileMarkdown = `# Profile
 ## Languages
 
 - English — C1
+- Portuguese — native
+- Klingon — conversação
 
 ## Known gaps
 
@@ -215,6 +224,8 @@ describe("LinkedIn text", () => {
     const deploy = ctx.lineOf("Cut deploy time by 40%");
     const team = ctx.lineOf("Led a team of 5 engineers");
     return {
+      headlines: [],
+      education: [],
       about: {
         paragraphs: [
           "I lead platform teams.",
@@ -280,6 +291,13 @@ describe("LinkedIn text", () => {
     ]);
     // The writer and the coverage review: two calls, the review general.
     expect(fake.generateObject).toHaveBeenCalledTimes(2);
+    // Experiences and projects in 3 to 4 bullets, the resume's format.
+    expect(fake.generateObject.mock.calls[0][0].system).toContain(
+      "3 to 4 bullets"
+    );
+    expect(fake.generateObject.mock.calls[0][0].system).toContain(
+      "Bullet format"
+    );
     expect(fake.generateObject.mock.calls[1][0].system).toContain(
       "Career as the profile states it"
     );
@@ -401,6 +419,42 @@ describe("LinkedIn text", () => {
       })
     ).rejects.toMatchObject({ code: "BAD_REQUEST" });
 
+    // Four bullets on an experience is LinkedIn's count, not a finding.
+    const four = await ctx.documents.saveEdit({
+      userId: ctx.user.id,
+      versionId: version.id,
+      baseSnapshotId: edited.snapshot.id,
+      content: {
+        ...linkedinOf(edited.content),
+        experiences: [
+          {
+            ...content.experiences[0],
+            lines: [
+              ...content.experiences[0].lines,
+              ...content.experiences[0].lines.map((line, index) => ({
+                ...line,
+                id: `extra-${index}`,
+              })),
+            ],
+          },
+        ],
+      },
+    });
+    expect(four).toBeTruthy();
+    const [fourBullets] = (
+      await ctx.documents.libraryDocument({
+        userId: ctx.user.id,
+        documentId,
+      })
+    ).versions;
+    expect(linkedinOf(fourBullets.content).experiences[0].lines).toHaveLength(
+      4
+    );
+    expect(
+      fourBullets.coverage?.findings.map((finding) => finding.code)
+    ).not.toContain("bulletCount");
+    await ctx.documents.undo({ userId: ctx.user.id, versionId: version.id });
+
     // Undoing the edit brings the copy back.
     await ctx.documents.undo({ userId: ctx.user.id, versionId: version.id });
     await expect(
@@ -411,6 +465,275 @@ describe("LinkedIn text", () => {
       })
     ).resolves.toMatchObject({
       text: expect.stringContaining("platform") as string,
+    });
+  });
+
+  it("copies the headline, an education's description, the certifications and the languages, and checks the headline", async () => {
+    const ctx = await setup();
+    const team = ctx.lineOf("Led a team of 5 engineers");
+    const education = ctx.context.credentials.find(
+      (row) => row.kind === "education"
+    )!;
+    const { version, documentId } = await ctx.generate({
+      ...writer(ctx),
+      headlines: [
+        { text: "Tech Lead | Platform teams", evidence_ids: [team.id] },
+        { text: "Platform engineer and team lead", evidence_ids: [team.id] },
+      ],
+      education: [
+        {
+          credential_id: education.id,
+          description: { text: "Led a study group.", evidence_ids: [team.id] },
+        },
+      ],
+    });
+    const copy = (section: string, acknowledgeWarnings?: boolean) =>
+      ctx.service.sectionText({
+        userId: ctx.user.id,
+        versionId: version.id,
+        section,
+        acknowledgeWarnings,
+      });
+    expect(version.coverage?.findings).toEqual([]);
+    await expect(copy("headline")).resolves.toEqual({
+      text: "Tech Lead | Platform teams",
+    });
+    await expect(copy(education.id)).resolves.toEqual({
+      text: "Led a study group.",
+    });
+    await expect(copy("certifications")).resolves.toEqual({
+      text: "Certified Kubernetes Administrator — CNCF — 2023-05 — valid",
+    });
+    await expect(copy("languages")).resolves.toEqual({
+      text: "English — Full professional proficiency\nPortuguese — Native or bilingual proficiency\nKlingon — conversação",
+    });
+
+    // Choosing another option and giving it an unmarked figure is pointed
+    // out like any line.
+    const content = linkedinOf(version.content);
+    await ctx.documents.saveEdit({
+      userId: ctx.user.id,
+      versionId: version.id,
+      baseSnapshotId: version.snapshot.id,
+      content: {
+        ...content,
+        headline: {
+          ...content.headlineOptions[1],
+          text: "Platform engineer who cut costs by 30%",
+        },
+      },
+    });
+    const [edited] = (
+      await ctx.documents.libraryDocument({
+        userId: ctx.user.id,
+        documentId,
+      })
+    ).versions;
+    expect(edited.coverage?.findings).toContainEqual(
+      expect.objectContaining({ code: "figure" })
+    );
+    await expect(copy("headline")).rejects.toMatchObject({
+      code: "PRECONDITION_FAILED",
+    });
+    await expect(copy("headline", true)).resolves.toEqual({
+      text: "Platform engineer who cut costs by 30%",
+    });
+  });
+
+  it("redoes one section as an adjustment, keeping the other sections and the user's edits", async () => {
+    const ctx = await setup();
+    const deploy = ctx.lineOf("Cut deploy time by 40%");
+    const team = ctx.lineOf("Led a team of 5 engineers");
+    const { version, documentId } = await ctx.generate({
+      ...writer(ctx),
+      headlines: [{ text: "Tech Lead | Platform", evidence_ids: [team.id] }],
+    });
+    const content = linkedinOf(version.content);
+    // The user rewords the About.
+    await ctx.documents.saveEdit({
+      userId: ctx.user.id,
+      versionId: version.id,
+      baseSnapshotId: version.snapshot.id,
+      content: {
+        ...content,
+        about: { ...content.about, text: "I lead platform teams, my way." },
+      },
+    });
+    const latest = async () =>
+      (await ctx.documents.libraryDocument({ userId: ctx.user.id, documentId }))
+        .versions[0];
+
+    const redo = await ctx.service.regenerateSection({
+      userId: ctx.user.id,
+      versionId: version.id,
+      section: ctx.globex.id,
+    });
+    const fake = await ctx.run(redo.generationId, {
+      ...writer(ctx),
+      headlines: [{ text: "Another headline", evidence_ids: [team.id] }],
+      about: { paragraphs: ["Something else."], evidence_ids: [team.id] },
+      experience: [
+        {
+          position_id: ctx.globex.id,
+          bullets: [
+            {
+              text: "Led 5 engineers and cut deploy time by 40%.",
+              evidence_ids: [team.id, deploy.id],
+            },
+          ],
+        },
+      ],
+    });
+    const redone = await latest();
+    const next = linkedinOf(redone.content);
+    expect(next.experiences[0].lines.map((line) => line.text)).toEqual([
+      "Led 5 engineers and cut deploy time by 40%.",
+    ]);
+    expect(next.about.text).toBe("I lead platform teams, my way.");
+    expect(next.headline?.text).toBe("Tech Lead | Platform");
+    expect(redone.snapshot).toMatchObject({ sequence: 3, origin: "generated" });
+    // One writer call asked for that section only; no coverage review.
+    expect(fake.generateObject).toHaveBeenCalledTimes(1);
+    expect(fake.generateObject.mock.calls[0][0].system).toContain(
+      "Write only the experience text of the position"
+    );
+
+    // Undo brings the section back as it was.
+    await ctx.documents.undo({ userId: ctx.user.id, versionId: version.id });
+    expect(
+      linkedinOf((await latest()).content).experiences[0].lines.map(
+        (line) => line.text
+      )
+    ).toEqual(["Cut deploy time by 40%.", "Led a team of 5 engineers."]);
+
+    // The headline options are redone together; a section the text
+    // doesn't have, or a credential code prints, can't be.
+    const headline = await ctx.service.regenerateSection({
+      userId: ctx.user.id,
+      versionId: version.id,
+      section: "headline",
+    });
+    await ctx.run(headline.generationId, {
+      ...writer(ctx),
+      headlines: [
+        { text: "Platform Tech Lead", evidence_ids: [team.id] },
+        { text: "Engineering lead", evidence_ids: [team.id] },
+      ],
+    });
+    const withHeadlines = linkedinOf((await latest()).content);
+    expect(withHeadlines.headlineOptions.map((line) => line.text)).toEqual([
+      "Platform Tech Lead",
+      "Engineering lead",
+    ]);
+    expect(withHeadlines.headline?.text).toBe("Platform Tech Lead");
+    expect(withHeadlines.about.text).toBe("I lead platform teams, my way.");
+    for (const section of ["languages", "no-such-section"]) {
+      await expect(
+        ctx.service.regenerateSection({
+          userId: ctx.user.id,
+          versionId: version.id,
+          section,
+        })
+      ).rejects.toMatchObject({ code: "NOT_FOUND" });
+    }
+
+    // Priced as an adjustment.
+    expect(
+      creditCap("generate_document", {
+        documentKind: "linkedin",
+        linkedinSection: true,
+      })
+    ).toBe(creditCap("adapt_document"));
+  });
+
+  it("lets the document agent suggest changes to the LinkedIn text, applied on Accept", async () => {
+    const ctx = await setup();
+    const team = ctx.lineOf("Led a team of 5 engineers");
+    const { version, documentId } = await ctx.generate({
+      ...writer(ctx),
+      headlines: [{ text: "Tech Lead | Platform", evidence_ids: [team.id] }],
+    });
+    const cipher = await getUserCipher(ctx.db, ctx.user.id);
+    const agent = await loadDocumentAgentContext({
+      db: ctx.db,
+      cipher,
+      userId: ctx.user.id,
+      documentId,
+    });
+    expect(agent?.kind).toBe("linkedin");
+    expect(agent?.documentText).toContain("[part: headline]");
+    expect(agent?.documentText).toContain("[part: about]");
+    expect(agent?.documentText).toContain(
+      `[part: experience:${ctx.globex.id}]`
+    );
+
+    const propose = (change: { part: string; find: string; replace: string }) =>
+      proposeChange({
+        db: ctx.db,
+        cipher,
+        versionId: version.id,
+        snapshotId: version.snapshot.id,
+        content: agent!.content,
+        origin: "document_agent",
+        change,
+        reason: "More direct.",
+        profilePassages: [team.text],
+        evidence: agent!.evidence,
+        profileText: agent!.profileText,
+        sources: [],
+      });
+    await expect(
+      propose({
+        part: `experience:${ctx.globex.id}`,
+        find: "Led a team of 5 engineers.",
+        replace: "Led a platform team of 5 engineers.",
+      })
+    ).resolves.toMatchObject({ ok: true });
+    await expect(
+      propose({
+        part: "about",
+        find: "I lead platform teams.",
+        replace: "I lead platform teams that ship.",
+      })
+    ).resolves.toMatchObject({ ok: true });
+    await expect(
+      propose({
+        part: "headline",
+        find: "Tech Lead | Platform",
+        replace: "Platform Tech Lead",
+      })
+    ).resolves.toMatchObject({ ok: true });
+    // The certifications and languages stay the profile's.
+    await expect(
+      propose({ part: "languages", find: "English", replace: "French" })
+    ).resolves.toMatchObject({ ok: false, refusal: { kind: "locked" } });
+
+    const changes = new ChangesService(ctx.db);
+    const listed = await changes.listChanges({
+      userId: ctx.user.id,
+      versionId: version.id,
+    });
+    expect(listed.map((change) => change.stale)).toEqual([false, false, false]);
+    await changes.acceptChanges({
+      userId: ctx.user.id,
+      versionId: version.id,
+      baseSnapshotId: version.snapshot.id,
+    });
+    const content = linkedinOf(
+      (await ctx.documents.libraryDocument({ userId: ctx.user.id, documentId }))
+        .versions[0].content
+    );
+    expect(content.experiences[0].lines.map((line) => line.text)).toEqual([
+      "Cut deploy time by 40%.",
+      "Led a platform team of 5 engineers.",
+    ]);
+    expect(content.about.text).toBe(
+      "I lead platform teams that ship.\n\nI cut deploy time by 40% with Kubernetes."
+    );
+    expect(content.headline?.text).toBe("Platform Tech Lead");
+    expect(content.headline?.origin).toEqual({
+      kind: "evidence",
+      evidenceIds: [team.id],
     });
   });
 
@@ -441,6 +764,99 @@ describe("LinkedIn text", () => {
     ).rejects.toMatchObject({ code: "NOT_FOUND" });
   });
 
+  it("writes the headline options and education descriptions by the summary's rules, and prints the credentials", async () => {
+    const ctx = await setup();
+    const deploy = ctx.lineOf("Cut deploy time by 40%");
+    const team = ctx.lineOf("Led a team of 5 engineers");
+    const education = ctx.context.credentials.find(
+      (row) => row.kind === "education"
+    )!;
+    const { content, dropped } = assembleLinkedin({
+      draft: {
+        ...writer(ctx),
+        headlines: [
+          {
+            text: "Tech Lead | Platform engineering with Kubernetes",
+            evidence_ids: [team.id, deploy.id],
+          },
+          // An estimated figure, a line citing nothing and one too long.
+          {
+            text: "Tech Lead who cut cloud costs by 30%",
+            evidence_ids: [ctx.lineOf("Cut cloud costs").id],
+          },
+          { text: "Visionary leader", evidence_ids: [] },
+          { text: `Tech Lead ${"x".repeat(220)}`, evidence_ids: [team.id] },
+        ],
+        education: [
+          {
+            credential_id: education.id,
+            description: {
+              text: "Studied distributed systems.",
+              evidence_ids: [deploy.id],
+            },
+          },
+        ],
+      },
+      context: ctx.context,
+      settings: defaultGenerationSettings,
+      today: "2026-06",
+    });
+
+    // Only grounded options under 220 characters stay; the first is chosen.
+    expect(content.headlineOptions.map((line) => line.text)).toEqual([
+      "Tech Lead | Platform engineering with Kubernetes",
+    ]);
+    expect(content.headline).toEqual(content.headlineOptions[0]);
+    expect(dropped.map((line) => line.reason)).toEqual(
+      expect.arrayContaining(["unsupported_figure", "no_evidence", "too_long"])
+    );
+
+    // Credentials are printed by code, a description only with a source.
+    expect(content.education).toMatchObject([
+      {
+        credentialId: education.id,
+        title: "BSc in Computer Science",
+        institution: "State University",
+        endDate: "2010-12",
+        description: { text: "Studied distributed systems." },
+      },
+    ]);
+    expect(content.certifications).toMatchObject([
+      {
+        title: "Certified Kubernetes Administrator",
+        institution: "CNCF",
+        level: "valid",
+        endDate: "2023-05",
+      },
+    ]);
+    expect(
+      content.languages.map((row) => [row.title, row.proficiency])
+    ).toEqual([
+      ["English", "full_professional"],
+      ["Portuguese", "native_or_bilingual"],
+      ["Klingon", null],
+    ]);
+
+    // An education with no description drafted, or none backed, has none.
+    const bare = assembleLinkedin({
+      draft: {
+        ...writer(ctx),
+        headlines: [],
+        education: [
+          {
+            credential_id: education.id,
+            description: { text: "Graduated with honours.", evidence_ids: [] },
+          },
+        ],
+      },
+      context: ctx.context,
+      settings: defaultGenerationSettings,
+      today: "2026-06",
+    });
+    expect(bare.content.education[0].description).toBeNull();
+    expect(bare.content.headline).toBeNull();
+  });
+
   it("applies the resume's assembly rules to LinkedIn content", async () => {
     const ctx = await setup();
     const deploy = ctx.lineOf("Cut deploy time by 40%");
@@ -457,14 +873,36 @@ describe("LinkedIn text", () => {
       });
     const draft = writer(ctx);
 
-    // Bullets per the settings: a recent position keeps its first few.
-    const limited = assemble(draft, {
-      ...defaultGenerationSettings,
-      bulletsRecent: 1,
-    });
-    expect(limited.content.experiences[0].lines).toHaveLength(1);
+    // 3 to 4 bullets per experience, whatever the resume's settings: the
+    // first four kept are printed.
+    const tools = ctx.lineOf("Tools: Kubernetes, Terraform");
+    const many = assemble(
+      {
+        ...draft,
+        experience: [
+          {
+            position_id: ctx.globex.id,
+            bullets: [
+              { text: "Led a team of 5 engineers.", evidence_ids: [team.id] },
+              { text: "Cut deploy time by 40%.", evidence_ids: [deploy.id] },
+              { text: "Ran Kubernetes clusters.", evidence_ids: [tools.id] },
+              { text: "Wrote Terraform modules.", evidence_ids: [tools.id] },
+              { text: "Mentored the team.", evidence_ids: [team.id] },
+            ],
+          },
+        ],
+      },
+      { ...defaultGenerationSettings, bulletsRecent: 1, bulletsOlder: 0 }
+    );
+    expect(many.content.experiences[0].lines.map((l) => l.text)).toEqual([
+      "Led a team of 5 engineers.",
+      "Cut deploy time by 40%.",
+      "Ran Kubernetes clusters.",
+      "Wrote Terraform modules.",
+    ]);
+    const limited = assemble(draft);
 
-    // “Keep”: the very old position is written like an older one (1 bullet).
+    // “Keep”: the very old position is written like an older one.
     const kept = assemble(draft, {
       ...defaultGenerationSettings,
       veryOld: "keep",
@@ -534,6 +972,7 @@ describe("LinkedIn text", () => {
     // Lines citing another position's evidence are refused.
     expect(
       assemble({
+        ...draft,
         about: draft.about,
         projects: [],
         experience: [

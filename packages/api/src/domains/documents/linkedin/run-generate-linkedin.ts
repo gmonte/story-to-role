@@ -16,6 +16,7 @@ import { repairPublicNames } from "../generation/public-names";
 import {
   assembleResume,
   type AssemblyDraft,
+  type DroppedLine,
 } from "../generation/assemble-resume";
 import { loadCareerContext } from "../generation/load-career-context";
 import { purposesOf, resumeMaterial } from "../generation/resume-prompts";
@@ -28,8 +29,14 @@ import {
   defaultGenerationSettings,
   generationSettingsSchema,
 } from "../schemas/generation-settings";
-import type { LinkedinContent } from "../schemas/linkedin-content";
+import type { Line } from "../schemas/document";
+import {
+  headlineMaxLength,
+  type LinkedinContent,
+} from "../schemas/linkedin-content";
+import { decryptDocument } from "../snapshot-content";
 import { loadWritingSetup } from "../writing/load-writing-setup";
+import { proficiencyOf } from "./linkedin-proficiency";
 import { linkedinAsResume } from "./linkedin-resume";
 import {
   careerFocus,
@@ -37,16 +44,26 @@ import {
   linkedinDraftSchema,
   linkedinPrompt,
   linkedinPurposeLines,
+  linkedinSectionInstruction,
+  linkedinSettings,
 } from "./linkedin-prompts";
+
+/** A line code refused, or a headline option longer than LinkedIn takes. */
+export type LinkedinDroppedLine =
+  | DroppedLine
+  | { text: string; reason: "too_long" };
 
 /**
  * Assembles LinkedIn content from a draft by the resume's own rules
  * (`assembleResume`): locked facts printed by code, each line citing
  * profile lines, figures only where the profile marks them measured, the
- * communication rules, studied and never-claim terms refused, bullets per
- * the settings by age and the very old rule. LinkedIn has no requirement
+ * communication rules, studied and never-claim terms refused, at most
+ * four bullets per experience and project, and the very old rule. LinkedIn has no requirement
  * to justify a very old experience, so under “relevant only” it is left
- * out. Positions and projects with no line left are not printed.
+ * out. Positions and projects with no line left are not printed. Each
+ * headline option and education description is checked like the summary;
+ * the first headline option kept is the chosen one. The credentials are
+ * printed by code, the languages on LinkedIn's scale.
  */
 export function assembleLinkedin(input: {
   draft: LinkedinDraft;
@@ -79,11 +96,12 @@ export function assembleLinkedin(input: {
     })),
   };
   const newLineId = input.newLineId ?? (() => randomUUID().slice(0, 8));
+  const settings = linkedinSettings(input.settings);
   const { content, dropped } = assembleResume({
     draft: assemblyDraft,
     context: input.context,
     sections: ["summary", "experience", "projects"],
-    settings: input.settings,
+    settings,
     today: input.today,
     purposes: [],
     targetTitle: null,
@@ -98,8 +116,48 @@ export function assembleLinkedin(input: {
   const projects = content.sections.find(
     (section) => section.kind === "projects"
   );
+  const allDropped: LinkedinDroppedLine[] = [...dropped];
+  // A free line (a headline option, an education's description) passes
+  // the summary's checks: it may cite any profile line.
+  const grounded = (line: { text: string; evidence_ids: string[] }) => {
+    const checked = assembleResume({
+      draft: { ...assemblyDraft, summary: line },
+      context: input.context,
+      sections: ["summary"],
+      settings,
+      today: input.today,
+      purposes: [],
+      targetTitle: null,
+      newLineId,
+    });
+    allDropped.push(...checked.dropped);
+    const section = checked.content.sections[0];
+    return section?.kind === "summary" ? section.line : null;
+  };
+  const headlineOptions = draft.headlines.flatMap((option): Line[] => {
+    if (option.text.trim().length > headlineMaxLength) {
+      allDropped.push({ text: option.text, reason: "too_long" });
+      return [];
+    }
+    const line = grounded(option);
+    return line ? [line] : [];
+  });
+  const credentials = (kind: "education" | "certification" | "language") =>
+    input.context.credentials
+      .filter((row) => row.kind === kind)
+      .map((row) => ({
+        credentialId: row.id,
+        title: row.title,
+        institution: row.institution,
+        level: row.level,
+        startDate: row.startDate,
+        endDate: row.endDate,
+        inProgress: row.inProgress,
+      }));
   const linkedin: LinkedinContent = {
     kind: "linkedin",
+    headline: headlineOptions[0] ?? null,
+    headlineOptions,
     about:
       summary?.kind === "summary"
         ? summary.line
@@ -131,8 +189,19 @@ export function assembleLinkedin(input: {
               lines: entry.lines,
             }))
         : [],
+    education: credentials("education").map((entry) => {
+      const drafted = draft.education.find(
+        (row) => row.credential_id === entry.credentialId
+      )?.description;
+      return { ...entry, description: drafted ? grounded(drafted) : null };
+    }),
+    certifications: credentials("certification"),
+    languages: credentials("language").map((entry) => ({
+      ...entry,
+      proficiency: proficiencyOf(entry.level),
+    })),
   };
-  return { content: linkedin, dropped };
+  return { content: linkedin, dropped: allDropped };
 }
 
 const withoutLines = (
@@ -140,6 +209,20 @@ const withoutLines = (
   lineIds: string[]
 ): LinkedinContent => ({
   ...content,
+  headline:
+    content.headline && lineIds.includes(content.headline.id)
+      ? null
+      : content.headline,
+  headlineOptions: content.headlineOptions.filter(
+    (line) => !lineIds.includes(line.id)
+  ),
+  education: content.education.map((entry) => ({
+    ...entry,
+    description:
+      entry.description && lineIds.includes(entry.description.id)
+        ? null
+        : entry.description,
+  })),
   about: lineIds.includes(content.about.id)
     ? { ...content.about, text: "" }
     : content.about,
@@ -153,12 +236,82 @@ const withoutLines = (
   })),
 });
 
+/** Which kind of section a redone section's id names in a text. */
+function sectionKind(content: LinkedinContent, section: string) {
+  if (section === "headline" || section === "about") return section;
+  if (content.experiences.some((row) => row.positionId === section))
+    return "position";
+  if (content.projects.some((row) => row.projectId === section))
+    return "project";
+  if (content.education.some((row) => row.credentialId === section))
+    return "education";
+  return null;
+}
+
+/**
+ * The text with one section taken from freshly written content, the rest
+ * as it was (the user's edits included). A section that came back empty
+ * keeps what it had.
+ */
+export function replaceSection(
+  previous: LinkedinContent,
+  written: LinkedinContent,
+  section: string
+): LinkedinContent {
+  if (section === "headline") {
+    return written.headlineOptions.length
+      ? {
+          ...previous,
+          headline: written.headline,
+          headlineOptions: written.headlineOptions,
+        }
+      : previous;
+  }
+  if (section === "about") {
+    return written.about.text
+      ? { ...previous, about: written.about }
+      : previous;
+  }
+  const lines = (entries: Array<{ id: string; lines: Line[] }>) =>
+    entries.find((row) => row.id === section)?.lines ?? [];
+  const position = lines(
+    written.experiences.map((row) => ({ id: row.positionId, lines: row.lines }))
+  );
+  const project = lines(
+    written.projects.map((row) => ({ id: row.projectId, lines: row.lines }))
+  );
+  const description = written.education.find(
+    (row) => row.credentialId === section
+  )?.description;
+  return {
+    ...previous,
+    experiences: previous.experiences.map((row) =>
+      row.positionId === section && position.length
+        ? { ...row, lines: position }
+        : row
+    ),
+    projects: previous.projects.map((row) =>
+      row.projectId === section && project.length
+        ? { ...row, lines: project }
+        : row
+    ),
+    education: previous.education.map((row) =>
+      row.credentialId === section && description
+        ? { ...row, description }
+        : row
+    ),
+  };
+}
+
 /**
  * Generates the user's LinkedIn text from the profile version the
  * generation froze (resume spec, "LinkedIn"): one writer call, code
  * assembling its draft by the resume's rules, then the coverage review
  * once, against the career as the profile states it. Stored as a snapshot
- * like any document's, with the review.
+ * like any document's, with the review. A `linkedin_section` generation
+ * writes one section again: the writer asked for it alone, the code
+ * checks as always, no coverage review, and a snapshot of the version's
+ * latest content with only that section replaced.
  */
 export async function runGenerateLinkedin(deps: {
   db: DbClient;
@@ -182,6 +335,22 @@ export async function runGenerateLinkedin(deps: {
   const document = await documents.findDocument(generation.documentId);
   if (document?.kind !== "linkedin") {
     throw new Error(`Generation ${generation.id} is not for a LinkedIn text`);
+  }
+  // A section written again starts from the version's latest content.
+  const redo =
+    generation.kind === "linkedin_section" && generation.versionId
+      ? await documents.latestSnapshot(generation.versionId)
+      : null;
+  const previous = redo ? decryptDocument(cipher, redo) : null;
+  const section = generation.section ?? "";
+  const kind =
+    previous?.kind === "linkedin" ? sectionKind(previous, section) : null;
+  if (generation.kind === "linkedin_section" && !kind) {
+    await documents.updateGeneration(generation.id, {
+      status: "failed",
+      finishedAt: new Date(),
+    });
+    throw new Error(`Generation ${generation.id} names no section of its text`);
   }
   await documents.updateGeneration(generation.id, { status: "running" });
   let stoppedBy: KeyUnusableError | null = null;
@@ -228,7 +397,7 @@ export async function runGenerateLinkedin(deps: {
     });
     const role = generation.writingLevel === "maximum" ? "maximum" : "writing";
     const progress = (step: number, label: string) =>
-      deps.reportProgress?.({ step, totalSteps: 3, label });
+      deps.reportProgress?.({ step, totalSteps: kind ? 2 : 3, label });
 
     await progress(1, "drafting");
     const written = await ai.generateObject({
@@ -236,8 +405,22 @@ export async function runGenerateLinkedin(deps: {
       role,
       maxTokens: reviewLoopSettings.draftMaxTokens,
       schema: linkedinDraftSchema,
-      system: linkedinPrompt(material, settings),
-      messages: [{ role: "user", content: "Write the LinkedIn text." }],
+      system: [
+        linkedinPrompt(
+          material,
+          settings,
+          context.credentials.filter((row) => row.kind === "education")
+        ),
+        ...(kind ? ["", linkedinSectionInstruction(section, kind)] : []),
+      ].join("\n"),
+      messages: [
+        {
+          role: "user",
+          content: kind
+            ? "Write that section of the LinkedIn text again."
+            : "Write the LinkedIn text.",
+        },
+      ],
     });
     if (!written.object) throw new Error("The writer returned no draft");
     const assembled = assembleLinkedin({
@@ -261,7 +444,11 @@ export async function runGenerateLinkedin(deps: {
       language: generation.language,
     });
     stoppedBy ??= repaired.stoppedBy;
-    const content = withoutLines(repaired.content, forbidden);
+    const fresh = withoutLines(repaired.content, forbidden);
+    const content =
+      previous?.kind === "linkedin"
+        ? replaceSection(previous, fresh, section)
+        : fresh;
     if (
       lockedFactViolations(linkedinAsResume(content), context.positions)
         .length > 0
@@ -272,29 +459,33 @@ export async function runGenerateLinkedin(deps: {
     // The coverage review never costs the document: without one it is
     // saved, and the code checks still run on it.
     let coverage: CoverageReviewContent | null = null;
-    await progress(2, "coverage_review");
-    try {
-      coverage = await reviewCoverage({
-        ai,
-        content: linkedinAsResume(content),
-        context,
-        brief,
-        purposes: purposesOf(brief),
-        language: generation.language,
-        documentName: "LinkedIn text",
-      });
-    } catch (error) {
-      if (error instanceof KeyUnusableError) {
-        stoppedBy = error;
-      } else {
-        logger.warn(["documents"], "Coverage review failed", {
-          generationId: generation.id,
-          error: error instanceof Error ? error.name : "unknown",
+    // A section written again keeps the version's review until the user
+    // asks for Review again.
+    if (!kind) {
+      await progress(2, "coverage_review");
+      try {
+        coverage = await reviewCoverage({
+          ai,
+          content: linkedinAsResume(content),
+          context,
+          brief,
+          purposes: purposesOf(brief),
+          language: generation.language,
+          documentName: "LinkedIn text",
         });
+      } catch (error) {
+        if (error instanceof KeyUnusableError) {
+          stoppedBy = error;
+        } else {
+          logger.warn(["documents"], "Coverage review failed", {
+            generationId: generation.id,
+            error: error instanceof Error ? error.name : "unknown",
+          });
+        }
       }
     }
 
-    await progress(3, "saving");
+    await progress(kind ? 2 : 3, "saving");
     await db.transaction(async (tx) => {
       const repository = new DocumentsRepository(tx);
       const existing = generation.versionId
@@ -308,13 +499,20 @@ export async function runGenerateLinkedin(deps: {
         }));
       await repository.lockVersion(version.id);
       const latest = await repository.latestSnapshot(version.id);
+      // A section written again goes over the latest content, so an edit
+      // saved while it was written stays.
+      const current = kind && latest ? decryptDocument(cipher, latest) : null;
+      const saved =
+        current?.kind === "linkedin"
+          ? replaceSection(current, fresh, section)
+          : content;
       const snapshot = await repository.insertSnapshot({
         versionId: version.id,
         sequence: (latest?.sequence ?? 0) + 1,
         parentSnapshotId: latest?.id ?? null,
         origin: "generated",
         author: "ai",
-        encryptedContent: cipher.encrypt(JSON.stringify(content)),
+        encryptedContent: cipher.encrypt(JSON.stringify(saved)),
         generationId: generation.id,
         profileVersionId: context.profileVersionId,
       });

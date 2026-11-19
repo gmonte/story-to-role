@@ -1,5 +1,7 @@
 "use client";
 
+import { useEffect } from "react";
+
 import { Plus, Trash2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 
@@ -20,8 +22,6 @@ import {
   VersionsBlock,
 } from "./document-side-panel";
 import { GenerationProgress } from "./documents-panel";
-import { LinkedinDialog } from "./linkedin-dialog";
-import { LinkedinEditor } from "./linkedin-editor";
 import { LibraryResumeDialog } from "./library-resume-dialog";
 import { ResumeWorkspace } from "./resume-workspace";
 
@@ -41,7 +41,13 @@ export function LibraryDocumentBody({ documentId }: { documentId: string }) {
 /** A library document in the editor, as an application's resume would be. */
 export function LibraryDocumentView({ documentId }: { documentId: string }) {
   const t = useTranslation();
+  const router = useRouter();
   const document = useLibraryDocument(documentId);
+  // The LinkedIn text has its own page; an old link to it opens there.
+  const isLinkedin = document.data?.kind === "linkedin";
+  useEffect(() => {
+    if (isLinkedin) router.replace("/app/linkedin");
+  }, [isLinkedin, router]);
   const generation = document.data?.generation;
   const running =
     generation?.status === "pending" || generation?.status === "running";
@@ -72,11 +78,6 @@ export function LibraryDocumentView({ documentId }: { documentId: string }) {
               }
             />
           )}
-        </div>
-      )}
-      {versions.length > 0 && document.data?.kind === "linkedin" && (
-        <div className="min-h-0 flex-1 overflow-y-auto p-6">
-          <LinkedinEditor versions={versions} defaultTone={generation?.tone} />
         </div>
       )}
       {(versions.length > 0 || running) && document.data?.kind === "resume" && (
@@ -123,31 +124,7 @@ export function LibraryDocumentPanel({ documentId }: { documentId: string }) {
     />
   );
 
-  // LinkedIn text: a new version is a generation in another language; the
-  // coverage review sits beside the text, in the editor.
-  if (document.data.kind === "linkedin") {
-    return (
-      <section className="flex flex-col gap-2">
-        <div className="flex items-center justify-between">
-          <h3 className="text-sm font-medium">
-            {t.formatMessage({ defaultMessage: "Versions" })}
-          </h3>
-          <div className="flex items-center gap-1">
-            <LinkedinDialog
-              defaultTone={document.data.generation?.tone}
-              trigger={
-                <Button size="sm" variant="ghost">
-                  <Plus />
-                  {t.formatMessage({ defaultMessage: "New version" })}
-                </Button>
-              }
-            />
-            {deleteDocument}
-          </div>
-        </div>
-      </section>
-    );
-  }
+  if (document.data.kind === "linkedin") return null;
 
   const tone = document.data.generation?.tone;
   return (

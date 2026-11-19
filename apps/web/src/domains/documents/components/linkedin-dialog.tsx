@@ -99,10 +99,10 @@ function LinkedinForm({
   const documentSettings = useDocumentSettings(true);
   const generate = useMutation(
     trpc.linkedin.generate.mutationOptions({
-      onSuccess: async ({ documentId }) => {
+      onSuccess: async () => {
         await refresh();
         onDone();
-        router.push(`/app/library/${documentId}`);
+        router.push("/app/linkedin");
       },
       onError: (error) => toast.error(error.message),
     })
@@ -117,7 +117,7 @@ function LinkedinForm({
         <DialogDescription>
           {t.formatMessage({
             defaultMessage:
-              "The About section and the text of each experience, written from your published profile. You copy what you approve: nothing is changed on LinkedIn.",
+              "Your headline options, About, experiences, projects, education, certifications and languages, written from your published profile. You copy what you approve: nothing is changed on LinkedIn.",
           })}
         </DialogDescription>
       </DialogHeader>

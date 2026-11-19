@@ -1,6 +1,6 @@
 "use client";
 
-import { Briefcase, FileText, Plus, Trash2 } from "lucide-react";
+import { FileText, Plus, Trash2 } from "lucide-react";
 import Link from "next/link";
 
 import { useTranslation } from "@repo/intl/use-translation";
@@ -10,7 +10,6 @@ import { Button } from "@repo/web/components/ui/button";
 import { DeleteDocumentDialog } from "./delete-document-dialog";
 import { useDocumentLabels } from "../hooks/use-document-labels";
 import { useLibrary } from "../hooks/use-library";
-import { LinkedinDialog } from "./linkedin-dialog";
 import { LibraryResumeDialog } from "./library-resume-dialog";
 
 /**
@@ -22,13 +21,10 @@ export function LibraryView() {
   const t = useTranslation();
   const labels = useDocumentLabels();
   const library = useLibrary();
-  const documents = [...(library.data ?? [])].sort((a, b) =>
-    a.focus.localeCompare(b.focus)
-  );
-
-  const hasLinkedin = documents.some(
-    (document) => document.kind === "linkedin"
-  );
+  // The LinkedIn text has its own page.
+  const documents = (library.data ?? [])
+    .filter((document) => document.kind !== "linkedin")
+    .sort((a, b) => a.focus.localeCompare(b.focus));
 
   return (
     <div className="mx-auto flex w-full max-w-3xl flex-col gap-4 overflow-y-auto p-6">
@@ -36,21 +32,10 @@ export function LibraryView() {
         <p className="text-muted-foreground text-sm">
           {t.formatMessage({
             defaultMessage:
-              "Resumes with no company behind them, each titled by its focus, and your LinkedIn text. Openings suggest the resumes when they fit.",
+              "Resumes with no company behind them, each titled by its focus. Openings suggest them when they fit.",
           })}
         </p>
         <div className="flex gap-2">
-          {/* One LinkedIn text per user: new languages are versions of it. */}
-          {library.data && !hasLinkedin && (
-            <LinkedinDialog
-              trigger={
-                <Button size="sm" variant="outline">
-                  <Briefcase />
-                  {t.formatMessage({ defaultMessage: "LinkedIn text" })}
-                </Button>
-              }
-            />
-          )}
           <LibraryResumeDialog
             trigger={
               <Button size="sm">
@@ -80,14 +65,8 @@ export function LibraryView() {
               className="flex flex-1 items-center justify-between p-3"
             >
               <span className="flex items-center gap-2 text-sm font-medium">
-                {document.kind === "linkedin" ? (
-                  <Briefcase className="size-4" />
-                ) : (
-                  <FileText className="size-4" />
-                )}
-                {document.kind === "linkedin"
-                  ? t.formatMessage({ defaultMessage: "LinkedIn text" })
-                  : document.focus}
+                <FileText className="size-4" />
+                {document.focus}
               </span>
               <span className="flex gap-1">
                 {document.languages.map((language) => (

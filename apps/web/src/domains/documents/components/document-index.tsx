@@ -9,6 +9,7 @@ import { useTranslation } from "@repo/intl/use-translation";
 import { Button } from "@repo/web/components/ui/button";
 import { cn } from "@repo/web/lib/utils";
 
+import { isResumeSection } from "../utils/document-blocks";
 import { useDocumentEditor } from "./document-editor-context";
 
 type Item = {
@@ -38,7 +39,7 @@ export function DocumentIndex() {
           index,
           title: block.text,
           children: [],
-          kind: block.kind,
+          kind: isResumeSection(block.kind) ? block.kind : undefined,
         });
         break;
       case "entry": {

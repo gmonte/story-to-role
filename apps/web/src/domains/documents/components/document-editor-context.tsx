@@ -173,6 +173,12 @@ type DocumentEditorState = {
   changes: LocatedChange[];
   acceptChanges: (documentChangeIds?: string[]) => void;
   rejectChanges: (documentChangeIds?: string[]) => void;
+  /**
+   * Saves a change made outside the text (choosing a LinkedIn headline
+   * option, a language's level) over what is saved, as a snapshot; the
+   * new snapshot then replaces the editor's text.
+   */
+  saveContent: (change: (content: EditableContent) => EditableContent) => void;
 };
 
 const DocumentEditorContext = createContext<DocumentEditorState | null>(null);
@@ -206,12 +212,8 @@ function spanOf(text: string, finding: DocumentFinding) {
     : null;
 }
 
-function editableContent(version: VersionView): EditableContent {
-  if (version.content.kind === "linkedin") {
-    throw new Error("LinkedIn text keeps its own editor");
-  }
-  return version.content;
-}
+const editableContent = (version: VersionView): EditableContent =>
+  version.content;
 
 /**
  * Holds the document's editor (resume spec, "Document workspace"): the
@@ -308,7 +310,17 @@ export function DocumentEditorProvider({
   }, [refresh, saveEdit, t, version.id]);
 
   const editor = useEditor({
-    extensions: documentExtensions({ notePrefix }),
+    extensions: documentExtensions({
+      notePrefix,
+      placeholders: {
+        headline: t.formatMessage({
+          defaultMessage: "Write your headline, or pick an option above",
+        }),
+        description: t.formatMessage({
+          defaultMessage: "Add a short description (optional)",
+        }),
+      },
+    }),
     content: blocksToDoc(initial),
     immediatelyRender: false,
     editorProps: {
@@ -650,6 +662,26 @@ export function DocumentEditorProvider({
       { versionId: version.id, documentChangeIds: ids },
       { onError: changesNotRecorded }
     );
+  };
+  const saveContent = async (
+    change: (content: EditableContent) => EditableContent
+  ) => {
+    await flush();
+    setSaveStatus("saving");
+    try {
+      // Not the editor's text: the new snapshot replaces it, as one from
+      // elsewhere does.
+      await saveEdit({
+        versionId: version.id,
+        baseSnapshotId: base.current.snapshotId,
+        content: change(base.current.content),
+      });
+      setSaveStatus("saved");
+    } catch (error) {
+      setSaveStatus("error");
+      toast.error((error as Error).message);
+    }
+    await refresh();
   };
   // The widgets in the text call the latest handlers.
   const changeHandlers = useRef<{
@@ -1145,6 +1177,7 @@ export function DocumentEditorProvider({
     changes,
     acceptChanges: (documentChangeIds) => void acceptChanges(documentChangeIds),
     rejectChanges,
+    saveContent: (change) => void saveContent(change),
   };
 
   return (

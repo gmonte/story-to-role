@@ -169,6 +169,13 @@
       "when": 1795115298943,
       "tag": "0023_answer_condition_stance",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1795123362920,
+      "tag": "0024_add_version_library_source",
+      "breakpoints": true
     }
   ]
 }

@@ -1,3 +1,5 @@
+import { reviewLoopSettings } from "@repo/api/domains/documents/generation/review-loop-settings";
+
 import type {
   ApplicationSource,
   ApplicationStatus,
@@ -46,6 +48,14 @@ export type MetricsRow = {
   }>;
   // Every resume version the application was sent with.
   resumes: ResumeVersionRef[];
+  // Where the resume sent came from and its review rating (the last
+  // version sent); null when no resume is recorded.
+  sentResume: {
+    library: { documentId: string; label: string | null } | null;
+    // The resume was written for the opening, not taken from the library.
+    generated: boolean;
+    rating: number | null;
+  } | null;
   // The band of the opening's latest fit check, if it has one.
   fitBand: "high" | "medium" | "low" | null;
 };
@@ -125,20 +135,41 @@ export function computeMetrics(input: {
     sent: rows.length,
     responded: rows.filter(responded).length,
     interviews: rows.filter(interviewed).length,
-    byResume: group((row) =>
-      row.resumes.length > 0 ? row.resumes.map((r) => r.versionId) : [null]
-    ).map(({ key, sent, responded }) => {
-      const ref = rows
-        .flatMap((row) => row.resumes)
-        .find((r) => r.versionId === key);
-      return {
-        versionId: key,
-        label: ref?.label ?? null,
-        language: ref?.language ?? null,
-        sent,
-        responded,
-      };
-    }),
+    byOrigin: group<{
+      origin: "generated" | "library" | "unknown";
+      id: string | null;
+    }>((row) => {
+      const sent = row.sentResume;
+      if (!sent) return [{ origin: "unknown", id: null }];
+      if (sent.library) {
+        return [{ origin: "library", id: sent.library.documentId }];
+      }
+      return [{ origin: sent.generated ? "generated" : "unknown", id: null }];
+    }).map(({ key, sent, responded }) => ({
+      origin: key.origin,
+      libraryDocumentId: key.id,
+      label:
+        rows.find((row) => row.sentResume?.library?.documentId === key.id)
+          ?.sentResume?.library?.label ?? null,
+      sent,
+      responded,
+    })),
+    byScore: group<"reached" | "below" | "none">((row) => [
+      row.sentResume?.rating == null
+        ? "none"
+        : row.sentResume.rating >= reviewLoopSettings.targetRating
+          ? "reached"
+          : "below",
+    ]).map(({ key, sent, responded }) => ({
+      band: key,
+      sent,
+      responded,
+    })),
+    byFit: group((row) => [row.fitBand]).map(({ key, sent, responded }) => ({
+      band: key,
+      sent,
+      responded,
+    })),
     bySource: group((row) => [row.source]).map(({ key, sent, responded }) => ({
       source: key,
       sent,

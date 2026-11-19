@@ -4,6 +4,7 @@ import { useState } from "react";
 
 import { useQuery } from "@tanstack/react-query";
 
+import { reviewLoopSettings } from "@repo/api/domains/documents/generation/review-loop-settings";
 import {
   type MetricsPeriod,
   type TrackerMetrics,
@@ -13,6 +14,7 @@ import { useTranslation } from "@repo/intl/use-translation";
 import { Button } from "@repo/web/components/ui/button";
 
 import { useTRPC } from "~/tools/trpc/client";
+import { useOpeningLabels } from "~/domains/openings/hooks/use-opening-labels";
 
 import { useTrackerLabels } from "../hooks/use-tracker-labels";
 
@@ -22,7 +24,7 @@ const fewApplications = 5;
 
 /**
  * The method's simple metrics over a period the user picks (tracker spec,
- * "Metrics"): response rates per resume version and per source, the median
+ * "Metrics"): response rates by resume origin, score and fit, and per source, the median
  * time to the first response and the high-fit openings that reached an
  * interview. A response is the company answering: In process, Offer, Hired
  * or Rejected.
@@ -75,6 +77,7 @@ export function TrackerMetricsPanel() {
 function MetricsBody({ metrics }: { metrics: TrackerMetrics }) {
   const t = useTranslation();
   const labels = useTrackerLabels();
+  const openingLabels = useOpeningLabels();
   const rate = (group: { sent: number; responded: number }) =>
     t.formatMessage(
       {
@@ -141,53 +144,111 @@ function MetricsBody({ metrics }: { metrics: TrackerMetrics }) {
         )}
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-2">
-        <div className="flex flex-col gap-1">
-          <h3 className="text-xs font-medium">
-            {t.formatMessage({
-              defaultMessage: "Response rate per resume version",
-            })}
-          </h3>
-          <ul className="flex flex-col gap-1">
-            {metrics.byResume.map((group) => (
-              <li
-                key={group.versionId ?? "none"}
-                className="flex justify-between gap-2"
-              >
-                <span className="min-w-0 truncate">
-                  {group.versionId
-                    ? (group.label ??
-                      t.formatMessage({ defaultMessage: "Resume" }))
-                    : t.formatMessage({ defaultMessage: "Not recorded" })}
-                </span>
-                <span className="text-muted-foreground shrink-0 whitespace-nowrap">
-                  {rate(group)}
-                </span>
-              </li>
-            ))}
-          </ul>
-        </div>
-        <div className="flex flex-col gap-1">
-          <h3 className="text-xs font-medium">
-            {t.formatMessage({ defaultMessage: "Response rate per source" })}
-          </h3>
-          <ul className="flex flex-col gap-1">
-            {metrics.bySource.map((group) => (
-              <li
-                key={group.source ?? "none"}
-                className="flex justify-between gap-2"
-              >
-                <span className="min-w-0 truncate">
-                  {labels.source(group.source)}
-                </span>
-                <span className="text-muted-foreground shrink-0 whitespace-nowrap">
-                  {rate(group)}
-                </span>
-              </li>
-            ))}
-          </ul>
-        </div>
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <RateGroup
+          title={t.formatMessage({
+            defaultMessage: "Response rate by resume origin",
+          })}
+          rows={metrics.byOrigin.map((group) => ({
+            key: `${group.origin}-${group.libraryDocumentId ?? ""}`,
+            label:
+              group.origin === "generated"
+                ? t.formatMessage({
+                    defaultMessage: "Generated for the opening",
+                  })
+                : group.origin === "library"
+                  ? t.formatMessage(
+                      { defaultMessage: "From a library resume: {name}" },
+                      {
+                        name:
+                          group.label ??
+                          t.formatMessage({ defaultMessage: "Resume" }),
+                      }
+                    )
+                  : t.formatMessage({ defaultMessage: "Not recorded" }),
+            group,
+          }))}
+          rate={rate}
+        />
+        <RateGroup
+          title={t.formatMessage({
+            defaultMessage: "Response rate by resume score",
+          })}
+          rows={metrics.byScore.map((group) => ({
+            key: group.band,
+            label:
+              group.band === "reached"
+                ? t.formatMessage(
+                    { defaultMessage: "Score {target} or more" },
+                    { target: reviewLoopSettings.targetRating }
+                  )
+                : group.band === "below"
+                  ? t.formatMessage(
+                      { defaultMessage: "Below {target}" },
+                      { target: reviewLoopSettings.targetRating }
+                    )
+                  : t.formatMessage({ defaultMessage: "No score" }),
+            group,
+          }))}
+          rate={rate}
+        />
+        <RateGroup
+          title={t.formatMessage({
+            defaultMessage: "Response rate by fit",
+          })}
+          rows={metrics.byFit.map((group) => ({
+            key: group.band ?? "none",
+            label: group.band
+              ? openingLabels.band(group.band)
+              : t.formatMessage({ defaultMessage: "Not checked" }),
+            group,
+          }))}
+          rate={rate}
+        />
+        <RateGroup
+          title={t.formatMessage({
+            defaultMessage: "Response rate per source",
+          })}
+          rows={metrics.bySource.map((group) => ({
+            key: group.source ?? "none",
+            label: labels.source(group.source),
+            group,
+          }))}
+          rate={rate}
+        />
       </div>
+    </div>
+  );
+}
+
+/** One compact list of response rates; hidden when it has no rows. */
+function RateGroup({
+  title,
+  rows,
+  rate,
+}: {
+  title: string;
+  rows: Array<{
+    key: string;
+    label: string;
+    group: { sent: number; responded: number };
+  }>;
+  rate: (group: { sent: number; responded: number }) => string;
+}) {
+  if (rows.length === 0) return null;
+  return (
+    <div className="flex flex-col gap-1">
+      <h3 className="text-xs font-medium">{title}</h3>
+      <ul className="flex flex-col gap-1">
+        {rows.map((row) => (
+          <li key={row.key} className="flex flex-col">
+            <span className="min-w-0 truncate">{row.label}</span>
+            <span className="text-muted-foreground whitespace-nowrap">
+              {rate(row.group)}
+            </span>
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }

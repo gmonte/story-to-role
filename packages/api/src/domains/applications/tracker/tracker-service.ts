@@ -510,6 +510,41 @@ export class TrackerService {
         versionRef(cipher, row),
       ])
     );
+    const origins = await repository.versionOrigins(versionIds);
+    const libraryOf = new Map(
+      origins.libraries.map((l) => [
+        l.versionId,
+        {
+          documentId: l.documentId,
+          label:
+            open(cipher, l.encryptedFocus) ?? open(cipher, l.encryptedLabel),
+        },
+      ])
+    );
+    // The rating of the kept round of the latest judged snapshot, as the
+    // review view reads it.
+    const ratingOf = (versionId: string) => {
+      const rounds = origins.rounds.filter((r) => r.versionId === versionId);
+      if (rounds.length === 0) return null;
+      const judged = (r: (typeof rounds)[number]) =>
+        r.snapshotId ?? r.generationSnapshotId;
+      const latest = judged(rounds[rounds.length - 1]);
+      const group = rounds.filter((r) => judged(r) === latest);
+      return (group.find((r) => r.kept) ?? group[group.length - 1]).rating;
+    };
+    const sentResumeOf = (versionId: string | undefined) => {
+      if (!versionId) return null;
+      const libraryVersionId = origins.versions.find(
+        (v) => v.versionId === versionId
+      )?.libraryVersionId;
+      return {
+        library: libraryVersionId
+          ? (libraryOf.get(libraryVersionId) ?? null)
+          : null,
+        generated: !libraryVersionId,
+        rating: ratingOf(versionId),
+      };
+    };
     const rows: MetricsRow[] = data.applications.map((application) => {
       const sent = data.submissions
         .filter((s) => s.applicationId === application.id)
@@ -526,6 +561,7 @@ export class TrackerService {
         status: application.status,
         changes: data.changes.filter((c) => c.applicationId === application.id),
         resumes: resumeIds.flatMap((id) => versions.get(id) ?? []),
+        sentResume: sentResumeOf(resumeIds[resumeIds.length - 1]),
         // Rows come newest first: the first is the latest check.
         fitBand:
           data.bands.find((b) => b.openingId === application.openingId)?.band ??

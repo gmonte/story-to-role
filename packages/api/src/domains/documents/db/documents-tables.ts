@@ -74,6 +74,10 @@ export const documentVersionsTable = createTable(
     // The base of each sync is read from the snapshots adaptations and
     // syncs produced, so undo moves it back on its own.
     adaptedFromVersionId: d.uuid(),
+    // The library version this opening's resume was copied or adapted
+    // from (a document outside any application), for the tracker's
+    // metrics by resume origin.
+    libraryVersionId: d.uuid(),
     // The latest snapshot's vector (ADR 0004), for suggesting similar
     // documents to an opening; refreshed by the tasks that run the model.
     embedding: d.vector({ dimensions: embeddingDimensions }),

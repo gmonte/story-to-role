@@ -31,7 +31,6 @@ const badgeVariant = {
   good: "default",
   middling: "secondary",
   low: "destructive",
-  capped: "destructive",
 } as const;
 
 type Review = NonNullable<VersionView["review"]>;
@@ -46,7 +45,7 @@ function useScoreLabel() {
     );
 }
 
-/** The band in a word: Strong, Fair, Low or Capped. */
+/** The band in a word: Strong, Fair or Low. */
 function BandBadge({ band }: { band: keyof typeof badgeVariant }) {
   const t = useTranslation();
   return (
@@ -54,7 +53,7 @@ function BandBadge({ band }: { band: keyof typeof badgeVariant }) {
       {t.formatMessage(
         {
           defaultMessage:
-            "{band, select, good {Strong} middling {Fair} capped {Capped} other {Low}}",
+            "{band, select, good {Strong} middling {Fair} other {Low}}",
         },
         { band }
       )}
@@ -115,11 +114,11 @@ function CoverageScoreBody({
   const t = useTranslation();
   const review = version.review;
   if (!review) return null;
-  const band = coverageScoreBand(review);
   const purpose = review.purpose;
 
   return (
     <>
+      <ContradictionsWarning review={review} />
       {!review.current && (
         <div className="flex flex-col gap-2">
           <StaleReviewNotice />
@@ -168,22 +167,13 @@ function CoverageScoreBody({
               })}
             </p>
           )}
-          {band === "capped" ? (
-            <p className="text-foreground">
+          {review.rating < review.target && (
+            <p>
               {t.formatMessage({
                 defaultMessage:
-                  "Capped: a reviewer found something that disagrees with your profile.",
+                  "Answer the gap questions or complete your profile to raise it.",
               })}
             </p>
-          ) : (
-            review.rating < review.target && (
-              <p>
-                {t.formatMessage({
-                  defaultMessage:
-                    "Answer the gap questions or complete your profile to raise it.",
-                })}
-              </p>
-            )
           )}
           <ReviewerList review={review} />
         </div>
@@ -192,26 +182,71 @@ function CoverageScoreBody({
   );
 }
 
-function FeedbackList({
-  title,
+/** The count of points a reviewer found that disagree with the profile. */
+function ContradictionsWarning({ review }: { review: Review }) {
+  const t = useTranslation();
+  if (review.inconsistencies === 0) return null;
+  return (
+    <p className="text-destructive font-medium">
+      {t.formatMessage(
+        {
+          defaultMessage:
+            "{count, plural, one {# point disagrees} other {# points disagree}} with your profile",
+        },
+        { count: review.inconsistencies }
+      )}
+    </p>
+  );
+}
+
+/** Each contradiction with its quote from the resume and the profile line. */
+function ContradictionList({
   items,
-  destructive,
 }: {
-  title: string;
-  items: string[];
-  destructive?: boolean;
+  items: Review["rounds"][number]["inconsistencies"];
 }) {
+  const t = useTranslation();
   if (items.length === 0) return null;
   return (
     <div className="flex flex-col gap-0.5">
-      <p
-        className={cn(
-          "font-medium",
-          destructive ? "text-destructive" : "text-foreground"
-        )}
-      >
-        {title}
+      <p className="text-destructive font-medium">
+        {t.formatMessage({ defaultMessage: "Disagrees with your profile" })}
       </p>
+      <ul className="list-disc space-y-1 pl-4">
+        {items.map((item, index) => (
+          <li key={index}>
+            {item.quote ? (
+              <>
+                <span className="text-foreground">
+                  {t.formatMessage(
+                    { defaultMessage: "“{quote}”" },
+                    { quote: item.quote }
+                  )}
+                </span>
+                {item.profileLine && (
+                  <span className="block">
+                    {t.formatMessage(
+                      { defaultMessage: "Your profile: {line}" },
+                      { line: item.profileLine }
+                    )}
+                  </span>
+                )}
+              </>
+            ) : (
+              item.text
+            )}
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+function FeedbackList({ title, items }: { title: string; items: string[] }) {
+  if (items.length === 0) return null;
+  return (
+    <div className="flex flex-col gap-0.5">
+      <p className="text-foreground font-medium">{title}</p>
       <ul className="list-disc space-y-0.5 pl-4">
         {items.map((item, index) => (
           <li key={index}>{item}</li>
@@ -225,7 +260,7 @@ function FeedbackList({
 function ReviewerList({ review }: { review: Review }) {
   const t = useTranslation();
   const needsAttention =
-    review.rating < review.target || coverageScoreBand(review) === "capped";
+    review.rating < review.target || review.inconsistencies > 0;
   return (
     <div className="flex flex-col gap-1">
       {review.rounds.map((round, index) => {
@@ -264,13 +299,7 @@ function ReviewerList({ review }: { review: Review }) {
               </span>
             </CollapsibleTrigger>
             <CollapsibleContent className="flex max-h-60 flex-col gap-2 overflow-y-auto px-2 pb-2">
-              <FeedbackList
-                destructive
-                title={t.formatMessage({
-                  defaultMessage: "Disagrees with your profile",
-                })}
-                items={round.inconsistencies}
-              />
+              <ContradictionList items={round.inconsistencies} />
               <FeedbackList
                 title={t.formatMessage({
                   defaultMessage: "What it advised",
@@ -328,6 +357,19 @@ export function CoverageScoreBadge({ version }: { version: VersionView }) {
       <PopoverTrigger asChild>
         <Button size="sm" variant="ghost" className="h-7 gap-1.5 px-2">
           <Badge variant={badgeVariant[band]}>{label(review)}</Badge>
+          {review.inconsistencies > 0 && (
+            <span
+              role="img"
+              aria-label={t.formatMessage(
+                {
+                  defaultMessage:
+                    "{count, plural, one {# point disagrees} other {# points disagree}} with your profile",
+                },
+                { count: review.inconsistencies }
+              )}
+              className="bg-destructive size-2 rounded-full"
+            />
+          )}
           {!review.current && (
             <span
               role="img"

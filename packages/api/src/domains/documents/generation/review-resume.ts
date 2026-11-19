@@ -3,9 +3,11 @@ import { z } from "zod";
 import type { AiClient } from "@repo/api/domains/ai/ai-client";
 import { foldAccents } from "@repo/api/utils/text/fold-accents";
 
+import type { OutputLanguage } from "../schemas/document";
 import type { ResumeContent } from "../schemas/resume-content";
+import { inconsistencySchema } from "../schemas/review-inconsistency";
 import { resumeText } from "./resume-checks";
-import { reviewerPrompt } from "./resume-prompts";
+import { outputLanguageNames, reviewerPrompt } from "./resume-prompts";
 import { reviewLoopSettings } from "./review-loop-settings";
 
 const reviewSchema = z.object({
@@ -17,19 +19,23 @@ const reviewSchema = z.object({
       })
     )
     .catch([]),
-  inconsistencies: z.array(z.string()).catch([]),
+  inconsistencies: z.array(inconsistencySchema).catch([]),
   advice: z.array(z.string()).catch([]),
 });
 export type Review = z.infer<typeof reviewSchema>;
 
 const normalize = (text: string) => foldAccents(text).toLowerCase().trim();
 
+/** Whitespace, accents and case never tell two passages apart. */
+const passage = (text: string) => normalize(text).replace(/\s+/g, " ");
+
 /**
  * A draft's rating, from 1 to 10, by how much of its purpose it covers
  * (resume spec, "Review rounds"): strong coverage counts whole, partial
  * half. What the fit check found to be a gap is left out of the count: a
  * resume must not cover it, so it can't be held against it. A draft that
- * disagrees with the profile is never a good one.
+ * disagrees with the profile is not capped: the score measures only the
+ * match, and contradictions are counted apart.
  */
 export function coverageRating(review: Review, gaps: string[]) {
   const lacking = new Set(gaps.map(normalize));
@@ -42,11 +48,7 @@ export function coverageRating(review: Review, gaps: string[]) {
       sum + (item.level === "strong" ? 1 : item.level === "partial" ? 0.5 : 0),
     0
   );
-  const rating = Math.min(
-    10,
-    Math.max(1, Math.round((10 * covered) / judged.length))
-  );
-  return review.inconsistencies.length > 0 ? Math.min(rating, 4) : rating;
+  return Math.min(10, Math.max(1, Math.round((10 * covered) / judged.length)));
 }
 
 /**
@@ -60,6 +62,8 @@ export async function judgeResume(input: {
   content: ResumeContent;
   pages: number;
   maxPages: number;
+  /** The user's interface language: what the feedback is written in. */
+  feedbackLanguage: OutputLanguage;
 }) {
   const { object, usage } = await input.ai.generateObject({
     purpose: "resume_review",
@@ -71,13 +75,20 @@ export async function judgeResume(input: {
       resume: resumeText(input.content),
       pages: input.pages,
       maxPages: input.maxPages,
+      feedbackLanguage: outputLanguageNames[input.feedbackLanguage],
     }),
     messages: [{ role: "user", content: "Review the resume." }],
   });
-  const judged: Review = object ?? {
-    coverage: [],
-    inconsistencies: [],
-    advice: [],
-  };
+  const resume = passage(resumeText(input.content));
+  const judged: Review = object
+    ? {
+        ...object,
+        // A contradiction without its exact quote in the draft is no proof.
+        inconsistencies: object.inconsistencies.filter(
+          (item) =>
+            passage(item.quote) !== "" && resume.includes(passage(item.quote))
+        ),
+      }
+    : { coverage: [], inconsistencies: [], advice: [] };
   return { judged, usage };
 }

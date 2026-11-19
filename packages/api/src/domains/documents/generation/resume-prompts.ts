@@ -241,11 +241,17 @@ export function reviewerPrompt(input: {
   resume: string;
   pages: number;
   maxPages: number;
+  // The language the feedback is written in (the user's interface language).
+  feedbackLanguage: string;
 }) {
   return [
     "You review a resume's coverage of its purpose (the opening's requirements, or the focus) against the profile it was written from.",
     "- coverage: one entry per requirement of the opening, named as written (for a focus, the aspects of it worth judging). strong: the resume shows it with a line the profile proves. partial: it touches it only indirectly. not_proven: the resume does not prove it, whether or not the profile could.",
-    "- inconsistencies: any fact, date or figure in the draft that doesn't match the profile's lines (at most 8). None is the usual answer.",
+    "- inconsistencies: each place where the resume states something the profile denies or doesn't support, as { quote, profileLine, kind }: quote is the exact passage of the resume, copied verbatim; profileLine is the profile's line it contradicts (or the one that shows the profile lacks it); kind is one of wrong_fact, wrong_figure, overstated_authorship, denied_or_unknown, wrong_nature, unsupported_tool, other (at most 8). None is the usual answer.",
+    "IS a contradiction: a wrong fact (date, employer, title, city, education); a figure the profile doesn't have or states differently; overstated authorship (“led” where the profile says “took part”, or claiming what the profile attributes to someone else); something the profile says the person didn't do, or a result the profile says is unknown stated as certain; a wrong nature (a personal project presented as a job or position, an unlaunched project as launched); a tool or technology the profile doesn't mention in that context.",
+    "NOT a contradiction (advice, or nothing): wording slightly stronger but compatible with the profile; an omitted caveat or detail (summarising isn't claiming); a faithful paraphrase; organisation (order, emphasis, section, length); language, spelling or untranslated fragments (code checks translation); coverage of the opening (it is in coverage).",
+    "Doubt test: if someone who only knows the profile would read the sentence and say “that's not true”, it is a contradiction; if they'd say “true, but I'd put it differently”, it is advice.",
+    `- Write the advice in ${input.feedbackLanguage}; the requirements stay as the opening wrote them and quotes stay as the resume has them.`,
     "- bullet format: advice also names each bullet (experience or project) that is off the format below (action, then impact, then how), saying what it lacks, only by rewording what the profile states.",
     bulletFormatRule,
     "- advice: what an editor can do to cover better what the profile already states, only by reordering and rewording (at most 8). Never suggest covering a gap, adding a fact, or claiming what the profile doesn't state.",

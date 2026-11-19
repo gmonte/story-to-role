@@ -2,6 +2,7 @@ import { z } from "zod";
 
 import type { UserCipher } from "@repo/api/domains/encryption/user-cipher";
 
+import { storedInconsistencySchema } from "../schemas/review-inconsistency";
 import { reviewLoopSettings } from "./review-loop-settings";
 
 /** The review's shape as stored per round (see `run-generate-resume.ts`). */
@@ -14,7 +15,7 @@ const storedReviewSchema = z.object({
       })
     )
     .catch([]),
-  inconsistencies: z.array(z.string()).catch([]),
+  inconsistencies: z.array(storedInconsistencySchema).catch([]),
   advice: z.array(z.string()).catch([]),
 });
 

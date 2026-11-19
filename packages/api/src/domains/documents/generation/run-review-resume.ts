@@ -117,6 +117,7 @@ export async function runReviewResume(deps: {
     content,
     pages,
     maxPages: settings.resumeMaxPages,
+    feedbackLanguage: profile.interviewLanguage,
   });
   // The same rule as a generation's: a text still carrying a forbidden
   // term is rated 1.

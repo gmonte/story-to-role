@@ -41,6 +41,7 @@ import {
   resumeDraftSchema,
 } from "./assemble-resume";
 import { reviewLoopSettings } from "./review-loop-settings";
+import { inconsistencyText } from "../schemas/review-inconsistency";
 import { coverageRating, judgeResume, type Review } from "./review-resume";
 import { loadCareerContext } from "./load-career-context";
 import {
@@ -67,6 +68,8 @@ type Candidate = {
   forbidden: string[];
   pages: number;
   rating: number;
+  // How many passages contradict the profile: kept apart from the rating.
+  contradictions: number;
   review: Review;
   inputTokens: number;
   outputTokens: number;
@@ -256,6 +259,7 @@ export async function runGenerateResume(deps: {
         content: evaluated.content,
         pages: evaluated.pages,
         maxPages: settings.resumeMaxPages,
+        feedbackLanguage: profile.interviewLanguage,
       });
       return {
         ...evaluated,
@@ -263,6 +267,7 @@ export async function runGenerateResume(deps: {
         // A draft still carrying a forbidden term is unusable as it stands.
         rating:
           evaluated.forbidden.length > 0 ? 1 : coverageRating(judged, gaps),
+        contradictions: judged.inconsistencies.length,
         review: judged,
         ...tokens([...usages, usage]),
       };
@@ -298,9 +303,20 @@ export async function runGenerateResume(deps: {
       for (let round = 1; round <= totalRounds; round++) {
         const previous = candidates.at(-1)!;
         const fits = previous.pages <= settings.resumeMaxPages;
-        if (fits && previous.rating >= reviewLoopSettings.targetRating) break;
+        // A draft that contradicts the profile never ends the loop early.
+        if (
+          previous.contradictions === 0 &&
+          fits &&
+          previous.rating >= reviewLoopSettings.targetRating
+        )
+          break;
         // Coverage stopped improving.
-        if (round > 1 && previous.rating <= candidates.at(-2)!.rating) break;
+        if (
+          previous.contradictions === 0 &&
+          round > 1 &&
+          previous.rating <= candidates.at(-2)!.rating
+        )
+          break;
         // Step 2 is review round 1; the steps around it draft and save.
         await progress(round + 1, "review_round");
         const forbiddenTexts = resumeLines(previous.content)
@@ -317,7 +333,9 @@ export async function runGenerateResume(deps: {
               settings,
               draft,
               advice: previous.review.advice,
-              inconsistencies: previous.review.inconsistencies,
+              inconsistencies: previous.review.inconsistencies.map((item) =>
+                inconsistencyText({ ...item, text: null })
+              ),
               dropped: previous.dropped,
               forbiddenLines: forbiddenTexts,
               pages: previous.pages,
@@ -335,12 +353,15 @@ export async function runGenerateResume(deps: {
       }
     }
 
-    // A draft within its pages beats a longer one; then the rating decides.
+    // A draft that agrees with the profile beats one that doesn't; then one
+    // within its pages beats a longer one; then the rating decides.
     const fits = (candidate: Candidate) =>
       candidate.pages <= settings.resumeMaxPages;
     const bestRound =
       candidates.length > 0
         ? candidates.reduce((top, candidate) => {
+            if ((candidate.contradictions === 0) !== (top.contradictions === 0))
+              return candidate.contradictions === 0 ? candidate : top;
             if (fits(candidate) !== fits(top))
               return fits(candidate) ? candidate : top;
             return candidate.rating > top.rating ? candidate : top;

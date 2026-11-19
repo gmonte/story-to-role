@@ -62,6 +62,8 @@ import {
   coverageRating,
   runGenerateResume,
 } from "./generation/run-generate-resume";
+import type { Inconsistency } from "./schemas/review-inconsistency";
+import { reviewViewOf } from "./generation/review-view";
 import { runReviewResume } from "./generation/run-review-resume";
 import { PdfService } from "./rendering/pdf-service";
 import { runRenderPdf } from "./rendering/run-render-pdf";
@@ -145,12 +147,15 @@ ${(extra.rules ?? []).map((line) => `- ${line}\n`).join("")}`;
  * A review whose coverage rates the draft `rating` out of 10: that many
  * requirements shown strongly, the rest not proven.
  */
-const reviewRated = (rating: number) => ({
+const reviewRated = (
+  rating: number,
+  inconsistencies: Inconsistency[] = []
+) => ({
   coverage: Array.from({ length: 10 }, (_, index) => ({
     requirement: `Requirement ${index + 1}`,
     level: index < rating ? ("strong" as const) : ("not_proven" as const),
   })),
-  inconsistencies: [],
+  inconsistencies,
   advice: ["Be more concrete"],
 });
 
@@ -337,6 +342,8 @@ async function setup({
   type Script = {
     drafts: Array<ResumeDraft | AdjustDraft>;
     ratings: number[];
+    /** What each review reports as contradicting the profile, in order. */
+    contradictions?: Array<Parameters<typeof reviewRated>[1]>;
     /** This month (YYYY-MM), for what "recent" is measured from. */
     today?: string;
     /** The coverage review, given the resume's lines by text. */
@@ -365,6 +372,7 @@ async function setup({
   async function runScripted(generationId: string, script: Script) {
     const drafts = [...script.drafts];
     const ratings = [...script.ratings];
+    const contradictions = [...(script.contradictions ?? [])];
     const filter = await loadNeverIncludeFilter({
       db,
       cipher,
@@ -373,7 +381,7 @@ async function setup({
     const fake = fakeProviderPackage({
       object: ({ system }) => {
         if (system.startsWith("You review")) {
-          return reviewRated(ratings.shift() ?? 5);
+          return reviewRated(ratings.shift() ?? 5, contradictions.shift());
         }
         if (system.startsWith("You audit")) {
           if (script.coverageFails) throw new Error("provider down");
@@ -596,6 +604,101 @@ describe("resume generation and snapshots", () => {
     // Strategist, one editor, two reviews, the keyword spelling repair, the
     // coverage review.
     expect(fake.generateObject).toHaveBeenCalledTimes(6);
+  });
+
+  it("keeps a draft without contradictions over a better-rated one with, and never stops early on it", async () => {
+    const ctx = await setup();
+    const line = {
+      text: "Led a team of 5 engineers.",
+      evidence_ids: [ctx.evidence[1].id],
+    };
+    const wrong = {
+      // Whitespace and case are normalised when the quote is looked up.
+      quote: "led a team  of 5 ENGINEERS",
+      profileLine: "Took part in a team of 5 engineers.",
+      kind: "overstated_authorship" as const,
+    };
+    const { generationId, fake } = await ctx.generate("thorough", {
+      drafts: [ctx.draft([line]), ctx.draft([line]), ctx.draft([line])],
+      ratings: [9, 6, 5],
+      contradictions: [[wrong], []],
+    });
+    const rounds = await new DocumentsRepository(ctx.db).listReviewRounds(
+      generationId
+    );
+    // The 9 didn't end the loop; the 6 without contradictions is the one kept.
+    expect(rounds.map((r) => [r.rating, r.kept])).toEqual([
+      [9, false],
+      [6, true],
+    ]);
+    // Strategist, one editor, two reviews, the keyword repair, the coverage.
+    expect(fake.generateObject).toHaveBeenCalledTimes(6);
+  });
+
+  it("drops a contradiction whose quote isn't in the draft, and shows old text-only ones", async () => {
+    const ctx = await setup();
+    const line = {
+      text: "Led a team of 5 engineers.",
+      evidence_ids: [ctx.evidence[1].id],
+    };
+    const found = [
+      {
+        quote: "Founded the company in 2015",
+        profileLine: "Never a founder.",
+        kind: "wrong_fact" as const,
+      },
+      {
+        quote: "Led a team of 5 engineers.",
+        profileLine: "Took part in a team of 5.",
+        kind: "other" as const,
+      },
+    ];
+    await ctx.generate("quick", {
+      drafts: [ctx.draft([line]), ctx.draft([line])],
+      ratings: [9, 9],
+      contradictions: [found, found],
+    });
+    const [version] = (
+      await ctx.documents.forOpening({
+        userId: ctx.user.id,
+        openingId: ctx.opening.id,
+      })
+    ).documents[0].versions;
+    expect(version.review?.inconsistencies).toBe(1);
+    expect(version.review?.rounds[0].inconsistencies).toMatchObject([
+      { quote: "Led a team of 5 engineers.", kind: "other" },
+    ]);
+
+    // A review stored with plain strings still reads, as text only.
+    const legacy = reviewViewOf(
+      [
+        {
+          round: 0,
+          snapshotId: null,
+          rating: 5,
+          kept: true,
+          encryptedReview: ctx.cipher.encrypt(
+            JSON.stringify({
+              coverage: [],
+              inconsistencies: ["Says 2019 where the profile says 2021"],
+              advice: [],
+            })
+          ),
+        },
+      ],
+      ctx.cipher,
+      "opening",
+      { latestId: "x", generationSnapshotId: null }
+    );
+    expect(legacy?.inconsistencies).toBe(1);
+    expect(legacy?.rounds[0].inconsistencies).toEqual([
+      {
+        quote: "",
+        profileLine: "",
+        kind: "other",
+        text: "Says 2019 where the profile says 2021",
+      },
+    ]);
   });
 
   it("skips review rounds when the first draft already reaches the target", async () => {
@@ -5034,7 +5137,11 @@ describe("resume generation and snapshots", () => {
 describe("a draft's rating by its coverage", () => {
   const review = (
     levels: Array<"strong" | "partial" | "not_proven">,
-    inconsistencies: string[] = []
+    inconsistencies: Array<{
+      quote: string;
+      profileLine: string;
+      kind: "wrong_fact";
+    }> = []
   ) => ({
     coverage: levels.map((level, index) => ({
       requirement: `Requirement ${index + 1}`,
@@ -5085,10 +5192,16 @@ describe("a draft's rating by its coverage", () => {
     ).toBe(1);
   });
 
-  it("caps a draft that disagrees with the profile at 4", () => {
-    const wrong = ["Says 2019 where the profile says 2021"];
-    expect(coverageRating(review(["strong", "strong"], wrong), [])).toBe(4);
-    expect(coverageRating(review(["strong", "not_proven"], wrong), [])).toBe(4);
+  it("doesn't cap a draft that disagrees with the profile: the score is only the match", () => {
+    const wrong = [
+      {
+        quote: "Since 2019",
+        profileLine: "Since 2021",
+        kind: "wrong_fact" as const,
+      },
+    ];
+    expect(coverageRating(review(["strong", "strong"], wrong), [])).toBe(10);
+    expect(coverageRating(review(["strong", "not_proven"], wrong), [])).toBe(5);
     expect(
       coverageRating(review(["partial", "not_proven", "not_proven"], wrong), [])
     ).toBe(2);

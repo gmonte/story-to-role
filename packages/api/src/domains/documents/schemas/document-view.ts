@@ -17,6 +17,7 @@ import {
 import { coverageFindingCodes } from "../coverage-review/check-document";
 import { documentContentSchema } from "./document-content";
 import { resumeSectionKindSchema } from "./resume-content";
+import { inconsistencyViewSchema } from "./review-inconsistency";
 
 /**
  * A profile line a document line cites (resume spec, "Trace in the
@@ -175,7 +176,7 @@ export const versionViewSchema = z.object({
           round: z.number().int(),
           rating: z.number().int(),
           kept: z.boolean(),
-          inconsistencies: z.array(z.string()),
+          inconsistencies: z.array(inconsistencyViewSchema),
           advice: z.array(z.string()),
           partial: z.array(z.string()),
           notProven: z.array(z.string()),

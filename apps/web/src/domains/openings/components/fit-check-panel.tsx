@@ -74,15 +74,9 @@ export function FitStep({ opening }: { opening: OpeningDetail }) {
               bandClassName(fitCheck.band)
             )}
           >
-            <div>
-              <p className="font-medium">{labels.band(fitCheck.band)}</p>
-              <p className="text-muted-foreground text-xs">
-                {t.formatMessage({
-                  defaultMessage:
-                    "A hint from your published profile. You can apply whatever it says.",
-                })}
-              </p>
-            </div>
+            {/* Its hint ("a hint from your profile") lives once, on the
+                header's chip. */}
+            <p className="font-medium">{labels.band(fitCheck.band)}</p>
             {/* The check is worth running again only once the profile or
                 the preferences moved on. */}
             {fitCheck.outdated && (

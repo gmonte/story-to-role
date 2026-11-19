@@ -9,6 +9,7 @@ import type { VersionView } from "@repo/api/domains/documents/schemas/document-v
 import { useTranslation } from "@repo/intl/use-translation";
 import { Button } from "@repo/web/components/ui/button";
 import { toast } from "@repo/web/components/ui/sonner";
+import { cn } from "@repo/web/lib/utils";
 
 import { useTRPC } from "~/tools/trpc/client";
 
@@ -81,9 +82,11 @@ export function useDownloadZip(openingId: string, versions: VersionView[]) {
 export function DownloadZipButton({
   openingId,
   versions,
+  className,
 }: {
   openingId: string;
   versions: VersionView[];
+  className?: string;
 }) {
   const zip = useDownloadZip(openingId, versions);
   return (
@@ -92,7 +95,7 @@ export function DownloadZipButton({
       <Button
         size="sm"
         variant="outline"
-        className="self-start"
+        className={cn("self-start", className)}
         disabled={zip.busy}
         onClick={zip.run}
       >

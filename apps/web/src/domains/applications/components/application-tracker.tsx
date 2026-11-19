@@ -3,23 +3,15 @@
 import { useState, type ReactNode } from "react";
 
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { ChevronDown, FileText, Send, Trash2 } from "lucide-react";
+import { FileText, Plus, Send, Trash2 } from "lucide-react";
 import Link from "next/link";
 
-import {
-  type ApplicationStatus,
-  applicationStatusSchema,
-} from "@repo/api/domains/applications/schemas/application";
+import { applicationStatusSchema } from "@repo/api/domains/applications/schemas/application";
 import type { ApplicationDetail } from "@repo/api/domains/applications/schemas/tracker";
 import { useTranslation } from "@repo/intl/use-translation";
 import { Badge } from "@repo/web/components/ui/badge";
 import { Button } from "@repo/web/components/ui/button";
 import { Checkbox } from "@repo/web/components/ui/checkbox";
-import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from "@repo/web/components/ui/collapsible";
 import {
   Dialog,
   DialogContent,
@@ -31,13 +23,6 @@ import {
 } from "@repo/web/components/ui/dialog";
 import { Input } from "@repo/web/components/ui/input";
 import { Label } from "@repo/web/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@repo/web/components/ui/select";
 import { toast } from "@repo/web/components/ui/sonner";
 import { Textarea } from "@repo/web/components/ui/textarea";
 
@@ -52,7 +37,14 @@ import { useRefreshTracker } from "../hooks/use-tracker";
 import { useTrackerLabels } from "../hooks/use-tracker-labels";
 import { dayToDate, today } from "../utils/dates";
 import { asksReason } from "../utils/withdraw";
-import { ApplicationDetails } from "./application-details";
+import { OptionsPopover, Section } from "./application-section";
+import {
+  NextStepSection,
+  NotesSection,
+  SentSection,
+  SourceSection,
+  TypeSection,
+} from "./application-details";
 import { WithdrawDialog } from "./withdraw-dialog";
 
 /**
@@ -97,27 +89,6 @@ export function ApplicationTracker({ openingId }: { openingId: string }) {
   );
 }
 
-/** A folded section of the summary. */
-function Folded({ label, children }: { label: string; children: ReactNode }) {
-  return (
-    <Collapsible className="flex flex-col gap-3">
-      <CollapsibleTrigger asChild>
-        <Button
-          size="sm"
-          variant="ghost"
-          className="group justify-between px-2"
-        >
-          {label}
-          <ChevronDown className="transition-transform group-data-[state=open]:rotate-180" />
-        </Button>
-      </CollapsibleTrigger>
-      <CollapsibleContent className="flex flex-col gap-3">
-        {children}
-      </CollapsibleContent>
-    </Collapsible>
-  );
-}
-
 function TrackerBlock({
   detail,
   openingId,
@@ -127,7 +98,6 @@ function TrackerBlock({
 }) {
   const t = useTranslation();
   const labels = useTrackerLabels();
-  const documentLabels = useDocumentLabels();
   const trpc = useTRPC();
   const refresh = useRefreshTracker();
   const onError = (error: { message: string }) => toast.error(error.message);
@@ -146,131 +116,139 @@ function TrackerBlock({
   );
 
   return (
-    <section className="flex flex-col gap-3">
-      {detail.external && (
-        <Badge variant="outline" className="self-start">
-          {t.formatMessage({ defaultMessage: "Applied outside StoryToRole" })}
-        </Badge>
-      )}
-      <div className="flex flex-wrap items-center gap-2">
-        <Select
-          value={detail.status}
-          onValueChange={(status) => {
-            if (asksReason(status as ApplicationStatus, detail.status)) {
-              setWithdrawing(true);
-              return;
-            }
-            setStatus.mutate({
-              applicationId: detail.id,
-              status: status as ApplicationStatus,
-            });
-          }}
-        >
-          <SelectTrigger className="w-44" size="sm">
-            <SelectValue>{labels.status(detail.status)}</SelectValue>
-          </SelectTrigger>
-          <SelectContent>
-            {statuses.map((status) => (
-              <SelectItem key={status} value={status}>
-                {labels.status(status)}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        {!detail.external && detail.status === "in_preparation" && (
-          <MarkAppliedDialog applicationId={detail.id} openingId={openingId} />
-        )}
-      </div>
-      <WithdrawDialog
-        key={`${detail.id}-${withdrawing}`}
-        detail={detail}
-        open={withdrawing}
-        onOpenChange={setWithdrawing}
-      />
-      {detail.status === "withdrawn" && (
-        <p className="flex flex-col text-xs">
-          <span className="text-muted-foreground">
-            {t.formatMessage({ defaultMessage: "Why you gave up" })}
-          </span>
-          <span>
-            {detail.declineReason ??
-              t.formatMessage({ defaultMessage: "No reason recorded" })}
-          </span>
-          <Button
-            variant="link"
-            size="sm"
-            className="h-auto self-start p-0 text-xs"
-            onClick={() => setWithdrawing(true)}
-          >
-            {t.formatMessage({ defaultMessage: "Edit" })}
-          </Button>
-        </p>
-      )}
-
-      {detail.submissions.length > 0 && (
-        <div className="flex flex-col gap-1 text-xs">
-          <span className="text-muted-foreground">
-            {t.formatMessage({ defaultMessage: "Sent" })}
-          </span>
-          {detail.submissions.map((submission) => (
-            <span key={submission.snapshotId}>
-              {t.formatMessage(
-                {
-                  defaultMessage: "{document} · {version}, as it was on {date}",
-                },
-                {
-                  document:
-                    submission.documentKind === "resume"
-                      ? t.formatMessage({ defaultMessage: "Resume" })
-                      : t.formatMessage({ defaultMessage: "Cover letter" }),
-                  version: documentLabels.version(submission),
-                  date: t.formatDate(submission.sentAt, {
-                    dateStyle: "medium",
-                  }),
-                }
-              )}
-            </span>
-          ))}
+    <div className="flex min-w-0 flex-col">
+      <Section
+        label={t.formatMessage({ defaultMessage: "Status" })}
+        action={
+          <OptionsPopover
+            label={t.formatMessage({ defaultMessage: "Change status" })}
+            value={detail.status}
+            disabled={setStatus.isPending}
+            options={statuses.map((value) => ({
+              value,
+              label: labels.status(value),
+            }))}
+            onSelect={(status) => {
+              if (asksReason(status, detail.status)) {
+                setWithdrawing(true);
+                return;
+              }
+              setStatus.mutate({ applicationId: detail.id, status });
+            }}
+          />
+        }
+      >
+        <div className="flex min-w-0 flex-wrap items-center gap-1.5">
+          <Badge variant="secondary">{labels.status(detail.status)}</Badge>
+          {detail.external && (
+            <Badge variant="outline">
+              {t.formatMessage({
+                defaultMessage: "Applied outside StoryToRole",
+              })}
+            </Badge>
+          )}
         </div>
+        {detail.status === "withdrawn" && (
+          <p className="flex min-w-0 flex-col text-xs">
+            <span className="text-muted-foreground">
+              {t.formatMessage({ defaultMessage: "Why you gave up" })}
+            </span>
+            <span className="break-words">
+              {detail.declineReason ??
+                t.formatMessage({ defaultMessage: "No reason recorded" })}
+            </span>
+            <Button
+              variant="link"
+              size="sm"
+              className="h-auto self-start p-0 text-xs"
+              onClick={() => setWithdrawing(true)}
+            >
+              {t.formatMessage({ defaultMessage: "Edit" })}
+            </Button>
+          </p>
+        )}
+        {!detail.external && detail.status === "in_preparation" && (
+          <MarkAppliedDialog
+            applicationId={detail.id}
+            openingId={openingId}
+            trigger={
+              <Button size="sm" className="w-full">
+                <Send />
+                {t.formatMessage({ defaultMessage: "Mark as applied" })}
+              </Button>
+            }
+          />
+        )}
+        <WithdrawDialog
+          key={`${detail.id}-${withdrawing}`}
+          detail={detail}
+          open={withdrawing}
+          onOpenChange={setWithdrawing}
+        />
+      </Section>
+
+      <SourceSection key={`source-${detail.id}`} detail={detail} />
+      <TypeSection detail={detail} />
+      <SentSection detail={detail} />
+      <NextStepSection key={`next-${detail.id}`} detail={detail} />
+      <NotesSection key={`notes-${detail.id}`} detail={detail} />
+      <TimelineSection detail={detail} />
+    </div>
+  );
+}
+
+const compactEvents = 3;
+
+/** The last entries, with the rest and the form to add one behind a click. */
+function TimelineSection({ detail }: { detail: ApplicationDetail }) {
+  const t = useTranslation();
+  const [all, setAll] = useState(false);
+  const [adding, setAdding] = useState(false);
+  const hidden = detail.events.length - compactEvents;
+  return (
+    <Section
+      label={t.formatMessage({ defaultMessage: "Timeline" })}
+      action={
+        <Button
+          size="icon"
+          variant="ghost"
+          className="text-muted-foreground size-6"
+          aria-label={t.formatMessage({ defaultMessage: "Add entry" })}
+          onClick={() => setAdding(!adding)}
+        >
+          <Plus className="size-3.5" />
+        </Button>
+      }
+    >
+      {adding && <AddEventForm applicationId={detail.id} />}
+      <EventsTimeline
+        detail={detail}
+        events={all ? detail.events : detail.events.slice(0, compactEvents)}
+      />
+      {hidden > 0 && (
+        <Button
+          variant="link"
+          size="sm"
+          className="h-auto self-start p-0 text-xs"
+          onClick={() => setAll(!all)}
+        >
+          {all
+            ? t.formatMessage({ defaultMessage: "Show less" })
+            : t.formatMessage({ defaultMessage: "Show all" })}
+        </Button>
       )}
-
-      {(detail.nextEvent ?? detail.nextStep) && (
-        <p className="text-xs">
-          <span className="text-muted-foreground">
-            {t.formatMessage({ defaultMessage: "Next step" })}
-          </span>
-          <span className="block">
-            {detail.nextEvent
-              ? t.formatMessage(
-                  { defaultMessage: "{event} on {date}" },
-                  {
-                    event:
-                      detail.nextEvent.text ??
-                      t.formatMessage({ defaultMessage: "an event" }),
-                    date: t.formatDate(detail.nextEvent.occurredAt, {
-                      dateStyle: "medium",
-                    }),
-                  }
-                )
-              : detail.nextStep}
-          </span>
-        </p>
-      )}
-
-      <Folded label={t.formatMessage({ defaultMessage: "Edit details" })}>
-        <ApplicationDetails key={detail.id} detail={detail} />
-      </Folded>
-
-      <Folded label={t.formatMessage({ defaultMessage: "Timeline" })}>
-        <AddEventForm applicationId={detail.id} />
-        <EventsTimeline detail={detail} />
-      </Folded>
-    </section>
+    </Section>
   );
 }
 
 /** What happened, with the notes the user can delete. */
-function EventsTimeline({ detail }: { detail: ApplicationDetail }) {
+function EventsTimeline({
+  detail,
+  events,
+}: {
+  detail: ApplicationDetail;
+  events: ApplicationDetail["events"];
+}) {
   const t = useTranslation();
   const labels = useTrackerLabels();
   const trpc = useTRPC();
@@ -282,8 +260,8 @@ function EventsTimeline({ detail }: { detail: ApplicationDetail }) {
     })
   );
   return (
-    <ol className="flex flex-col gap-2 border-l pl-3 text-xs">
-      {detail.events.map((event) => (
+    <ol className="flex min-w-0 flex-col gap-2 border-l pl-3 text-xs">
+      {events.map((event) => (
         <li key={event.id} className="flex items-start justify-between gap-2">
           <span className="flex flex-col">
             <span className="text-muted-foreground">
@@ -369,7 +347,7 @@ function AddEventForm({ applicationId }: { applicationId: string }) {
         })}
         onChange={(event) => setText(event.target.value)}
       />
-      <div className="flex gap-2">
+      <div className="flex min-w-0 flex-col gap-2">
         <Input
           type="datetime-local"
           value={when}

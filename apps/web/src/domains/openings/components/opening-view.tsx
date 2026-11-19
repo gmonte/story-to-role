@@ -199,13 +199,22 @@ export function ApplicationColumn({ openingId }: { openingId: string }) {
     (document) => document.versions
   );
   return (
-    <div className="flex flex-col gap-3">
+    <div className="flex min-w-0 flex-col gap-3">
       <h2 className="font-medium">
         {t.formatMessage({ defaultMessage: "Application" })}
       </h2>
       <ApplicationTracker openingId={openingId} />
       {versions.length > 0 && (
-        <DownloadZipButton openingId={openingId} versions={versions} />
+        <section className="flex flex-col gap-1.5 border-t pt-3">
+          <h3 className="text-muted-foreground text-xs font-medium">
+            {t.formatMessage({ defaultMessage: "Files" })}
+          </h3>
+          <DownloadZipButton
+            openingId={openingId}
+            versions={versions}
+            className="w-full"
+          />
+        </section>
       )}
     </div>
   );

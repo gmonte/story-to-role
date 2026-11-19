@@ -130,3 +130,47 @@ export function changeWidget(
   root.append(footer);
   return root;
 }
+
+/**
+ * A suggested section move as a banner above the section's title: what
+ * the agent proposes (`summary`), why, and Accept or Reject.
+ */
+export function sectionMoveWidget(
+  change: DocumentChange,
+  summary: string,
+  labels: Pick<ChangeWidgetLabels, "accept" | "reject">,
+  handlers: {
+    accept: (documentChangeId: string) => void;
+    reject: (documentChangeId: string) => void;
+  }
+) {
+  const root = document.createElement("div");
+  root.className = cn(
+    "my-1.5 rounded-lg border border-emerald-500/40 bg-emerald-500/10 px-3 py-2 text-sm"
+  );
+  root.setAttribute("data-document-change-id", change.id);
+  root.contentEditable = "false";
+  const title = document.createElement("div");
+  title.className = cn("text-foreground font-medium");
+  title.textContent = summary;
+  root.append(title);
+
+  const footer = document.createElement("div");
+  footer.className = cn("mt-1.5 flex flex-wrap items-center gap-2");
+  const reason = document.createElement("span");
+  reason.className = cn("text-muted-foreground min-w-48 flex-1 text-xs");
+  reason.textContent = change.reason;
+  footer.append(
+    reason,
+    button(labels.accept, cn(buttonVariants(), small), () =>
+      handlers.accept(change.id)
+    ),
+    button(
+      labels.reject,
+      cn(buttonVariants({ variant: "outline" }), small),
+      () => handlers.reject(change.id)
+    )
+  );
+  root.append(footer);
+  return root;
+}

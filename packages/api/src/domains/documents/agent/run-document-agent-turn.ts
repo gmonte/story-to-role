@@ -19,7 +19,12 @@ import { limitQuestions } from "@repo/api/domains/agents/question-limit";
 import { getUserCipher } from "@repo/api/domains/encryption/user-cipher";
 import { partText } from "@repo/api/domains/profile/truth/suggestions";
 
-import { proposeChange, type ChangeRefusal } from "../changes/propose-change";
+import {
+  proposeChange,
+  proposeSectionMove,
+  type ChangeRefusal,
+} from "../changes/propose-change";
+import { resumeSectionKindSchema } from "../schemas/resume-content";
 import { loadDocumentAgentContext } from "./document-agent-context";
 import { buildDocumentAgentPrompt } from "./document-agent-prompt";
 import { loadLetterPrepContext } from "./letter-prep-context";
@@ -300,6 +305,65 @@ export async function runDocumentAgentTurn(
         },
       }),
     };
+    // A letter has no sections: the call is refused there.
+    const sectionTool = {
+      propose_section_move: tool({
+        description:
+          "Propose moving one resume section, with all its content, above or below another section (for example Projects above Professional experience). It waits as a suggestion the person accepts or rejects; nothing changes until they accept. Use the section names of the “## …” headings.",
+        inputSchema: z.object({
+          section: resumeSectionKindSchema.describe("The section to move"),
+          placement: z
+            .enum(["above", "below"])
+            .describe("Where it goes relative to `anchor`"),
+          anchor: resumeSectionKindSchema.describe(
+            "The section it goes next to"
+          ),
+          reason: z
+            .string()
+            .describe(
+              "One short sentence shown to the person with the suggestion, in their language"
+            ),
+        }),
+        execute: ({ section, placement, anchor, reason }) => {
+          const result = proposing.then(async () => {
+            const proposed = await proposeSectionMove({
+              db,
+              cipher,
+              versionId: context.versionId,
+              snapshotId: context.snapshotId,
+              content: context.content,
+              origin: "document_agent",
+              move: { kind: section, placement, anchor },
+              reason,
+              pending: waiting,
+            });
+            if (!proposed.ok) {
+              return {
+                error:
+                  proposed.refusal.kind === "unchanged"
+                    ? "The section already sits there."
+                    : "Both sections must be printed in the resume; use the names of its “## …” headings.",
+              };
+            }
+            waiting = [
+              ...waiting.filter(
+                (other) => !proposed.supersededIds.includes(other.id)
+              ),
+              proposed.change,
+            ];
+            turnChangeIds.add(proposed.change.id);
+            deps.reportChange?.(proposed.change.id);
+            return {
+              proposed: true,
+              documentChangeId: proposed.change.id,
+              note: "It waits for the person on the section; nothing changed yet.",
+            };
+          });
+          proposing = result.catch(() => undefined);
+          return result;
+        },
+      }),
+    };
     return {
       result: deps.streamText({
         model,
@@ -315,7 +379,7 @@ export async function runDocumentAgentTurn(
             historyWindow(input.messages, agentSettings.historyWindow)
           )
         ),
-        tools,
+        tools: { ...tools, ...sectionTool },
         stopWhen: stepCountIs(agentSettings.maxSteps),
         // The last step answers in words: a turn spent reading and
         // suggesting would otherwise end without a reply to the user.

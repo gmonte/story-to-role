@@ -2,6 +2,7 @@ import {
   contactsSeparator,
   splitContacts,
 } from "@repo/api/domains/documents/changes/document-change";
+import { sectionsInOrder } from "@repo/api/domains/documents/changes/section-order";
 import {
   credentialLine,
   formatPeriod,
@@ -380,7 +381,41 @@ export function blocksToContent<T extends EditableContent>(
       }
     }),
   };
-  return next as T;
+  // The sections go in the order the blocks print them (a moved section).
+  const printed = blocks.flatMap((block) =>
+    block.type === "sectionTitle" ? [block.kind] : []
+  );
+  return {
+    ...next,
+    sections: sectionsInOrder(next.sections, printed),
+  } as T;
+}
+
+/**
+ * The blocks with a section (its title and all its content) moved to
+ * `toIndex` among the sections; the header stays first. Null when the
+ * section isn't there or doesn't change place.
+ */
+export function moveSectionBlocks(
+  blocks: DocumentBlock[],
+  kind: ResumeSectionKind,
+  toIndex: number
+): DocumentBlock[] | null {
+  const first = blocks.findIndex((block) => block.type === "sectionTitle");
+  if (first < 0) return null;
+  const chunks: DocumentBlock[][] = [];
+  for (const block of blocks.slice(first)) {
+    if (block.type === "sectionTitle") chunks.push([block]);
+    else chunks[chunks.length - 1].push(block);
+  }
+  const from = chunks.findIndex(
+    (chunk) => chunk[0].type === "sectionTitle" && chunk[0].kind === kind
+  );
+  const to = Math.min(Math.max(toIndex, 0), chunks.length - 1);
+  if (from < 0 || from === to) return null;
+  const [moved] = chunks.splice(from, 1);
+  chunks.splice(to, 0, moved);
+  return [...blocks.slice(0, first), ...chunks.flat()];
 }
 
 /** Every line of the content by id, for the trace and the findings. */

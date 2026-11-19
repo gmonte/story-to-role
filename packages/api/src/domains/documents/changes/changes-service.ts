@@ -8,7 +8,7 @@ import { resumeLinkOf } from "../letter/letter-resume";
 import { requireUserVersion } from "../require-version";
 import type { ListedDocumentChange } from "../schemas/document-change";
 import { decryptDocument } from "../snapshot-content";
-import { applyDocumentChange, locateDocumentChange } from "./document-change";
+import { applyDocumentChange, changeApplies } from "./document-change";
 import { readChangeContent } from "./propose-change";
 
 /**
@@ -45,7 +45,7 @@ export class ChangesService {
         stale:
           !content ||
           content.kind === "linkedin" ||
-          !locateDocumentChange(content, change),
+          !changeApplies(content, change),
       };
     });
   }

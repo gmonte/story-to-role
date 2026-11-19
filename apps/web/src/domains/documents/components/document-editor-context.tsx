@@ -14,10 +14,12 @@ import {
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEditor, type Editor } from "@tiptap/react";
 
+import { sectionMoveOf } from "@repo/api/domains/documents/changes/section-order";
 import {
   coverageFindingKey,
   reviewNoteKey,
 } from "@repo/api/domains/documents/coverage-review/finding-key";
+import type { ResumeSectionKind } from "@repo/api/domains/documents/schemas/resume-content";
 import type { ListedDocumentChange } from "@repo/api/domains/documents/schemas/document-change";
 import type {
   CoverageView,
@@ -40,6 +42,7 @@ import {
   changeWidget,
   removedWordsClass,
   replacedBlockClass,
+  sectionMoveWidget,
 } from "../utils/change-widget";
 import { locateChangeInBlocks } from "../utils/document-changes";
 import { findPassage, type PassageTarget } from "../utils/passages";
@@ -47,6 +50,7 @@ import {
   blocksToContent,
   contentToBlocks,
   linesById,
+  moveSectionBlocks,
   type DocumentBlock,
   type EditableContent,
 } from "../utils/document-blocks";
@@ -141,6 +145,12 @@ type DocumentEditorState = {
   goToFinding: (finding: DocumentFinding) => void;
   goToNote: (note: ReviewNote) => void;
   addBullet: (ownerId: string) => void;
+  /**
+   * Moves a section, with its content, to a place among the sections (the
+   * header stays first). Saved at once as a snapshot of its own, so undo
+   * restores the old order.
+   */
+  moveSection: (kind: ResumeSectionKind, toIndex: number) => void;
   /** The agent's changes waiting in the text (ADR 0009). */
   changes: LocatedChange[];
   acceptChanges: (documentChangeIds?: string[]) => void;
@@ -305,6 +315,26 @@ export function DocumentEditorProvider({
       }, readDelayMs);
     },
   });
+
+  const moveSection = useCallback(
+    (kind: ResumeSectionKind, toIndex: number) => {
+      if (!editor || editor.isDestroyed) return;
+      const next = moveSectionBlocks(
+        docToBlocks(editor.state.doc),
+        kind,
+        toIndex
+      );
+      if (!next) return;
+      clearTimeout(readTimer.current);
+      clearTimeout(saveTimer.current);
+      resetDocument(editor, next);
+      setBlocks(next);
+      latest.current = next;
+      setSaveStatus("pending");
+      void flush();
+    },
+    [editor, flush]
+  );
 
   // A new official snapshot from elsewhere (undo, restore, a generation, a
   // sync) replaces the text; our own save only refreshes the origins.
@@ -829,6 +859,39 @@ export function DocumentEditorProvider({
     for (const change of changes) {
       const { range } = change;
       if (!range) continue;
+      const move = sectionMoveOf(change);
+      if (move) {
+        // A section move is a banner on the section's title.
+        const titleOf = (kind: string) =>
+          blocks.find(
+            (block) => block.type === "sectionTitle" && block.kind === kind
+          );
+        const anchor = titleOf(move.anchor);
+        const summary = t.formatMessage(
+          {
+            defaultMessage:
+              "{placement, select, above {Suggested: move this section above {anchor}} other {Suggested: move this section below {anchor}}}",
+          },
+          {
+            placement: move.placement,
+            anchor: anchor && "text" in anchor ? anchor.text : move.anchor,
+          }
+        );
+        specs.push({
+          kind: "widget",
+          at: positions[range.start],
+          interactive: true,
+          element: () =>
+            sectionMoveWidget(change, summary, changeLabels, {
+              accept: (documentChangeId) =>
+                changeHandlers.current?.accept(documentChangeId),
+              reject: (documentChangeId) =>
+                changeHandlers.current?.reject(documentChangeId),
+            }),
+          key: `change-${change.id}`,
+        });
+        continue;
+      }
       const replaced = blocks
         .slice(range.start, range.end)
         .map((block) =>
@@ -998,6 +1061,7 @@ export function DocumentEditorProvider({
     goToFinding,
     goToNote,
     addBullet: (ownerId) => editor && appendBullet(editor, ownerId),
+    moveSection,
     changes,
     acceptChanges: (documentChangeIds) => void acceptChanges(documentChangeIds),
     rejectChanges,

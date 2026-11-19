@@ -53,8 +53,9 @@ export function ProfileWorkspace() {
       </ResizableAside>
       <div className="min-w-0 flex-1 overflow-y-auto">
         <ProfileToolbar />
-        <ProfileSuggestionsBar />
         <ProfileDocument />
+        {/* Floats at the bottom of the scrolling text while suggestions wait. */}
+        <ProfileSuggestionsBar />
       </div>
     </div>
   );

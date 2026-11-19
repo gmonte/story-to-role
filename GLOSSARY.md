@@ -152,6 +152,14 @@ _Avoid_: Branch, language version, variant, copy
 A resume or cover letter with no company behind it, kept in the library and titled by its required focus.
 _Avoid_: General document, generic resume, master resume, template
 
+**LinkedIn text**:
+The user's one LinkedIn document, on its own page: the headline, the About, each experience's and project's text, the education with an optional description, the certifications and the languages, generated from the profile for the user to copy; nothing is ever sent to LinkedIn.
+_Avoid_: LinkedIn profile (that is LinkedIn's), LinkedIn document, LinkedIn resume
+
+**Headline option**:
+One of the headlines the AI writes for the LinkedIn text, at most 220 characters; the user chooses one, and only the chosen one is copied and checked.
+_Avoid_: Tagline, title line (that is a resume's)
+
 **Snapshot**:
 An immutable copy of a generated document's content at one point in its version's history.
 _Avoid_: Commit, revision, draft; the interface calls it a change

@@ -260,3 +260,33 @@ The opening page restructured after a product design review ([docs/design/openin
 ### O3: Mobile polish
 
 - The opening page and the document pages on a phone: sticky primary action, the Application and Fit blocks reachable in a tap, the document workspace in read mode with tap to edit, and the preview as a sheet.
+
+## LinkedIn page
+
+The LinkedIn text moves out of the library to its own sidebar item, the second one, and gains the sections LinkedIn asks for (resume spec, “LinkedIn”). Owner decisions: generated at once and redone by parts; the headline as AI options to choose from; education, certifications and languages printed by code (languages on LinkedIn's scale), the education's description by the AI only when the profile backs it; the page edits like My career, in the document workspace.
+
+### L1: The LinkedIn page and its sections
+
+- **LinkedIn** in the sidebar after My career (`/app/linkedin`); the library stops listing the LinkedIn document and its old address opens the new page.
+- Content gains `headline` (the chosen line) and `headlineOptions`, `education` (credential entries with an optional `description` line), `certifications` and `languages` (credential entries with LinkedIn's `proficiency`, or none when the level can't be read). A text written before has none of them; no migration (snapshots are JSON).
+- The writer returns the headline options and the education descriptions besides the About, experiences and projects; code checks each like the summary (a line citing profile lines, figures only `[medido]`, communication rules), drops an option over 220 characters, prints the credentials and converts the language levels.
+- The LinkedIn view as a resume (`linkedinAsResume`) carries the chosen headline, the education descriptions and the credential sections, so the code checks, the coverage review and the copy gate cover them with no rules of their own.
+- The page: the empty state with Generate my LinkedIn, then the document workspace (index, findings, the texts in blocks, choosing a headline, Copy text per section, versions on the right).
+
+Acceptance:
+- [ ] LinkedIn is the sidebar's second item; generating writes headline options, About, experiences, projects, education, certifications and languages; each section copies its text.
+- [ ] A language level reads on LinkedIn's scale in the output language; a headline option the profile doesn't back is not kept.
+
+### L2: Redoing one section
+
+- **Generate this section again** on the headline, the About, an experience, a project and an education's description: a `linkedin_section` generation naming the section, charged as an adjustment (`generate_document` with the section hint, 10 × level), whose snapshot replaces that section only; the code checks run on it.
+
+Acceptance:
+- [ ] Redoing one experience leaves the other sections, and the user's edits in them, untouched, in a new snapshot that undo reverts.
+
+### L3: The agent on the LinkedIn text
+
+- The document agent and its suggestions on the LinkedIn text, through its view as a resume: a change is located and applied on that view and mapped back; Talk about this and Talk to the agent from a finding work as on a resume.
+
+Acceptance:
+- [ ] Asked to rewrite a bullet of an experience, the agent suggests it in place and Accept creates a snapshot.

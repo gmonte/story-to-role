@@ -40,12 +40,12 @@ const badgeVariant = {
 
 type Review = NonNullable<VersionView["review"]>;
 
-/** “Match score 8/10”. */
+/** “Resume score 8/10”. */
 function useScoreLabel() {
   const t = useTranslation();
   return (review: Review) =>
     t.formatMessage(
-      { defaultMessage: "Match score {rating}/10" },
+      { defaultMessage: "Resume score {rating}/10" },
       { rating: t.formatNumber(review.rating) }
     );
 }
@@ -137,7 +137,7 @@ function CoverageScoreBody({
             {t.formatMessage(
               {
                 defaultMessage:
-                  "The score StoryToRole’s reviewers gave this resume’s match with the {purpose, select, focus {focus} other {opening}}.",
+                  "The score StoryToRole’s reviewers gave this resume for the {purpose, select, focus {focus} other {opening}}.",
               },
               { purpose }
             )}

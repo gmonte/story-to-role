@@ -23,7 +23,7 @@ The method's columns, beyond company, title, link and status:
 | Resume sent | The family and version sent, recorded automatically when the document comes from StoryToRole, or picked by hand for an external application: what the user promised |
 | Next step | Free text ("HR interview on Sep 20"), shown on the application and in reminders |
 | Notes | Free text |
-| Decline reason (the user's) | Why the user gave up; it can become a rule in the job preferences document, which screening reads |
+| Decline reason (the user's) | Why the user gave up, asked in a dialog when the status is set to Withdrawn (optional, editable later); it can become a rule in the job preferences document, which screening reads |
 
 There is no field for recruiter contacts. Notes and next steps are free text, where names, emails and phone numbers end up: they are encrypted with the user's key and never reach any prompt. Anything the AI reads of the tracker is its structured fields (source, application type, resume sent, status, dates, decline reason).
 

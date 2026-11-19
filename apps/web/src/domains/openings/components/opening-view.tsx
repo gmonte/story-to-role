@@ -1,7 +1,6 @@
 "use client";
 
 import { ExternalLink, FileText, TriangleAlert } from "lucide-react";
-import Link from "next/link";
 
 import type { OpeningDetail } from "@repo/api/domains/openings/schemas/opening-view";
 import { useTranslation } from "@repo/intl/use-translation";
@@ -97,7 +96,7 @@ export function OpeningPageBody({
 /**
  * The opening's application as the full tracker (tracker spec): its
  * status, "Mark as applied", what was sent and the next step, with the
- * details, the timeline and giving up folded.
+ * details and the timeline folded.
  */
 export function ApplicationColumn({ openingId }: { openingId: string }) {
   const t = useTranslation();
@@ -107,11 +106,6 @@ export function ApplicationColumn({ openingId }: { openingId: string }) {
         {t.formatMessage({ defaultMessage: "Application" })}
       </h2>
       <ApplicationTracker openingId={openingId} />
-      <Button asChild variant="outline" size="sm" className="self-start">
-        <Link href="/app/tracker">
-          {t.formatMessage({ defaultMessage: "All applications" })}
-        </Link>
-      </Button>
     </div>
   );
 }

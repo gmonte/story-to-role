@@ -38,6 +38,7 @@ import {
   SelectValue,
 } from "@repo/web/components/ui/select";
 import { toast } from "@repo/web/components/ui/sonner";
+import { Textarea } from "@repo/web/components/ui/textarea";
 
 import { useDocumentLabels } from "~/domains/documents/hooks/use-document-labels";
 import { WarningsDialog } from "~/domains/documents/components/warnings-dialog";
@@ -49,12 +50,14 @@ import { useOpening } from "~/domains/openings/hooks/use-opening";
 import { useRefreshTracker } from "../hooks/use-tracker";
 import { useTrackerLabels } from "../hooks/use-tracker-labels";
 import { dayToDate, today } from "../utils/dates";
-import { ApplicationDetails, ApplicationWithdraw } from "./application-details";
+import { asksReason } from "../utils/withdraw";
+import { ApplicationDetails } from "./application-details";
+import { WithdrawDialog } from "./withdraw-dialog";
 
 /**
  * The opening's application in the tracker (tracker spec), as a summary:
  * its status, "Mark as applied" (recording what was sent), what was sent
- * and the next step; the details, the timeline and giving up stay folded
+ * and the next step; the details and the timeline stay folded
  * until asked for. The full tracker comes to the Application step later.
  */
 export function ApplicationTracker({ openingId }: { openingId: string }) {
@@ -122,6 +125,9 @@ function TrackerBlock({
   const setStatus = useMutation(
     trpc.tracker.setStatus.mutationOptions({ onSuccess: refresh, onError })
   );
+  // Giving up is the withdrawn status: it asks for the reason first, and
+  // cancelling leaves the status as it was.
+  const [withdrawing, setWithdrawing] = useState(false);
   // "No response" only comes with time; "Applied" with documents goes
   // through the dialog that records what was sent.
   const statuses = applicationStatusSchema.options.filter(
@@ -140,12 +146,16 @@ function TrackerBlock({
       <div className="flex flex-wrap items-center gap-2">
         <Select
           value={detail.status}
-          onValueChange={(status) =>
+          onValueChange={(status) => {
+            if (asksReason(status as ApplicationStatus, detail.status)) {
+              setWithdrawing(true);
+              return;
+            }
             setStatus.mutate({
               applicationId: detail.id,
               status: status as ApplicationStatus,
-            })
-          }
+            });
+          }}
         >
           <SelectTrigger className="w-44" size="sm">
             <SelectValue>{labels.status(detail.status)}</SelectValue>
@@ -162,6 +172,31 @@ function TrackerBlock({
           <MarkAppliedDialog applicationId={detail.id} openingId={openingId} />
         )}
       </div>
+      <WithdrawDialog
+        key={`${detail.id}-${withdrawing}`}
+        detail={detail}
+        open={withdrawing}
+        onOpenChange={setWithdrawing}
+      />
+      {detail.status === "withdrawn" && (
+        <p className="flex flex-col text-xs">
+          <span className="text-muted-foreground">
+            {t.formatMessage({ defaultMessage: "Why you gave up" })}
+          </span>
+          <span>
+            {detail.declineReason ??
+              t.formatMessage({ defaultMessage: "No reason recorded" })}
+          </span>
+          <Button
+            variant="link"
+            size="sm"
+            className="h-auto self-start p-0 text-xs"
+            onClick={() => setWithdrawing(true)}
+          >
+            {t.formatMessage({ defaultMessage: "Edit" })}
+          </Button>
+        </p>
+      )}
 
       {detail.submissions.length > 0 && (
         <div className="flex flex-col gap-1 text-xs">
@@ -220,12 +255,6 @@ function TrackerBlock({
       <Folded label={t.formatMessage({ defaultMessage: "Timeline" })}>
         <AddEventForm applicationId={detail.id} />
         <EventsTimeline detail={detail} />
-      </Folded>
-
-      <Folded
-        label={t.formatMessage({ defaultMessage: "Give up this opening" })}
-      >
-        <ApplicationWithdraw key={detail.id} detail={detail} />
       </Folded>
     </section>
   );
@@ -323,7 +352,7 @@ function AddEventForm({ applicationId }: { applicationId: string }) {
         });
       }}
     >
-      <Input
+      <Textarea
         value={text}
         maxLength={2000}
         placeholder={t.formatMessage({

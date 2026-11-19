@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 
 import {
   type ApplicationSource,
@@ -29,7 +29,6 @@ import { useTRPC } from "~/tools/trpc/client";
 
 import { useRefreshTracker } from "../hooks/use-tracker";
 import { useTrackerLabels } from "../hooks/use-tracker-labels";
-import { today } from "../utils/dates";
 
 const unset = "unset";
 
@@ -251,122 +250,6 @@ export function ApplicationDetails({ detail }: { detail: ApplicationDetail }) {
       >
         {t.formatMessage({ defaultMessage: "Save" })}
       </Button>
-    </form>
-  );
-}
-
-/**
- * Giving up (tracker spec): the user's own reason, kept for the
- * retrospective, and the two buttons that feed the job preferences from
- * it. Apart from the rest of the form: they change what is recommended.
- */
-export function ApplicationWithdraw({ detail }: { detail: ApplicationDetail }) {
-  const t = useTranslation();
-  const trpc = useTRPC();
-  const refresh = useRefreshTracker();
-  const queryClient = useQueryClient();
-  const [declineReason, setDeclineReason] = useState(
-    detail.declineReason ?? ""
-  );
-  const onError = (error: { message: string }) => toast.error(error.message);
-  const save = useMutation(
-    trpc.tracker.updateDetails.mutationOptions({
-      onSuccess: async () => {
-        await refresh();
-        toast.success(t.formatMessage({ defaultMessage: "Saved" }));
-      },
-      onError,
-    })
-  );
-  const preferencesChanged = () => {
-    void queryClient.invalidateQueries({ queryKey: trpc.profile.pathKey() });
-    void queryClient.invalidateQueries({ queryKey: trpc.openings.pathKey() });
-  };
-  const addRule = useMutation(
-    trpc.tracker.addDeclineReasonAsRule.mutationOptions({
-      onSuccess: () => {
-        preferencesChanged();
-        toast.success(
-          t.formatMessage({
-            defaultMessage:
-              "Added to your discard rules; the next fit checks count it.",
-          })
-        );
-      },
-      onError,
-    })
-  );
-  const exclude = useMutation(
-    trpc.tracker.excludeCompany.mutationOptions({
-      onSuccess: ({ company }) => {
-        preferencesChanged();
-        toast.success(
-          t.formatMessage(
-            {
-              defaultMessage:
-                "{company} is now among your excluded companies; the next fit checks count it.",
-            },
-            { company }
-          )
-        );
-      },
-      onError,
-    })
-  );
-
-  return (
-    <form
-      className="flex flex-col gap-3"
-      onSubmit={(event) => {
-        event.preventDefault();
-        save.mutate({
-          applicationId: detail.id,
-          declineReason: declineReason.trim() || null,
-        });
-      }}
-    >
-      <div className="grid gap-1.5">
-        <Label htmlFor="decline-reason">
-          {t.formatMessage({ defaultMessage: "Why you gave up (your reason)" })}
-        </Label>
-        <Textarea
-          id="decline-reason"
-          value={declineReason}
-          maxLength={2000}
-          onChange={(event) => setDeclineReason(event.target.value)}
-        />
-      </div>
-      <div className="flex flex-wrap gap-2">
-        <Button
-          type="submit"
-          size="sm"
-          variant="outline"
-          disabled={save.isPending}
-        >
-          {t.formatMessage({ defaultMessage: "Save the reason" })}
-        </Button>
-        {/* Saved reason only: the rule is what the server stored. */}
-        <Button
-          type="button"
-          size="sm"
-          variant="outline"
-          disabled={addRule.isPending || !detail.declineReason}
-          onClick={() => addRule.mutate({ applicationId: detail.id })}
-        >
-          {t.formatMessage({ defaultMessage: "Add as a discard rule" })}
-        </Button>
-        <Button
-          type="button"
-          size="sm"
-          variant="destructive"
-          disabled={exclude.isPending}
-          onClick={() =>
-            exclude.mutate({ applicationId: detail.id, date: today() })
-          }
-        >
-          {t.formatMessage({ defaultMessage: "Exclude the company" })}
-        </Button>
-      </div>
     </form>
   );
 }

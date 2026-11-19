@@ -163,7 +163,7 @@ export class LinkedinService {
     });
     const content = decryptDocument(cipher, latest);
     if (content.kind !== "linkedin") throw notFound();
-    const text = sectionText(content, input.section);
+    const text = sectionText(content, input.section, version.language);
     if (text === null) throw notFound();
     return { text };
   }

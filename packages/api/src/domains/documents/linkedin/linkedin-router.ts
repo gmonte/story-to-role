@@ -56,7 +56,8 @@ export const linkedinRouter = createTRPCRouter({
     .input(
       z.object({
         versionId: z.uuid(),
-        // `about`, or the id of the position whose experience to copy.
+        // `headline`, `about`, `certifications`, `languages`, or the id of
+        // the position, project or education whose text to copy.
         section: z.string().min(1).max(64),
         acknowledgeWarnings: z.boolean().optional(),
       })

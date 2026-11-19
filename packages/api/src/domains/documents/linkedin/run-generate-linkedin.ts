@@ -16,6 +16,7 @@ import { repairPublicNames } from "../generation/public-names";
 import {
   assembleResume,
   type AssemblyDraft,
+  type DroppedLine,
 } from "../generation/assemble-resume";
 import { loadCareerContext } from "../generation/load-career-context";
 import { purposesOf, resumeMaterial } from "../generation/resume-prompts";
@@ -28,8 +29,13 @@ import {
   defaultGenerationSettings,
   generationSettingsSchema,
 } from "../schemas/generation-settings";
-import type { LinkedinContent } from "../schemas/linkedin-content";
+import type { Line } from "../schemas/document";
+import {
+  headlineMaxLength,
+  type LinkedinContent,
+} from "../schemas/linkedin-content";
 import { loadWritingSetup } from "../writing/load-writing-setup";
+import { proficiencyOf } from "./linkedin-proficiency";
 import { linkedinAsResume } from "./linkedin-resume";
 import {
   careerFocus,
@@ -39,6 +45,11 @@ import {
   linkedinPurposeLines,
 } from "./linkedin-prompts";
 
+/** A line code refused, or a headline option longer than LinkedIn takes. */
+export type LinkedinDroppedLine =
+  | DroppedLine
+  | { text: string; reason: "too_long" };
+
 /**
  * Assembles LinkedIn content from a draft by the resume's own rules
  * (`assembleResume`): locked facts printed by code, each line citing
@@ -46,7 +57,10 @@ import {
  * communication rules, studied and never-claim terms refused, bullets per
  * the settings by age and the very old rule. LinkedIn has no requirement
  * to justify a very old experience, so under “relevant only” it is left
- * out. Positions and projects with no line left are not printed.
+ * out. Positions and projects with no line left are not printed. Each
+ * headline option and education description is checked like the summary;
+ * the first headline option kept is the chosen one. The credentials are
+ * printed by code, the languages on LinkedIn's scale.
  */
 export function assembleLinkedin(input: {
   draft: LinkedinDraft;
@@ -98,8 +112,48 @@ export function assembleLinkedin(input: {
   const projects = content.sections.find(
     (section) => section.kind === "projects"
   );
+  const allDropped: LinkedinDroppedLine[] = [...dropped];
+  // A free line (a headline option, an education's description) passes
+  // the summary's checks: it may cite any profile line.
+  const grounded = (line: { text: string; evidence_ids: string[] }) => {
+    const checked = assembleResume({
+      draft: { ...assemblyDraft, summary: line },
+      context: input.context,
+      sections: ["summary"],
+      settings: input.settings,
+      today: input.today,
+      purposes: [],
+      targetTitle: null,
+      newLineId,
+    });
+    allDropped.push(...checked.dropped);
+    const section = checked.content.sections[0];
+    return section?.kind === "summary" ? section.line : null;
+  };
+  const headlineOptions = draft.headlines.flatMap((option): Line[] => {
+    if (option.text.trim().length > headlineMaxLength) {
+      allDropped.push({ text: option.text, reason: "too_long" });
+      return [];
+    }
+    const line = grounded(option);
+    return line ? [line] : [];
+  });
+  const credentials = (kind: "education" | "certification" | "language") =>
+    input.context.credentials
+      .filter((row) => row.kind === kind)
+      .map((row) => ({
+        credentialId: row.id,
+        title: row.title,
+        institution: row.institution,
+        level: row.level,
+        startDate: row.startDate,
+        endDate: row.endDate,
+        inProgress: row.inProgress,
+      }));
   const linkedin: LinkedinContent = {
     kind: "linkedin",
+    headline: headlineOptions[0] ?? null,
+    headlineOptions,
     about:
       summary?.kind === "summary"
         ? summary.line
@@ -131,8 +185,19 @@ export function assembleLinkedin(input: {
               lines: entry.lines,
             }))
         : [],
+    education: credentials("education").map((entry) => {
+      const drafted = draft.education.find(
+        (row) => row.credential_id === entry.credentialId
+      )?.description;
+      return { ...entry, description: drafted ? grounded(drafted) : null };
+    }),
+    certifications: credentials("certification"),
+    languages: credentials("language").map((entry) => ({
+      ...entry,
+      proficiency: proficiencyOf(entry.level),
+    })),
   };
-  return { content: linkedin, dropped };
+  return { content: linkedin, dropped: allDropped };
 }
 
 const withoutLines = (
@@ -140,6 +205,20 @@ const withoutLines = (
   lineIds: string[]
 ): LinkedinContent => ({
   ...content,
+  headline:
+    content.headline && lineIds.includes(content.headline.id)
+      ? null
+      : content.headline,
+  headlineOptions: content.headlineOptions.filter(
+    (line) => !lineIds.includes(line.id)
+  ),
+  education: content.education.map((entry) => ({
+    ...entry,
+    description:
+      entry.description && lineIds.includes(entry.description.id)
+        ? null
+        : entry.description,
+  })),
   about: lineIds.includes(content.about.id)
     ? { ...content.about, text: "" }
     : content.about,
@@ -236,7 +315,11 @@ export async function runGenerateLinkedin(deps: {
       role,
       maxTokens: reviewLoopSettings.draftMaxTokens,
       schema: linkedinDraftSchema,
-      system: linkedinPrompt(material, settings),
+      system: linkedinPrompt(
+        material,
+        settings,
+        context.credentials.filter((row) => row.kind === "education")
+      ),
       messages: [{ role: "user", content: "Write the LinkedIn text." }],
     });
     if (!written.object) throw new Error("The writer returned no draft");

@@ -544,7 +544,6 @@ function OpeningTitle({
   const [editing, setEditing] = useState(false);
   const [title, setTitle] = useState("");
   const [company, setCompany] = useState("");
-  const [link, setLink] = useState("");
   const rename = useMutation(
     trpc.openings.rename.mutationOptions({
       onSuccess: async () => {
@@ -559,7 +558,6 @@ function OpeningTitle({
   function start() {
     setTitle(opening.title ?? "");
     setCompany(opening.company ?? "");
-    setLink(opening.sourceUrl ?? "");
     setEditing(true);
   }
   function save() {
@@ -568,7 +566,6 @@ function OpeningTitle({
       openingId,
       title: title.trim(),
       company: company.trim(),
-      sourceUrl: link.trim() || null,
     });
   }
 
@@ -619,19 +616,6 @@ function OpeningTitle({
           placeholder={t.formatMessage({ defaultMessage: "Company" })}
           aria-label={t.formatMessage({ defaultMessage: "Company" })}
           className="h-8 max-w-xs text-sm"
-        />
-        <Input
-          type="url"
-          value={link}
-          maxLength={2000}
-          onChange={(event) => setLink(event.target.value)}
-          placeholder={t.formatMessage({
-            defaultMessage: "Link to the posting (optional)",
-          })}
-          aria-label={t.formatMessage({
-            defaultMessage: "Link to the posting",
-          })}
-          className="h-8 max-w-sm text-sm"
         />
         <Button
           size="sm"

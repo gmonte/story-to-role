@@ -30,8 +30,10 @@ import { SimilarDocuments } from "~/domains/documents/components/similar-documen
 import { AiAtWork } from "~/domains/workspace/components/ai-at-work";
 import { ResizableAside } from "~/domains/workspace/components/resizable-aside";
 
+import { useOpening } from "../hooks/use-opening";
 import { useOpeningLabels } from "../hooks/use-opening-labels";
 import type { OpeningView as Page } from "../utils/opening-journey";
+import { OpeningLinkSection } from "./opening-link-section";
 import { DescriptionEditor } from "./description-editor";
 import { FitColumn, pendingGaps } from "./fit-check-panel";
 import type { useOpeningJourney } from "./opening-header";
@@ -194,6 +196,7 @@ export function OpeningPageBody({
  */
 export function ApplicationColumn({ openingId }: { openingId: string }) {
   const t = useTranslation();
+  const opening = useOpening(openingId);
   const documents = useOpeningDocuments(openingId);
   const versions = (documents.data?.documents ?? []).flatMap(
     (document) => document.versions
@@ -204,6 +207,9 @@ export function ApplicationColumn({ openingId }: { openingId: string }) {
         {t.formatMessage({ defaultMessage: "Application" })}
       </h2>
       <ApplicationTracker openingId={openingId} />
+      {opening.data && (
+        <OpeningLinkSection openingId={openingId} opening={opening.data} />
+      )}
       {versions.length > 0 && (
         <section className="flex flex-col gap-1.5 border-t pt-3">
           <h3 className="text-muted-foreground text-xs font-medium">

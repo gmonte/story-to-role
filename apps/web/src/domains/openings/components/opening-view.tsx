@@ -16,6 +16,7 @@ import {
 import type { OpeningDetail } from "@repo/api/domains/openings/schemas/opening-view";
 import { useTranslation } from "@repo/intl/use-translation";
 import { Button } from "@repo/web/components/ui/button";
+import { Separator } from "@repo/web/components/ui/separator";
 
 import { ApplicationContext } from "~/domains/applications/components/application-context";
 import { ApplicationTracker } from "~/domains/applications/components/application-tracker";
@@ -263,7 +264,7 @@ export function DocumentPage({
             <p className="text-muted-foreground text-sm">
               {t.formatMessage({
                 defaultMessage:
-                  "Written from your published profile only, whatever the fit check says; then you review every line.",
+                  "The AI writes a resume for this opening from your published profile. You can generate it even with a low fit, and then review it line by line.",
               })}
             </p>
             {journey.resume?.generation?.status === "failed" && (
@@ -291,6 +292,13 @@ export function DocumentPage({
             )}
           </div>
           <SimilarDocuments
+            separator={
+              <div className="text-muted-foreground flex items-center gap-3 text-xs">
+                <Separator className="flex-1" />
+                {t.formatMessage({ defaultMessage: "or" })}
+                <Separator className="flex-1" />
+              </div>
+            }
             openingId={openingId}
             defaultLanguage={journey.language}
             defaultTone={journey.tone}

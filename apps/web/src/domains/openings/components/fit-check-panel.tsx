@@ -23,6 +23,24 @@ import { useOpeningLabels } from "../hooks/use-opening-labels";
 import { GapQuestion } from "./gap-question";
 
 const verdictOrder = { gap: 0, partial: 1, met: 2 } as const;
+const importanceOrder = { mandatory: 0, desirable: 1 } as const;
+
+type FitItem = NonNullable<OpeningDetail["fitCheck"]>["items"][number];
+
+/**
+ * The requirements in a fixed order, the same on every load: gaps first,
+ * then partial, then met; within each, mandatory before desirable, then by
+ * kind and name.
+ */
+export function byFitOrder(a: FitItem, b: FitItem) {
+  return (
+    verdictOrder[a.verdict] - verdictOrder[b.verdict] ||
+    importanceOrder[a.importance] - importanceOrder[b.importance] ||
+    a.category.localeCompare(b.category) ||
+    a.term.localeCompare(b.term) ||
+    a.id.localeCompare(b.id)
+  );
+}
 
 /** Gap questions the user hasn't answered yet. */
 export function pendingGaps(opening: OpeningDetail) {
@@ -132,16 +150,14 @@ export function FitColumn({ opening }: { opening: OpeningDetail }) {
             </div>
           )}
           <ul className="flex flex-col gap-2">
-            {[...fitCheck.items]
-              .sort((a, b) => verdictOrder[a.verdict] - verdictOrder[b.verdict])
-              .map((item) => (
-                <FitCheckItem
-                  key={item.id}
-                  item={item}
-                  positions={fitCheck.positions}
-                  projects={fitCheck.projects}
-                />
-              ))}
+            {[...fitCheck.items].sort(byFitOrder).map((item) => (
+              <FitCheckItem
+                key={item.id}
+                item={item}
+                positions={fitCheck.positions}
+                projects={fitCheck.projects}
+              />
+            ))}
           </ul>
         </>
       ) : opening.needsPublishedProfile ? (

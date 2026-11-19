@@ -38,6 +38,7 @@ import { DocumentsService } from "../documents-service";
 import { loadCareerContext } from "../generation/load-career-context";
 import type { CoverLetterContent } from "../schemas/cover-letter-content";
 import type { ResumeContent } from "../schemas/resume-content";
+import { reviewerAttachment } from "./reviewer-attachment";
 import { runDocumentAgentTurn } from "./run-document-agent-turn";
 
 vi.mock("@repo/common/env/web.env", () => ({
@@ -488,6 +489,84 @@ describe("the document agent", () => {
     expect(system).toContain("The passage the conversation is about");
     // read_part gave the frozen version's experience.
     expect(toolResultsOf(prompts[1])).toContain("Led a team of 5 engineers");
+  });
+
+  it("gives the agent the latest review and a reviewer's feedback sent as an attachment", async () => {
+    const ctx = await setup();
+    const { document, version } = await ctx.insertResume("opening");
+    const store = new DocumentsRepository(ctx.db);
+    const snapshot = await store.latestSnapshot(version.id);
+    const generation = await store.insertGeneration({
+      profileId: ctx.profileId,
+      documentId: document.id,
+      versionId: version.id,
+      snapshotId: snapshot.id,
+      language: "en-US",
+      status: "completed",
+      reviewDepth: "quick",
+      writingLevel: "standard",
+      tone: "direct",
+    });
+    await store.insertReviewRounds([
+      {
+        generationId: generation.id,
+        snapshotId: null,
+        round: 0,
+        rating: 6,
+        inputTokens: 1,
+        outputTokens: 1,
+        kept: true,
+        encryptedReview: ctx.cipher.encrypt(
+          JSON.stringify({
+            coverage: [{ requirement: "Terraform at scale", level: "partial" }],
+            inconsistencies: [
+              {
+                quote: "Mentored two interns",
+                profileLine: "Led a team of 5 engineers",
+                kind: "wrong_fact",
+              },
+            ],
+            advice: ["Quantify the mentoring."],
+          })
+        ),
+      },
+    ]);
+    const { chatId } = await ctx.chats.current(ctx.user.id, {
+      kind: "document",
+      documentId: document.id,
+    });
+    const { model, prompts } = agentModel([], "Fair point.");
+    await ctx.say(
+      chatId,
+      composeAgentMessage(
+        null,
+        "Is the reviewer right?",
+        null,
+        reviewerAttachment({
+          section: "contradiction",
+          reviewer: 1,
+          rating: 6,
+          text: "Disagrees with your profile",
+          quote: "Mentored two interns",
+          profileLine: "Led a team of 5 engineers",
+        }),
+        version.id
+      ),
+      model
+    );
+    const system = systemOf(prompts[0]);
+    // The attachment reaches the prompt, with the passage and profile line.
+    expect(system).toContain("reviewer feedback the person asked about");
+    expect(system).toContain(
+      "Reviewer 1 (6/10) said (contradiction): Disagrees with your profile"
+    );
+    expect(system).toContain("Resume passage: “Mentored two interns”");
+    expect(system).toContain("Profile line: “Led a team of 5 engineers”");
+    // The review itself is in the context without an attachment.
+    expect(system).toContain("What the resume's reviewers said");
+    expect(system).toContain("Rating kept: 6/10");
+    expect(system).toContain("Advice: Quantify the mentoring.");
+    expect(system).toContain("Partly covered: Terraform at scale");
   });
 
   it("reads a cover letter and a library document's focus", async () => {

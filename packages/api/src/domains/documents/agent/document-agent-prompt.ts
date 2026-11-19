@@ -17,7 +17,7 @@ export const list = (items: string[]) =>
   items.length ? items.map((item) => `- ${item}`).join("\n") : "(none)";
 
 const tagNames =
-  "resume|interview|profile|document|passage|index|purpose|userInput|rules|gaps|findings|review|settings|attachment|waiting|rejected";
+  "resume|interview|profile|document|passage|index|purpose|userInput|rules|gaps|findings|review|settings|attachment|reviewers|waiting|rejected";
 
 export const oneLine = (text: string) =>
   text.replace(/\s*\n\s*/g, " / ").trim();
@@ -31,6 +31,35 @@ export const data = (tag: string, text: string) =>
 
 export const languageName = (language: string) =>
   language === "pt-BR" ? "Brazilian Portuguese" : "English";
+
+const attachmentNames = {
+  finding: "finding",
+  review: "review note",
+  reviewer: "reviewer feedback",
+} as const;
+
+const short = (text: string, max = 300) =>
+  text.length > max ? `${text.slice(0, max - 1)}…` : text;
+
+/** The latest review compactly: each reviewer's rating and feedback. */
+export function reviewersText(
+  reviewers: NonNullable<DocumentAgentContext["reviewers"]>
+) {
+  return [
+    `Rating kept: ${reviewers.rating}/10 (target ${reviewers.target}).`,
+    ...reviewers.rounds.flatMap((round, index) => [
+      `Reviewer ${index + 1}: ${round.rating}/10${round.kept ? " (kept)" : ""}`,
+      ...round.inconsistencies.map((item) =>
+        item.quote
+          ? `- Contradiction: “${short(item.quote)}”${item.profileLine ? ` — profile: ${short(item.profileLine)}` : ""}`
+          : `- Contradiction: ${short(item.text ?? "")}`
+      ),
+      ...round.advice.map((item) => `- Advice: ${short(item)}`),
+      ...round.partial.map((item) => `- Partly covered: ${short(item)}`),
+      ...round.notProven.map((item) => `- Not shown: ${short(item)}`),
+    ]),
+  ].join("\n");
+}
 
 /**
  * The document agent's instructions for one turn (ADR 0009, resume spec,
@@ -76,6 +105,7 @@ export function buildDocumentAgentPrompt(input: DocumentAgentPromptInput) {
     "",
     "## A passage, a finding or a review note being discussed",
     "- The person's message may open with quoted lines (“> …”): the passage of the document they selected, which is also below. A line that starts “~ [finding] …” is a finding of the document's checks, “~ [review] …” a note of the coverage review, and they are asking about it: say what it means in a sentence, then how to resolve it (ask what you need first, if you must). With no words of their own, propose the resolution right away.",
+    "- A line that starts “~ [reviewer] …” is feedback from one of the resume's reviewers (the AI reviewers that rated it; their latest review is below), in a section: contradiction (with the resume passage and the profile line it contradicts), advice, partial or not shown. The person wants to talk about it. You may agree or disagree with the reviewer, and say why, grounded on the document and the profile: a reviewer can be wrong. Explain what it means in plain words. Propose a change only as a suggestion (propose_change) when it makes the document better, under all the rules above: never invent a fact or a figure, and never touch a locked fact unless the person asked for it. A contradiction means the passage says what the profile does not back: the fix is to reword it to what the profile says, or, if the passage is true, for the person to add the fact to their profile.",
     "",
     "## How you answer",
     "- In the language of the person's last message. Plain text, no Markdown. Short: this is a side panel. After proposing, don't repeat the new wording: the person sees it in the text.",
@@ -216,9 +246,16 @@ export function buildDocumentAgentPrompt(input: DocumentAgentPromptInput) {
         ]
       : []),
     "",
+    ...(context.reviewers
+      ? [
+          `## What the resume's reviewers said${context.reviewers.current ? "" : " (of an earlier snapshot of this version)"}`,
+          data("reviewers", reviewersText(context.reviewers)),
+          "",
+        ]
+      : []),
     ...(input.attachment
       ? [
-          `## The ${input.attachment.kind === "finding" ? "finding" : "review note"} the person asked about`,
+          `## The ${attachmentNames[input.attachment.kind]} the person asked about`,
           data("attachment", input.attachment.text),
           "",
         ]

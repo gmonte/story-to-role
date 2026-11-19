@@ -2,8 +2,12 @@
 
 import { useState } from "react";
 
-import { ChevronDown } from "lucide-react";
+import { ChevronDown, MessageSquare } from "lucide-react";
 
+import {
+  reviewerAttachment,
+  type ReviewerFeedbackSection,
+} from "@repo/api/domains/documents/agent/reviewer-attachment";
 import type { VersionView } from "@repo/api/domains/documents/schemas/document-view";
 import { useTranslation } from "@repo/intl/use-translation";
 import { Badge } from "@repo/web/components/ui/badge";
@@ -21,6 +25,7 @@ import {
 import { cn } from "@repo/web/lib/utils";
 
 import { coverageScoreBand, roundsTrail } from "../utils/coverage-score";
+import { useDocumentAgent } from "./document-agent-context";
 import {
   ReviewAgainButton,
   ReviewProgress,
@@ -199,11 +204,90 @@ function ContradictionsWarning({ review }: { review: Review }) {
   );
 }
 
+type Round = Review["rounds"][number];
+
+/** Who said it: the reviewer's number and rating, for the attachment. */
+type Reviewer = { number: number; rating: number };
+
+/**
+ * A small “Talk about this” button: it sends a piece of reviewer feedback
+ * to the document agent as an attachment (nothing where there is no agent).
+ */
+function TalkAboutButton({
+  label,
+  attachment,
+}: {
+  label: string;
+  attachment: ReturnType<typeof reviewerAttachment>;
+}) {
+  const agent = useDocumentAgent();
+  if (!agent) return null;
+  return (
+    <Button
+      type="button"
+      size="icon"
+      variant="ghost"
+      className="text-muted-foreground size-5 shrink-0"
+      aria-label={label}
+      title={label}
+      onClick={() => agent.talkAbout({ attachment })}
+    >
+      <MessageSquare className="size-3" />
+    </Button>
+  );
+}
+
+/** “Talk about this” for one item of a reviewer's feedback. */
+function TalkAboutItem({
+  reviewer,
+  section,
+  text,
+  quote,
+  profileLine,
+}: {
+  reviewer: Reviewer;
+  section: ReviewerFeedbackSection;
+  text: string;
+  quote?: string | null;
+  profileLine?: string | null;
+}) {
+  const t = useTranslation();
+  return (
+    <TalkAboutButton
+      label={t.formatMessage({ defaultMessage: "Talk about this" })}
+      attachment={reviewerAttachment({
+        section,
+        reviewer: reviewer.number,
+        rating: reviewer.rating,
+        text,
+        quote,
+        profileLine,
+      })}
+    />
+  );
+}
+
+/** Everything one reviewer said, as the text of one attachment. */
+function wholeReview(round: Round) {
+  return [
+    ...round.inconsistencies.map((item) =>
+      item.quote
+        ? `Contradiction: “${item.quote}”${item.profileLine ? ` (profile: “${item.profileLine}”)` : ""}`
+        : `Contradiction: ${item.text ?? ""}`
+    ),
+    ...round.advice.map((item) => `Advice: ${item}`),
+    ...round.partial.map((item) => `Partially covered: ${item}`),
+    ...round.notProven.map((item) => `Not shown: ${item}`),
+  ].join("\n");
+}
+
 /** Each contradiction with its quote from the resume and the profile line. */
 function ContradictionList({
   items,
+  reviewer,
 }: {
-  items: Review["rounds"][number]["inconsistencies"];
+  items: Round["inconsistencies"];
+  reviewer: Reviewer;
 }) {
   const t = useTranslation();
   if (items.length === 0) return null;
@@ -215,6 +299,20 @@ function ContradictionList({
       <ul className="list-disc space-y-1 pl-4">
         {items.map((item, index) => (
           <li key={index}>
+            <span className="float-right ml-1">
+              <TalkAboutItem
+                reviewer={reviewer}
+                section="contradiction"
+                text={
+                  item.text ??
+                  t.formatMessage({
+                    defaultMessage: "Disagrees with your profile",
+                  })
+                }
+                quote={item.quote}
+                profileLine={item.profileLine}
+              />
+            </span>
             {item.quote ? (
               <>
                 <span className="text-foreground">
@@ -242,17 +340,70 @@ function ContradictionList({
   );
 }
 
-function FeedbackList({ title, items }: { title: string; items: string[] }) {
+function FeedbackList({
+  title,
+  items,
+  section,
+  reviewer,
+}: {
+  title: string;
+  items: string[];
+  section: ReviewerFeedbackSection;
+  reviewer: Reviewer;
+}) {
   if (items.length === 0) return null;
   return (
     <div className="flex flex-col gap-0.5">
       <p className="text-foreground font-medium">{title}</p>
       <ul className="list-disc space-y-0.5 pl-4">
         {items.map((item, index) => (
-          <li key={index}>{item}</li>
+          <li key={index}>
+            <span className="float-right ml-1">
+              <TalkAboutItem
+                reviewer={reviewer}
+                section={section}
+                text={item}
+              />
+            </span>
+            {item}
+          </li>
         ))}
       </ul>
     </div>
+  );
+}
+
+/** “Talk about this review”: the reviewer's whole feedback to the agent. */
+function TalkAboutWholeReview({
+  reviewer,
+  round,
+}: {
+  reviewer: Reviewer;
+  round: Round;
+}) {
+  const t = useTranslation();
+  const agent = useDocumentAgent();
+  if (!agent) return null;
+  return (
+    <Button
+      type="button"
+      size="sm"
+      variant="ghost"
+      className="text-muted-foreground h-6 gap-1 px-2 text-xs"
+      onClick={() =>
+        agent.talkAbout({
+          attachment: reviewerAttachment({
+            section: "review",
+            reviewer: reviewer.number,
+            rating: reviewer.rating,
+            text: wholeReview(round),
+          }),
+        })
+      }
+    >
+      <MessageSquare className="size-3" />
+      {t.formatMessage({ defaultMessage: "Talk about this review" })}
+    </Button>
   );
 }
 
@@ -270,6 +421,7 @@ function ReviewerList({ review }: { review: Review }) {
             round.partial.length +
             round.notProven.length ===
           0;
+        const reviewer = { number: index + 1, rating: round.rating };
         return (
           <Collapsible
             key={round.round}
@@ -299,24 +451,36 @@ function ReviewerList({ review }: { review: Review }) {
               </span>
             </CollapsibleTrigger>
             <CollapsibleContent className="flex max-h-60 flex-col gap-2 overflow-y-auto px-2 pb-2">
-              <ContradictionList items={round.inconsistencies} />
+              <div className="flex justify-end">
+                <TalkAboutWholeReview reviewer={reviewer} round={round} />
+              </div>
+              <ContradictionList
+                items={round.inconsistencies}
+                reviewer={reviewer}
+              />
               <FeedbackList
                 title={t.formatMessage({
                   defaultMessage: "What it advised",
                 })}
                 items={round.advice}
+                section="advice"
+                reviewer={reviewer}
               />
               <FeedbackList
                 title={t.formatMessage({
                   defaultMessage: "Partially covered",
                 })}
                 items={round.partial}
+                section="partial"
+                reviewer={reviewer}
               />
               <FeedbackList
                 title={t.formatMessage({
                   defaultMessage: "Not shown in the resume",
                 })}
                 items={round.notProven}
+                section="not_shown"
+                reviewer={reviewer}
               />
             </CollapsibleContent>
           </Collapsible>

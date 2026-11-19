@@ -179,10 +179,15 @@ export function useAttachmentLabel() {
           defaultMessage: "Finding",
           description: "Label of a linter finding attached to a chat message",
         })
-      : t.formatMessage({
-          defaultMessage: "Review",
-          description: "Label of a quality-review note attached to a message",
-        });
+      : kind === "reviewer"
+        ? t.formatMessage({
+            defaultMessage: "Reviewer feedback",
+            description: "Label of a reviewer's feedback attached to a message",
+          })
+        : t.formatMessage({
+            defaultMessage: "Review",
+            description: "Label of a quality-review note attached to a message",
+          });
 }
 
 /** The user's message: the passage it is about, where from, then their words. */

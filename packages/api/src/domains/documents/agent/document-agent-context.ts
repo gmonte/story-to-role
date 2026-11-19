@@ -36,6 +36,7 @@ import {
   writtenSettings,
 } from "../coverage-review/snapshot-coverage";
 import { DocumentsRepository } from "../documents-repository";
+import { reviewViewOf } from "../generation/review-view";
 import type { CareerContext } from "../generation/load-career-context";
 import { writtenLines } from "../generation/resume-checks";
 import type { OpeningBrief } from "../generation/resume-prompts";
@@ -110,6 +111,9 @@ export type DocumentAgentContext = {
     inconsistencies: Array<{ lineText: string; explanation: string }>;
     suggestions: Array<{ lineText: string | null; text: string }>;
   } | null;
+  // What the resume's reviewers said in the version's latest review
+  // (rating, contradictions, advice, coverage); null without one.
+  reviewers: ReturnType<typeof reviewViewOf>;
 };
 
 const shorten = (text: string, max = 160) =>
@@ -391,6 +395,16 @@ export async function loadDocumentAgentContext(input: {
     };
   }
 
+  const reviewers =
+    content.kind === "resume" && written
+      ? reviewViewOf(
+          await repository.listReviewRounds(written.id),
+          cipher,
+          openingId ? "opening" : "focus",
+          { latestId: latest.id, generationSnapshotId: written.snapshotId }
+        )
+      : null;
+
   // How many rejected changes the agent is reminded of.
   const rememberedRejections = 5;
   const pending = (await repository.listPendingChanges(version.id)).map(
@@ -459,5 +473,6 @@ export async function loadDocumentAgentContext(input: {
     gaps: career.gaps,
     findings,
     review,
+    reviewers,
   };
 }

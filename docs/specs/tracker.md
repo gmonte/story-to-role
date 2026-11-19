@@ -58,6 +58,13 @@ Details live in **events**, dated entries on the application's timeline ("HR int
 
 In-app only in the MVP, configurable and dismissible: a nudge to record a follow-up after some days without response ("You applied to Company X 10 days ago with no reply"), a reminder of a dated event ("Your interview is tomorrow"), and a warning before an application turns "No response". Email reminders come later; they need a transactional email service, which is one more subprocessor.
 
+## The Applications page: list and kanban
+
+One page, two views (`?view=list|kanban`, remembered per viewer), with the reminders, the metrics and "Applied elsewhere" above them.
+
+- **List**: company, title, status, type, source, sent date or "Not sent", fit band and last activity; filters (status, type, company, sent or not) and sorting (last activity, sent date, company, status) are applied on the client and kept in the URL.
+- **Kanban**: a column per status in tracker order. Dragging a card to another column changes its status by the select's rules: "Applied" opens the dialog that asks what was sent (allowed with nothing), "Withdrawn" opens the give-up dialog (cancelling leaves the card), "No response" accepts no drop (it only comes with time), and "Applied" is refused for an application not in preparation unless made elsewhere. Each card has a status menu as the keyboard alternative, and opens the opening page.
+
 ## Open points
 
 None at the moment.

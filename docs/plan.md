@@ -256,6 +256,7 @@ The opening page restructured after a product design review ([docs/design/openin
 
 - One Applications page with two views. **List**: filters (status, type, company, sent or not) and sorting. **Kanban**: a column per application status; dragging a card to another column changes its status (the same rules as the status select: “Applied” asks what was sent, “No response” only comes with time). A card opens the opening page.
 - Replaces the Tracker page's list; shares the tracker's queries and components.
+- Status: built (filters, sorting, kanban with native drag and drop and a status menu per card). The resume score column is not shown yet.
 
 ### O3: Mobile polish
 

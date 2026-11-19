@@ -296,43 +296,47 @@ function ContradictionList({
       <p className="text-destructive font-medium">
         {t.formatMessage({ defaultMessage: "Disagrees with your profile" })}
       </p>
-      <ul className="list-disc space-y-1 pl-4">
+      <ul className="space-y-1">
         {items.map((item, index) => (
-          <li key={index}>
-            <span className="float-right ml-1">
-              <TalkAboutItem
-                reviewer={reviewer}
-                section="contradiction"
-                text={
-                  item.text ??
-                  t.formatMessage({
-                    defaultMessage: "Disagrees with your profile",
-                  })
-                }
-                quote={item.quote}
-                profileLine={item.profileLine}
-              />
-            </span>
-            {item.quote ? (
-              <>
-                <span className="text-foreground">
-                  {t.formatMessage(
-                    { defaultMessage: "“{quote}”" },
-                    { quote: item.quote }
-                  )}
-                </span>
-                {item.profileLine && (
-                  <span className="block">
+          <li key={index} className="group flex items-start gap-1.5">
+            <span
+              aria-hidden
+              className="bg-muted-foreground mt-1.5 size-1 shrink-0 rounded-full"
+            />
+            <span className="min-w-0 flex-1">
+              {item.quote ? (
+                <>
+                  <span className="text-foreground">
                     {t.formatMessage(
-                      { defaultMessage: "Your profile: {line}" },
-                      { line: item.profileLine }
+                      { defaultMessage: "“{quote}”" },
+                      { quote: item.quote }
                     )}
                   </span>
-                )}
-              </>
-            ) : (
-              item.text
-            )}
+                  {item.profileLine && (
+                    <span className="block">
+                      {t.formatMessage(
+                        { defaultMessage: "Your profile: {line}" },
+                        { line: item.profileLine }
+                      )}
+                    </span>
+                  )}
+                </>
+              ) : (
+                item.text
+              )}
+            </span>
+            <TalkAboutItem
+              reviewer={reviewer}
+              section="contradiction"
+              text={
+                item.text ??
+                t.formatMessage({
+                  defaultMessage: "Disagrees with your profile",
+                })
+              }
+              quote={item.quote}
+              profileLine={item.profileLine}
+            />
           </li>
         ))}
       </ul>
@@ -355,17 +359,15 @@ function FeedbackList({
   return (
     <div className="flex flex-col gap-0.5">
       <p className="text-foreground font-medium">{title}</p>
-      <ul className="list-disc space-y-0.5 pl-4">
+      <ul className="space-y-0.5">
         {items.map((item, index) => (
-          <li key={index}>
-            <span className="float-right ml-1">
-              <TalkAboutItem
-                reviewer={reviewer}
-                section={section}
-                text={item}
-              />
-            </span>
-            {item}
+          <li key={index} className="group flex items-start gap-1.5">
+            <span
+              aria-hidden
+              className="bg-muted-foreground mt-1.5 size-1 shrink-0 rounded-full"
+            />
+            <span className="min-w-0 flex-1">{item}</span>
+            <TalkAboutItem reviewer={reviewer} section={section} text={item} />
           </li>
         ))}
       </ul>

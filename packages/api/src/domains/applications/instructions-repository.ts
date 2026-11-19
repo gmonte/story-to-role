@@ -92,6 +92,19 @@ export class InstructionsRepository {
   }
 
   /** Gap answers already turned into points, so a split skips them. */
+  /**
+   * Points made from a gap answer follow it to the new fit check's item
+   * when the check runs again.
+   */
+  async moveFitCheckItemPoints(moves: Array<{ from: string; to: string }>) {
+    for (const move of moves) {
+      await this.tx
+        .update(instructionPointsTable)
+        .set({ fitCheckItemId: move.to })
+        .where(eq(instructionPointsTable.fitCheckItemId, move.from));
+    }
+  }
+
   async splitFitCheckItemIds(openingId: string) {
     const rows = await this.tx
       .select({ fitCheckItemId: instructionPointsTable.fitCheckItemId })

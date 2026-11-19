@@ -443,7 +443,8 @@ async function screenOpening(
     lines.length ? lines.map((line) => `- ${line}`) : ["- (none)"];
 
   // The answers already given to this opening's gap questions stay with
-  // their requirements, except those already made into instruction points.
+  // their requirements, those already made into instruction points too:
+  // the points move to the new items, so they are not split again.
   const [previous] = await openings.latestFitChecks([opening.id]);
   const split = await new InstructionsRepository(db).splitFitCheckItemIds(
     opening.id
@@ -452,7 +453,7 @@ async function screenOpening(
     (previous ? await openings.listFitCheckItems(previous.id) : [])
       .filter(
         (item) =>
-          (!!item.encryptedGapAnswer && !split.has(item.id)) ||
+          !!item.encryptedGapAnswer ||
           item.lackConfirmedAt !== null ||
           item.conditionStance !== null
       )
@@ -749,6 +750,8 @@ async function screenOpening(
     }
   }
 
+  // Instruction points made from an answer, from the old item to the new.
+  const moved: Array<{ from: string; to: string }> = [];
   await db.transaction(async (tx) => {
     const repository = new OpeningsRepository(tx);
     await repository.insertFitCheck({
@@ -769,7 +772,10 @@ async function screenOpening(
         : null,
       items: items.map((item) => {
         const kept = answered.get(item.term.id);
+        const id = crypto.randomUUID();
+        if (kept && split.has(kept.id)) moved.push({ from: kept.id, to: id });
         return {
+          id,
           termId: item.term.id,
           verdict: item.verdict,
           evidenceIds: item.passageIds,
@@ -787,6 +793,7 @@ async function screenOpening(
         };
       }),
     });
+    await new InstructionsRepository(tx).moveFitCheckItemPoints(moved);
     await repository.updateOpening(opening.id, input.analyzed);
   });
 }

@@ -4,6 +4,7 @@ import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { createAiClient } from "@repo/api/domains/ai/ai-client";
 import { loadPendingGapAnswers } from "@repo/api/domains/applications/load-gap-answers";
+import { instructionPointsTable } from "@repo/api/domains/applications/db/instructions-tables";
 import { careerProfilesTable } from "@repo/api/domains/career/db/career-tables";
 import {
   loadOpeningUserInput,
@@ -748,6 +749,62 @@ describe("openings and fit check", () => {
         gapAnswer: "I wrote our modules.",
       }
     );
+  });
+
+  it("keeps an answer already made into an instruction point when the check runs again", async () => {
+    const ctx = await setup();
+    const openingId = await ctx.add();
+    const allGaps = fitScript((terms) => ({
+      items: terms.map((term) => ({
+        term_id: term.termId,
+        verdict: "gap",
+        passage_ids: [],
+        explanation: "No",
+      })),
+    }));
+    await ctx.analyze(openingId, {
+      object: (request: { system: string }) =>
+        request.system.startsWith("Write")
+          ? {
+              questions: [
+                ...request.system.matchAll(/- ([0-9a-f-]{36}): (.*)/g),
+              ].map((m) => ({ term_id: m[1], question: `About ${m[2]}?` })),
+            }
+          : allGaps.object(request),
+    });
+    const before = (await ctx.detail(openingId)).fitCheck!.items.find(
+      (item) => item.term === "Terraform"
+    )!;
+    await ctx.openings.answerGapQuestion({
+      userId: ctx.user.id,
+      fitCheckItemId: before.id,
+      answer: "I wrote our modules.",
+      notTied: true,
+    });
+    // Generating a document made the answer an instruction point.
+    const [profileRow] = await ctx.db.select().from(careerProfilesTable);
+    const cipher = await getUserCipher(ctx.db, ctx.user.id);
+    await ctx.db.insert(instructionPointsTable).values({
+      profileId: profileRow.id,
+      openingId,
+      source: "gap_answer",
+      fitCheckItemId: before.id,
+      sequence: 1,
+      encryptedText: cipher.encrypt("Wrote the Terraform modules."),
+    });
+
+    await ctx.openings.reanalyze({ userId: ctx.user.id, openingId });
+    await ctx.analyze(openingId, fitScript(allMet));
+    const after = (await ctx.detail(openingId)).fitCheck!.items.find(
+      (item) => item.term === "Terraform"
+    )!;
+    expect(after).toMatchObject({
+      verdict: "met",
+      gapAnswer: "I wrote our modules.",
+    });
+    // The point follows the answer, so it is not split again.
+    const [point] = await ctx.db.select().from(instructionPointsTable);
+    expect(point.fitCheckItemId).toBe(after.id);
   });
 
   /** A profile with two positions and a project, a check with all gaps. */

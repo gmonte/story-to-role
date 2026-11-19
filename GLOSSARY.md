@@ -97,7 +97,7 @@ A target the user may apply to at one company: a posted vacancy, or a company th
 _Avoid_: Job, vacancy, role, posting, target
 
 **Application**:
-The user's pursuit of one opening, which starts when its first document is generated or copied (or is registered by hand as an external application) and closes hired, rejected, withdrawn or with no response.
+The user's pursuit of one opening, which starts when its first document is generated or copied, when the user marks the opening as applied or moves its status without any document, or when it is registered by hand as an external application and closes hired, rejected, withdrawn or with no response.
 _Avoid_: Candidacy, job, tracker entry
 
 **External application**:

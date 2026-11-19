@@ -214,7 +214,11 @@ export function SentSection({ detail }: { detail: ApplicationDetail }) {
   const documentLabels = useDocumentLabels();
   const { save, pending } = useSaveDetails(detail);
   const [open, setOpen] = useState(false);
-  const picksByHand = detail.external && detail.submissions.length === 0;
+  // An external application, or one marked as applied without any document,
+  // says by hand which resume it was sent with.
+  const picksByHand =
+    (detail.external || detail.status !== "in_preparation") &&
+    detail.submissions.length === 0;
   const options = useQuery({
     ...trpc.tracker.resumeVersions.queryOptions({}),
     enabled: picksByHand,
@@ -304,7 +308,9 @@ export function SentSection({ detail }: { detail: ApplicationDetail }) {
               t.formatMessage({ defaultMessage: "Resume" })}
           </p>
         ) : (
-          <Empty>{t.formatMessage({ defaultMessage: "Not recorded" })}</Empty>
+          <Empty>
+            {t.formatMessage({ defaultMessage: "No resume recorded" })}
+          </Empty>
         )
       ) : (
         <Empty>

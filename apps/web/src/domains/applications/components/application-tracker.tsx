@@ -54,31 +54,13 @@ import { WithdrawDialog } from "./withdraw-dialog";
  * until asked for. The full tracker comes to the Application step later.
  */
 export function ApplicationTracker({ openingId }: { openingId: string }) {
-  const t = useTranslation();
   const trpc = useTRPC();
   const applicationId = useOpening(openingId).data?.applicationId;
   const detail = useQuery({
     ...trpc.tracker.get.queryOptions({ applicationId: applicationId ?? "" }),
     enabled: !!applicationId,
   });
-  if (!applicationId) {
-    return (
-      <div className="flex flex-col items-start gap-2">
-        <p className="text-muted-foreground text-xs">
-          {t.formatMessage({
-            defaultMessage:
-              "No application yet. It starts with the first document you write for this opening.",
-          })}
-        </p>
-        <Button asChild size="sm" variant="outline">
-          <Link href="?view=resume" scroll={false}>
-            <FileText />
-            {t.formatMessage({ defaultMessage: "Go to the resume" })}
-          </Link>
-        </Button>
-      </div>
-    );
-  }
+  if (!applicationId) return <NoApplicationYet openingId={openingId} />;
   if (!detail.data) return null;
   return (
     <TrackerBlock
@@ -86,6 +68,92 @@ export function ApplicationTracker({ openingId }: { openingId: string }) {
       detail={detail.data}
       openingId={openingId}
     />
+  );
+}
+
+/**
+ * An opening with no application yet: the status is shown anyway, and
+ * applying or moving it creates the application on the fly, without any
+ * document (tracker spec, "Applying without a resume").
+ */
+function NoApplicationYet({ openingId }: { openingId: string }) {
+  const t = useTranslation();
+  const labels = useTrackerLabels();
+  const trpc = useTRPC();
+  const refresh = useRefreshTracker();
+  const ensure = useMutation(trpc.tracker.ensureForOpening.mutationOptions());
+  const setStatus = useMutation(
+    trpc.tracker.setStatus.mutationOptions({
+      onSuccess: refresh,
+      onError: (error) => toast.error(error.message),
+    })
+  );
+  const pending = ensure.isPending || setStatus.isPending;
+  // What a user moves by hand: "Applied" goes through the dialog, "No
+  // response" only comes with time, and the first status is where it is.
+  const statuses = applicationStatusSchema.options.filter(
+    (status) =>
+      status !== "no_response" &&
+      status !== "applied" &&
+      status !== "in_preparation"
+  );
+  return (
+    <div className="flex min-w-0 flex-col">
+      <Section
+        label={t.formatMessage({ defaultMessage: "Status" })}
+        action={
+          <OptionsPopover
+            label={t.formatMessage({ defaultMessage: "Change status" })}
+            value="in_preparation"
+            disabled={pending}
+            options={statuses.map((value) => ({
+              value,
+              label: labels.status(value),
+            }))}
+            onSelect={async (status) => {
+              try {
+                const { applicationId } = await ensure.mutateAsync({
+                  openingId,
+                });
+                setStatus.mutate({ applicationId, status });
+              } catch (error) {
+                toast.error(
+                  error instanceof Error ? error.message : String(error)
+                );
+              }
+            }}
+          />
+        }
+      >
+        <div className="flex min-w-0 flex-wrap items-center gap-1.5">
+          <Badge variant="secondary">
+            {t.formatMessage({ defaultMessage: "Not applied yet" })}
+          </Badge>
+        </div>
+        <MarkAppliedDialog
+          applicationId={null}
+          openingId={openingId}
+          trigger={
+            <Button size="sm" className="w-full">
+              <Send />
+              {t.formatMessage({ defaultMessage: "Mark as applied" })}
+            </Button>
+          }
+        />
+        <p className="text-muted-foreground text-xs">
+          {t.formatMessage({
+            defaultMessage:
+              "You can apply without a resume or letter from here. Documents written for this opening are recorded when you mark it as applied.",
+          })}
+        </p>
+        <Button asChild size="sm" variant="link" className="self-start px-0">
+          <Link href="?view=resume" scroll={false}>
+            <FileText />
+            {t.formatMessage({ defaultMessage: "Go to the resume" })}
+          </Link>
+        </Button>
+      </Section>
+    </div>
   );
 }
 
@@ -372,7 +440,8 @@ export function MarkAppliedDialog({
   openingId,
   trigger,
 }: {
-  applicationId: string;
+  /** None yet: the application is created when it is marked as applied. */
+  applicationId: string | null;
   openingId: string;
   /** The page's own button, instead of the summary's. */
   trigger?: ReactNode;
@@ -406,7 +475,7 @@ function MarkAppliedForm({
   openingId,
   onDone,
 }: {
-  applicationId: string;
+  applicationId: string | null;
   openingId: string;
   onDone: () => void;
 }) {
@@ -428,6 +497,7 @@ function MarkAppliedForm({
   );
   const [confirming, setConfirming] = useState(false);
   const [date, setDate] = useState(today());
+  const ensure = useMutation(trpc.tracker.ensureForOpening.mutationOptions());
   const mark = useMutation(
     trpc.tracker.markApplied.mutationOptions({
       onSuccess: async () => {
@@ -438,13 +508,23 @@ function MarkAppliedForm({
     })
   );
 
-  const send = (acknowledgeWarnings: boolean) =>
+  const send = async (acknowledgeWarnings: boolean) => {
+    let id = applicationId;
+    if (!id) {
+      try {
+        id = (await ensure.mutateAsync({ openingId })).applicationId;
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : String(error));
+        return;
+      }
+    }
     mark.mutate({
-      applicationId,
+      applicationId: id,
       versionIds: selected,
       appliedAt: dayToDate(date),
       acknowledgeWarnings: acknowledgeWarnings || undefined,
     });
+  };
 
   return (
     <>
@@ -484,6 +564,14 @@ function MarkAppliedForm({
             )}
           </label>
         ))}
+        {versions.length === 0 && (
+          <p className="text-muted-foreground text-sm">
+            {t.formatMessage({
+              defaultMessage:
+                "No resume or letter was written for this opening. It is recorded without a resume; you can pick one later.",
+            })}
+          </p>
+        )}
         <div className="grid gap-1.5 pt-2">
           <Label htmlFor="applied-on">
             {t.formatMessage({ defaultMessage: "Applied on" })}
@@ -499,7 +587,7 @@ function MarkAppliedForm({
       </div>
       <DialogFooter>
         <Button
-          disabled={mark.isPending || selected.length === 0}
+          disabled={mark.isPending || ensure.isPending}
           onClick={() => (warned ? setConfirming(true) : send(false))}
         >
           {t.formatMessage({ defaultMessage: "Mark as applied" })}

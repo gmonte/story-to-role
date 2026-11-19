@@ -420,7 +420,7 @@ describe("tracker, the method's fields", () => {
     );
   });
 
-  it("encrypts the free text and picks the resume by hand only when external", async () => {
+  it("encrypts the free text and picks the resume by hand only when none was recorded", async () => {
     const ctx = await setup();
     const { applicationId } = await ctx.external();
     const documents = new DocumentsRepository(ctx.db);
@@ -496,10 +496,11 @@ describe("tracker, the method's fields", () => {
     expect(cleared.notes).toBeNull();
     expect(cleared.nextStep).not.toBeNull();
 
-    // An application with documents records its own: no hand-picking.
+    // One still in preparation records its own: no hand-picking. (Applied
+    // without a resume, it picks by hand like an external one.)
     await ctx.db
       .update(applicationsTable)
-      .set({ external: false })
+      .set({ external: false, status: "in_preparation" })
       .where(eq(applicationsTable.id, applicationId));
     await expect(
       ctx.tracker.updateDetails({

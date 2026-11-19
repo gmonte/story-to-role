@@ -8,7 +8,8 @@ The tracker follows every application the user pursues, from the first document 
 
 ## Applications in the tracker
 
-- An application enters the tracker when its first document is generated or copied (see [resume-and-cover-letter.md](./resume-and-cover-letter.md)). Openings that were only analyzed stay in a list of analyzed openings, outside the tracker.
+- An application enters the tracker when its first document is generated or copied (see [resume-and-cover-letter.md](./resume-and-cover-letter.md)), or when the user marks the opening as applied or moves its status, even with no resume or cover letter written for it. Openings that were only analyzed, with neither, stay in a list of analyzed openings, outside the tracker.
+- **Applying without a resume:** the opening page shows the status (“Not applied yet”) with “Mark as applied” and the status options even with no application; using them creates the application on the fly (the opening's owner only), with no documents. Marked as applied without documents, it has no submissions: the Sent section says “No resume recorded” and offers the same hand pick as an external application (a resume version, or not recorded). The applications list, board and metrics include it; the metrics group it under resume origin “Not recorded” and score “No score”.
 - **External applications:** the user can create an application by hand for an opening they applied to outside StoryToRole (company, title, link and, optionally, the description), with no documents and no credits spent. It is marked external; it stops being external once a document is generated or copied for it.
 - When the user marks an application as applied, it records the exact snapshot of each version sent; documents are never frozen.
 

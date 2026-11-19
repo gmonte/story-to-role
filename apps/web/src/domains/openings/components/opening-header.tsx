@@ -4,8 +4,9 @@ import type { ReactNode } from "react";
 
 import { useMutation } from "@tanstack/react-query";
 import {
-  ArrowLeft,
   Ban,
+  Briefcase,
+  Mail,
   Ellipsis,
   ExternalLink,
   FileText,
@@ -14,7 +15,6 @@ import {
   TriangleAlert,
 } from "lucide-react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
 
 import type { OpeningDetail } from "@repo/api/domains/openings/schemas/opening-view";
 import type { DocumentView } from "@repo/api/domains/documents/schemas/document-view";
@@ -29,7 +29,6 @@ import {
   DropdownMenuTrigger,
 } from "@repo/web/components/ui/dropdown-menu";
 import { toast } from "@repo/web/components/ui/sonner";
-import { Tabs, TabsList, TabsTrigger } from "@repo/web/components/ui/tabs";
 import {
   Tooltip,
   TooltipContent,
@@ -103,11 +102,10 @@ export type SideButton = {
 };
 
 /**
- * The opening pages' header (workspace spec, "The opening page"). On the
- * opening itself: the title and company, the state chips, the rare
- * actions in a menu, one primary action for the state and the switch
- * between the pages. On a document page it is slim: the way back to the
- * opening and the same switch.
+ * The opening pages' header (workspace spec, "The opening page"), the same
+ * on the opening, resume and cover letter pages, as a GitHub issue's: the
+ * title, the state chips, the rare actions in a menu, one primary action
+ * for the state, and the tabs between the pages below.
  */
 export function OpeningHeader({
   openingId,
@@ -129,10 +127,8 @@ export function OpeningHeader({
   const t = useTranslation();
   const labels = useOpeningLabels();
   const trackerLabels = useTrackerLabels();
-  const pathname = usePathname();
   const journey = useOpeningJourney(openingId, opening);
   const processing = opening.status === "processing";
-  const slim = view !== "opening";
   const stepLabels: Record<OpeningView, string> = {
     opening: t.formatMessage({ defaultMessage: "Opening" }),
     resume: t.formatMessage({ defaultMessage: "Resume" }),
@@ -146,30 +142,45 @@ export function OpeningHeader({
       ? "…"
       : (journey.letter?.versions.length ?? ""),
   };
+  // Tabs as a GitHub issue's: an icon, the label and a count, the open one
+  // as a tab joined to the line below.
+  const stepIcons: Record<OpeningView, ReactNode> = {
+    opening: <Briefcase className="size-4" />,
+    resume: <FileText className="size-4" />,
+    letter: <Mail className="size-4" />,
+  };
   const switcher = journey.views.length > 1 && (
-    <Tabs
-      value={view}
-      onValueChange={(next) => setView(next as OpeningView)}
-      className="shrink-0"
-    >
-      <TabsList>
-        {openingViews.map((step) => (
-          <TabsTrigger
+    <nav className="-mb-px flex items-end gap-1 overflow-x-auto">
+      {openingViews.map((step) => {
+        const enabled = journey.views.includes(step);
+        const active = view === step;
+        const hint = stepHints[step];
+        return (
+          <button
             key={step}
-            value={step}
-            disabled={!journey.views.includes(step)}
-            className="gap-1.5"
+            type="button"
+            disabled={!enabled}
+            aria-current={active ? "page" : undefined}
+            onClick={() => setView(step)}
+            className={cn(
+              "text-muted-foreground flex shrink-0 items-center gap-2 rounded-t-md border border-transparent px-4 py-2 text-sm transition-colors",
+              enabled && "hover:text-foreground",
+              !enabled && "opacity-50",
+              active &&
+                "bg-background text-foreground border-border border-b-background font-medium"
+            )}
           >
+            {stepIcons[step]}
             {stepLabels[step]}
-            {stepHints[step] !== "" && stepHints[step] !== undefined && (
-              <span className="text-muted-foreground text-[11px]">
-                {stepHints[step]}
+            {hint !== "" && hint !== undefined && (
+              <span className="bg-muted text-foreground rounded-full px-2 text-xs font-medium">
+                {hint}
               </span>
             )}
-          </TabsTrigger>
-        ))}
-      </TabsList>
-    </Tabs>
+          </button>
+        );
+      })}
+    </nav>
   );
   const sideTrigger = sideButton && (
     <Button
@@ -183,37 +194,14 @@ export function OpeningHeader({
     </Button>
   );
 
-  if (slim) {
-    return (
-      <div className="bg-background/95 z-10 flex shrink-0 flex-wrap items-center justify-between gap-x-4 gap-y-2 border-b px-4 py-2 backdrop-blur">
-        <Button
-          asChild
-          variant="ghost"
-          size="sm"
-          className="-ml-2 min-w-0 justify-start"
-        >
-          <Link href={`${pathname}?view=opening`} scroll={false}>
-            <ArrowLeft />
-            <span className="truncate">
-              {[opening.company, opening.title].filter(Boolean).join(" · ") ||
-                t.formatMessage({ defaultMessage: "Opening" })}
-            </span>
-          </Link>
-        </Button>
-        <div className="flex items-center gap-2">
-          {sideTrigger}
-          {switcher}
-        </div>
-      </div>
-    );
-  }
-
+  // The same header on the opening, resume and cover letter pages (owner):
+  // the document pages differ only below it.
   return (
-    <div className="bg-background/95 z-10 flex shrink-0 flex-col gap-2 border-b px-4 py-3 backdrop-blur">
+    <div className="bg-background/95 z-10 flex shrink-0 flex-col gap-3 border-b px-4 pt-4 backdrop-blur">
       <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-2">
         {/* On a narrow screen the actions wrap under the title. */}
         <div className="min-w-0 basis-full sm:flex-1 sm:basis-0">
-          <h1 className="font-display truncate text-xl font-semibold tracking-tight">
+          <h1 className="font-display text-2xl font-semibold tracking-tight sm:text-3xl">
             {processing
               ? t.formatMessage({ defaultMessage: "Reading the opening…" })
               : (opening.title ??
@@ -306,9 +294,9 @@ export function OpeningHeader({
             onShowApplication={onShowApplication}
           />
           <OpeningMenu openingId={openingId} opening={opening} />
-          {switcher}
         </div>
       </div>
+      {switcher}
     </div>
   );
 }

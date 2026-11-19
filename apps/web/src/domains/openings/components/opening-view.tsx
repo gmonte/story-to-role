@@ -1,6 +1,17 @@
 "use client";
 
-import { ExternalLink, FileText, TriangleAlert } from "lucide-react";
+import {
+  useState,
+  useSyncExternalStore,
+  type PointerEvent as ReactPointerEvent,
+} from "react";
+
+import {
+  ExternalLink,
+  FileText,
+  GripVertical,
+  TriangleAlert,
+} from "lucide-react";
 
 import type { OpeningDetail } from "@repo/api/domains/openings/schemas/opening-view";
 import { useTranslation } from "@repo/intl/use-translation";
@@ -31,6 +42,61 @@ export type OpeningLayout = "three" | "two" | "stack";
  * the application folds behind the header's button and the fit goes below
  * the description; on a phone everything stacks.
  */
+const minFitWidth = 288;
+const maxFitWidth = 720;
+
+/**
+ * A column the user widens or narrows by dragging its edge, remembered per
+ * viewer (read after hydration, so server and client render the same).
+ */
+function useColumnWidth(key: string, fallback: number) {
+  // The saved width, read from storage on the client (the server renders
+  // the default); a drag overrides it until the next visit.
+  const saved = useSyncExternalStore(
+    () => () => undefined,
+    () => {
+      try {
+        const stored = Number(window.localStorage.getItem(key));
+        return stored >= minFitWidth && stored <= maxFitWidth
+          ? stored
+          : fallback;
+      } catch {
+        return fallback;
+      }
+    },
+    () => fallback
+  );
+  const [dragged, setDragged] = useState<number | null>(null);
+  const width = dragged ?? saved;
+
+  function startResize(event: ReactPointerEvent<HTMLDivElement>) {
+    event.preventDefault();
+    const startX = event.clientX;
+    const start = width;
+    let latest = start;
+    const onMove = (move: PointerEvent) => {
+      latest = Math.min(
+        maxFitWidth,
+        Math.max(minFitWidth, start + move.clientX - startX)
+      );
+      setDragged(latest);
+    };
+    const onUp = () => {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+      try {
+        window.localStorage.setItem(key, String(Math.round(latest)));
+      } catch {
+        // Not remembered this time.
+      }
+    };
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+  }
+
+  return { width, startResize };
+}
+
 export function OpeningPageBody({
   openingId,
   opening,
@@ -53,13 +119,31 @@ export function OpeningPageBody({
     <ApplicationColumn openingId={openingId} />
   );
 
+  const { width: fitWidth, startResize: startFitResize } = useColumnWidth(
+    "opening-fit-width",
+    416
+  );
+
   if (layout === "three") {
     return (
       <div className="flex min-h-0 flex-1">
         {fit && (
-          <aside className="bg-muted/30 w-[26rem] shrink-0 overflow-y-auto border-r p-4">
-            {fit}
-          </aside>
+          <>
+            <aside
+              className="bg-muted/30 shrink-0 overflow-y-auto p-4"
+              style={{ width: fitWidth }}
+            >
+              {fit}
+            </aside>
+            <div
+              role="separator"
+              aria-orientation="vertical"
+              onPointerDown={startFitResize}
+              className="hover:bg-primary/20 flex w-1.5 shrink-0 cursor-col-resize touch-none items-center justify-center border-l"
+            >
+              <GripVertical className="text-muted-foreground size-3" />
+            </div>
+          </>
         )}
         <main className="min-w-0 flex-1 overflow-y-auto">
           <div className="mx-auto flex w-full max-w-3xl flex-col gap-6 p-6">

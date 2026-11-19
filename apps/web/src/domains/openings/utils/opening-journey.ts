@@ -28,7 +28,10 @@ export function resolveView(
 /** The pages a state lets the user open. */
 export function availableViews(input: {
   status: OpeningStatus;
+  // An analyzed opening being checked again keeps its pages.
+  rechecking?: boolean;
 }): readonly OpeningView[] {
+  if (input.rechecking) return openingViews;
   switch (input.status) {
     case "analyzed":
     case "closed":

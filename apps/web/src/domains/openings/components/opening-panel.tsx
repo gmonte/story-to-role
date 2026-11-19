@@ -42,6 +42,7 @@ import { OpeningHeader, useOpeningJourney } from "./opening-header";
 import {
   ApplicationColumn,
   DocumentPage,
+  isRecheck,
   OpeningPageBody,
   type OpeningLayout,
 } from "./opening-view";
@@ -76,7 +77,10 @@ function OpeningScreen({
   const [sheetOpen, setSheetOpen] = useState(false);
   const view = resolveView(
     searchParams.get("view"),
-    availableViews({ status: opening.status })
+    availableViews({
+      status: opening.status,
+      rechecking: isRecheck(opening),
+    })
   );
   const setView = (next: Page) => {
     const params = new URLSearchParams(searchParams);
@@ -106,7 +110,10 @@ function OpeningScreen({
   }, [journey.resumeGenerating, journey.letterGenerating]);
 
   const layout: OpeningLayout = wide ? "three" : desktop ? "two" : "stack";
-  const worked = opening.status === "analyzed" || opening.status === "closed";
+  const worked =
+    opening.status === "analyzed" ||
+    opening.status === "closed" ||
+    isRecheck(opening);
   // The application folds behind the header's button between `lg` and
   // `xl`; under `lg` it is a block of the page.
   const applicationFolded =

@@ -51,6 +51,7 @@ import { CoverageScoreBadge } from "~/domains/documents/components/coverage-scor
 import { useSelectedVersion } from "~/domains/documents/hooks/use-selected-version";
 
 import { useRefreshOpenings } from "../hooks/use-opening";
+import { isRecheck } from "./opening-view";
 import { useOpeningLabels } from "../hooks/use-opening-labels";
 import {
   availableViews,
@@ -96,7 +97,10 @@ export function useOpeningJourney(openingId: string, opening: OpeningDetail) {
       letterGenerating: generating(letter),
       applicationStatus: opening.applicationStatus,
     }),
-    views: availableViews({ status: opening.status }),
+    views: availableViews({
+      status: opening.status,
+      rechecking: isRecheck(opening),
+    }),
   };
 }
 

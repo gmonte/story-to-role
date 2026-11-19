@@ -60,7 +60,8 @@ export function suggestionWidget(
     if (!diff.fallback) line.classList.add("profile-suggestion-new-diff");
     if (block.type === "item") {
       line.style.marginLeft = `${block.depth * 1.25}rem`;
-      line.append("• ");
+      // The bullet is drawn by the stylesheet, hanging like the editor's.
+      line.setAttribute("data-depth", String(block.depth));
     }
     if (diff.fallback) {
       line.append(block.text);

@@ -26,6 +26,7 @@ import { GenerateResumeDialog } from "~/domains/documents/components/generate-re
 import { ResumeWorkspace } from "~/domains/documents/components/resume-workspace";
 import { SimilarDocuments } from "~/domains/documents/components/similar-documents";
 import { AiAtWork } from "~/domains/workspace/components/ai-at-work";
+import { ResizableAside } from "~/domains/workspace/components/resizable-aside";
 
 import { useOpeningLabels } from "../hooks/use-opening-labels";
 import type { OpeningView as Page } from "../utils/opening-journey";
@@ -250,9 +251,12 @@ export function DocumentPage({
   }
   return (
     <div className="flex min-h-0 flex-1">
-      <aside className="hidden w-60 shrink-0 space-y-6 overflow-y-auto border-r p-4 md:block">
+      <ResizableAside
+        storageKey="document-index-width"
+        className="space-y-6 p-4"
+      >
         {instructions}
-      </aside>
+      </ResizableAside>
       <div className="min-w-0 flex-1 overflow-y-auto">
         <div className="mx-auto flex w-full max-w-3xl flex-col gap-6 p-6">
           <div className="flex flex-col gap-3">

@@ -29,6 +29,7 @@ import { GenerateLetterDialog } from "~/domains/documents/components/generate-le
 import { useOpeningDocuments } from "~/domains/documents/hooks/use-opening-documents";
 import { useTimeline } from "~/domains/career/hooks/use-career-queries";
 import { useTRPC } from "~/tools/trpc/client";
+import { ResizableAside } from "~/domains/workspace/components/resizable-aside";
 
 function useRefreshMotivation() {
   const trpc = useTRPC();
@@ -141,9 +142,12 @@ function Prep({ children, aside }: { children: ReactNode; aside?: ReactNode }) {
   return (
     <div className="flex min-h-0 flex-1">
       {aside && (
-        <aside className="hidden w-60 shrink-0 space-y-6 overflow-y-auto border-r p-4 md:block">
+        <ResizableAside
+          storageKey="document-index-width"
+          className="space-y-6 p-4"
+        >
           {aside}
-        </aside>
+        </ResizableAside>
       )}
       <div className="min-w-0 flex-1 overflow-y-auto">
         <div className="mx-auto w-full max-w-3xl p-6">{children}</div>

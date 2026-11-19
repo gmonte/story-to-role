@@ -7,6 +7,8 @@ import type {
   VersionView,
 } from "@repo/api/domains/documents/schemas/document-view";
 
+import { ResizableAside } from "~/domains/workspace/components/resizable-aside";
+
 import { useSelectedVersion } from "../hooks/use-selected-version";
 import { GenerationProgress } from "./documents-panel";
 import { DocumentWorkspace } from "./document-workspace";
@@ -30,9 +32,12 @@ export function ResumeWorkspace({
   if (generation?.status === "pending" || generation?.status === "running") {
     return (
       <div className="flex min-h-0 flex-1">
-        <aside className="hidden w-60 shrink-0 space-y-6 overflow-y-auto border-r p-4 empty:hidden md:block">
+        <ResizableAside
+          storageKey="document-index-width"
+          className="space-y-6 p-4"
+        >
           {aside}
-        </aside>
+        </ResizableAside>
         <div className="flex min-w-0 flex-1 items-start justify-center overflow-y-auto p-6">
           <div className="w-full max-w-xl">
             <GenerationProgress generation={generation} />

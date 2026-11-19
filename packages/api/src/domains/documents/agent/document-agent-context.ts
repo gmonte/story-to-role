@@ -518,17 +518,19 @@ export async function loadDocumentAgentContext(input: {
           fitCheck: brief.fitCheck,
         }
       : { kind: "focus", focus },
-    userInput: openingId
-      ? await loadOpeningUserInput({
-          db,
-          cipher,
-          profileId: profile.id,
-          openingId,
-          kind: content.kind,
-          career,
-          storyLineId: written?.storyLineId ?? null,
-        })
-      : null,
+    // LinkedIn text has no opening.
+    userInput:
+      openingId && content.kind !== "linkedin"
+        ? await loadOpeningUserInput({
+            db,
+            cipher,
+            profileId: profile.id,
+            openingId,
+            kind: content.kind,
+            career,
+            storyLineId: written?.storyLineId ?? null,
+          })
+        : null,
     rules: career.rules,
     profileLanguage: career.profileLanguage,
     translations: career.translations,

@@ -18,7 +18,7 @@ import {
   sectionMoveOf,
 } from "@repo/api/domains/documents/changes/section-order";
 
-import type { DocumentBlock } from "./document-blocks";
+import { type DocumentBlock, isResumeSection } from "./document-blocks";
 
 /**
  * Whether a block is a line of a part. A position's or project's bullets
@@ -80,7 +80,9 @@ export function locateChangeInBlocks(
     // A section move sits on the section's title; stale when it no longer
     // changes anything (the section moved already, or is gone).
     const titles = blocks.flatMap((block, index) =>
-      block.type === "sectionTitle" ? [{ kind: block.kind, index }] : []
+      block.type === "sectionTitle" && isResumeSection(block.kind)
+        ? [{ kind: block.kind, index }]
+        : []
     );
     if (!moveSectionNextTo(titles, move)) return null;
     const at = titles.find((title) => title.kind === move.kind)!.index;

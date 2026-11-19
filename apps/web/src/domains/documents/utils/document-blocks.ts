@@ -22,12 +22,19 @@ import type {
   Line,
   OutputLanguage,
 } from "@repo/api/domains/documents/schemas/document";
-import type {
-  ExperienceEntry,
-  ResumeContent,
-  ResumeSection,
-  ResumeSectionKind,
+import {
+  type ExperienceEntry,
+  type ResumeContent,
+  type ResumeSection,
+  type ResumeSectionKind,
+  resumeSectionKinds,
 } from "@repo/api/domains/documents/schemas/resume-content";
+
+/** A resume's section title, the only kind that can be moved. */
+export const isResumeSection = (
+  kind: ResumeSectionKind | LinkedinSectionKind
+): kind is ResumeSectionKind =>
+  (resumeSectionKinds as readonly string[]).includes(kind);
 
 /** The content the document editor shows: a resume, a letter or LinkedIn. */
 export type EditableContent =
@@ -576,7 +583,9 @@ export function blocksToContent<T extends EditableContent>(
   };
   // The sections go in the order the blocks print them (a moved section).
   const printed = blocks.flatMap((block) =>
-    block.type === "sectionTitle" ? [block.kind] : []
+    block.type === "sectionTitle" && isResumeSection(block.kind)
+      ? [block.kind]
+      : []
   );
   return {
     ...next,

@@ -1,6 +1,6 @@
 import type { AgentAttachment } from "@repo/api/domains/agents/agent-message";
 
-import { linkedinBullets } from "../linkedin/linkedin-prompts";
+import { aboutFormatRule, linkedinBullets } from "../linkedin/linkedin-prompts";
 import { headlineMaxLength } from "../schemas/linkedin-content";
 import { bulletFormatRule } from "../writing/bullet-format";
 import type { DocumentAgentContext } from "./document-agent-context";
@@ -96,6 +96,8 @@ export function buildDocumentAgentPrompt(input: DocumentAgentPromptInput) {
     ...(context.kind === "linkedin"
       ? [
           `- On this LinkedIn text the parts are the headline (one line, at most ${headlineMaxLength} characters), the About (one paragraph per line), each position's and project's bullets and each education's description (one line; \`find\` empty adds one where there is none). Employers, titles, dates, education records, certifications and languages are printed from the profile and can't be changed here: say so when asked. The headline and the About are never emptied.`,
+          "- When you propose or write the About, follow its format:\n" +
+            aboutFormatRule,
         ]
       : []),
     "- When you propose or write a resume or LinkedIn bullet (experience or project, not the summary, the letter or a skills group), follow the product's bullet format:\n" +
@@ -176,7 +178,7 @@ export function buildDocumentAgentPrompt(input: DocumentAgentPromptInput) {
         context.kind === "resume"
           ? `Resume length: at most ${settings.resumeMaxPages} page(s)`
           : context.kind === "linkedin"
-            ? "LinkedIn text: no page limit; the About in 3 to 5 short paragraphs"
+            ? "LinkedIn text: no page limit; the About in 3 to 4 short paragraphs, 150 to 300 words, as the About format says"
             : `Cover letter: at most ${settings.letterMaxParagraphs} paragraphs, ${settings.letterMaxPages} page(s)`,
       ].join("\n")
     ),

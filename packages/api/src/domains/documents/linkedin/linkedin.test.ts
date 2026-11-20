@@ -312,6 +312,13 @@ describe("LinkedIn text", () => {
     expect(fake.generateObject.mock.calls[0][0].system).toContain(
       "Bullet format"
     );
+    // The About's rules: identity, proof, keywords, no filler.
+    expect(fake.generateObject.mock.calls[0][0].system).toContain(
+      "About format"
+    );
+    expect(fake.generateObject.mock.calls[0][0].system).toContain(
+      "2,600 characters"
+    );
     expect(fake.generateObject.mock.calls[1][0].system).toContain(
       "Career as the profile states it"
     );

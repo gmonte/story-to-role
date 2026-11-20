@@ -1,5 +1,6 @@
 import { z } from "zod";
 
+import { env } from "@repo/common/env/web.env";
 import { db } from "@repo/api/tools/db";
 import { ok, okSchema, openApiMeta } from "@repo/api/tools/openapi";
 import {
@@ -11,6 +12,7 @@ import {
 
 import { CreditsService } from "./credits-service";
 import { courtesyGrantSchema, creditSummarySchema } from "./schemas/credits";
+import { usageStatementSchema } from "./schemas/usage-statement";
 
 export const creditsRouter = createTRPCRouter({
   summary: userProcedure
@@ -25,6 +27,29 @@ export const creditsRouter = createTRPCRouter({
     .input(z.object({}))
     .output(creditSummarySchema)
     .query(({ ctx }) => new CreditsService(db).summary(ctx.userId)),
+
+  usageStatement: userProcedure
+    .meta(
+      openApiMeta(
+        "credits",
+        "GET",
+        "/credits/usage",
+        "Returns the usage statement: each AI operation in a window, who paid, its tokens and credits"
+      )
+    )
+    .input(
+      z.object({
+        from: z.coerce.date().optional(),
+        to: z.coerce.date().optional(),
+      })
+    )
+    .output(usageStatementSchema)
+    .query(({ ctx, input }) =>
+      new CreditsService(db).usageStatement(ctx.userId, {
+        ...input,
+        showsPlatformCost: env.USAGE_STATEMENT_SHOWS_PLATFORM_COST,
+      })
+    ),
 
   listCourtesyGrants: adminProcedure
     .meta(

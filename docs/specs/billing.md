@@ -79,6 +79,16 @@ Credits live in an append-only ledger in Postgres: grants, debits, reservations,
 - The user always sees the cost of the next action before taking it.
 - A **credit reserve** keeps enough credits for the step the user came for: in the Free plan, the resume generation. When the balance approaches the reserve, the user sees an alert before each agent message and validation, so working on the profile (agent messages, validation and imports) never consumes the credits the resume needs.
 
+## Usage statement
+
+Every user has a read-only **usage statement** (Plan and credits → Usage statement, and a line in the credit meter), so they can see what each AI operation cost and how tokens turn into credits. It lists their own account only; there is no system-wide view.
+
+- **One row per operation:** each finished task the user started (a resume creation, a fit check, a message to the profile agent…), and each AI call made outside any task (such as turning a gap answer into a sentence). Running tasks appear once they finish. A row shows when, the operation, who paid, input, output and cache tokens, credits and US$ (see below); a failed operation is marked and kept out of averages. Expanding a row splits it by model, with the operation's credits shared by each model's part of its US$ cost (one decimal, adding up to the total).
+- **Who paid:** **your credits** when the operation debited any (its credits are what it debited), **your key** when the user's own key paid, and **StoryToRole** when StoryToRole's key paid without charging the user (calls outside tasks, failed tasks, tasks with no cost). Whatever did not come out of the user's credits shows its **credit equivalent**: what it would have cost in credits, by the same formula as settlement.
+- **Average per operation:** for each kind of operation in the window, the count, average credits, average tokens, average US$ (when shown) and total credits.
+- **Window:** a start and an end date the user picks, with shortcuts for the current credit month, the last 30 days and last month, kept in the URL; days are UTC days, as credit months are. By default, the plan's current credit month: the subscription's billing month, the calendar month for a courtesy grant, the last 30 days on Free.
+- **Platform cost:** `USAGE_STATEMENT_SHOWS_PLATFORM_COST` (server-side, default `true`) decides whether StoryToRole's operations and US$ beyond the user's own key are shown; US$ next to credits would reveal the margin. When it is `false`, StoryToRole's operations are left out and US$ is shown only for the user's key. **Set it to `false` in Vercel Production before real users arrive.**
+
 ## Payments
 
 Stripe directly, through an account opened in Brazil under the owner's CNPJ; Clerk handles sign-in only and stores the link to the Stripe customer. Clerk Billing was ruled out because it charges in USD only and has no credits, metered billing or one-time packs.

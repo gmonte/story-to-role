@@ -42,6 +42,7 @@ import {
 } from "./assemble-resume";
 import { reviewLoopSettings } from "./review-loop-settings";
 import { inconsistencyText } from "../schemas/review-inconsistency";
+import { pickBestRound } from "./pick-best-round";
 import { coverageRating, judgeResume, type Review } from "./review-resume";
 import { loadCareerContext } from "./load-career-context";
 import {
@@ -355,18 +356,7 @@ export async function runGenerateResume(deps: {
 
     // A draft that agrees with the profile beats one that doesn't; then one
     // within its pages beats a longer one; then the rating decides.
-    const fits = (candidate: Candidate) =>
-      candidate.pages <= settings.resumeMaxPages;
-    const bestRound =
-      candidates.length > 0
-        ? candidates.reduce((top, candidate) => {
-            if ((candidate.contradictions === 0) !== (top.contradictions === 0))
-              return candidate.contradictions === 0 ? candidate : top;
-            if (fits(candidate) !== fits(top))
-              return fits(candidate) ? candidate : top;
-            return candidate.rating > top.rating ? candidate : top;
-          })
-        : null;
+    const bestRound = pickBestRound(candidates, settings.resumeMaxPages);
     const chosen = bestRound ?? adjusted!;
     // A line still naming something by its real name is rewritten once
     // with the public form; if it still does, the code checks warn.

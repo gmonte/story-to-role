@@ -52,6 +52,8 @@ export const trackedApplicationSchema = z.object({
   source: applicationSourceSchema.nullable(),
   applicationType: applicationTypeSchema.nullable(),
   nextStep: z.string().nullable(),
+  // The opening's latest fit band (the list view only; the detail leaves it empty).
+  fitBand: fitBandSchema.nullable(),
   // The next dated event still ahead, if any.
   nextEvent: z
     .object({ occurredAt: z.date(), text: z.string().nullable() })

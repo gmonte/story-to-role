@@ -1246,12 +1246,17 @@ export class DocumentsService {
   }
 
   /**
-   * "Review again" (resume spec, "Review rounds"): one reviewer and the
-   * coverage review judge the resume's latest snapshot as it is, in a
+   * "Review again" (resume spec, "Review rounds"): one reviewer, or three in
+   * parallel, and the coverage review judge the resume's latest snapshot as it is, in a
    * task, rewriting nothing. Only for a resume the profile wrote, whose
    * latest snapshot no review judged yet.
    */
-  async reviewAgain(input: { userId: string; versionId: string }) {
+  async reviewAgain(input: {
+    userId: string;
+    versionId: string;
+    reviewers?: 1 | 3;
+  }) {
+    const reviewers = input.reviewers ?? 1;
     const { version, document } = await requireUserVersion(
       this.db,
       input.userId,
@@ -1279,11 +1284,13 @@ export class DocumentsService {
     await this.tasks.assertAffordable({
       userId: input.userId,
       type: "review_document",
+      hints: { reviewers },
     });
     const { realtime } = await this.tasks.start({
       userId: input.userId,
       type: "review_document",
       subjectId: latest.id,
+      hints: { reviewers },
     });
     return { snapshotId: latest.id, realtime };
   }

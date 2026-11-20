@@ -331,6 +331,25 @@ export class TrackerRepository {
     return { applications, changes, submissions, bands };
   }
 
+  /** Each opening's latest fit band. */
+  async latestFitBands(openingIds: string[]) {
+    const bands = new Map<string, "high" | "medium" | "low">();
+    if (openingIds.length === 0) return bands;
+    const rows = await this.tx
+      .select({
+        openingId: fitChecksTable.openingId,
+        band: fitChecksTable.band,
+      })
+      .from(fitChecksTable)
+      .where(inArray(fitChecksTable.openingId, openingIds))
+      .orderBy(desc(fitChecksTable.createdAt));
+    // Newest first: the first row of each opening is its latest check.
+    for (const row of rows) {
+      if (!bands.has(row.openingId)) bands.set(row.openingId, row.band);
+    }
+    return bands;
+  }
+
   /** The status a "No response" closed: what an event reopens it to. */
   async statusBeforeNoResponse(applicationId: string) {
     const [row] = await this.tx

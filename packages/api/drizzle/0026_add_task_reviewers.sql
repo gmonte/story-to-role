@@ -1,0 +1,1 @@
+ALTER TABLE "tasks" ADD COLUMN IF NOT EXISTS "reviewers" integer DEFAULT 1 NOT NULL;

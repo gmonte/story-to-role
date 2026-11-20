@@ -119,12 +119,16 @@ export class TrackerService {
         rows.map((row) => row.application.id),
         now
       );
+      const bands = await repository.latestFitBands(
+        rows.map((row) => row.application.openingId)
+      );
       return rows.map((row) => {
         const event = next.find(
           (item) => item.applicationId === row.application.id
         );
         return {
           ...this.summary(cipher, row),
+          fitBand: bands.get(row.application.openingId) ?? null,
           nextEvent: event
             ? {
                 occurredAt: event.occurredAt,
@@ -765,6 +769,7 @@ export class TrackerService {
       source: row.application.source,
       applicationType: row.application.applicationType,
       nextStep: open(cipher, row.application.encryptedNextStep),
+      fitBand: null,
       nextEvent: null,
     };
   }

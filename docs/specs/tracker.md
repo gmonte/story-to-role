@@ -17,14 +17,14 @@ The tracker follows every application the user pursues, from the first document 
 
 The method's columns, beyond company, title, link and status:
 
-| Field                       | Notes                                                                                                                                                                               |
-| --------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Source                      | Where the opening was found: LinkedIn, the company's site, a referral, a job board (a short list plus free text)                                                                    |
-| Application type            | Simplified (one-click on a job board) or external (the company's own form)                                                                                                          |
-| Resume sent                 | The family and version sent, recorded automatically when the document comes from StoryToRole, or picked by hand for an external application: what the user promised                 |
-| Next step                   | Free text ("HR interview on Sep 20"), shown on the application and in reminders                                                                                                     |
-| Notes                       | Free text                                                                                                                                                                           |
-| Decline reason (the user's) | Why the user gave up, asked in a dialog when the status is set to Withdrawn (optional, editable later); it can become a rule in the job preferences document, which screening reads |
+| Field                       | Notes                                                                                                                                                                                                                                   |
+| --------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Source                      | Where the opening was found: LinkedIn, the company's site, a referral, a job board (a short list plus free text)                                                                                                                        |
+| Application type            | Standard (the same profile the person reuses across openings: a job board's quick apply, a talent platform; stored as `simplified`) or dedicated (a document generated or a form filled in for this opening only; stored as `external`) |
+| Resume sent                 | The family and version sent, recorded automatically when the document comes from StoryToRole, or picked by hand for an external application: what the user promised                                                                     |
+| Next step                   | Free text ("HR interview on Sep 20"), shown on the application and in reminders                                                                                                                                                         |
+| Notes                       | Free text                                                                                                                                                                                                                               |
+| Decline reason (the user's) | Why the user gave up, asked in a dialog when the status is set to Withdrawn (optional, editable later); it can become a rule in the job preferences document, which screening reads                                                     |
 
 There is no field for recruiter contacts. Notes and next steps are free text, where names, emails and phone numbers end up: they are encrypted with the user's key and never reach any prompt. Anything the AI reads of the tracker is its structured fields (source, application type, resume sent, status, dates, decline reason).
 
@@ -57,6 +57,13 @@ Details live in **events**, dated entries on the application's timeline ("HR int
 ## Reminders
 
 In-app only in the MVP, configurable and dismissible: a nudge to record a follow-up after some days without response ("You applied to Company X 10 days ago with no reply"), a reminder of a dated event ("Your interview is tomorrow"), and a warning before an application turns "No response". Email reminders come later; they need a transactional email service, which is one more subprocessor.
+
+## The Applications page: list and kanban
+
+One page, two views (`?view=list|kanban`, remembered per viewer), with the reminders, the metrics and "Applied elsewhere" above them.
+
+- **List**: company, title, status, type, source, sent date or "Not sent", fit band and last activity; filters (status, type, company, sent or not) and sorting (last activity, sent date, company, status) are applied on the client and kept in the URL.
+- **Kanban**: a column per status in tracker order. Dragging a card to another column changes its status by the select's rules: "Applied" opens the dialog that asks what was sent (allowed with nothing), "Withdrawn" opens the give-up dialog (cancelling leaves the card), "No response" accepts no drop (it only comes with time), and "Applied" is refused for an application not in preparation unless made elsewhere. Each card has a status menu as the keyboard alternative, and opens the opening page.
 
 ## Open points
 

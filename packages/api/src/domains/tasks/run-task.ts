@@ -14,6 +14,8 @@ export type TaskContext = {
   userId: string;
   /** The row the task works on, when it has one. */
   subjectId: string | null;
+  /** Parallel reviewers a review task runs. */
+  reviewers: number;
   db: DbClient;
   /** Live to the browser through Realtime, durable in the task row. */
   reportProgress: (progress: TaskProgress) => Promise<void>;
@@ -45,6 +47,7 @@ export async function runTask(
       taskId,
       userId: owner.userId,
       subjectId: owner.subjectId,
+      reviewers: owner.reviewers,
       db,
       reportProgress: async (progress) => {
         triggerClient.reportProgress(progress);

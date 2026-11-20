@@ -59,7 +59,7 @@ export function uniqueFileNames(
   });
 }
 
-/** `<Company>_<Title>.zip`: unzipping makes a folder named after the opening. */
+/** `<Company>_<Title>.zip`, its files inside a folder of the same name. */
 export function applicationZipName(input: {
   company: string | null;
   title: string | null;

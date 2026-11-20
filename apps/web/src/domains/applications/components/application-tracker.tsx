@@ -439,25 +439,35 @@ export function MarkAppliedDialog({
   applicationId,
   openingId,
   trigger,
+  open: controlledOpen,
+  onOpenChange,
 }: {
   /** None yet: the application is created when it is marked as applied. */
   applicationId: string | null;
   openingId: string;
   /** The page's own button, instead of the summary's. */
   trigger?: ReactNode;
+  /** Controlled by the caller (the kanban drop): no trigger is shown. */
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
 }) {
   const t = useTranslation();
-  const [open, setOpen] = useState(false);
+  const [ownOpen, setOwnOpen] = useState(false);
+  const controlled = controlledOpen !== undefined;
+  const open = controlledOpen ?? ownOpen;
+  const setOpen = onOpenChange ?? setOwnOpen;
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        {trigger ?? (
-          <Button size="sm">
-            <Send />
-            {t.formatMessage({ defaultMessage: "Mark as applied" })}
-          </Button>
-        )}
-      </DialogTrigger>
+      {!controlled && (
+        <DialogTrigger asChild>
+          {trigger ?? (
+            <Button size="sm">
+              <Send />
+              {t.formatMessage({ defaultMessage: "Mark as applied" })}
+            </Button>
+          )}
+        </DialogTrigger>
+      )}
       <DialogContent>
         {/* Mounted per opening: the choices start fresh each time. */}
         <MarkAppliedForm

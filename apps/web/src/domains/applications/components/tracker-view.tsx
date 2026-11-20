@@ -1,61 +1,105 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useSyncExternalStore } from "react";
 
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { Plus } from "lucide-react";
-import Link from "next/link";
+import { Columns3, List, Plus } from "lucide-react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
-import {
-  applicationStatusSchema,
-  closedStatuses,
-} from "@repo/api/domains/applications/schemas/application";
-import type {
-  TrackedApplication,
-  TrackerSettings,
-} from "@repo/api/domains/applications/schemas/tracker";
+import type { TrackerSettings } from "@repo/api/domains/applications/schemas/tracker";
 import { useTranslation } from "@repo/intl/use-translation";
-import { Badge } from "@repo/web/components/ui/badge";
 import { Button } from "@repo/web/components/ui/button";
 import { Checkbox } from "@repo/web/components/ui/checkbox";
 import { Input } from "@repo/web/components/ui/input";
 import { Label } from "@repo/web/components/ui/label";
 import { toast } from "@repo/web/components/ui/sonner";
+import { Tabs, TabsList, TabsTrigger } from "@repo/web/components/ui/tabs";
 
 import { useTRPC } from "~/tools/trpc/client";
 
 import { useRefreshTracker, useTracker } from "../hooks/use-tracker";
-import { useTrackerLabels } from "../hooks/use-tracker-labels";
+import {
+  filtersToParams,
+  parseFilters,
+  type ApplicationFilters,
+} from "../utils/application-filters";
+import { ApplicationFiltersBar, ApplicationsList } from "./applications-list";
+import { ApplicationsKanban } from "./applications-kanban";
 import { ExternalApplicationDialog } from "./external-application-dialog";
 import { ReminderList } from "./reminder-list";
 import { TrackerMetricsPanel } from "./tracker-metrics-panel";
 
-const openStatuses = applicationStatusSchema.options.filter(
-  (status) => !closedStatuses.includes(status)
-);
+type View = "list" | "kanban";
+const viewKey = "applications-view";
+
+const listeners = new Set<() => void>();
+
+function readStoredView(): View {
+  try {
+    return localStorage.getItem(viewKey) === "kanban" ? "kanban" : "list";
+  } catch {
+    // Private mode: the list is the default.
+    return "list";
+  }
+}
+
+/** The view in the URL, else the one this viewer used last. */
+function useView(): [View, (view: View) => void] {
+  const router = useRouter();
+  const pathname = usePathname();
+  const params = useSearchParams();
+  const fromUrl = params.get("view");
+  const stored = useSyncExternalStore(
+    (listener) => {
+      listeners.add(listener);
+      return () => listeners.delete(listener);
+    },
+    readStoredView,
+    () => "list" as View
+  );
+  const view: View =
+    fromUrl === "kanban" || fromUrl === "list" ? fromUrl : stored;
+  const setView = (next: View) => {
+    try {
+      localStorage.setItem(viewKey, next);
+    } catch {
+      // Not remembered.
+    }
+    listeners.forEach((listener) => listener());
+    const query = new URLSearchParams(params.toString());
+    query.set("view", next);
+    router.replace(`${pathname}?${query.toString()}`, { scroll: false });
+  };
+  return [view, setView];
+}
 
 /**
- * The tracker (tracker spec): every application from its first document
- * to the outcome, by status, with the reminders on top.
+ * The Applications page (tracker spec): every application from its first
+ * document to the outcome, as a filtered list or a kanban by status, with
+ * the reminders and metrics on top.
  */
 export function TrackerView() {
   const t = useTranslation();
-  const labels = useTrackerLabels();
+  const router = useRouter();
+  const pathname = usePathname();
+  const params = useSearchParams();
   const tracker = useTracker();
   const applications = tracker.data ?? [];
-  const groups = [
-    ...openStatuses.map((status) => ({
-      label: labels.status(status),
-      items: applications.filter((row) => row.status === status),
-    })),
-    {
-      label: t.formatMessage({ defaultMessage: "Closed" }),
-      items: applications.filter((row) => closedStatuses.includes(row.status)),
-    },
-  ];
+  const [view, setView] = useView();
+  const filters = parseFilters(params);
+  const setFilters = (next: ApplicationFilters) => {
+    const query = new URLSearchParams(params.toString());
+    for (const key of ["status", "type", "company", "sent", "sort"]) {
+      query.delete(key);
+    }
+    for (const [key, value] of Object.entries(filtersToParams(next))) {
+      query.set(key, value);
+    }
+    router.replace(`${pathname}?${query.toString()}`, { scroll: false });
+  };
 
   return (
-    <div className="mx-auto flex w-full max-w-3xl flex-col gap-6 overflow-y-auto p-6 text-sm">
+    <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 overflow-y-auto p-6 text-sm">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <p className="text-muted-foreground">
           {t.formatMessage({
@@ -77,103 +121,51 @@ export function TrackerView() {
 
       <TrackerMetricsPanel />
 
-      {tracker.data && applications.length === 0 && (
+      {tracker.data && applications.length === 0 ? (
         <p className="text-muted-foreground rounded-lg border border-dashed p-6 text-center">
           {t.formatMessage({
             defaultMessage:
               "No applications yet. One starts when you generate a document for an opening, or add one you made elsewhere.",
           })}
         </p>
+      ) : (
+        <section className="flex min-w-0 flex-col gap-3">
+          <Tabs value={view} onValueChange={(value) => setView(value as View)}>
+            <TabsList>
+              <TabsTrigger value="list">
+                <List />
+                {t.formatMessage({ defaultMessage: "List" })}
+              </TabsTrigger>
+              <TabsTrigger value="kanban">
+                <Columns3 />
+                {t.formatMessage({ defaultMessage: "Kanban" })}
+              </TabsTrigger>
+            </TabsList>
+          </Tabs>
+          {view === "list" ? (
+            <ApplicationsList
+              applications={applications}
+              filters={filters}
+              onFiltersChange={setFilters}
+            />
+          ) : (
+            <div className="flex min-w-0 flex-col gap-3">
+              <ApplicationFiltersBar
+                filters={filters}
+                onChange={setFilters}
+                withSort={false}
+              />
+              <ApplicationsKanban
+                applications={applications}
+                filters={filters}
+              />
+            </div>
+          )}
+        </section>
       )}
-
-      {groups
-        .filter((group) => group.items.length > 0)
-        .map((group) => (
-          <section key={group.label} className="flex flex-col gap-2">
-            <h2 className="font-medium">
-              {t.formatMessage(
-                { defaultMessage: "{status} ({count, number})" },
-                { status: group.label, count: group.items.length }
-              )}
-            </h2>
-            <ul className="grid gap-2">
-              {group.items.map((application) => (
-                <ApplicationRow
-                  key={application.id}
-                  application={application}
-                />
-              ))}
-            </ul>
-          </section>
-        ))}
 
       <TrackerSettingsForm />
     </div>
-  );
-}
-
-function ApplicationRow({ application }: { application: TrackedApplication }) {
-  const t = useTranslation();
-  const labels = useTrackerLabels();
-  return (
-    <li>
-      <Link
-        href={`/app/openings/${application.openingId}`}
-        className="bg-background hover:border-primary flex flex-wrap items-center justify-between gap-2 rounded-lg border p-3"
-      >
-        <span className="flex flex-col">
-          <span className="font-medium">
-            {[application.company, application.title]
-              .filter(Boolean)
-              .join(" · ")}
-          </span>
-          <span className="text-muted-foreground text-xs">
-            {application.nextEvent
-              ? t.formatMessage(
-                  { defaultMessage: "Next: {event} on {date}" },
-                  {
-                    event:
-                      application.nextEvent.text ??
-                      t.formatMessage({ defaultMessage: "an event" }),
-                    date: t.formatDate(application.nextEvent.occurredAt, {
-                      dateStyle: "medium",
-                    }),
-                  }
-                )
-              : application.nextStep
-                ? t.formatMessage(
-                    { defaultMessage: "Next step: {step}" },
-                    { step: application.nextStep }
-                  )
-                : application.appliedAt
-                  ? t.formatMessage(
-                      { defaultMessage: "Applied on {date}" },
-                      {
-                        date: t.formatDate(application.appliedAt, {
-                          dateStyle: "medium",
-                        }),
-                      }
-                    )
-                  : t.formatMessage(
-                      { defaultMessage: "Since {date}" },
-                      {
-                        date: t.formatDate(application.statusChangedAt, {
-                          dateStyle: "medium",
-                        }),
-                      }
-                    )}
-          </span>
-        </span>
-        <span className="flex gap-1">
-          {application.external && (
-            <Badge variant="outline">
-              {t.formatMessage({ defaultMessage: "Elsewhere" })}
-            </Badge>
-          )}
-          <Badge variant="secondary">{labels.status(application.status)}</Badge>
-        </span>
-      </Link>
-    </li>
   );
 }
 

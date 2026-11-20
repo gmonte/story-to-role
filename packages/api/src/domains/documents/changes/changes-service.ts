@@ -8,7 +8,11 @@ import { resumeLinkOf } from "../letter/letter-resume";
 import { requireUserVersion } from "../require-version";
 import type { ListedDocumentChange } from "../schemas/document-change";
 import { decryptDocument } from "../snapshot-content";
-import { applyDocumentChange, changeApplies } from "./document-change";
+import {
+  applyDocumentChange,
+  changeApplies,
+  changeViolation,
+} from "./document-change";
 import { readChangeContent } from "./propose-change";
 
 /**
@@ -60,6 +64,8 @@ export class ChangesService {
     versionId: string;
     baseSnapshotId: string;
     documentChangeIds?: string[];
+    /** The lines the user wrote in place of a change's, by change id. */
+    editedReplacements?: Record<string, string>;
   }) {
     return this.db.transaction(async (tx) => {
       const repository = new DocumentsRepository(tx);
@@ -83,8 +89,18 @@ export class ChangesService {
       const skipped: string[] = [];
       for (const row of await repository.listPendingChanges(version.id)) {
         if (wanted && !wanted.has(row.id)) continue;
-        const change = readChangeContent(cipher, row);
-        const next = applyDocumentChange(content, change, change.evidenceIds);
+        const proposed = readChangeContent(cipher, row);
+        const edited = input.editedReplacements?.[row.id];
+        // What the user wrote is theirs: it traces to nobody else, and
+        // may touch a locked fact, but still can't break a part's shape.
+        const change =
+          edited === undefined
+            ? proposed
+            : { ...proposed, replace: edited, evidenceIds: [] };
+        const next =
+          edited !== undefined && changeViolation(content, change)
+            ? null
+            : applyDocumentChange(content, change, change.evidenceIds);
         if (!next) {
           skipped.push(row.id);
           continue;

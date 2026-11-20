@@ -143,26 +143,38 @@ function CoverageScoreBody({
             )}
           </p>
           <p>
-            {review.ofEdit
+            {review.ofEdit && review.rounds.length > 1
               ? t.formatMessage(
                   {
                     defaultMessage:
-                      "Review of the current text: {count, plural, =0 {no reviewers} one {# reviewer} other {# reviewers}}.",
+                      "{count} reviewers in parallel: {trail} — kept {rating}",
                   },
-                  { count: review.rounds.length }
+                  {
+                    count: review.rounds.length,
+                    trail: roundsTrail(review.rounds),
+                    rating: t.formatNumber(review.rating),
+                  }
                 )
-              : review.rounds.length > 1
+              : review.ofEdit
                 ? t.formatMessage(
                     {
                       defaultMessage:
-                        "{count} reviewers ({trail}); the highest score is kept.",
+                        "Review of the current text: {count, plural, =0 {no reviewers} one {# reviewer} other {# reviewers}}.",
                     },
-                    {
-                      count: review.rounds.length,
-                      trail: roundsTrail(review.rounds),
-                    }
+                    { count: review.rounds.length }
                   )
-                : t.formatMessage({ defaultMessage: "One reviewer." })}
+                : review.rounds.length > 1
+                  ? t.formatMessage(
+                      {
+                        defaultMessage:
+                          "{count} reviewers ({trail}); the highest score is kept.",
+                      },
+                      {
+                        count: review.rounds.length,
+                        trail: roundsTrail(review.rounds),
+                      }
+                    )
+                  : t.formatMessage({ defaultMessage: "One reviewer." })}
           </p>
           {review.rounds.length > 1 && (
             <p>

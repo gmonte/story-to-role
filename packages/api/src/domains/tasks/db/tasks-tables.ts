@@ -32,6 +32,8 @@ export const tasksTable = createTable(
     // The row the task works on (a chat message, an import…), so the run
     // can load it from the task id alone.
     subjectId: d.uuid(),
+    // Parallel reviewers a review task runs (1 or 3), read by the run.
+    reviewers: d.integer().notNull().default(1),
     status: d.text().$type<TaskStatus>().notNull().default("pending"),
     runId: d.text(),
     progress: d.jsonb().$type<TaskProgress>(),

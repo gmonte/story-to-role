@@ -3,9 +3,13 @@ import { parseFragment } from "@repo/api/domains/profile/truth/suggestions";
 import { buttonVariants } from "@repo/web/components/ui/button";
 import { cn } from "@repo/web/lib/utils";
 
+import {
+  suggestionEditor,
+  type SuggestionEditorLabels,
+} from "./suggestion-editor";
 import { lineDiff, lineKey, unchangedEnds } from "./word-diff";
 
-export type SuggestionWidgetLabels = {
+export type SuggestionWidgetLabels = SuggestionEditorLabels & {
   accept: string;
   // Keep the old lines and add the new ones after them.
   both: string;
@@ -36,7 +40,7 @@ export function suggestionWidget(
   suggestion: ProfileSuggestion,
   labels: SuggestionWidgetLabels,
   handlers: {
-    accept: (profileSuggestionId: string) => void;
+    accept: (profileSuggestionId: string, edited?: string) => void;
     both: (profileSuggestionId: string) => void;
     reject: (profileSuggestionId: string) => void;
   }
@@ -62,6 +66,7 @@ export function suggestionWidget(
     replaced.map((block) => block.text),
     lines.map((block) => block.text)
   );
+  const shown: HTMLElement[] = [];
   for (const [index, block] of lines.entries()) {
     const line = document.createElement("div");
     line.className = `profile-suggestion-new profile-suggestion-${block.type}`;
@@ -86,12 +91,14 @@ export function suggestionWidget(
       }
     }
     root.append(line);
+    shown.push(line);
   }
   if (!lines.length && replaced.length) {
     const removal = document.createElement("div");
     removal.className = "profile-suggestion-note";
     removal.textContent = labels.removal;
     root.append(removal);
+    shown.push(removal);
   }
 
   const footer = document.createElement("div");
@@ -99,11 +106,19 @@ export function suggestionWidget(
   const reason = document.createElement("span");
   reason.className = "profile-suggestion-reason";
   reason.textContent = suggestion.reason;
+  // The proposal's markdown lines, editable in place.
+  const editor = suggestionEditor({
+    initial: suggestion.replace,
+    labels,
+    hide: [...shown, footer],
+    onAccept: (edited) => handlers.accept(suggestion.id, edited),
+  });
   footer.append(
     reason,
     button(labels.accept, cn(buttonVariants(), small), () =>
       handlers.accept(suggestion.id)
     ),
+    editor.editButton,
     button(
       labels.reject,
       cn(buttonVariants({ variant: "outline" }), small),
@@ -120,6 +135,6 @@ export function suggestionWidget(
         ]
       : [])
   );
-  root.append(footer);
+  root.append(footer, editor.panel);
   return root;
 }

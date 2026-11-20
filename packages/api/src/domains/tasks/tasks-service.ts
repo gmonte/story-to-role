@@ -163,6 +163,7 @@ export class TasksService {
           type: input.type,
           subjectId: input.subjectId,
           funding,
+          reviewers: input.hints?.reviewers,
         });
         // A key-funded task reserves nothing: the user's key pays.
         if (funding === "credits") {

@@ -1,3 +1,5 @@
+import { Suspense } from "react";
+
 import { getTranslation } from "@repo/intl/get-translation";
 
 import { TrackerView } from "~/domains/applications/components/tracker-view";
@@ -10,7 +12,11 @@ export default async function TrackerPage() {
   return (
     <WorkspacePage
       title={t.formatMessage({ defaultMessage: "Applications" })}
-      chat={<TrackerView />}
+      chat={
+        <Suspense>
+          <TrackerView />
+        </Suspense>
+      }
     />
   );
 }

@@ -28,11 +28,14 @@ export function useTrackerLabels() {
     other: t.formatMessage({ defaultMessage: "Other" }),
   };
   const types: Record<ApplicationType, string> = {
+    // Stored as “simplified”: the same profile reused across openings (a
+    // job board's quick apply, a talent platform).
     simplified: t.formatMessage({
-      defaultMessage: "Simplified (one-click on a job board)",
+      defaultMessage: "Standard (the same profile you use for many openings)",
     }),
+    // Stored as “external”: a document or form made for this opening only.
     external: t.formatMessage({
-      defaultMessage: "External (the company's own form)",
+      defaultMessage: "Dedicated (a document or form made for this opening)",
     }),
   };
   return {

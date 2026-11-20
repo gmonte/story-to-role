@@ -184,6 +184,11 @@ export const documentsRouter = createTRPCRouter({
         versionId: z.uuid(),
         baseSnapshotId: z.uuid(),
         documentChangeIds: z.array(z.uuid()).max(200).optional(),
+        // A change the user edited before accepting: id -> the lines they
+        // wrote in place of the suggested ones.
+        editedReplacements: z
+          .record(z.uuid(), z.string().max(20000))
+          .optional(),
       })
     )
     .output(

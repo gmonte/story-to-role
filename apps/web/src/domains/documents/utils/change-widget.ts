@@ -6,9 +6,13 @@ import type { DocumentChange } from "@repo/api/domains/documents/schemas/documen
 import { buttonVariants } from "@repo/web/components/ui/button";
 import { cn } from "@repo/web/lib/utils";
 
+import {
+  suggestionEditor,
+  type SuggestionEditorLabels,
+} from "~/domains/profile/utils/suggestion-editor";
 import { lineDiff } from "~/domains/profile/utils/word-diff";
 
-export type ChangeWidgetLabels = {
+export type ChangeWidgetLabels = SuggestionEditorLabels & {
   accept: string;
   reject: string;
   removal: string;
@@ -61,7 +65,7 @@ export function changeWidget(
   replaced: string[],
   labels: ChangeWidgetLabels,
   handlers: {
-    accept: (documentChangeId: string) => void;
+    accept: (documentChangeId: string, edited?: string) => void;
     reject: (documentChangeId: string) => void;
   }
 ) {
@@ -74,6 +78,7 @@ export function changeWidget(
 
   const lines = splitChangeLines(change.replace);
   const diff = lineDiff(replaced, lines);
+  const shown: HTMLElement[] = [];
   for (const [index, text] of lines.entries()) {
     const line = document.createElement("div");
     line.className = cn(
@@ -103,12 +108,14 @@ export function changeWidget(
       }
     }
     root.append(line);
+    shown.push(line);
   }
   if (!lines.length) {
     const removal = document.createElement("div");
     removal.className = cn("text-muted-foreground text-xs italic");
     removal.textContent = labels.removal;
     root.append(removal);
+    shown.push(removal);
   }
 
   const footer = document.createElement("div");
@@ -116,18 +123,26 @@ export function changeWidget(
   const reason = document.createElement("span");
   reason.className = cn("text-muted-foreground min-w-48 flex-1 text-xs");
   reason.textContent = change.reason;
+  // The line or paragraph text it writes, editable in place.
+  const editor = suggestionEditor({
+    initial: lines.join("\n"),
+    labels,
+    hide: [...shown, footer],
+    onAccept: (edited) => handlers.accept(change.id, edited),
+  });
   footer.append(
     reason,
     button(labels.accept, cn(buttonVariants(), small), () =>
       handlers.accept(change.id)
     ),
+    editor.editButton,
     button(
       labels.reject,
       cn(buttonVariants({ variant: "outline" }), small),
       () => handlers.reject(change.id)
     )
   );
-  root.append(footer);
+  root.append(footer, editor.panel);
   return root;
 }
 

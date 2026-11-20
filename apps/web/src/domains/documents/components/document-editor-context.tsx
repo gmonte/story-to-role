@@ -617,7 +617,11 @@ export function DocumentEditorProvider({
    * the new official snapshot then replaces the editor's text. Changes
    * whose lines are gone stay waiting.
    */
-  const acceptChanges = async (documentChangeIds?: string[]) => {
+  const acceptChanges = async (
+    documentChangeIds?: string[],
+    // The lines the user wrote in place of a change's, by change id.
+    editedReplacements?: Record<string, string>
+  ) => {
     const ids = documentChangeIds ?? changes.map((change) => change.id);
     if (!ids.length) return;
     await flush();
@@ -626,6 +630,7 @@ export function DocumentEditorProvider({
         versionId: version.id,
         baseSnapshotId: base.current.snapshotId,
         documentChangeIds: ids,
+        editedReplacements,
       });
       forgetChanges(result.accepted);
       // The others are located again: one whose lines moved is now stale.
@@ -685,17 +690,24 @@ export function DocumentEditorProvider({
   };
   // The widgets in the text call the latest handlers.
   const changeHandlers = useRef<{
-    accept: (documentChangeId: string) => void;
+    accept: (documentChangeId: string, edited?: string) => void;
     reject: (documentChangeId: string) => void;
   } | null>(null);
   changeHandlers.current = {
-    accept: (documentChangeId) => void acceptChanges([documentChangeId]),
+    accept: (documentChangeId, edited) =>
+      void acceptChanges(
+        [documentChangeId],
+        edited === undefined ? undefined : { [documentChangeId]: edited }
+      ),
     reject: (documentChangeId) => rejectChanges([documentChangeId]),
   };
   const changeLabels = {
     accept: t.formatMessage({ defaultMessage: "Accept" }),
     reject: t.formatMessage({ defaultMessage: "Reject" }),
     removal: t.formatMessage({ defaultMessage: "Remove the line above" }),
+    edit: t.formatMessage({ defaultMessage: "Edit" }),
+    acceptEdited: t.formatMessage({ defaultMessage: "Accept edited" }),
+    cancel: t.formatMessage({ defaultMessage: "Cancel" }),
   };
 
   const fixFor = useCallback(
@@ -1053,8 +1065,8 @@ export function DocumentEditorProvider({
         interactive: true,
         element: () =>
           changeWidget(change, replaced, changeLabels, {
-            accept: (documentChangeId) =>
-              changeHandlers.current?.accept(documentChangeId),
+            accept: (documentChangeId, edited) =>
+              changeHandlers.current?.accept(documentChangeId, edited),
             reject: (documentChangeId) =>
               changeHandlers.current?.reject(documentChangeId),
           }),

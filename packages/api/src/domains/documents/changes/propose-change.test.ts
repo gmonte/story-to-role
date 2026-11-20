@@ -830,6 +830,43 @@ describe("proposed changes", () => {
     ).toEqual([]);
   });
 
+  it("accepts a change with the lines the user edited, traced to nobody else", async () => {
+    const ctx = await setup();
+    const proposed = await ctx.propose(
+      {
+        part: ctx.experience,
+        find: "Was responsible for cutting deploy time by 40% with Kubernetes.",
+        replace: "Cut deploy time by 40% with Kubernetes.",
+      },
+      {
+        profilePassages: [
+          "Cut deploy time by 40% with Kubernetes [measured: CI dashboard].",
+        ],
+      }
+    );
+    if (!proposed.ok) throw new Error("not proposed");
+    const result = await ctx.changes.acceptChanges({
+      userId: ctx.user.id,
+      versionId: ctx.version.id,
+      baseSnapshotId: ctx.snapshot.id,
+      documentChangeIds: [proposed.change.id],
+      editedReplacements: {
+        [proposed.change.id]: "Halved deploy time with Kubernetes.",
+      },
+    });
+    expect(result.accepted).toEqual([proposed.change.id]);
+    const content = await ctx.latest();
+    const entry = content.kind === "resume" && content.sections[2];
+    expect(
+      entry && entry.kind === "experience" && entry.entries[0].lines[0]
+    ).toEqual({
+      id: "exp1",
+      text: "Halved deploy time with Kubernetes.",
+      origin: { kind: "manual" },
+    });
+    expect(await ctx.listPending()).toHaveLength(0);
+  });
+
   it("accepts all waiting changes one snapshot each, skipping those whose lines were edited away", async () => {
     const ctx = await setup();
     const stale = await ctx.propose({

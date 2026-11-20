@@ -401,7 +401,7 @@ export function ProfileEditorProvider({
   const [agentTopic, setAgentTopic] = useState<AgentTopic | null>(null);
   // The widgets in the text call the latest handlers.
   const suggestionHandlers = useRef<{
-    accept: (profileSuggestionId: string) => void;
+    accept: (profileSuggestionId: string, edited?: string) => void;
     both: (profileSuggestionId: string) => void;
     reject: (profileSuggestionId: string) => void;
   } | null>(null);
@@ -413,6 +413,9 @@ export function ProfileEditorProvider({
     }),
     reject: t.formatMessage({ defaultMessage: "Reject" }),
     removal: t.formatMessage({ defaultMessage: "Remove the lines above" }),
+    edit: t.formatMessage({ defaultMessage: "Edit" }),
+    acceptEdited: t.formatMessage({ defaultMessage: "Accept edited" }),
+    cancel: t.formatMessage({ defaultMessage: "Cancel" }),
   };
 
   // The findings and hints drawn over the text follow every lint.
@@ -504,8 +507,8 @@ export function ProfileEditorProvider({
         interactive: true,
         element: () =>
           suggestionWidget(suggestion, suggestionLabels, {
-            accept: (profileSuggestionId) =>
-              suggestionHandlers.current?.accept(profileSuggestionId),
+            accept: (profileSuggestionId, edited) =>
+              suggestionHandlers.current?.accept(profileSuggestionId, edited),
             both: (profileSuggestionId) =>
               suggestionHandlers.current?.both(profileSuggestionId),
             reject: (profileSuggestionId) =>
@@ -675,7 +678,14 @@ export function ProfileEditorProvider({
   const acceptSuggestions = (
     profileSuggestionIds?: string[],
     // Keep the lines a suggestion replaces, adding its lines after them.
-    { keepBoth = false }: { keepBoth?: boolean } = {}
+    {
+      keepBoth = false,
+      edited,
+    }: {
+      keepBoth?: boolean;
+      // The lines the user wrote in place of the suggested ones.
+      edited?: string;
+    } = {}
   ) => {
     if (!editor) return;
     let next = currentBlocks();
@@ -687,14 +697,16 @@ export function ProfileEditorProvider({
       ) {
         continue;
       }
+      const proposed =
+        edited === undefined ? suggestion : { ...suggestion, replace: edited };
       const changed = applyChange(
         next,
         keepBoth && suggestion.find.trim()
           ? {
-              ...suggestion,
-              replace: [suggestion.find, suggestion.replace].join("\n"),
+              ...proposed,
+              replace: [suggestion.find, proposed.replace].join("\n"),
             }
-          : suggestion
+          : proposed
       );
       if (!changed) continue;
       next = changed;
@@ -733,7 +745,8 @@ export function ProfileEditorProvider({
   };
 
   suggestionHandlers.current = {
-    accept: (profileSuggestionId) => acceptSuggestions([profileSuggestionId]),
+    accept: (profileSuggestionId, edited) =>
+      acceptSuggestions([profileSuggestionId], { edited }),
     both: (profileSuggestionId) =>
       acceptSuggestions([profileSuggestionId], { keepBoth: true }),
     reject: (profileSuggestionId) => rejectSuggestions([profileSuggestionId]),

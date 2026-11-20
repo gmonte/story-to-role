@@ -103,6 +103,24 @@ describe("a suggested change", () => {
     ).toContain("(2022-03 a atual)\n\n- Tecnologias: Python\n");
   });
 
+  it("applies the lines the user edited in place of the suggested ones", () => {
+    const suggestion = {
+      part: "experience:gama — júnior",
+      find: "- Tecnologias: Python",
+      replace: "- Tecnologias: Python, Django",
+    };
+    // Accepting an edited suggestion writes the edited lines, parsed like
+    // the original replacement.
+    expect(
+      apply({
+        ...suggestion,
+        replace: "- Tecnologias: Python, Flask\n- Nuvem: AWS",
+      })
+    ).toContain(
+      "### Gama — Júnior (2019-02 a 2022-02)\n\n- Tecnologias: Python, Flask\n- Nuvem: AWS\n"
+    );
+  });
+
   it("keeps the list shape when the model drops the markers", () => {
     expect(
       apply({

@@ -4,6 +4,7 @@ import type { DbClient } from "@repo/api/tools/db-client";
 import { AiKeysRepository } from "@repo/api/domains/ai/ai-keys-repository";
 import { AiUsageRepository } from "@repo/api/domains/ai/ai-usage-repository";
 import { TasksRepository } from "@repo/api/domains/tasks/tasks-repository";
+import { decodeCursor, encodeCursor } from "@repo/api/utils/db/keyset";
 
 import { decideFunding } from "./credit-funding";
 import {
@@ -17,8 +18,11 @@ import { creditReserve, nearReserve, resumeEstimate } from "./credit-reserve";
 import { settleTask } from "./settle-task";
 import { CreditsRepository } from "./credits-repository";
 import type { CourtesyGrant, CreditSummary } from "./schemas/credits";
-import type { UsageStatement } from "./schemas/usage-statement";
-import { buildUsageStatement } from "./usage-statement";
+import type {
+  UsageOperations,
+  UsageStatement,
+} from "./schemas/usage-statement";
+import { buildUsageOperations, buildUsageStatement } from "./usage-statement";
 import { UsageStatementRepository } from "./usage-statement-repository";
 import { grantWelcomeCredits } from "./welcome-credits";
 
@@ -112,6 +116,76 @@ export class CreditsService {
       now?: Date;
     }
   ): Promise<UsageStatement> {
+    const window = await this.usageWindow(userId, input);
+    const repository = new UsageStatementRepository(this.db);
+    const calls = await repository.callsBetween(userId, window.from, window.to);
+    return buildUsageStatement({
+      calls,
+      debitedByTask: await repository.debitedByTask(taskIdsOf(calls)),
+      window,
+      showsPlatformCost: input.showsPlatformCost,
+    });
+  }
+
+  /**
+   * A page of the usage statement's operations in the same window,
+   * newest first (keyset pagination on the last call and the operation).
+   */
+  async usageOperations(
+    userId: string,
+    input: {
+      from?: Date;
+      to?: Date;
+      showsPlatformCost: boolean;
+      cursor?: string | null;
+      limit: number;
+      now?: Date;
+    }
+  ): Promise<UsageOperations> {
+    const window = await this.usageWindow(userId, input);
+    const repository = new UsageStatementRepository(this.db);
+    const filters = {
+      userId,
+      ...window,
+      showsPlatformCost: input.showsPlatformCost,
+    };
+    const after = decodeCursor(input.cursor);
+    const page = await repository.operationsPage({
+      ...filters,
+      cursor:
+        after && typeof after.keys[0] === "string"
+          ? { lastCall: after.keys[0], operationId: after.id }
+          : null,
+      // One more than shown tells whether a next page exists.
+      limit: input.limit + 1,
+    });
+    const shown = page.slice(0, input.limit);
+    const calls = await repository.callsOfOperations(
+      shown.map((row) => row.operationId)
+    );
+    const built = buildUsageOperations({
+      calls,
+      debitedByTask: await repository.debitedByTask(taskIdsOf(calls)),
+      showsPlatformCost: input.showsPlatformCost,
+    });
+    // In the page's own order, which Postgres decided to the microsecond.
+    const byId = new Map(built.map((row) => [row.operationId, row]));
+    const last = shown[shown.length - 1];
+    return {
+      data: shown.flatMap((row) => byId.get(row.operationId) ?? []),
+      nextCursor:
+        page.length > input.limit && last
+          ? encodeCursor({ keys: [last.lastCall], id: last.operationId })
+          : null,
+      total: await repository.countOperations(filters),
+    };
+  }
+
+  /** The window asked for, or the plan's current credit month. */
+  private async usageWindow(
+    userId: string,
+    input: { from?: Date; to?: Date; now?: Date }
+  ) {
     const now = input.now ?? new Date();
     const fallback = await this.defaultUsageWindow(userId, now);
     const window = {
@@ -119,17 +193,7 @@ export class CreditsService {
       to: input.to ?? fallback.to,
     };
     if (window.from >= window.to) throw new TRPCError({ code: "BAD_REQUEST" });
-    const repository = new UsageStatementRepository(this.db);
-    const calls = await repository.callsBetween(userId, window.from, window.to);
-    const taskIds = [
-      ...new Set(calls.flatMap((call) => (call.taskId ? [call.taskId] : []))),
-    ];
-    return buildUsageStatement({
-      calls,
-      debitedByTask: await repository.debitedByTask(taskIds),
-      window,
-      showsPlatformCost: input.showsPlatformCost,
-    });
+    return window;
   }
 
   private async defaultUsageWindow(userId: string, now: Date) {
@@ -257,3 +321,7 @@ export class CreditsService {
     return { users: users.length, granted, settled: stale.length };
   }
 }
+
+const taskIdsOf = (calls: Array<{ taskId: string | null }>) => [
+  ...new Set(calls.flatMap((call) => (call.taskId ? [call.taskId] : []))),
+];

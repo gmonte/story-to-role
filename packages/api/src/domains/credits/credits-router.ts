@@ -9,10 +9,14 @@ import {
   isAdmin,
   userProcedure,
 } from "@repo/api/tools/trpc";
+import { paginationParamsSchema } from "@repo/api/utils/schemas/pagination";
 
 import { CreditsService } from "./credits-service";
 import { courtesyGrantSchema, creditSummarySchema } from "./schemas/credits";
-import { usageStatementSchema } from "./schemas/usage-statement";
+import {
+  usageOperationsSchema,
+  usageStatementSchema,
+} from "./schemas/usage-statement";
 
 export const creditsRouter = createTRPCRouter({
   summary: userProcedure
@@ -34,7 +38,7 @@ export const creditsRouter = createTRPCRouter({
         "credits",
         "GET",
         "/credits/usage",
-        "Returns the usage statement: each AI operation in a window, who paid, its tokens and credits"
+        "Returns the usage statement's totals by payer and averages per kind of AI operation in a window"
       )
     )
     .input(
@@ -46,6 +50,29 @@ export const creditsRouter = createTRPCRouter({
     .output(usageStatementSchema)
     .query(({ ctx, input }) =>
       new CreditsService(db).usageStatement(ctx.userId, {
+        ...input,
+        showsPlatformCost: env.USAGE_STATEMENT_SHOWS_PLATFORM_COST,
+      })
+    ),
+
+  usageOperations: userProcedure
+    .meta(
+      openApiMeta(
+        "credits",
+        "GET",
+        "/credits/usage/operations",
+        "Returns a page of the usage statement's AI operations: who paid, tokens and credits, by model"
+      )
+    )
+    .input(
+      paginationParamsSchema.extend({
+        from: z.coerce.date().optional(),
+        to: z.coerce.date().optional(),
+      })
+    )
+    .output(usageOperationsSchema)
+    .query(({ ctx, input }) =>
+      new CreditsService(db).usageOperations(ctx.userId, {
         ...input,
         showsPlatformCost: env.USAGE_STATEMENT_SHOWS_PLATFORM_COST,
       })

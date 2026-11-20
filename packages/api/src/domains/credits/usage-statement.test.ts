@@ -11,6 +11,7 @@ import { DocumentsRepository } from "@repo/api/domains/documents/documents-repos
 import type { TaskType } from "@repo/api/domains/tasks/schemas/task";
 import { TasksRepository } from "@repo/api/domains/tasks/tasks-repository";
 import { createTestUser } from "@repo/api/test/create-test-user";
+import type { DbClient } from "@repo/api/tools/db-client";
 import {
   clearTestDatabase,
   closeTestDatabase,
@@ -43,6 +44,16 @@ const haikuCall = {
   inputTokens: 100_000,
   outputTokens: 20_000,
 };
+
+type UsageInput = Parameters<CreditsService["usageStatement"]>[1];
+
+/** The statement with every operation of its window on one page. */
+async function usage(db: DbClient, userId: string, input: UsageInput) {
+  const credits = new CreditsService(db);
+  const statement = await credits.usageStatement(userId, input);
+  const page = await credits.usageOperations(userId, { ...input, limit: 100 });
+  return { ...statement, operations: page.data };
+}
 
 async function setup() {
   const db = await getTestDatabase();
@@ -170,10 +181,11 @@ describe("usage statement", () => {
       debited: 48,
     });
 
-    const statement = await new CreditsService(ctx.db).usageStatement(
-      ctx.user.id,
-      { ...window, showsPlatformCost: false, now }
-    );
+    const statement = await usage(ctx.db, ctx.user.id, {
+      ...window,
+      showsPlatformCost: false,
+      now,
+    });
 
     expect(statement.operations).toHaveLength(1);
     expect(statement.operations[0]).toMatchObject({
@@ -221,10 +233,11 @@ describe("usage statement", () => {
       calls: [sonnetCall],
     });
 
-    const statement = await new CreditsService(ctx.db).usageStatement(
-      ctx.user.id,
-      { ...window, showsPlatformCost: false, now }
-    );
+    const statement = await usage(ctx.db, ctx.user.id, {
+      ...window,
+      showsPlatformCost: false,
+      now,
+    });
 
     expect(statement.operations[0]).toMatchObject({
       operation: { taskType: "profile_agent_turn", documentKind: null },
@@ -268,9 +281,8 @@ describe("usage statement", () => {
       calls: [haikuCall],
       debited: 3,
     });
-    const credits = new CreditsService(ctx.db);
 
-    const hidden = await credits.usageStatement(ctx.user.id, {
+    const hidden = await usage(ctx.db, ctx.user.id, {
       ...window,
       showsPlatformCost: false,
       now,
@@ -278,7 +290,7 @@ describe("usage statement", () => {
     expect(hidden.operations.map((row) => row.payer)).toEqual(["credits"]);
     expect(hidden.totals.map((row) => row.payer)).toEqual(["credits"]);
 
-    const shown = await credits.usageStatement(ctx.user.id, {
+    const shown = await usage(ctx.db, ctx.user.id, {
       ...window,
       showsPlatformCost: true,
       now,
@@ -329,10 +341,11 @@ describe("usage statement", () => {
       ...sonnetCall,
     });
 
-    const statement = await new CreditsService(ctx.db).usageStatement(
-      ctx.user.id,
-      { ...window, showsPlatformCost: false, now }
-    );
+    const statement = await usage(ctx.db, ctx.user.id, {
+      ...window,
+      showsPlatformCost: false,
+      now,
+    });
 
     expect(statement.operations).toHaveLength(3);
     // 45 and 3 credits; 110k and 120k tokens; US$0.30 and US$0.02.
@@ -363,7 +376,7 @@ describe("usage statement", () => {
     });
     const credits = new CreditsService(ctx.db);
 
-    const free = await credits.usageStatement(ctx.user.id, {
+    const free = await usage(ctx.db, ctx.user.id, {
       showsPlatformCost: false,
       now,
     });
@@ -377,7 +390,7 @@ describe("usage statement", () => {
       endsAt: null,
       now,
     });
-    const courtesy = await credits.usageStatement(ctx.user.id, {
+    const courtesy = await usage(ctx.db, ctx.user.id, {
       showsPlatformCost: false,
       now,
     });
@@ -401,9 +414,8 @@ describe("usage statement", () => {
       createdAt: at("2026-11-01T00:01:00Z"),
       ...haikuCall,
     });
-    const credits = new CreditsService(ctx.db);
 
-    const november = await credits.usageStatement(ctx.user.id, {
+    const november = await usage(ctx.db, ctx.user.id, {
       ...window,
       showsPlatformCost: false,
       now,
@@ -414,7 +426,7 @@ describe("usage statement", () => {
       inputTokens: 200_000,
     });
 
-    const october = await credits.usageStatement(ctx.user.id, {
+    const october = await usage(ctx.db, ctx.user.id, {
       from: at("2026-10-01T00:00:00Z"),
       to: window.from,
       showsPlatformCost: false,
@@ -437,13 +449,45 @@ describe("usage statement", () => {
       debited: 10,
     });
 
-    const statement = await new CreditsService(ctx.db).usageStatement(
-      ctx.user.id,
-      { ...window, showsPlatformCost: false, now }
-    );
+    const statement = await usage(ctx.db, ctx.user.id, {
+      ...window,
+      showsPlatformCost: false,
+      now,
+    });
 
     expect(statement.operations[0].models.map((row) => row.credits)).toEqual([
       3.4, 3.3, 3.3,
     ]);
+  });
+
+  it("pages operations newest first, with a cursor and the total", async () => {
+    const ctx = await setup();
+    for (const day of ["05", "06", "07"]) {
+      await ctx.call({
+        funding: "key",
+        purpose: "gap_answer_sentence",
+        createdAt: at(`2026-11-${day}T09:00:00Z`),
+        ...haikuCall,
+      });
+    }
+    const credits = new CreditsService(ctx.db);
+    const input = { ...window, showsPlatformCost: false, now, limit: 2 };
+
+    const first = await credits.usageOperations(ctx.user.id, input);
+    expect(first.total).toBe(3);
+    expect(first.data.map((row) => row.at)).toEqual([
+      at("2026-11-07T09:00:00Z"),
+      at("2026-11-06T09:00:00Z"),
+    ]);
+    expect(first.nextCursor).not.toBeNull();
+
+    const second = await credits.usageOperations(ctx.user.id, {
+      ...input,
+      cursor: first.nextCursor,
+    });
+    expect(second.data.map((row) => row.at)).toEqual([
+      at("2026-11-05T09:00:00Z"),
+    ]);
+    expect(second.nextCursor).toBeNull();
   });
 });

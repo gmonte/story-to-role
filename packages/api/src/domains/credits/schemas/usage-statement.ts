@@ -5,6 +5,7 @@ import {
   generationKindSchema,
 } from "@repo/api/domains/documents/schemas/document";
 import { taskTypeSchema } from "@repo/api/domains/tasks/schemas/task";
+import { createPaginationOutputSchema } from "@repo/api/utils/schemas/pagination";
 
 /**
  * Who paid for an operation (billing spec, "Usage statement"): the user's
@@ -57,26 +58,32 @@ export const usageStatementSchema = z.object({
       totalCredits: z.number(),
     })
   ),
-  operations: z.array(
+});
+export type UsageStatement = z.infer<typeof usageStatementSchema>;
+
+/** One operation of the usage statement, with its calls split by model. */
+export const usageOperationRowSchema = z.object({
+  operationId: z.string(),
+  operation: usageOperationSchema,
+  at: z.date(),
+  status: z.enum(["completed", "failed"]),
+  payer: usagePayerSchema,
+  ...tokensShape,
+  credits: z.number(),
+  usd: z.number().nullable(),
+  // The operation's credits shared by each model's part of its cost.
+  models: z.array(
     z.object({
-      operationId: z.string(),
-      operation: usageOperationSchema,
-      at: z.date(),
-      status: z.enum(["completed", "failed"]),
-      payer: usagePayerSchema,
+      model: z.string(),
       ...tokensShape,
       credits: z.number(),
       usd: z.number().nullable(),
-      // The operation's credits shared by each model's part of its cost.
-      models: z.array(
-        z.object({
-          model: z.string(),
-          ...tokensShape,
-          credits: z.number(),
-          usd: z.number().nullable(),
-        })
-      ),
     })
   ),
 });
-export type UsageStatement = z.infer<typeof usageStatementSchema>;
+export type UsageOperationRow = z.infer<typeof usageOperationRowSchema>;
+
+export const usageOperationsSchema = createPaginationOutputSchema({
+  dataSchema: usageOperationRowSchema,
+});
+export type UsageOperations = z.infer<typeof usageOperationsSchema>;

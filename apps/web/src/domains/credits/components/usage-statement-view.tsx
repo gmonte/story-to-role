@@ -10,6 +10,7 @@ import type {
   UsageStatement,
 } from "@repo/api/domains/credits/schemas/usage-statement";
 import { useTranslation } from "@repo/intl/use-translation";
+import { InfiniteScroll } from "@repo/web/components/pagination/infinite-scroll";
 import { Badge } from "@repo/web/components/ui/badge";
 import { Button } from "@repo/web/components/ui/button";
 import { Input } from "@repo/web/components/ui/input";
@@ -24,6 +25,7 @@ import {
   TableRow,
 } from "@repo/web/components/ui/table";
 
+import { useUsageOperations } from "../hooks/use-usage-operations";
 import { useUsageStatement } from "../hooks/use-usage-statement";
 import { usageOperationLabel } from "../utils/usage-operation-label";
 
@@ -85,7 +87,7 @@ export function UsageStatementView() {
       <PeriodPicker statement={data} setPeriod={setPeriod} />
       {isPending || !data ? (
         <Skeleton className="h-40 w-full" />
-      ) : data.operations.length === 0 ? (
+      ) : data.totals.length === 0 ? (
         <p className="text-muted-foreground">
           {t.formatMessage({
             defaultMessage: "No AI operation in this period.",
@@ -95,7 +97,7 @@ export function UsageStatementView() {
         <>
           <Totals statement={data} />
           <Summary statement={data} />
-          <Operations statement={data} />
+          <Operations statement={data} period={period} />
         </>
       )}
     </div>
@@ -353,11 +355,21 @@ function Summary({ statement }: { statement: UsageStatement }) {
   );
 }
 
-function Operations({ statement }: { statement: UsageStatement }) {
+function Operations({
+  statement,
+  period,
+}: {
+  statement: UsageStatement;
+  period: { from?: Date; to?: Date };
+}) {
   const t = useTranslation();
   const format = useFormats();
+  const operations = useUsageOperations(period);
   const [open, setOpen] = useState<string[]>([]);
-  const showsUsd = statement.operations.some((row) => row.usd !== null);
+  // US$ shows for the user's key, or everywhere with the platform's cost.
+  const showsUsd =
+    statement.showsPlatformCost ||
+    statement.totals.some((total) => total.payer === "key");
   const toggle = (operationId: string) =>
     setOpen((current) =>
       current.includes(operationId)
@@ -368,7 +380,12 @@ function Operations({ statement }: { statement: UsageStatement }) {
   return (
     <section className="flex flex-col gap-2">
       <h2 className="font-medium">
-        {t.formatMessage({ defaultMessage: "Operations" })}
+        {operations.total === undefined
+          ? t.formatMessage({ defaultMessage: "Operations" })
+          : t.formatMessage(
+              { defaultMessage: "Operations ({total, number})" },
+              { total: operations.total }
+            )}
       </h2>
       <Table>
         <TableHeader>
@@ -401,7 +418,7 @@ function Operations({ statement }: { statement: UsageStatement }) {
           </TableRow>
         </TableHeader>
         <TableBody>
-          {statement.operations.map((row) => {
+          {operations.rows.map((row) => {
             const expanded = open.includes(row.operationId);
             return (
               <Fragment key={row.operationId}>
@@ -488,6 +505,12 @@ function Operations({ statement }: { statement: UsageStatement }) {
           })}
         </TableBody>
       </Table>
+      {operations.isLoading && <Skeleton className="h-24 w-full" />}
+      <InfiniteScroll
+        hasMore={operations.hasMore}
+        loadingMore={operations.loadingMore}
+        onLoadMore={operations.fetchNextPage}
+      />
     </section>
   );
 }

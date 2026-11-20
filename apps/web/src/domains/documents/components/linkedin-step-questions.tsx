@@ -3,7 +3,15 @@
 import { useState } from "react";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { MessageCircleQuestion, RotateCcw, Send, X } from "lucide-react";
+import {
+  Check,
+  MessageCircleQuestion,
+  RotateCcw,
+  Send,
+  UserPlus,
+  X,
+} from "lucide-react";
+import Link from "next/link";
 
 import { useTranslation } from "@repo/intl/use-translation";
 import { Button } from "@repo/web/components/ui/button";
@@ -77,10 +85,24 @@ export function LinkedinStepQuestions({
       onError,
     })
   );
+  const send = useMutation(
+    trpc.linkedinInterview.sendToProfile.mutationOptions({
+      onSuccess: async () => {
+        toast.success(
+          t.formatMessage({
+            defaultMessage:
+              "Sent to your profile as a suggestion. Accept it in My career and publish to use it in your resumes.",
+          })
+        );
+        await refresh();
+      },
+      onError,
+    })
+  );
   const data = interview.data;
   if (!data) return null;
   const asking = data.status === "in_progress";
-  const send = () =>
+  const sendAnswer = () =>
     data.interviewId &&
     text.trim() &&
     answer.mutate({ interviewId: data.interviewId, text });
@@ -126,7 +148,7 @@ export function LinkedinStepQuestions({
                 onKeyDown={(event) => {
                   if (event.key === "Enter" && !event.shiftKey) {
                     event.preventDefault();
-                    send();
+                    sendAnswer();
                   }
                 }}
               />
@@ -138,7 +160,7 @@ export function LinkedinStepQuestions({
               <Button
                 size="icon"
                 disabled={!text.trim()}
-                onClick={send}
+                onClick={sendAnswer}
                 aria-label={t.formatMessage({ defaultMessage: "Send" })}
               >
                 <Send />
@@ -197,6 +219,33 @@ export function LinkedinStepQuestions({
                 className="bg-muted/60 flex items-start gap-1 rounded-md px-2 py-1 text-xs"
               >
                 <span className="flex-1">{instruction.text}</span>
+                {instruction.sent ? (
+                  <Link
+                    href="/app/career"
+                    className="text-primary flex shrink-0 items-center gap-0.5 hover:underline"
+                  >
+                    <Check className="size-3" />
+                    {t.formatMessage({ defaultMessage: "In your profile" })}
+                  </Link>
+                ) : (
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    className="size-5 shrink-0"
+                    disabled={send.isPending}
+                    title={t.formatMessage({
+                      defaultMessage: "Send to my profile",
+                    })}
+                    aria-label={t.formatMessage({
+                      defaultMessage: "Send to my profile",
+                    })}
+                    onClick={() =>
+                      send.mutate({ linkedinInstructionId: instruction.id })
+                    }
+                  >
+                    <UserPlus className="size-3" />
+                  </Button>
+                )}
                 <Button
                   size="icon"
                   variant="ghost"

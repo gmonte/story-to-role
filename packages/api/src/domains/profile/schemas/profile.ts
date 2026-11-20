@@ -55,6 +55,8 @@ export const profileSuggestionOriginSchema = z.enum([
   // A document line the user added to the profile (resume spec, "Document
   // workspace").
   "document",
+  // An answer to a LinkedIn step's questions (resume spec, "LinkedIn").
+  "linkedin",
 ]);
 export type ProfileSuggestionOrigin = z.infer<
   typeof profileSuggestionOriginSchema

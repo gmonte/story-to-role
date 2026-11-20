@@ -1,6 +1,10 @@
 import { TRPCError } from "@trpc/server";
 
 import { CareerRepository } from "@repo/api/domains/career/career-repository";
+import {
+  type SuggestionTarget,
+  suggestLine,
+} from "@repo/api/domains/profile/suggestions/suggest-line";
 import { getUserCipher } from "@repo/api/domains/encryption/user-cipher";
 import type { RealtimeSubscription } from "@repo/api/domains/tasks/schemas/task";
 import { TasksService } from "@repo/api/domains/tasks/tasks-service";
@@ -91,6 +95,7 @@ export class LinkedinInterviewService {
         positionId: row.positionId,
         projectId: row.projectId,
         credentialId: row.credentialId,
+        sent: row.status === "promoted",
       })),
     };
   }
@@ -191,6 +196,66 @@ export class LinkedinInterviewService {
       interview.id,
       { status: "skipped" }
     );
+  }
+
+  /**
+   * Sends a LinkedIn instruction to the profile's draft as a suggestion
+   * (origin `linkedin`): under its position's or project's Results, the
+   * career direction for a headline answer, or the seniority and areas
+   * line otherwise. The writer keeps reading it; a later resume or letter
+   * uses it only once the user accepts it and publishes.
+   */
+  async sendToProfile(input: {
+    userId: string;
+    linkedinInstructionId: string;
+  }): Promise<{ profileSuggestionId: string }> {
+    const repository = new LinkedinInterviewRepository(this.db);
+    const instruction = await repository.findInstruction(
+      input.linkedinInstructionId
+    );
+    const profile = await new CareerRepository(this.db).findProfileByUserId(
+      input.userId
+    );
+    if (
+      instruction?.profileId !== profile?.id ||
+      instruction.status === "removed"
+    )
+      throw notFound();
+    if (instruction.status === "promoted")
+      throw new TRPCError({ code: "CONFLICT" });
+    const cipher = await getUserCipher(this.db, input.userId);
+    const general: SuggestionTarget =
+      instruction.section === "headline"
+        ? { kind: "careerDirection" }
+        : { kind: "identityAreas" };
+    const { profileSuggestionId } = await suggestLine({
+      db: this.db,
+      cipher,
+      userId: input.userId,
+      careerProfileId: profile.id,
+      target: instruction.positionId
+        ? {
+            kind: "experience",
+            positionId: instruction.positionId,
+            field: "results",
+          }
+        : instruction.projectId
+          ? {
+              kind: "project",
+              projectId: instruction.projectId,
+              field: "results",
+            }
+          : general,
+      fallback: general,
+      text: cipher.decrypt(instruction.encryptedText),
+      reason: {
+        "en-US": "You said this answering the questions of your LinkedIn.",
+        "pt-BR": "Você disse isto respondendo às perguntas do seu LinkedIn.",
+      },
+      origin: "linkedin",
+    });
+    await repository.updateInstruction(instruction.id, { status: "promoted" });
+    return { profileSuggestionId };
   }
 
   /** Removes a LinkedIn instruction: the writer no longer reads it. */

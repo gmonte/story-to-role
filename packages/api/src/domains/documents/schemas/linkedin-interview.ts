@@ -17,9 +17,14 @@ export type LinkedinTurnRole = z.infer<typeof linkedinTurnRoleSchema>;
 
 /**
  * A LinkedIn instruction: kept for the writer, removed by the user, or
- * sent to the profile as a suggestion (it stays kept for the writer).
+ * promoted: sent to the profile as a suggestion, and still read by the
+ * writer.
  */
-export const linkedinInstructionStatusSchema = z.enum(["kept", "removed"]);
+export const linkedinInstructionStatusSchema = z.enum([
+  "kept",
+  "removed",
+  "promoted",
+]);
 export type LinkedinInstructionStatus = z.infer<
   typeof linkedinInstructionStatusSchema
 >;
@@ -51,6 +56,8 @@ export const linkedinInstructionViewSchema = z.object({
   positionId: z.uuid().nullable(),
   projectId: z.uuid().nullable(),
   credentialId: z.uuid().nullable(),
+  // Sent to the profile's draft as a suggestion.
+  sent: z.boolean(),
 });
 
 export const linkedinInterviewViewSchema = z.object({

@@ -1,4 +1,4 @@
-import { and, asc, eq } from "drizzle-orm";
+import { and, asc, eq, ne } from "drizzle-orm";
 
 import type { DbClient } from "@repo/api/tools/db-client";
 
@@ -89,7 +89,10 @@ export class LinkedinInterviewRepository {
       .values({ ...row, sequence: turns.length + 1 });
   }
 
-  /** The document's instructions the writer reads: the kept ones. */
+  /**
+   * The document's instructions the writer reads: every one not removed,
+   * those sent to the profile included.
+   */
   listKeptInstructions(documentId: string) {
     return this.tx
       .select()
@@ -97,7 +100,7 @@ export class LinkedinInterviewRepository {
       .where(
         and(
           eq(linkedinInstructionsTable.documentId, documentId),
-          eq(linkedinInstructionsTable.status, "kept")
+          ne(linkedinInstructionsTable.status, "removed")
         )
       )
       .orderBy(asc(linkedinInstructionsTable.createdAt));

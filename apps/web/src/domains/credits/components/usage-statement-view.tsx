@@ -225,6 +225,15 @@ function useFormats() {
 function Totals({ statement }: { statement: UsageStatement }) {
   const t = useTranslation();
   const format = useFormats();
+  // What was spent, never a balance: by the user, on their key, or by
+  // StoryToRole on the user's behalf.
+  const spentBy: Record<UsagePayer, string> = {
+    credits: t.formatMessage({ defaultMessage: "Spent by you" }),
+    key: t.formatMessage({ defaultMessage: "Spent on your key" }),
+    storytorole: t.formatMessage({
+      defaultMessage: "Spent by StoryToRole on you",
+    }),
+  };
   return (
     <section className="grid gap-3 sm:grid-cols-3">
       {statement.totals.map((total) => (
@@ -233,11 +242,11 @@ function Totals({ statement }: { statement: UsageStatement }) {
           className="flex flex-col gap-1 rounded-lg border p-4"
         >
           <span className="text-muted-foreground text-xs">
-            {format.payer(total.payer)}
+            {spentBy[total.payer]}
           </span>
           <span className="text-lg font-medium">
             {t.formatMessage(
-              { defaultMessage: "{credits} credits" },
+              { defaultMessage: "{credits} credits spent" },
               { credits: format.rowCredits(total.payer, total.credits) }
             )}
           </span>

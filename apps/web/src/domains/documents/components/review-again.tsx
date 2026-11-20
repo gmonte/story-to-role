@@ -70,26 +70,37 @@ export function ReviewAgainButton({ version }: { version: VersionView }) {
             <ChevronDown className="size-3.5" />
           </Button>
         </PopoverTrigger>
-        <PopoverContent align="end" className="flex w-64 flex-col gap-1 p-1.5">
+        <PopoverContent
+          align="end"
+          className="flex w-72 max-w-[calc(100vw-2rem)] flex-col gap-1 p-1.5"
+        >
           <Button
             variant="ghost"
             size="sm"
-            className="h-auto justify-between gap-2 py-1.5"
+            className="h-auto w-full justify-between gap-2 py-1.5 whitespace-normal"
             onClick={() => start(1)}
           >
-            <span>{t.formatMessage({ defaultMessage: "1 reviewer" })}</span>
-            <CreditCost credits={credits.data?.estimates.reReview} />
+            <span className="min-w-0 text-left">
+              {t.formatMessage({ defaultMessage: "1 reviewer" })}
+            </span>
+            <CreditCost
+              className="shrink-0"
+              credits={credits.data?.estimates.reReview}
+            />
           </Button>
           <Button
             variant="ghost"
             size="sm"
-            className="h-auto justify-between gap-2 py-1.5"
+            className="h-auto w-full justify-between gap-2 py-1.5 whitespace-normal"
             onClick={() => start(3)}
           >
-            <span>
+            <span className="min-w-0 text-left">
               {t.formatMessage({ defaultMessage: "3 reviewers in parallel" })}
             </span>
-            <CreditCost credits={credits.data?.estimates.reReviewParallel} />
+            <CreditCost
+              className="shrink-0"
+              credits={credits.data?.estimates.reReviewParallel}
+            />
           </Button>
         </PopoverContent>
       </Popover>

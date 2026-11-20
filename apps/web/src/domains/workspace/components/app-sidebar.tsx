@@ -77,7 +77,7 @@ export function AppSidebar() {
   const adminLabel = t.formatMessage({ defaultMessage: "Admin" });
 
   return (
-    <Sidebar collapsible="icon">
+    <Sidebar collapsible="icon" variant="inset">
       <SidebarHeader>
         <Link href="/app/career" className="flex h-10 items-center px-2">
           <BrandLockup className="group-data-[collapsible=icon]:hidden" />

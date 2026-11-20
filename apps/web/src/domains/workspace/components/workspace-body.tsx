@@ -126,8 +126,8 @@ export function WorkspaceBody({
           style={{ width: panelWidth, minWidth: minPanel }}
           className={
             flushPanel
-              ? "bg-muted/30 hidden max-w-[50vw] overflow-hidden empty:hidden lg:block"
-              : "bg-muted/30 hidden max-w-[50vw] overflow-y-auto p-4 empty:hidden lg:block"
+              ? "bg-muted/60 hidden max-w-[50vw] overflow-hidden empty:hidden lg:block"
+              : "bg-muted/60 hidden max-w-[50vw] overflow-y-auto p-4 empty:hidden lg:block"
           }
         >
           {panel}

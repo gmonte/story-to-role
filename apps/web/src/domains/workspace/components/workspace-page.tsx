@@ -1,12 +1,13 @@
 import type { ReactNode } from "react";
 
 import { Separator } from "@repo/web/components/ui/separator";
-import { SidebarTrigger } from "@repo/web/components/ui/sidebar";
+import { SidebarInset, SidebarTrigger } from "@repo/web/components/ui/sidebar";
 
 /**
  * One screen of the workspace: the chat in the center and the side panel on
  * the right, as in the Claude app. A screen that opens files beside the
- * panel passes its own `WorkspaceBody` as `body`.
+ * panel passes its own `WorkspaceBody` as `body`. On a wide screen it is a
+ * raised panel over the sidebar's backdrop (shadcn's inset sidebar).
  */
 export function WorkspacePage({
   title,
@@ -20,7 +21,7 @@ export function WorkspacePage({
   body?: ReactNode;
 }) {
   return (
-    <div className="flex h-svh min-w-0 flex-1 flex-col">
+    <SidebarInset className="h-svh min-w-0 overflow-hidden md:h-[calc(100svh-1rem)] md:border">
       <header className="flex h-12 shrink-0 items-center gap-2 border-b px-3">
         <SidebarTrigger />
         <Separator orientation="vertical" className="h-4!" />
@@ -28,14 +29,14 @@ export function WorkspacePage({
       </header>
       {body ?? (
         <div className="flex min-h-0 flex-1">
-          <main className="flex min-w-0 flex-1 flex-col">{chat}</main>
+          <div className="flex min-w-0 flex-1 flex-col">{chat}</div>
           {panel && (
-            <aside className="bg-muted/30 hidden w-80 shrink-0 overflow-y-auto border-l p-4 empty:hidden lg:block xl:w-96">
+            <aside className="bg-muted/60 hidden w-80 shrink-0 overflow-y-auto border-l p-4 empty:hidden lg:block xl:w-96">
               {panel}
             </aside>
           )}
         </div>
       )}
-    </div>
+    </SidebarInset>
   );
 }

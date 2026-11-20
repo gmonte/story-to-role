@@ -151,7 +151,7 @@ export function OpeningPageBody({
         {fit && (
           <>
             <aside
-              className="bg-muted/30 shrink-0 overflow-y-auto p-4"
+              className="bg-muted/60 shrink-0 overflow-y-auto p-4"
               style={{ width: fitWidth }}
             >
               {fit}
@@ -174,7 +174,7 @@ export function OpeningPageBody({
         {application && (
           <aside
             id="application-column"
-            className="bg-muted/30 w-80 shrink-0 overflow-y-auto border-l p-4"
+            className="bg-muted/60 w-80 shrink-0 overflow-y-auto border-l p-4"
           >
             {application}
           </aside>

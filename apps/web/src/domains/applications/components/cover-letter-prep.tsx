@@ -248,7 +248,6 @@ function Prep({
           defaultWidth={384}
           side="right"
           from="lg"
-          className="bg-muted/30"
         >
           {agent}
         </ResizableAside>

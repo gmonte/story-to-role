@@ -290,3 +290,35 @@ Acceptance:
 
 Acceptance:
 - [x] Asked to rewrite a bullet of an experience, the agent suggests it in place and Accept creates a snapshot.
+
+## LinkedIn step by step
+
+Creating the LinkedIn text becomes a guided flow, one step per section, with questions about what the profile lacks before each one is written (resume spec, “LinkedIn”, “Step by step, with questions”). Owner decisions: one step per section; the answers count at once as LinkedIn instructions and are offered to the profile as suggestions; priced like the cover letter's interview (per question and per step), with Generate everything at once kept as a shortcut.
+
+### L4: The steps, without questions
+
+- Starting (the Goal step) creates the LinkedIn document with a snapshot of what code prints (experiences and projects with no bullets, education, certifications, languages), free.
+- A step writes its section with a `linkedin_section` generation; new section keys for every experience (`experiences`) and every project (`projects`) at once, besides the existing ones; priced as an adjustment.
+- The page: the steps on the left while guided (Goal, Headline, About, Experiences, Projects, Education, Certifications and languages; the empty ones skipped), the text in the editor, Next and Write again per step; Finish runs the coverage review. Generate everything at once stays on the Goal step.
+- Generate this section again opens that section's step alone.
+
+Acceptance:
+- [ ] Going through the steps without questions writes each section in its own snapshot, the other sections and the user's edits untouched, and Finish leaves a coverage review.
+- [ ] Generate this section again on an experience opens the Experiences step for that position and rewrites only it.
+
+### L5: Questions in each step
+
+- A LinkedIn interview per step (turns like the motivation interview's, a `linkedin_turn` task priced like `motivation_turn`), up to three questions, by voice or text, skippable; none when the profile already holds what the section needs.
+- The answers split into points tied to a position, project or education, kept with the LinkedIn document as LinkedIn instructions; the LinkedIn writer and its checks read them as `instructions` (cited like profile lines, figures as the user wrote them), and the step lists them, removable.
+
+Acceptance:
+- [ ] An answer giving a result's figure lets the Experiences step write a bullet with that figure, citing the instruction, with no figure finding.
+- [ ] Skipping the questions writes the section from the profile alone, charging only the step.
+
+### L6: Answers to the profile
+
+- Each point is offered, one by one, as a suggestion in the profile's draft (origin `linkedin`): a position's Responsibilities or Results, a project's What I did, or the career direction; the step says it was sent, with a link to My career.
+
+Acceptance:
+- [ ] A point sent to the profile appears as a pending suggestion; after accepting and publishing, a new resume can use it.
+

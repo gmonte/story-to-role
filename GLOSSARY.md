@@ -158,6 +158,12 @@ _Avoid_: LinkedIn profile (that is LinkedIn's), LinkedIn document, LinkedIn resu
 
 **Headline option**:
 One of the headlines the AI writes for the LinkedIn text, at most 220 characters; the user chooses one, and only the chosen one is copied and checked.
+
+**LinkedIn step**:
+One section of the guided LinkedIn flow (Goal, Headline, About, Experiences, Projects, Education, Certifications and languages): its questions, then that section written alone.
+
+**LinkedIn instruction**:
+A point from the user's answers in a LinkedIn step, kept with the LinkedIn document and cited by its writer like a profile line; it reaches the profile only as a suggestion the user accepts and publishes.
 _Avoid_: Tagline, title line (that is a resume's)
 
 **Snapshot**:

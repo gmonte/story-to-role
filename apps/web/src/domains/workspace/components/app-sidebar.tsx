@@ -73,16 +73,8 @@ export function AppSidebar() {
       label: t.formatMessage({ defaultMessage: "New opening" }),
       icon: Plus,
     },
-    ...(isAdmin
-      ? [
-          {
-            href: "/app/admin",
-            label: t.formatMessage({ defaultMessage: "Admin" }),
-            icon: ShieldCheck,
-          },
-        ]
-      : []),
   ];
+  const adminLabel = t.formatMessage({ defaultMessage: "Admin" });
 
   return (
     <Sidebar collapsible="icon">
@@ -130,6 +122,21 @@ export function AppSidebar() {
 
       <SidebarFooter>
         <SidebarMenu>
+          {/* Admin heads the footer: a tool apart from the work above. */}
+          {isAdmin && (
+            <SidebarMenuItem>
+              <SidebarMenuButton
+                asChild
+                isActive={pathname.startsWith("/app/admin")}
+                tooltip={adminLabel}
+              >
+                <Link href="/app/admin">
+                  <ShieldCheck />
+                  <span>{adminLabel}</span>
+                </Link>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+          )}
           <SidebarMenuItem>
             <CreditMeter />
             <OutOfCreditsNotice />

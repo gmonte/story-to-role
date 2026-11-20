@@ -14,7 +14,7 @@ export async function LandingSteps({ locale }: { locale: Locale }) {
       title: t.formatMessage({ defaultMessage: "Write your profile" }),
       text: t.formatMessage({
         defaultMessage:
-          "Start from the resume you have. The profile agent asks what a recruiter would ask, up to three questions at a time, and suggests changes you accept or decline.",
+          "Start from the resume you have. The profile agent asks what a recruiter would ask and suggests changes you accept or decline.",
       }),
     },
     {

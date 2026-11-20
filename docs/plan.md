@@ -321,5 +321,5 @@ Acceptance:
 - Each point is offered, one by one, as a suggestion in the profile's draft (origin `linkedin`): a position's Responsibilities or Results, a project's What I did, or the career direction; the step says it was sent, with a link to My career.
 
 Acceptance:
-- [ ] A point sent to the profile appears as a pending suggestion; after accepting and publishing, a new resume can use it.
+- [x] A point sent to the profile appears as a pending suggestion; after accepting and publishing, a new resume can use it.
 

@@ -781,6 +781,7 @@ describe("LinkedIn text", () => {
         positionId: ctx.globex.id,
         projectId: null,
         credentialId: null,
+        sent: false,
       },
     ]);
     const [instruction] = answered.instructions;
@@ -820,6 +821,30 @@ describe("LinkedIn text", () => {
     expect(
       version.coverage?.findings.map((finding) => finding.code)
     ).not.toContain("figure");
+
+    // Sent to the profile: a suggestion under its position's results, the
+    // draft unchanged, the writer still reading it.
+    const profiles = new ProfileService(ctx.db, ctx.tasks);
+    const { profileSuggestionId } = await interviews.sendToProfile({
+      userId: ctx.user.id,
+      linkedinInstructionId: instruction.id,
+    });
+    expect(await profiles.listSuggestions(ctx.user.id)).toEqual([
+      expect.objectContaining({
+        id: profileSuggestionId,
+        origin: "linkedin",
+        replace: expect.stringContaining(
+          "deploys went from 2 hours to 10 minutes"
+        ) as string,
+      }),
+    ]);
+    expect((await view()).instructions[0].sent).toBe(true);
+    await expect(
+      interviews.sendToProfile({
+        userId: ctx.user.id,
+        linkedinInstructionId: instruction.id,
+      })
+    ).rejects.toMatchObject({ code: "CONFLICT" });
 
     // Removed, the writer no longer reads it.
     await interviews.removeInstruction({

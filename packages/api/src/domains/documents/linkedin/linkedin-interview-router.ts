@@ -91,6 +91,24 @@ export const linkedinInterviewRouter = createTRPCRouter({
       return ok;
     }),
 
+  sendToProfile: userProcedure
+    .meta(
+      openApiMeta(
+        "linkedin",
+        "POST",
+        "/linkedin/instructions/by-id/{linkedinInstructionId}/profile",
+        "Sends a LinkedIn instruction to the profile's draft as a suggestion"
+      )
+    )
+    .input(z.object({ linkedinInstructionId: z.uuid() }))
+    .output(z.object({ profileSuggestionId: z.uuid() }))
+    .mutation(({ ctx, input }) =>
+      new LinkedinInterviewService(db).sendToProfile({
+        userId: ctx.userId,
+        ...input,
+      })
+    ),
+
   removeInstruction: userProcedure
     .meta(
       openApiMeta(

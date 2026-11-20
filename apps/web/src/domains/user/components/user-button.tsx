@@ -29,6 +29,16 @@ export function UserButton() {
     <ClerkUserButton
       showName
       userProfileMode="modal"
+      userProfileProps={{
+        appearance: {
+          elements: {
+            // A long label of ours (“Plan, credits and your key”) wraps:
+            // left-aligned with its icon on the first line, like Clerk's.
+            navbarButton: "justify-start! items-start! text-left!",
+            navbarButtonIcon: "mt-0.5! shrink-0!",
+          },
+        },
+      }}
       appearance={{
         elements: {
           rootBox: "flex-1 w-full!",

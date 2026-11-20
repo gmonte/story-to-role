@@ -10,6 +10,7 @@ import {
   ProfileDecorations,
 } from "~/domains/profile/utils/editor-extensions";
 
+import { clipboardText } from "./clipboard-text";
 import {
   type DocumentBlock,
   isEditableBlock,
@@ -413,6 +414,23 @@ export const DocumentClipboard = Extension.create({
             tr.setSelection(Selection.near(tr.doc.resolve(at), -1));
             view.dispatch(tr.scrollIntoView());
             return true;
+          },
+          clipboardTextSerializer: (slice, view) => {
+            const blocks: Array<{ bullet: boolean; text: string }> = [];
+            slice.content.forEach((node) =>
+              blocks.push({
+                bullet: (node.attrs as BlockAttrs).type === "bullet",
+                text: node.textContent,
+              })
+            );
+            const { $from, $to } = view.state.selection;
+            const wholeLine =
+              $from.parentOffset === 0 &&
+              $to.parentOffset === $to.parent.content.size;
+            return clipboardText(
+              blocks,
+              blocks.length === 1 && slice.openStart > 0 && !wholeLine
+            );
           },
         },
       }),

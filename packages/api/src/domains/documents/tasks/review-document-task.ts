@@ -13,7 +13,7 @@ export const reviewDocumentTask = task({
   run: async ({ taskId }: { taskId: string }) => {
     await runTask(
       { db, taskId, type: "review_document" },
-      async ({ userId, subjectId, reportProgress }) => {
+      async ({ userId, subjectId, reviewers, reportProgress }) => {
         if (!subjectId) throw new Error(`Task ${taskId} has no snapshot`);
         const { ai, cipher } = await createTaskAi({ db, userId, taskId });
         await runReviewResume({
@@ -22,6 +22,7 @@ export const reviewDocumentTask = task({
           cipher,
           userId,
           snapshotId: subjectId,
+          reviewers,
           reportProgress,
         });
       }

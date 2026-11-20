@@ -227,7 +227,13 @@ export const documentsRouter = createTRPCRouter({
         "Reviews the resume's latest snapshot again, rewriting nothing"
       )
     )
-    .input(z.object({ versionId: z.uuid() }))
+    .input(
+      z.object({
+        versionId: z.uuid(),
+        // One reviewer, or three judging in parallel.
+        reviewers: z.union([z.literal(1), z.literal(3)]).default(1),
+      })
+    )
     .output(
       z.object({ snapshotId: z.uuid(), realtime: realtimeSubscriptionSchema })
     )

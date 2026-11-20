@@ -25,6 +25,7 @@ export class TasksRepository {
     type: TaskType;
     subjectId?: string;
     funding?: AiFunding;
+    reviewers?: number;
   }): Promise<Task> {
     const [task] = await this.tx
       .insert(tasksTable)
@@ -71,6 +72,7 @@ export class TasksRepository {
         type: tasksTable.type,
         subjectId: tasksTable.subjectId,
         funding: tasksTable.funding,
+        reviewers: tasksTable.reviewers,
       })
       .from(tasksTable)
       .where(eq(tasksTable.id, taskId));

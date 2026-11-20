@@ -20,6 +20,7 @@ import { resolveSections } from "../template/resolve-sections";
 import { loadWritingSetup } from "../writing/load-writing-setup";
 import { estimatePages, findForbiddenLines } from "./resume-checks";
 import { purposesOf, resumeMaterial } from "./resume-prompts";
+import { pickBestRound } from "./pick-best-round";
 import { coverageRating, judgeResume } from "./review-resume";
 
 /**
@@ -35,6 +36,8 @@ export async function runReviewResume(deps: {
   cipher: UserCipher;
   userId: string;
   snapshotId: string;
+  /** Independent reviewers judging in parallel: 1 or 3. */
+  reviewers?: number;
   reportProgress?: (progress: TaskProgress) => Promise<void>;
   /** This month (YYYY-MM): what "recent" is measured from. */
   today?: string;
@@ -111,20 +114,36 @@ export async function runReviewResume(deps: {
   const pages = rendered?.pages ?? estimatePages(content);
 
   await progress(1, "reviewing");
-  const { judged, usage } = await judgeResume({
-    ai,
-    material,
-    content,
-    pages,
-    maxPages: settings.resumeMaxPages,
-    feedbackLanguage: profile.interviewLanguage,
-  });
-  // The same rule as a generation's: a text still carrying a forbidden
-  // term is rated 1.
-  const rating =
-    findForbiddenLines(content, filter).length > 0
-      ? 1
-      : coverageRating(judged, gaps);
+  // Independent reviewers, none seeing another: the same prompt and input.
+  const reviewers = Math.max(1, deps.reviewers ?? 1);
+  const candidates = await Promise.all(
+    Array.from({ length: reviewers }, async () => {
+      const { judged, usage } = await judgeResume({
+        ai,
+        material,
+        content,
+        pages,
+        maxPages: settings.resumeMaxPages,
+        feedbackLanguage: profile.interviewLanguage,
+      });
+      // The same rule as a generation's: a text still carrying a forbidden
+      // term is rated 1.
+      const rating =
+        findForbiddenLines(content, filter).length > 0
+          ? 1
+          : coverageRating(judged, gaps);
+      return {
+        judged,
+        usage,
+        rating,
+        pages,
+        contradictions: judged.inconsistencies.length,
+      };
+    })
+  );
+  // Chosen as a generation's rounds are: no contradiction first, then the
+  // highest rating.
+  const best = pickBestRound(candidates, settings.resumeMaxPages)!;
 
   // The coverage review never costs the rating: if it fails, the rating
   // is kept without one.
@@ -155,18 +174,19 @@ export async function runReviewResume(deps: {
   await db.transaction(async (tx) => {
     const store = new DocumentsRepository(tx);
     const rounds = await store.listReviewRounds(written.id);
-    await store.insertReviewRounds([
-      {
+    const first = (rounds.at(-1)?.round ?? -1) + 1;
+    await store.insertReviewRounds(
+      candidates.map((candidate, index) => ({
         generationId: written.id,
         snapshotId: snapshot.id,
-        round: (rounds.at(-1)?.round ?? -1) + 1,
-        rating,
-        inputTokens: usage.inputTokens,
-        outputTokens: usage.outputTokens,
-        kept: true,
-        encryptedReview: cipher.encrypt(JSON.stringify(judged)),
-      },
-    ]);
+        round: first + index,
+        rating: candidate.rating,
+        inputTokens: candidate.usage.inputTokens,
+        outputTokens: candidate.usage.outputTokens,
+        kept: candidate === best,
+        encryptedReview: cipher.encrypt(JSON.stringify(candidate.judged)),
+      }))
+    );
     if (coverage) {
       await store.insertCoverageReview({
         generationId: written.id,

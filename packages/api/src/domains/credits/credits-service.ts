@@ -66,6 +66,7 @@ export class CreditsService {
           fitCheck: creditCap("analyze_opening"),
           adaptation: creditCap("adapt_document"),
           reReview: creditCap("review_document"),
+          reReviewParallel: creditCap("review_document", { reviewers: 3 }),
           research: creditCap("research_company"),
           styleProfile: creditCap("extract_style_profile"),
           motivationTurn: creditCap("motivation_turn"),

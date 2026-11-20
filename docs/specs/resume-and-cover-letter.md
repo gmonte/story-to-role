@@ -53,6 +53,7 @@ Generating a resume runs a loop: a strategist drafts, a reviewer judges the draf
 - The user picks the depth before generating: **Quick** (one round) or **Thorough** (up to three rounds, stopping early when coverage stops improving). The best version is kept: no contradictions first, then the highest rating. Each option shows its credit estimate.
 - The number of rounds behind each option is a setting, not a constant, so it can be tuned with real data.
 - Every round's rating, cost and outcome are stored, so the quality gained per extra round can be measured.
+- **Review again, with 1 or 3 reviewers.** The user chooses **1 reviewer** or **3 reviewers in parallel**, each option with its credit estimate (three reviewers cost three reviews; the coverage review runs once). The reviewers are independent calls over the same latest snapshot, none seeing another, rewriting nothing. Each is stored as a review round tied to that snapshot, and the result is picked by the same **Selection** rule as a generation's rounds (no contradictions first, then the highest rating): the kept reviewer's score is the score shown and its contradictions are the ones counted in the warning, while every reviewer's feedback stays listed. The card reads “3 reviewers in parallel: 6 · 7 · 8 — kept 8”.
 
 ## Generation rules
 

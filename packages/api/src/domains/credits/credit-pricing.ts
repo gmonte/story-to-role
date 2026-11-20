@@ -62,6 +62,8 @@ export type CapHints = {
   linkedinSection?: boolean;
   // The profile parts a validation reviews.
   parts?: number;
+  // Reviewers a review task runs in parallel: each costs a review.
+  reviewers?: number;
 };
 
 /**
@@ -86,8 +88,9 @@ export function creditCap(type: TaskType, hints: CapHints = {}): number {
     case "adapt_document":
       return 10 * level;
     case "review_document":
-      // One reviewer and the coverage review, rewriting nothing.
-      return 10;
+      // A reviewer and the coverage review, rewriting nothing; parallel
+      // reviewers cost one review each.
+      return 10 * (hints.reviewers ?? 1);
     case "generate_document": {
       if (hints.linkedinSection) return creditCap("adapt_document", hints);
       // A LinkedIn text is priced like a cover letter: one writer call and

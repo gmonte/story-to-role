@@ -17,6 +17,7 @@ import { OpeningsRepository } from "@repo/api/domains/openings/openings-reposito
 import { ProfileService } from "@repo/api/domains/profile/profile-service";
 import type * as SuggestLineModule from "@repo/api/domains/profile/suggestions/suggest-line";
 import { suggestLine } from "@repo/api/domains/profile/suggestions/suggest-line";
+import { tasksTable } from "@repo/api/domains/tasks/db/tasks-tables";
 import { TasksService } from "@repo/api/domains/tasks/tasks-service";
 import { createTestUser } from "@repo/api/test/create-test-user";
 import { fakeProviderPackage } from "@repo/api/test/fake-provider-package";
@@ -1441,6 +1442,107 @@ describe("resume generation and snapshots", () => {
       content: again,
     });
     expect((await load()).review).toMatchObject({ rating: 9, current: false });
+  });
+
+  it("Review again with 3 parallel reviewers stores 3 rounds and keeps the generation's pick", async () => {
+    const ctx = await setup();
+    const line = {
+      text: "Led a team of 5 engineers.",
+      evidence_ids: [ctx.evidence[1].id],
+    };
+    await ctx.generate("quick", { drafts: [ctx.draft([line])], ratings: [6] });
+    const load = async () =>
+      (
+        await ctx.documents.forOpening({
+          userId: ctx.user.id,
+          openingId: ctx.opening.id,
+        })
+      ).documents[0].versions[0];
+    const generated = await load();
+    const edited = structuredClone(resumeOf(generated.content));
+    experienceOf(edited).lines[0].text = "Led and mentored 5 engineers.";
+    await ctx.documents.saveEdit({
+      userId: ctx.user.id,
+      versionId: generated.id,
+      baseSnapshotId: generated.snapshot.id,
+      content: edited,
+    });
+    const stale = await load();
+
+    // Three reviewers cost three reviews, checked before the task starts.
+    expect(creditCap("review_document", { reviewers: 3 })).toBe(
+      3 * creditCap("review_document")
+    );
+    const started = await ctx.documents.reviewAgain({
+      userId: ctx.user.id,
+      versionId: stale.id,
+      reviewers: 3,
+    });
+    const [task] = await ctx.db
+      .select()
+      .from(tasksTable)
+      .where(eq(tasksTable.subjectId, started.snapshotId));
+    expect(task.reviewers).toBe(3);
+
+    // The highest rating contradicts the profile; the other two don't.
+    const contradiction: Inconsistency = {
+      quote: "Led and mentored 5 engineers.",
+      profileLine: "Led 2 engineers",
+      kind: "wrong_figure",
+    };
+    const verdicts = [
+      reviewRated(9, [contradiction]),
+      reviewRated(5),
+      reviewRated(7),
+    ];
+    let next = 0;
+    const fake = fakeProviderPackage({
+      object: ({ system }) => {
+        if (system.startsWith("You review")) return verdicts[next++];
+        if (system.startsWith("You audit")) return emptyCoverage;
+        throw new Error("a re-review rewrites nothing");
+      },
+    });
+    await runReviewResume({
+      db: ctx.db,
+      ai: createAiClient({
+        db: ctx.db,
+        userId: ctx.user.id,
+        funding: "credits",
+        providerPackage: fake.providerPackage,
+        neverIncludeFilter: await loadNeverIncludeFilter({
+          db: ctx.db,
+          cipher: ctx.cipher,
+          profileId: ctx.profile.id,
+        }),
+      }),
+      cipher: ctx.cipher,
+      userId: ctx.user.id,
+      snapshotId: started.snapshotId,
+      reviewers: 3,
+    });
+
+    const stored = (await ctx.db.select().from(reviewRoundsTable)).filter(
+      (round) => round.snapshotId === started.snapshotId
+    );
+    expect(stored).toHaveLength(3);
+    expect(stored.filter((round) => round.kept)).toHaveLength(1);
+    const reviewed = await load();
+    // Same rule as a generation: no contradiction first, then the best
+    // rating: the 9 is passed over for the 7, and the warning counts the
+    // kept reviewer's contradictions (none).
+    expect(reviewed.review).toMatchObject({
+      rating: 7,
+      inconsistencies: 0,
+      current: true,
+      ofEdit: true,
+    });
+    expect(reviewed.review?.rounds.map((round) => round.rating).sort()).toEqual(
+      [5, 7, 9]
+    );
+    expect(reviewed.review?.rounds.filter((round) => round.kept)).toEqual([
+      expect.objectContaining({ rating: 7 }),
+    ]);
   });
 
   it("refuses another user's versions", async () => {

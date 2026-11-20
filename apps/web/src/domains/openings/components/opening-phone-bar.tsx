@@ -88,22 +88,22 @@ export function OpeningPhoneBar({
               <Button
                 key={item.key}
                 variant="outline"
-                className="h-11 min-w-0 flex-1 px-2"
+                className="h-auto min-h-11 min-w-0 flex-1 px-2 py-1.5 text-xs leading-tight whitespace-normal"
                 onClick={() => setSheet(item.key)}
               >
-                <span className="truncate">{item.label}</span>
+                <span className="line-clamp-2 text-center">{item.label}</span>
               </Button>
             )
         )}
         {target && actionLabel && (
           <Button
-            className="h-11 min-w-0 flex-[1.4] px-2"
+            className="h-auto min-h-11 min-w-0 flex-[1.4] px-2 py-1.5 text-xs leading-tight whitespace-normal"
             onClick={() => {
               if (target.kind === "sheet") setSheet(target.sheet);
               else openView(target.view);
             }}
           >
-            <span className="truncate">{actionLabel}</span>
+            <span className="line-clamp-2 text-center">{actionLabel}</span>
           </Button>
         )}
       </div>

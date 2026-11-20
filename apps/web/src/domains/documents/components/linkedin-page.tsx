@@ -1,5 +1,7 @@
 "use client";
 
+import { useState } from "react";
+
 import { Plus, Sparkles, Trash2 } from "lucide-react";
 
 import type { VersionView } from "@repo/api/domains/documents/schemas/document-view";
@@ -23,6 +25,12 @@ import { GenerationProgress } from "./documents-panel";
 import { HeadlineOptions, LanguageLevels } from "./linkedin-choices";
 import { LinkedinDialog } from "./linkedin-dialog";
 import { LinkedinIndex } from "./linkedin-index";
+import { LinkedinStepCard, LinkedinStepList } from "./linkedin-steps";
+import {
+  type LinkedinStepKey,
+  linkedinSteps,
+  openStep,
+} from "../utils/linkedin-steps";
 
 /** The user's one LinkedIn document, found among their documents. */
 function useLinkedinDocumentId() {
@@ -77,7 +85,7 @@ function LinkedinEmpty() {
           <p className="text-muted-foreground text-sm">
             {t.formatMessage({
               defaultMessage:
-                "StoryToRole writes each part of your LinkedIn from your published profile, with the same rules as your resumes. You edit it here and copy what you approve; nothing is ever changed on LinkedIn.",
+                "StoryToRole writes your LinkedIn from your published profile, one section at a time, with the same rules as your resumes. You edit it here and copy what you approve; nothing is ever changed on LinkedIn.",
             })}
           </p>
         </div>
@@ -93,7 +101,7 @@ function LinkedinEmpty() {
           trigger={
             <Button className="self-start">
               <Sparkles />
-              {t.formatMessage({ defaultMessage: "Generate my LinkedIn" })}
+              {t.formatMessage({ defaultMessage: "Create my LinkedIn" })}
             </Button>
           }
         />
@@ -111,6 +119,20 @@ function LinkedinView({ documentId }: { documentId: string }) {
   const generation = document.data?.generation;
   const running =
     generation?.status === "pending" || generation?.status === "running";
+  const content =
+    selected?.content.kind === "linkedin" ? selected.content : null;
+  const steps = content ? linkedinSteps(content) : [];
+  // Guided until the coverage review judged the text: Finish, or the
+  // shortcut that generates everything at once.
+  const guided =
+    !!content &&
+    !selected?.coverage?.review &&
+    !(running && generation?.kind === "generate");
+  const [chosenStep, setChosenStep] = useState<LinkedinStepKey | null>(null);
+  const step =
+    chosenStep && steps.some((row) => row.key === chosenStep)
+      ? chosenStep
+      : openStep(steps);
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
@@ -144,7 +166,25 @@ function LinkedinView({ documentId }: { documentId: string }) {
           version={selected}
           versions={versions}
           select={select}
-          index={<LinkedinIndex busy={running} />}
+          index={
+            guided ? (
+              <div className="flex flex-col gap-4">
+                <LinkedinStepList
+                  steps={steps}
+                  current={step}
+                  onSelect={setChosenStep}
+                />
+                <LinkedinStepCard
+                  steps={steps}
+                  current={step}
+                  onSelect={setChosenStep}
+                  busy={running}
+                />
+              </div>
+            ) : (
+              <LinkedinIndex busy={running} />
+            )
+          }
           notices={<LinkedinNotices version={selected} />}
         />
       )}

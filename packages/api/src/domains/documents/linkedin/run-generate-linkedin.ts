@@ -29,7 +29,7 @@ import {
   defaultGenerationSettings,
   generationSettingsSchema,
 } from "../schemas/generation-settings";
-import type { Line } from "../schemas/document";
+import type { Line, OutputLanguage } from "../schemas/document";
 import {
   headlineMaxLength,
   type LinkedinContent,
@@ -37,7 +37,12 @@ import {
 import { decryptDocument } from "../snapshot-content";
 import { loadWritingSetup } from "../writing/load-writing-setup";
 import { proficiencyOf } from "./linkedin-proficiency";
-import { linkedinAsResume } from "./linkedin-resume";
+import {
+  allEducation,
+  allExperiences,
+  allProjects,
+  linkedinAsResume,
+} from "./linkedin-resume";
 import {
   careerFocus,
   type LinkedinDraft,
@@ -45,6 +50,7 @@ import {
   linkedinPrompt,
   linkedinPurposeLines,
   linkedinSectionInstruction,
+  type LinkedinSectionWritten,
   linkedinSettings,
 } from "./linkedin-prompts";
 
@@ -142,17 +148,7 @@ export function assembleLinkedin(input: {
     return line ? [line] : [];
   });
   const credentials = (kind: "education" | "certification" | "language") =>
-    input.context.credentials
-      .filter((row) => row.kind === kind)
-      .map((row) => ({
-        credentialId: row.id,
-        title: row.title,
-        institution: row.institution,
-        level: row.level,
-        startDate: row.startDate,
-        endDate: row.endDate,
-        inProgress: row.inProgress,
-      }));
+    credentialEntries(input.context, kind);
   const linkedin: LinkedinContent = {
     kind: "linkedin",
     headline: headlineOptions[0] ?? null,
@@ -203,6 +199,68 @@ export function assembleLinkedin(input: {
   return { content: linkedin, dropped: allDropped };
 }
 
+type AssemblyContext = Parameters<typeof assembleResume>[0]["context"];
+
+const credentialEntries = (
+  context: AssemblyContext,
+  kind: "education" | "certification" | "language"
+) =>
+  context.credentials
+    .filter((row) => row.kind === kind)
+    .map((row) => ({
+      credentialId: row.id,
+      title: row.title,
+      institution: row.institution,
+      level: row.level,
+      startDate: row.startDate,
+      endDate: row.endDate,
+      inProgress: row.inProgress,
+    }));
+
+/**
+ * What a LinkedIn text holds before any step writes (resume spec,
+ * "LinkedIn", "Step by step"): what code prints, every position and
+ * project with no bullets, the credentials, the languages on LinkedIn's
+ * scale, and no headline, About or education description. No AI.
+ */
+export function linkedinSkeleton(
+  context: AssemblyContext,
+  newLineId: () => string = () => randomUUID().slice(0, 8)
+): LinkedinContent {
+  return {
+    kind: "linkedin",
+    headline: null,
+    headlineOptions: [],
+    about: { id: newLineId(), text: "", origin: { kind: "manual" } },
+    experiences: context.positions.map((position) => ({
+      positionId: position.id,
+      employer: position.employer,
+      title: position.title,
+      startDate: position.startDate,
+      endDate: position.endDate,
+      lines: [],
+    })),
+    projects: context.projects.map((project) => ({
+      projectId: project.id,
+      name: project.name,
+      startDate: project.startDate,
+      endDate: project.endDate,
+      role: project.role,
+      link: project.link,
+      lines: [],
+    })),
+    education: credentialEntries(context, "education").map((entry) => ({
+      ...entry,
+      description: null,
+    })),
+    certifications: credentialEntries(context, "certification"),
+    languages: credentialEntries(context, "language").map((entry) => ({
+      ...entry,
+      proficiency: proficiencyOf(entry.level),
+    })),
+  };
+}
+
 const withoutLines = (
   content: LinkedinContent,
   lineIds: string[]
@@ -235,9 +293,16 @@ const withoutLines = (
   })),
 });
 
-/** Which kind of section a redone section's id names in a text. */
-function sectionKind(content: LinkedinContent, section: string) {
+/** Which kind of section a section written alone names in a text. */
+function sectionKind(
+  content: LinkedinContent,
+  section: string
+): LinkedinSectionWritten | null {
   if (section === "headline" || section === "about") return section;
+  if (section === allExperiences && content.experiences.length)
+    return "experiences";
+  if (section === allProjects && content.projects.length) return "projects";
+  if (section === allEducation && content.education.length) return "educations";
   if (content.experiences.some((row) => row.positionId === section))
     return "position";
   if (content.projects.some((row) => row.projectId === section))
@@ -271,34 +336,116 @@ export function replaceSection(
       ? { ...previous, about: written.about }
       : previous;
   }
-  const lines = (entries: Array<{ id: string; lines: Line[] }>) =>
-    entries.find((row) => row.id === section)?.lines ?? [];
-  const position = lines(
-    written.experiences.map((row) => ({ id: row.positionId, lines: row.lines }))
-  );
-  const project = lines(
-    written.projects.map((row) => ({ id: row.projectId, lines: row.lines }))
-  );
-  const description = written.education.find(
-    (row) => row.credentialId === section
-  )?.description;
+  // The entries this section names: one by its id, or all of a kind.
+  const named = (id: string, all: string) => section === id || section === all;
+  const lines = (entries: Array<{ id: string; lines: Line[] }>, id: string) =>
+    entries.find((row) => row.id === id)?.lines ?? [];
+  const writtenPositions = written.experiences.map((row) => ({
+    id: row.positionId,
+    lines: row.lines,
+  }));
+  const writtenProjects = written.projects.map((row) => ({
+    id: row.projectId,
+    lines: row.lines,
+  }));
   return {
     ...previous,
-    experiences: previous.experiences.map((row) =>
-      row.positionId === section && position.length
-        ? { ...row, lines: position }
-        : row
-    ),
-    projects: previous.projects.map((row) =>
-      row.projectId === section && project.length
-        ? { ...row, lines: project }
-        : row
-    ),
-    education: previous.education.map((row) =>
-      row.credentialId === section && description
-        ? { ...row, description }
-        : row
-    ),
+    experiences: previous.experiences.map((row) => {
+      const position = named(row.positionId, allExperiences)
+        ? lines(writtenPositions, row.positionId)
+        : [];
+      return position.length ? { ...row, lines: position } : row;
+    }),
+    projects: previous.projects.map((row) => {
+      const project = named(row.projectId, allProjects)
+        ? lines(writtenProjects, row.projectId)
+        : [];
+      return project.length ? { ...row, lines: project } : row;
+    }),
+    education: previous.education.map((row) => {
+      const description = named(row.credentialId, allEducation)
+        ? written.education.find(
+            (entry) => entry.credentialId === row.credentialId
+          )?.description
+        : null;
+      return description ? { ...row, description } : row;
+    }),
+  };
+}
+
+/** Whether a section written alone already had text: it is written again. */
+function sectionHadText(
+  content: LinkedinContent,
+  section: string,
+  kind: LinkedinSectionWritten
+) {
+  switch (kind) {
+    case "headline":
+      return content.headlineOptions.length > 0;
+    case "about":
+      return content.about.text.trim() !== "";
+    case "experiences":
+      return content.experiences.some((row) => row.lines.length > 0);
+    case "projects":
+      return content.projects.some((row) => row.lines.length > 0);
+    case "educations":
+      return content.education.some((row) => row.description);
+    case "position":
+      return content.experiences.some(
+        (row) => row.positionId === section && row.lines.length > 0
+      );
+    case "project":
+      return content.projects.some(
+        (row) => row.projectId === section && row.lines.length > 0
+      );
+    case "education":
+      return content.education.some(
+        (row) => row.credentialId === section && row.description
+      );
+  }
+}
+
+/** The career a LinkedIn generation reads: its frozen profile version. */
+async function loadLinkedinContext(input: {
+  db: DbClient;
+  cipher: UserCipher;
+  generation: {
+    id: string;
+    profileId: string;
+    profileVersionId: string | null;
+    language: OutputLanguage;
+  };
+}) {
+  const { db, cipher, generation } = input;
+  const filter = await loadNeverIncludeFilter({
+    db,
+    cipher,
+    profileId: generation.profileId,
+    profileVersionId: generation.profileVersionId,
+  });
+  const context = await loadCareerContext({
+    db,
+    cipher,
+    profileId: generation.profileId,
+    filter,
+    profileVersionId: generation.profileVersionId,
+    language: generation.language,
+  });
+  if (!context.profileVersionId) {
+    throw new Error(`Generation ${generation.id} has no published profile`);
+  }
+  const brief = {
+    title: careerFocus,
+    company: null,
+    terms: [],
+    fitCheck: [],
+    focus: careerFocus,
+  };
+  return {
+    filter,
+    context,
+    profileVersionId: context.profileVersionId,
+    brief,
   };
 }
 
@@ -335,6 +482,9 @@ export async function runGenerateLinkedin(deps: {
   if (document?.kind !== "linkedin") {
     throw new Error(`Generation ${generation.id} is not for a LinkedIn text`);
   }
+  if (generation.kind === "linkedin_review") {
+    return reviewLinkedin({ ...deps, generation });
+  }
   // A section written again starts from the version's latest content.
   const redo =
     generation.kind === "linkedin_section" && generation.versionId
@@ -360,30 +510,8 @@ export async function runGenerateLinkedin(deps: {
         .parse(generation.settings ?? defaultGenerationSettings)
     );
     const today = deps.today ?? new Date().toISOString().slice(0, 7);
-    const filter = await loadNeverIncludeFilter({
-      db,
-      cipher,
-      profileId: generation.profileId,
-      profileVersionId: generation.profileVersionId,
-    });
-    const context = await loadCareerContext({
-      db,
-      cipher,
-      profileId: generation.profileId,
-      filter,
-      profileVersionId: generation.profileVersionId,
-      language: generation.language,
-    });
-    if (!context.profileVersionId) {
-      throw new Error(`Generation ${generation.id} has no published profile`);
-    }
-    const brief = {
-      title: careerFocus,
-      company: null,
-      terms: [],
-      fitCheck: [],
-      focus: careerFocus,
-    };
+    const { filter, context, profileVersionId, brief } =
+      await loadLinkedinContext({ db, cipher, generation });
     const setup = await loadWritingSetup({ db, cipher, userId: deps.userId });
     const material = resumeMaterial({
       context,
@@ -411,7 +539,16 @@ export async function runGenerateLinkedin(deps: {
           material,
           context.credentials.filter((row) => row.kind === "education")
         ),
-        ...(kind ? ["", linkedinSectionInstruction(section, kind)] : []),
+        ...(kind && previous?.kind === "linkedin"
+          ? [
+              "",
+              linkedinSectionInstruction(
+                section,
+                kind,
+                sectionHadText(previous, section, kind)
+              ),
+            ]
+          : []),
       ].join("\n"),
       messages: [
         {
@@ -514,13 +651,13 @@ export async function runGenerateLinkedin(deps: {
         author: "ai",
         encryptedContent: cipher.encrypt(JSON.stringify(saved)),
         generationId: generation.id,
-        profileVersionId: context.profileVersionId,
+        profileVersionId,
       });
       if (coverage) {
         await repository.insertCoverageReview({
           generationId: generation.id,
           snapshotId: snapshot.id,
-          profileVersionId: context.profileVersionId,
+          profileVersionId,
           encryptedContent: cipher.encrypt(JSON.stringify(coverage)),
         });
       }
@@ -539,4 +676,72 @@ export async function runGenerateLinkedin(deps: {
     throw error;
   }
   if (stoppedBy) throw stoppedBy;
+}
+
+/**
+ * The last step of the guided flow (resume spec, "LinkedIn", "Step by
+ * step"): the coverage review of the version's latest snapshot as it is,
+ * stored with that snapshot. Nothing is written.
+ */
+async function reviewLinkedin(deps: {
+  db: DbClient;
+  ai: AiClient;
+  cipher: UserCipher;
+  generation: NonNullable<
+    Awaited<ReturnType<DocumentsRepository["findGeneration"]>>
+  >;
+  reportProgress?: (progress: TaskProgress) => Promise<void>;
+}) {
+  const { db, ai, cipher, generation } = deps;
+  const documents = new DocumentsRepository(db);
+  await documents.updateGeneration(generation.id, { status: "running" });
+  try {
+    const latest = generation.versionId
+      ? await documents.latestSnapshot(generation.versionId)
+      : null;
+    const content = latest ? decryptDocument(cipher, latest) : null;
+    if (!latest || content?.kind !== "linkedin") {
+      throw new Error(`Generation ${generation.id} has no LinkedIn text`);
+    }
+    const { context, profileVersionId, brief } = await loadLinkedinContext({
+      db,
+      cipher,
+      generation,
+    });
+    await deps.reportProgress?.({
+      step: 1,
+      totalSteps: 2,
+      label: "coverage_review",
+    });
+    const coverage = await reviewCoverage({
+      ai,
+      content: linkedinAsResume(content),
+      context,
+      brief,
+      purposes: purposesOf(brief),
+      language: generation.language,
+      documentName: "LinkedIn text",
+    });
+    await deps.reportProgress?.({ step: 2, totalSteps: 2, label: "saving" });
+    await db.transaction(async (tx) => {
+      const repository = new DocumentsRepository(tx);
+      await repository.insertCoverageReview({
+        generationId: generation.id,
+        snapshotId: latest.id,
+        profileVersionId,
+        encryptedContent: cipher.encrypt(JSON.stringify(coverage)),
+      });
+      await repository.updateGeneration(generation.id, {
+        status: "completed",
+        snapshotId: latest.id,
+        finishedAt: new Date(),
+      });
+    });
+  } catch (error) {
+    await documents.updateGeneration(generation.id, {
+      status: "failed",
+      finishedAt: new Date(),
+    });
+    throw error;
+  }
 }

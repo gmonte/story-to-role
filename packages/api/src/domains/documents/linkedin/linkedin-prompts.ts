@@ -118,20 +118,37 @@ export function linkedinPrompt(
   ].join("\n");
 }
 
+/** What a section written alone is, for its instruction. */
+export type LinkedinSectionWritten =
+  | "headline"
+  | "about"
+  | "experiences"
+  | "projects"
+  | "educations"
+  | "position"
+  | "project"
+  | "education";
+
 /**
- * What a LinkedIn section written again asks of the writer (resume spec,
- * "LinkedIn"): that section alone, by the same rules.
+ * What a LinkedIn section written alone asks of the writer (resume spec,
+ * "LinkedIn"): a step's section, or one written again, by the same rules.
  */
 export function linkedinSectionInstruction(
   section: string,
-  kind: "headline" | "about" | "position" | "project" | "education"
+  kind: LinkedinSectionWritten,
+  // The section already had text: the person asked for it again.
+  again: boolean
 ) {
   const what = {
     headline: "the headline options",
     about: "the About section",
+    experiences: "the experience text of every position",
+    projects: "the text of every project",
+    educations:
+      "the description of every education listed, where profile lines back one",
     position: `the experience text of the position ${section}`,
     project: `the text of the project ${section}`,
     education: `the description of the education ${section}`,
   }[kind];
-  return `Write only ${what}, fresh, by the rules above; leave every other field empty. The person asked to write it again, so word it differently from a first attempt while keeping to the profile.`;
+  return `Write only ${what}, by the rules above; leave every other field empty.${again ? " The person asked to write it again, so word it differently from a first attempt while keeping to the profile." : ""}`;
 }

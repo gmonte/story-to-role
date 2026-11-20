@@ -62,6 +62,9 @@ export const generationKindSchema = z.enum([
   "letter_update",
   // One section of the LinkedIn text written again (`generations.section`).
   "linkedin_section",
+  // The coverage review of a LinkedIn text as it is, the last step of its
+  // guided flow: no snapshot of its own.
+  "linkedin_review",
 ]);
 export type GenerationKind = z.infer<typeof generationKindSchema>;
 

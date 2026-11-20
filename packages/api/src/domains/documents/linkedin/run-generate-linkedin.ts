@@ -58,9 +58,8 @@ export type LinkedinDroppedLine =
  * (`assembleResume`): locked facts printed by code, each line citing
  * profile lines, figures only where the profile marks them measured, the
  * communication rules, studied and never-claim terms refused, at most
- * four bullets per experience and project, and the very old rule. LinkedIn has no requirement
- * to justify a very old experience, so under “relevant only” it is left
- * out. Positions and projects with no line left are not printed. Each
+ * four bullets per experience and project, every position written however
+ * old (`linkedinSettings`). Positions and projects with no line left are not printed. Each
  * headline option and education description is checked like the summary;
  * the first headline option kept is the chosen one. The credentials are
  * printed by code, the languages on LinkedIn's scale.
@@ -355,9 +354,11 @@ export async function runGenerateLinkedin(deps: {
   await documents.updateGeneration(generation.id, { status: "running" });
   let stoppedBy: KeyUnusableError | null = null;
   try {
-    const settings = generationSettingsSchema
-      .catch(defaultGenerationSettings)
-      .parse(generation.settings ?? defaultGenerationSettings);
+    const settings = linkedinSettings(
+      generationSettingsSchema
+        .catch(defaultGenerationSettings)
+        .parse(generation.settings ?? defaultGenerationSettings)
+    );
     const today = deps.today ?? new Date().toISOString().slice(0, 7);
     const filter = await loadNeverIncludeFilter({
       db,
@@ -408,7 +409,6 @@ export async function runGenerateLinkedin(deps: {
       system: [
         linkedinPrompt(
           material,
-          settings,
           context.credentials.filter((row) => row.kind === "education")
         ),
         ...(kind ? ["", linkedinSectionInstruction(section, kind)] : []),

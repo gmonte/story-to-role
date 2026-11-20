@@ -42,7 +42,7 @@ import {
 function useTypeNames() {
   const t = useTranslation();
   const names: Record<ApplicationType, string> = {
-    simplified: t.formatMessage({ defaultMessage: "Simplified" }),
+    simplified: t.formatMessage({ defaultMessage: "Standard" }),
     external: t.formatMessage({ defaultMessage: "Dedicated" }),
   };
   return names;

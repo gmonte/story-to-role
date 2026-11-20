@@ -172,7 +172,7 @@ function InlineValue({
   );
 }
 
-/** Simplified (a profile reused across openings) or dedicated. */
+/** Standard (a profile reused across openings) or dedicated. */
 export function TypeSection({ detail }: { detail: ApplicationDetail }) {
   const t = useTranslation();
   const labels = useTrackerLabels();

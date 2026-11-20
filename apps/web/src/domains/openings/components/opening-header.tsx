@@ -176,7 +176,7 @@ export function OpeningHeader({
             aria-current={active ? "page" : undefined}
             onClick={() => setView(step)}
             className={cn(
-              "text-muted-foreground flex shrink-0 items-center gap-2 rounded-t-md border border-transparent px-4 py-2 text-sm transition-colors",
+              "text-muted-foreground flex shrink-0 items-center gap-2 rounded-t-md border border-transparent px-4 py-2 text-sm transition-colors max-sm:min-h-11",
               enabled && "hover:text-foreground",
               !enabled && "opacity-50",
               active &&
@@ -221,7 +221,8 @@ export function OpeningHeader({
           ) : (
             <OpeningTitle openingId={openingId} opening={opening} />
           )}
-          <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+          {/* On a phone the chips scroll sideways instead of piling up. */}
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-1 max-sm:flex-nowrap max-sm:overflow-x-auto max-sm:pb-1 max-sm:[&>*]:shrink-0">
             {opening.company && (
               <p className="text-muted-foreground text-sm">{opening.company}</p>
             )}

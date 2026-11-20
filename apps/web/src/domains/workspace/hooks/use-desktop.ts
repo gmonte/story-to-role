@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
 
 // Tailwind's `lg`: where the workspace shows its side columns.
 const desktopQuery = "(min-width: 1024px)";
@@ -32,4 +32,23 @@ export function useDesktop() {
 /** Whether the screen has room for the opening page's three columns. */
 export function useWide() {
   return useMatches(wideQuery);
+}
+
+// Below Tailwind's `md`: a phone.
+const phoneQuery = "(max-width: 767px)";
+
+/**
+ * Whether the screen is a phone (below `md`). The server and the first
+ * client render say no, so the markup agrees.
+ */
+export function usePhone() {
+  return useSyncExternalStore(
+    (onChange) => {
+      const query = window.matchMedia(phoneQuery);
+      query.addEventListener("change", onChange);
+      return () => query.removeEventListener("change", onChange);
+    },
+    () => window.matchMedia(phoneQuery).matches,
+    () => false
+  );
 }

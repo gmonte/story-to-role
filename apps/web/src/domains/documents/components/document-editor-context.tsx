@@ -223,9 +223,12 @@ const editableContent = (version: VersionView): EditableContent =>
  */
 export function DocumentEditorProvider({
   version,
+  editable = true,
   children,
 }: {
   version: VersionView;
+  /** False reads the document without typing over it (a phone's read mode). */
+  editable?: boolean;
   children: ReactNode;
 }) {
   const t = useTranslation();
@@ -322,6 +325,7 @@ export function DocumentEditorProvider({
       },
     }),
     content: blocksToDoc(initial),
+    editable,
     immediatelyRender: false,
     editorProps: {
       attributes: {
@@ -345,6 +349,12 @@ export function DocumentEditorProvider({
       }, readDelayMs);
     },
   });
+
+  useEffect(() => {
+    if (editor && !editor.isDestroyed && editor.isEditable !== editable) {
+      editor.setEditable(editable);
+    }
+  }, [editor, editable]);
 
   const moveSection = useCallback(
     (kind: ResumeSectionKind, toIndex: number) => {

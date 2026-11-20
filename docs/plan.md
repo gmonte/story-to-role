@@ -261,6 +261,7 @@ The opening page restructured after a product design review ([docs/design/openin
 ### O3: Mobile polish
 
 - The opening page and the document pages on a phone: sticky primary action, the Application and Fit blocks reachable in a tap, the document workspace in read mode with tap to edit, and the preview as a sheet.
+- Status: built (bottom bar with Fit, Application and the state's next step; read mode with Edit and Done; Index, Agent, Preview and Versions as sheets). Not yet checked on a real device.
 
 ## LinkedIn page
 

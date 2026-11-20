@@ -32,14 +32,18 @@ import { ResizableAside } from "~/domains/workspace/components/resizable-aside";
 
 import { useOpening } from "../hooks/use-opening";
 import { useOpeningLabels } from "../hooks/use-opening-labels";
-import type { OpeningView as Page } from "../utils/opening-journey";
+import type {
+  OpeningView as Page,
+  PrimaryAction,
+} from "../utils/opening-journey";
 import { OpeningLinkSection } from "./opening-link-section";
 import { DescriptionEditor } from "./description-editor";
 import { FitColumn, pendingGaps } from "./fit-check-panel";
+import { OpeningPhoneBar } from "./opening-phone-bar";
 import type { useOpeningJourney } from "./opening-header";
 
 /** How many columns the screen has room for. */
-export type OpeningLayout = "three" | "two" | "stack";
+export type OpeningLayout = "three" | "two" | "stack" | "phone";
 
 /**
  * The opening itself, on one screen (workspace spec, "The opening page"):
@@ -108,10 +112,15 @@ export function OpeningPageBody({
   openingId,
   opening,
   layout,
+  action = null,
+  openView,
 }: {
   openingId: string;
   opening: OpeningDetail;
   layout: OpeningLayout;
+  /** The state's primary action, for the phone's bottom bar. */
+  action?: PrimaryAction | null;
+  openView?: (view: Exclude<Page, "opening">) => void;
 }) {
   const worked = opening.status === "analyzed" || opening.status === "closed";
   const recheck = isRecheck(opening);
@@ -171,6 +180,29 @@ export function OpeningPageBody({
           </aside>
         )}
       </div>
+    );
+  }
+
+  // A phone: the description is the page; Fit and Application are sheets
+  // behind the bottom bar.
+  if (layout === "phone") {
+    return (
+      <>
+        <main className="min-h-0 flex-1 overflow-y-auto">
+          <div className="mx-auto flex w-full max-w-3xl flex-col gap-6 p-4">
+            {description}
+          </div>
+        </main>
+        {(fit || application || action) && (
+          <OpeningPhoneBar
+            opening={opening}
+            action={action}
+            fit={fit}
+            application={application}
+            openView={openView ?? (() => undefined)}
+          />
+        )}
+      </>
     );
   }
 

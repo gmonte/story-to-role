@@ -115,3 +115,37 @@ export function primaryAction(state: JourneyState): PrimaryAction | null {
   if (state.letterVersions === 0) return "write_letter";
   return "mark_applied";
 }
+
+/** What the phone's bottom bar does with the state's primary action. */
+export type PhoneActionTarget =
+  | { kind: "sheet"; sheet: "fit" | "application" }
+  | { kind: "view"; view: Exclude<OpeningView, "opening"> };
+
+/**
+ * The bar's third button: where the state's next step lives on a phone.
+ * Answering questions opens the Fit sheet, the documents open their pages
+ * and marking as applied (or recording a reply) opens the Application
+ * sheet. The other actions (analyze, reopen, go to My career, add again)
+ * stay in the header, so the bar has none then.
+ */
+export function phoneActionTarget(
+  action: PrimaryAction | null
+): PhoneActionTarget | null {
+  switch (action) {
+    case "answer_questions":
+      return { kind: "sheet", sheet: "fit" };
+    case "generate_resume":
+      return { kind: "view", view: "resume" };
+    case "write_letter":
+      return { kind: "view", view: "letter" };
+    case "mark_applied":
+    case "record_reply":
+      return { kind: "sheet", sheet: "application" };
+    case "go_to_career":
+    case "reopen":
+    case "analyze":
+    case "add_again":
+    case null:
+      return null;
+  }
+}

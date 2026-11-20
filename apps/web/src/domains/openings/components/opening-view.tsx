@@ -166,11 +166,11 @@ export function OpeningPageBody({
             </div>
           </>
         )}
-        <main className="min-w-0 flex-1 overflow-y-auto">
+        <div className="min-w-0 flex-1 overflow-y-auto">
           <div className="mx-auto flex w-full max-w-3xl flex-col gap-6 p-6">
             {description}
           </div>
-        </main>
+        </div>
         {application && (
           <aside
             id="application-column"
@@ -188,11 +188,11 @@ export function OpeningPageBody({
   if (layout === "phone") {
     return (
       <>
-        <main className="min-h-0 flex-1 overflow-y-auto">
+        <div className="min-h-0 flex-1 overflow-y-auto">
           <div className="mx-auto flex w-full max-w-3xl flex-col gap-6 p-4">
             {description}
           </div>
-        </main>
+        </div>
         {(fit || application || action) && (
           <OpeningPhoneBar
             opening={opening}
@@ -207,7 +207,7 @@ export function OpeningPageBody({
   }
 
   return (
-    <main className="min-h-0 flex-1 overflow-y-auto">
+    <div className="min-h-0 flex-1 overflow-y-auto">
       <div className="mx-auto flex w-full max-w-3xl flex-col gap-8 p-4 sm:p-6">
         {/* Under `lg` the application is a block of the page; from `lg` it
             sits behind the header's button. */}
@@ -217,7 +217,7 @@ export function OpeningPageBody({
         {description}
         {fit}
       </div>
-    </main>
+    </div>
   );
 }
 

@@ -157,7 +157,9 @@ export function resumeMaterial(input: {
     ...(context.instructions.length
       ? [
           "",
-          "Application instructions (the user's own statements for this application; follow them, and cite their ids like profile lines when a line rests on them):",
+          input.purposeLines
+            ? "The user's answers for this text (their own statements, figures as they wrote them; cite their ids like profile lines when a line rests on them):"
+            : "Application instructions (the user's own statements for this application; follow them, and cite their ids like profile lines when a line rests on them):",
           ...context.instructions.map(
             (row) =>
               `- instruction ${row.id}${row.positionId ? ` (position ${row.positionId})` : ""}: ${row.text}`

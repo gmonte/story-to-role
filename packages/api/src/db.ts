@@ -15,6 +15,7 @@ export * from "./domains/applications/db/research-tables";
 export * from "./domains/applications/db/motivation-tables";
 export * from "./domains/documents/db/documents-tables";
 export * from "./domains/documents/db/writing-tables";
+export * from "./domains/documents/db/linkedin-tables";
 export * from "./domains/agents/db/agents-tables";
 
 // Relations

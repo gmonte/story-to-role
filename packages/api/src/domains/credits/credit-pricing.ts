@@ -79,6 +79,7 @@ export function creditCap(type: TaskType, hints: CapHints = {}): number {
     case "analyze_opening":
       return 3;
     case "motivation_turn":
+    case "linkedin_turn":
     case "split_instructions":
     case "extract_style_profile":
       return 3;

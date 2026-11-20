@@ -13,6 +13,7 @@ import { adaptationRouter } from "./domains/documents/adaptation/adaptation-rout
 import { creditsRouter } from "./domains/credits/credits-router";
 import { documentsRouter } from "./domains/documents/documents-router";
 import { letterRouter } from "./domains/documents/letter/letter-router";
+import { linkedinInterviewRouter } from "./domains/documents/linkedin/linkedin-interview-router";
 import { linkedinRouter } from "./domains/documents/linkedin/linkedin-router";
 import { libraryRouter } from "./domains/documents/library/library-router";
 import { writingRouter } from "./domains/documents/writing/writing-router";
@@ -32,6 +33,7 @@ export const appRouter = createTRPCRouter({
   instructions: instructionsRouter,
   letters: letterRouter,
   linkedin: linkedinRouter,
+  linkedinInterview: linkedinInterviewRouter,
   library: libraryRouter,
   motivation: motivationRouter,
   openings: openingsRouter,

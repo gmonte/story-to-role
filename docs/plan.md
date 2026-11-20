@@ -304,8 +304,8 @@ Creating the LinkedIn text becomes a guided flow, one step per section, with que
 - Generate this section again opens that section's step alone.
 
 Acceptance:
-- [ ] Going through the steps without questions writes each section in its own snapshot, the other sections and the user's edits untouched, and Finish leaves a coverage review.
-- [ ] Generate this section again on an experience opens the Experiences step for that position and rewrites only it.
+- [x] Going through the steps without questions writes each section in its own snapshot, the other sections and the user's edits untouched, and Finish leaves a coverage review.
+- [x] Generate this section again on an experience opens the Experiences step for that position and rewrites only it.
 
 ### L5: Questions in each step
 
@@ -313,8 +313,8 @@ Acceptance:
 - The answers split into points tied to a position, project or education, kept with the LinkedIn document as LinkedIn instructions; the LinkedIn writer and its checks read them as `instructions` (cited like profile lines, figures as the user wrote them), and the step lists them, removable.
 
 Acceptance:
-- [ ] An answer giving a result's figure lets the Experiences step write a bullet with that figure, citing the instruction, with no figure finding.
-- [ ] Skipping the questions writes the section from the profile alone, charging only the step.
+- [x] An answer giving a result's figure lets the Experiences step write a bullet with that figure, citing the instruction, with no figure finding.
+- [x] Skipping the questions writes the section from the profile alone, charging only the step.
 
 ### L6: Answers to the profile
 

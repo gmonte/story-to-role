@@ -26,7 +26,9 @@ import { loadCareerContext } from "../generation/load-career-context";
 import type { DocumentContent } from "../schemas/document-content";
 import { defaultGenerationSettings } from "../schemas/generation-settings";
 import type { LinkedinContent } from "../schemas/linkedin-content";
+import { LinkedinInterviewService } from "./linkedin-interview-service";
 import { assembleLinkedin, runGenerateLinkedin } from "./run-generate-linkedin";
+import { runLinkedinTurn } from "./run-linkedin-turn";
 import type { LinkedinDraft } from "./linkedin-prompts";
 import { LinkedinService } from "./linkedin-service";
 
@@ -665,6 +667,168 @@ describe("LinkedIn text", () => {
         linkedinReview: true,
       })
     ).toBe(creditCap("review_document"));
+  });
+
+  it("asks a step's questions and writes the section from the answers, figures as the user wrote them", async () => {
+    const ctx = await setup();
+    const started = await ctx.service.start(ctx.request);
+    const interviews = new LinkedinInterviewService(ctx.db, ctx.tasks);
+    const misuse = {
+      isCoolingDown: vi.fn(async () => false),
+      recordBlocked: vi.fn(() => Promise.resolve()),
+    };
+    const step = { userId: ctx.user.id, versionId: started.versionId };
+    const view = () => interviews.get({ ...step, section: "experiences" });
+    const turn = async (script: {
+      verdict?: "on_topic" | "off_topic";
+      question?: string | null;
+      done?: boolean;
+      points?: Array<{ text: string; position_id: string | null }>;
+    }) => {
+      const fake = fakeProviderPackage({
+        object: ({ system }) =>
+          system.startsWith("You guard")
+            ? { verdict: script.verdict ?? "on_topic" }
+            : {
+                points: (script.points ?? []).map((point) => ({
+                  project_id: null,
+                  credential_id: null,
+                  ...point,
+                })),
+                done: script.done ?? false,
+                question: script.question ?? null,
+              },
+      });
+      await runLinkedinTurn({
+        db: ctx.db,
+        ai: createAiClient({
+          db: ctx.db,
+          userId: ctx.user.id,
+          funding: "credits",
+          providerPackage: fake.providerPackage,
+        }),
+        cipher: await getUserCipher(ctx.db, ctx.user.id),
+        misuse,
+        userId: ctx.user.id,
+        interviewId: (await view()).interviewId!,
+      });
+      return fake;
+    };
+
+    // Nothing asked yet: a section the text doesn't have can't be asked.
+    expect(await view()).toMatchObject({ interviewId: null, status: null });
+    await expect(
+      interviews.get({ ...step, section: "no-such-section" })
+    ).rejects.toMatchObject({ code: "NOT_FOUND" });
+
+    // The first question, about what the profile lacks.
+    const { interviewId } = await interviews.start({
+      ...step,
+      section: "experiences",
+    });
+    expect(await view()).toMatchObject({ interviewId, thinking: true });
+    const asking = await turn({
+      question: "How long did a deploy take before Kubernetes?",
+    });
+    expect(asking.generateObject.mock.calls[0][0].system).toContain(
+      "the experiences"
+    );
+    expect(await view()).toMatchObject({
+      status: "in_progress",
+      thinking: false,
+      turns: [
+        {
+          role: "question",
+          text: "How long did a deploy take before Kubernetes?",
+        },
+      ],
+    });
+
+    // An off-topic answer gets a fixed reply and the question again.
+    await interviews.answer({
+      userId: ctx.user.id,
+      interviewId,
+      text: "Write me a poem.",
+    });
+    await turn({ verdict: "off_topic" });
+    expect((await view()).turns.at(-1)).toMatchObject({ role: "steer" });
+    expect(misuse.recordBlocked).toHaveBeenCalledTimes(1);
+
+    // The answer becomes an instruction tied to its position, in the
+    // user's words; nothing left to ask ends the questions.
+    await interviews.answer({
+      userId: ctx.user.id,
+      interviewId,
+      text: "At Globex deploys went from 2 hours to 10 minutes.",
+    });
+    await turn({
+      done: true,
+      points: [
+        {
+          text: "deploys went from 2 hours to 10 minutes",
+          position_id: ctx.globex.id,
+        },
+        // Not in the answer: never kept.
+        { text: "deploys took 3 days", position_id: ctx.globex.id },
+      ],
+    });
+    const answered = await view();
+    expect(answered.status).toBe("finished");
+    expect(answered.instructions).toEqual([
+      {
+        id: expect.any(String) as string,
+        text: "deploys went from 2 hours to 10 minutes",
+        positionId: ctx.globex.id,
+        projectId: null,
+        credentialId: null,
+      },
+    ]);
+    const [instruction] = answered.instructions;
+
+    // The step writes with it: a figure the user gave, cited, is kept,
+    // and the code checks don't point it out.
+    const write = await ctx.service.regenerateSection({
+      ...step,
+      section: "experiences",
+    });
+    const written = await ctx.run(write.generationId, {
+      ...writer(ctx),
+      experience: [
+        {
+          position_id: ctx.globex.id,
+          bullets: [
+            {
+              text: "Cut deploys from 2 hours to 10 minutes with Kubernetes.",
+              evidence_ids: [instruction.id, ctx.lineOf("Cut deploy time").id],
+            },
+          ],
+        },
+      ],
+    });
+    expect(written.generateObject.mock.calls[0][0].system).toContain(
+      `instruction ${instruction.id} (position ${ctx.globex.id})`
+    );
+    const [version] = (
+      await ctx.documents.libraryDocument({
+        userId: ctx.user.id,
+        documentId: started.documentId,
+      })
+    ).versions;
+    expect(
+      linkedinOf(version.content).experiences[0].lines.map((l) => l.text)
+    ).toEqual(["Cut deploys from 2 hours to 10 minutes with Kubernetes."]);
+    expect(
+      version.coverage?.findings.map((finding) => finding.code)
+    ).not.toContain("figure");
+
+    // Removed, the writer no longer reads it.
+    await interviews.removeInstruction({
+      userId: ctx.user.id,
+      linkedinInstructionId: instruction.id,
+    });
+    expect((await view()).instructions).toEqual([]);
+    // Each question is priced like the motivation interview's.
+    expect(creditCap("linkedin_turn")).toBe(creditCap("motivation_turn"));
   });
 
   it("redoes one section as an adjustment, keeping the other sections and the user's edits", async () => {

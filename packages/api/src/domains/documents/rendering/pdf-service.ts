@@ -263,21 +263,25 @@ export class PdfService {
     const names = uniqueFileNames(files);
     const open = (value: string | null) =>
       value ? cipher.decrypt(value) : null;
+    const fileName = applicationZipName({
+      company: open(opening.encryptedCompany),
+      title: open(opening.encryptedTitle),
+    });
+    // Inside a folder named after the opening: unzipping makes it even with
+    // one file (an archive with a single entry is otherwise unpacked loose).
+    const folder = fileName.replace(/\.zip$/, "");
     return {
       bytes: Buffer.from(
         zipSync(
           Object.fromEntries(
             files.map((file, index) => [
-              names[index],
+              `${folder}/${names[index]}`,
               new Uint8Array(file.bytes),
             ])
           )
         )
       ),
-      fileName: applicationZipName({
-        company: open(opening.encryptedCompany),
-        title: open(opening.encryptedTitle),
-      }),
+      fileName,
     };
   }
 }

@@ -2934,8 +2934,9 @@ describe("resume generation and snapshots", () => {
       openingId: ctx.opening.id,
     });
     expect(zip?.fileName).toBe("Hooli_Platform_Engineer.zip");
+    // In a folder named after the opening, even with one file.
     expect(Object.keys(unzipSync(new Uint8Array(zip!.bytes)))).toEqual([
-      "Ada_Lovelace_Platform_Engineer_Resume.pdf",
+      "Hooli_Platform_Engineer/Ada_Lovelace_Platform_Engineer_Resume.pdf",
     ]);
 
     // A new snapshot needs its own PDF; undoing it deletes that file.

@@ -522,8 +522,13 @@ export function useVersionRowLabel() {
           { defaultMessage: "Cover letter · {version}" },
           { version: labels.version(version) }
         )
-      : t.formatMessage(
-          { defaultMessage: "Resume · {version}" },
-          { version: labels.version(version) }
-        );
+      : kind === "linkedin"
+        ? t.formatMessage(
+            { defaultMessage: "LinkedIn · {version}" },
+            { version: labels.version(version) }
+          )
+        : t.formatMessage(
+            { defaultMessage: "Resume · {version}" },
+            { version: labels.version(version) }
+          );
 }

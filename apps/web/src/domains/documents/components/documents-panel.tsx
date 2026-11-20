@@ -197,11 +197,31 @@ export function GenerationProgress({
 }) {
   const t = useTranslation();
   const { progress } = generation;
+  if (generation.kind === "linkedin_review") {
+    return (
+      <AiAtWork
+        title={t.formatMessage({ defaultMessage: "Reviewing your LinkedIn" })}
+        current={progress?.label ?? "coverage_review"}
+        steps={[
+          {
+            key: "coverage_review",
+            label: t.formatMessage({
+              defaultMessage: "Checking every line against your profile",
+            }),
+          },
+          {
+            key: "saving",
+            label: t.formatMessage({ defaultMessage: "Saving the review" }),
+          },
+        ]}
+      />
+    );
+  }
   if (generation.kind === "linkedin_section") {
     return (
       <AiAtWork
         title={t.formatMessage({
-          defaultMessage: "Writing this section again",
+          defaultMessage: "Writing this section",
         })}
         current={progress?.label ?? "drafting"}
         steps={[

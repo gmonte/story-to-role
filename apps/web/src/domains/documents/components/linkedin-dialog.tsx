@@ -46,9 +46,11 @@ const languages: OutputLanguage[] = ["en-US", "pt-BR"];
 const tones: Tone[] = ["your_style", "formal", "direct", "warm", "technical"];
 
 /**
- * Generates the LinkedIn text (resume spec, "LinkedIn") from the published
- * profile, in a language: the first time it creates the document, and
- * again in a language it has makes a new change of that version.
+ * The Goal step of the LinkedIn text (resume spec, "LinkedIn", "Step by
+ * step"): the language, writing level and tone, then Start step by step
+ * (free: a version with what code prints, written section by section) or
+ * the shortcut Generate everything at once, which in a language the text
+ * has makes a new snapshot of that version.
  */
 export function LinkedinDialog({
   defaultLanguage,
@@ -99,16 +101,26 @@ function LinkedinForm({
   // Only whether the profile is published: a LinkedIn text takes no
   // document settings (every position, 3 to 4 bullets, no page limit).
   const documentSettings = useDocumentSettings(true);
+  const done = async (versionId?: string) => {
+    await refresh();
+    onDone();
+    router.push(
+      versionId ? `/app/linkedin?version=${versionId}` : "/app/linkedin"
+    );
+  };
   const generate = useMutation(
     trpc.linkedin.generate.mutationOptions({
-      onSuccess: async () => {
-        await refresh();
-        onDone();
-        router.push("/app/linkedin");
-      },
+      onSuccess: () => done(),
       onError: (error) => toast.error(error.message),
     })
   );
+  const start = useMutation(
+    trpc.linkedin.start.mutationOptions({
+      onSuccess: ({ versionId }) => done(versionId),
+      onError: (error) => toast.error(error.message),
+    })
+  );
+  const pending = generate.isPending || start.isPending;
 
   return (
     <>
@@ -119,7 +131,7 @@ function LinkedinForm({
         <DialogDescription>
           {t.formatMessage({
             defaultMessage:
-              "Your headline options, About, experiences, projects, education, certifications and languages, written from your published profile. You copy what you approve: nothing is changed on LinkedIn.",
+              "Your headline options, About, experiences, projects, education, certifications and languages, written from your published profile, one step at a time. You copy what you approve: nothing is changed on LinkedIn.",
           })}
         </DialogDescription>
       </DialogHeader>
@@ -178,15 +190,24 @@ function LinkedinForm({
           </Select>
         </div>
       </div>
-      <DialogFooter className="items-center">
-        <CreditCost
-          credits={linkedinCredits(credits.data?.estimates, writingLevel)}
-        />
+      <DialogFooter className="flex-col items-stretch gap-2 sm:flex-row sm:items-center">
+        <div className="flex items-center gap-2 sm:mr-auto">
+          <Button
+            variant="ghost"
+            disabled={pending || documentSettings.unpublished}
+            onClick={() => generate.mutate({ language, writingLevel, tone })}
+          >
+            {t.formatMessage({ defaultMessage: "Generate everything at once" })}
+          </Button>
+          <CreditCost
+            credits={linkedinCredits(credits.data?.estimates, writingLevel)}
+          />
+        </div>
         <Button
-          disabled={generate.isPending || documentSettings.unpublished}
-          onClick={() => generate.mutate({ language, writingLevel, tone })}
+          disabled={pending || documentSettings.unpublished}
+          onClick={() => start.mutate({ language, writingLevel, tone })}
         >
-          {t.formatMessage({ defaultMessage: "Generate" })}
+          {t.formatMessage({ defaultMessage: "Start step by step" })}
         </Button>
       </DialogFooter>
     </>

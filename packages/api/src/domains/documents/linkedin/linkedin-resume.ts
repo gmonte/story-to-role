@@ -177,6 +177,15 @@ export function sectionText(
 }
 
 /**
+ * The sections a LinkedIn step writes whole (resume spec, "LinkedIn",
+ * "Step by step"): every experience, every project, every education's
+ * description.
+ */
+export const allExperiences = "experiences";
+export const allProjects = "projects";
+export const allEducation = "education";
+
+/**
  * Whether a section is one the AI writes and the text has, so it can be
  * written again: `headline`, `about`, or a position's, project's or
  * education's id. Certifications and languages are printed by code.
@@ -185,6 +194,9 @@ export function redoableSection(content: LinkedinContent, section: string) {
   return (
     section === "headline" ||
     section === "about" ||
+    (section === allExperiences && content.experiences.length > 0) ||
+    (section === allProjects && content.projects.length > 0) ||
+    (section === allEducation && content.education.length > 0) ||
     content.experiences.some((row) => row.positionId === section) ||
     content.projects.some((row) => row.projectId === section) ||
     content.education.some((row) => row.credentialId === section)

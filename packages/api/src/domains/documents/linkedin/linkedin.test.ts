@@ -561,6 +561,112 @@ describe("LinkedIn text", () => {
     });
   });
 
+  it("goes step by step: starts with what code prints, writes each section alone, and finishes with a coverage review", async () => {
+    const ctx = await setup();
+    const team = ctx.lineOf("Led a team of 5 engineers");
+    const triggered = ctx.trigger.trigger.mock.calls.length;
+    const started = await ctx.service.start(ctx.request);
+    const latest = async () =>
+      (
+        await ctx.documents.libraryDocument({
+          userId: ctx.user.id,
+          documentId: started.documentId,
+        })
+      ).versions[0];
+    const first = await latest();
+    const content = linkedinOf(first.content);
+    // Free and without AI: what code prints, every position with no
+    // bullets, the very old one too.
+    expect(ctx.trigger.trigger).toHaveBeenCalledTimes(triggered);
+    expect(first.id).toBe(started.versionId);
+    expect(content.headline).toBeNull();
+    expect(content.about.text).toBe("");
+    expect(
+      content.experiences.map((entry) => [entry.employer, entry.lines.length])
+    ).toEqual([
+      ["Globex", 0],
+      ["Acme", 0],
+    ]);
+    expect(content.projects.map((entry) => entry.name)).toEqual([
+      "Side Product",
+    ]);
+    expect(content.education).toMatchObject([
+      { title: "BSc in Computer Science", description: null },
+    ]);
+    expect(content.certifications).toHaveLength(1);
+    expect(content.languages.map((row) => row.proficiency)).toEqual([
+      "full_professional",
+      "native_or_bilingual",
+      null,
+    ]);
+    expect(first.coverage?.review ?? null).toBeNull();
+    // Starting again in that language keeps the text as it is.
+    const again = await ctx.service.start(ctx.request);
+    expect(again.versionId).toBe(started.versionId);
+    expect((await latest()).snapshot.sequence).toBe(1);
+
+    // The Experiences step writes every position, and nothing else.
+    const experiences = await ctx.service.regenerateSection({
+      userId: ctx.user.id,
+      versionId: started.versionId,
+      section: "experiences",
+    });
+    const fake = await ctx.run(experiences.generationId, writer(ctx));
+    expect(fake.generateObject).toHaveBeenCalledTimes(1);
+    expect(fake.generateObject.mock.calls[0][0].system).toContain(
+      "Write only the experience text of every position"
+    );
+    const written = linkedinOf((await latest()).content);
+    expect(written.experiences.map((entry) => entry.lines.length)).toEqual([
+      2, 1,
+    ]);
+    expect(written.about.text).toBe("");
+    expect(written.headline).toBeNull();
+
+    // The About step writes the About alone.
+    const about = await ctx.service.regenerateSection({
+      userId: ctx.user.id,
+      versionId: started.versionId,
+      section: "about",
+    });
+    await ctx.run(about.generationId, {
+      ...writer(ctx),
+      about: {
+        paragraphs: ["I lead platform teams."],
+        evidence_ids: [team.id],
+      },
+    });
+    const withAbout = await latest();
+    expect(linkedinOf(withAbout.content).about.text).toBe(
+      "I lead platform teams."
+    );
+    expect(
+      linkedinOf(withAbout.content).experiences.map((e) => e.lines.length)
+    ).toEqual([2, 1]);
+
+    // Finish: the coverage review of the text as it is, on its latest
+    // snapshot, priced as a review.
+    const finish = await ctx.service.review({
+      userId: ctx.user.id,
+      versionId: started.versionId,
+    });
+    const reviewer = await ctx.run(finish.generationId, writer(ctx));
+    expect(reviewer.generateObject).toHaveBeenCalledTimes(1);
+    expect(reviewer.generateObject.mock.calls[0][0].system).toMatch(
+      /^You audit/
+    );
+    const reviewed = await latest();
+    expect(reviewed.snapshot.id).toBe(withAbout.snapshot.id);
+    expect(reviewed.coverage?.review).toBeTruthy();
+    expect(reviewed.coverage?.current).toBe(true);
+    expect(
+      creditCap("generate_document", {
+        documentKind: "linkedin",
+        linkedinReview: true,
+      })
+    ).toBe(creditCap("review_document"));
+  });
+
   it("redoes one section as an adjustment, keeping the other sections and the user's edits", async () => {
     const ctx = await setup();
     const deploy = ctx.lineOf("Cut deploy time by 40%");

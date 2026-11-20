@@ -60,6 +60,8 @@ export type CapHints = {
   documentKind?: "resume" | "cover_letter" | "linkedin";
   // One LinkedIn section written again: priced as an adjustment.
   linkedinSection?: boolean;
+  // A LinkedIn text's coverage review alone: priced as Review again.
+  linkedinReview?: boolean;
   // The profile parts a validation reviews.
   parts?: number;
   // Reviewers a review task runs in parallel: each costs a review.
@@ -93,6 +95,7 @@ export function creditCap(type: TaskType, hints: CapHints = {}): number {
       return 10 * (hints.reviewers ?? 1);
     case "generate_document": {
       if (hints.linkedinSection) return creditCap("adapt_document", hints);
+      if (hints.linkedinReview) return creditCap("review_document");
       // A LinkedIn text is priced like a cover letter: one writer call and
       // the coverage review.
       if (

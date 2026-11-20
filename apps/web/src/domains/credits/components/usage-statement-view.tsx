@@ -241,19 +241,29 @@ function Totals({ statement }: { statement: UsageStatement }) {
               { credits: format.rowCredits(total.payer, total.credits) }
             )}
           </span>
-          <span className="text-muted-foreground text-xs">
-            {t.formatMessage(
-              {
-                defaultMessage:
-                  "{operations, plural, one {# operation} other {# operations}} · {input} in · {output} out",
-              },
-              {
-                operations: total.operations,
-                input: format.tokens(total.inputTokens),
-                output: format.tokens(total.outputTokens),
-              }
-            )}
-          </span>
+          <div className="text-muted-foreground grid gap-0.5 text-xs">
+            <p>
+              {t.formatMessage(
+                {
+                  defaultMessage:
+                    "{operations, plural, =0 {No operations} one {# operation} other {# operations}}",
+                },
+                { operations: total.operations }
+              )}
+            </p>
+            <p>
+              {t.formatMessage(
+                { defaultMessage: "{tokens} input tokens" },
+                { tokens: format.tokens(total.inputTokens) }
+              )}
+            </p>
+            <p>
+              {t.formatMessage(
+                { defaultMessage: "{tokens} output tokens" },
+                { tokens: format.tokens(total.outputTokens) }
+              )}
+            </p>
+          </div>
           {total.usd !== null && (
             <span className="text-muted-foreground text-xs">
               {format.usd(total.usd)}
@@ -363,10 +373,10 @@ function Operations({ statement }: { statement: UsageStatement }) {
               {t.formatMessage({ defaultMessage: "Paid by" })}
             </TableHead>
             <TableHead className="text-right">
-              {t.formatMessage({ defaultMessage: "Input" })}
+              {t.formatMessage({ defaultMessage: "Input tokens" })}
             </TableHead>
             <TableHead className="text-right">
-              {t.formatMessage({ defaultMessage: "Output" })}
+              {t.formatMessage({ defaultMessage: "Output tokens" })}
             </TableHead>
             <TableHead className="text-right">
               {t.formatMessage({ defaultMessage: "Cache read / write" })}

@@ -60,10 +60,15 @@ export class FrozenContexts {
     openingId: string | null;
     // Absent: the profile's fields as written, no translation applied.
     language?: OutputLanguage;
+    // A LinkedIn text: its LinkedIn instructions.
+    linkedinDocumentId?: string;
   }): Promise<CareerContext> {
-    const key = [input.profileVersionId, input.openingId, input.language].join(
-      ":"
-    );
+    const key = [
+      input.profileVersionId,
+      input.openingId,
+      input.language,
+      input.linkedinDocumentId,
+    ].join(":");
     let context = this.contexts.get(key);
     if (!context) {
       context = (async () => {
@@ -80,6 +85,7 @@ export class FrozenContexts {
           filter,
           profileVersionId: input.profileVersionId,
           openingId: input.openingId ?? undefined,
+          linkedinDocumentId: input.linkedinDocumentId,
           language: input.language,
         });
       })();
@@ -174,6 +180,8 @@ export async function snapshotCoverage(input: {
     profileVersionId: input.snapshot.profileVersionId,
     openingId,
     language: input.version.language,
+    linkedinDocumentId:
+      content.kind === "linkedin" ? input.document.id : undefined,
   });
   const focus = input.document.encryptedFocus
     ? cipher.decrypt(input.document.encryptedFocus)

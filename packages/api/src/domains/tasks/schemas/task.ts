@@ -11,6 +11,7 @@ export const taskTypes = [
   "render_pdf",
   "research_company",
   "motivation_turn",
+  "linkedin_turn",
   "validate_profile",
   "embed_profile",
   "profile_agent_turn",

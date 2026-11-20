@@ -412,6 +412,7 @@ async function loadLinkedinContext(input: {
   generation: {
     id: string;
     profileId: string;
+    documentId: string;
     profileVersionId: string | null;
     language: OutputLanguage;
   };
@@ -430,6 +431,8 @@ async function loadLinkedinContext(input: {
     filter,
     profileVersionId: generation.profileVersionId,
     language: generation.language,
+    // What the user answered in its steps.
+    linkedinDocumentId: generation.documentId,
   });
   if (!context.profileVersionId) {
     throw new Error(`Generation ${generation.id} has no published profile`);

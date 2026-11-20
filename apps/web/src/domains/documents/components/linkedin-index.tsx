@@ -30,6 +30,7 @@ import { useTRPC } from "~/tools/trpc/client";
 import { useRefreshDocuments } from "../hooks/use-opening-documents";
 import { hasWarnings } from "../utils/version-checks";
 import { useDocumentEditor } from "./document-editor-context";
+import { LinkedinStepQuestions } from "./linkedin-step-questions";
 import { WarningsDialog } from "./warnings-dialog";
 
 type Row = {
@@ -250,9 +251,10 @@ function CopyTextButton({ section }: { section: string }) {
 }
 
 /**
- * Generate this section again (resume spec, "LinkedIn"): its cost first,
- * then one section rewritten from the profile the text froze, as a new
- * snapshot that leaves the other sections and their edits alone.
+ * Generate this section again (resume spec, "LinkedIn"): the section's
+ * step alone, its questions and earlier answers, then that section
+ * rewritten from the profile the text froze, as a new snapshot that leaves
+ * the other sections and their edits alone.
  */
 function RedoSectionButton({
   section,
@@ -303,10 +305,15 @@ function RedoSectionButton({
             <DialogDescription>
               {t.formatMessage({
                 defaultMessage:
-                  "The AI writes this section again from your profile. The other sections, and your edits in them, stay as they are; Undo brings this one back.",
+                  "The AI writes this section again from your profile and your answers. The other sections, and your edits in them, stay as they are; Undo brings this one back.",
               })}
             </DialogDescription>
           </DialogHeader>
+          <LinkedinStepQuestions
+            versionId={version.id}
+            section={section}
+            disabled={busy || saveStatus !== "saved"}
+          />
           <DialogFooter className="items-center gap-2">
             <CreditCost credits={credits.data?.estimates.adaptation} />
             <DialogClose asChild>

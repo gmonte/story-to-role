@@ -17,6 +17,7 @@ import { useTRPC } from "~/tools/trpc/client";
 import { useRefreshDocuments } from "../hooks/use-opening-documents";
 import type { LinkedinStep, LinkedinStepKey } from "../utils/linkedin-steps";
 import { useDocumentEditor } from "./document-editor-context";
+import { LinkedinStepQuestions } from "./linkedin-step-questions";
 
 /** Each step's name and what it writes, in the interface's language. */
 function useStepLabels() {
@@ -119,7 +120,8 @@ function StepMark({ done, number }: { done: boolean; number: number }) {
 }
 
 /**
- * The current step, under the steps: what it writes, Write this section
+ * The current step, under the steps: what it writes, its questions, Write
+ * this section
  * (priced as an adjustment) or Write again, Back and Next; the last step
  * finishes with the coverage review, priced as Review again.
  */
@@ -184,6 +186,14 @@ export function LinkedinStepCard({
         <h3 className="font-semibold">{names[step.key]}</h3>
         <p className="text-muted-foreground text-sm">{details[step.key]}</p>
       </div>
+      {step.section && (
+        <LinkedinStepQuestions
+          key={step.section}
+          versionId={version.id}
+          section={step.section}
+          disabled={blocked}
+        />
+      )}
       <div className="flex flex-wrap items-center gap-2">
         {step.section ? (
           <>

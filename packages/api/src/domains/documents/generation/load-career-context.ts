@@ -2,6 +2,7 @@ import type { PublicName } from "@repo/api/domains/profile/rules/public-names";
 import type { Translation } from "@repo/api/domains/profile/rules/translations";
 import type { ProfileLanguage } from "@repo/api/domains/profile/truth/sections";
 import { InstructionsRepository } from "@repo/api/domains/applications/instructions-repository";
+import { LinkedinInterviewRepository } from "@repo/api/domains/documents/linkedin/linkedin-interview-repository";
 import {
   type LockedField,
   positionFieldOf,
@@ -153,6 +154,8 @@ export async function loadCareerContext(input: {
   filter: NeverIncludeFilter;
   profileVersionId?: string | null;
   openingId?: string;
+  /** A LinkedIn text: its LinkedIn instructions stand for the opening's. */
+  linkedinDocumentId?: string;
   /** Prints each position's approved title equivalent in this language. */
   language?: OutputLanguage;
 }): Promise<CareerContext> {
@@ -268,22 +271,27 @@ export async function loadCareerContext(input: {
     }));
 
   const instructionsRepository = new InstructionsRepository(db);
-  const instructions = input.openingId
-    ? (await instructionsRepository.listPoints(input.openingId))
-        .filter((point) => point.status === "kept")
-        .map((point) => ({
-          id: point.id,
-          positionId:
-            point.positionId && positionIds.has(point.positionId)
-              ? point.positionId
-              : null,
-          credentialId:
-            point.credentialId && credentialIds.has(point.credentialId)
-              ? point.credentialId
-              : null,
-          text: filter.apply(cipher.decrypt(point.encryptedText)),
-        }))
-    : [];
+  const points = input.openingId
+    ? (await instructionsRepository.listPoints(input.openingId)).filter(
+        (point) => point.status === "kept"
+      )
+    : input.linkedinDocumentId
+      ? await new LinkedinInterviewRepository(db).listKeptInstructions(
+          input.linkedinDocumentId
+        )
+      : [];
+  const instructions = points.map((point) => ({
+    id: point.id,
+    positionId:
+      point.positionId && positionIds.has(point.positionId)
+        ? point.positionId
+        : null,
+    credentialId:
+      point.credentialId && credentialIds.has(point.credentialId)
+        ? point.credentialId
+        : null,
+    text: filter.apply(cipher.decrypt(point.encryptedText)),
+  }));
   const overrides = input.openingId
     ? (await instructionsRepository.listOverrides(input.openingId))
         .filter((row) => row.confirmedAt)

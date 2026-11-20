@@ -70,6 +70,7 @@ export class AccountRepository {
     const applications = await byProfile(t.applicationsTable);
     const motivationInterviews = await byProfile(t.motivationInterviewsTable);
     const documents = await byProfile(t.documentsTable);
+    const linkedinInterviews = await byProfile(t.linkedinInterviewsTable);
     const versions = await this.rowsWhere(
       t.documentVersionsTable,
       t.documentVersionsTable.documentId,
@@ -159,6 +160,13 @@ export class AccountRepository {
       ),
       motivation_points: await byProfile(t.motivationPointsTable),
       documents,
+      linkedin_interviews: linkedinInterviews,
+      linkedin_turns: await below(
+        t.linkedinTurnsTable,
+        t.linkedinTurnsTable.interviewId,
+        linkedinInterviews
+      ),
+      linkedin_instructions: await byProfile(t.linkedinInstructionsTable),
       document_versions: versions,
       document_snapshots: await below(
         t.documentSnapshotsTable,

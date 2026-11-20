@@ -44,6 +44,7 @@ export class UsageStatementRepository {
         )
       );
     return this.calls(
+      userId,
       or(
         and(
           isNull(aiUsageTable.taskId),
@@ -56,8 +57,9 @@ export class UsageStatementRepository {
   }
 
   /** Every call of the given operations (task ids, or ids of loose calls). */
-  callsOfOperations(operationIds: string[]) {
+  callsOfOperations(userId: string, operationIds: string[]) {
     return this.calls(
+      userId,
       or(
         inArray(aiUsageTable.taskId, operationIds),
         and(isNull(aiUsageTable.taskId), inArray(aiUsageTable.id, operationIds))
@@ -153,7 +155,8 @@ export class UsageStatementRepository {
    * Calls with their task and, for a document generation, the kinds of
    * document and generation, oldest first.
    */
-  private calls(where: SQL | undefined) {
+  /** Only the user's own calls, whatever else `where` asks. */
+  private calls(userId: string, where: SQL | undefined) {
     return this.tx
       .select({
         callId: aiUsageTable.id,
@@ -178,7 +181,7 @@ export class UsageStatementRepository {
         documentsTable,
         eq(documentsTable.id, generationsTable.documentId)
       )
-      .where(where)
+      .where(and(eq(aiUsageTable.userId, userId), where))
       .orderBy(aiUsageTable.createdAt);
   }
 

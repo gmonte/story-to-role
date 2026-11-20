@@ -161,6 +161,7 @@ export class CreditsService {
     });
     const shown = page.slice(0, input.limit);
     const calls = await repository.callsOfOperations(
+      userId,
       shown.map((row) => row.operationId)
     );
     const built = buildUsageOperations({

@@ -310,6 +310,58 @@ describe("usage statement", () => {
     ]);
   });
 
+  it("leaves out another user's calls, inside a task or not", async () => {
+    const ctx = await setup();
+    await ctx.call({
+      funding: "credits",
+      purpose: "gap_answer_sentence",
+      createdAt: at("2026-11-12T09:00:00Z"),
+      ...haikuCall,
+    });
+    const other = await createTestUser("grace@example.com");
+    const otherUsage = new AiUsageRepository(ctx.db);
+    await otherUsage.record({
+      userId: other.id,
+      provider: "anthropic",
+      role: "writing",
+      funding: "credits",
+      purpose: "gap_answer_sentence",
+      createdAt: at("2026-11-13T09:00:00Z"),
+      ...sonnetCall,
+    });
+    const otherTask = await new TasksRepository(ctx.db).create({
+      userId: other.id,
+      type: "analyze_opening",
+      funding: "key",
+    });
+    await otherUsage.record({
+      userId: other.id,
+      provider: "anthropic",
+      role: "writing",
+      taskId: otherTask.id,
+      funding: "key",
+      purpose: "analyze_opening",
+      createdAt: at("2026-11-14T09:00:00Z"),
+      ...sonnetCall,
+    });
+    await new TasksRepository(ctx.db).markCompleted(otherTask.id);
+
+    const statement = await usage(ctx.db, ctx.user.id, {
+      ...window,
+      showsPlatformCost: true,
+      now,
+    });
+    expect(statement.operations).toHaveLength(1);
+    expect(
+      statement.totals.map((row) => [
+        row.payer,
+        row.operations,
+        row.inputTokens,
+      ])
+    ).toEqual([["storytorole", 1, 100_000]]);
+    expect(statement.summary.map((row) => row.count)).toEqual([1]);
+  });
+
   it("averages each kind of completed operation, leaving out failed and running ones", async () => {
     const ctx = await setup();
     await ctx.task({

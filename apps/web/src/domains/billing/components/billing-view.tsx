@@ -1,7 +1,8 @@
 "use client";
 
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { ExternalLink } from "lucide-react";
+import { ExternalLink, ReceiptText } from "lucide-react";
+import Link from "next/link";
 
 import { billingCatalog } from "@repo/api/domains/billing/billing-catalog";
 import {
@@ -116,6 +117,12 @@ export function BillingView() {
             })}
           </Button>
         )}
+        <Button variant="outline" className="self-start" asChild>
+          <Link href="/app/billing/usage">
+            <ReceiptText />
+            {t.formatMessage({ defaultMessage: "Usage statement" })}
+          </Link>
+        </Button>
       </section>
 
       <FinishWithCredits />

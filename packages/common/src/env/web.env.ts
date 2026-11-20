@@ -58,6 +58,14 @@ export const env = createEnv({
     // keys wrapped by it stay readable.
     ENCRYPTION_MASTER_KEY: z.string().regex(/^v\d+:[A-Za-z0-9+/]{43}=$/),
     ENCRYPTION_PREVIOUS_MASTER_KEYS: z.string().optional(),
+
+    // Whether the usage statement shows what StoryToRole paid without
+    // charging the user, and US$ beyond the user's own key (it reveals the
+    // margin). Set it to `false` in Production before real users arrive.
+    USAGE_STATEMENT_SHOWS_PLATFORM_COST: z
+      .enum(["true", "false"])
+      .default("true")
+      .transform((val) => val === "true"),
   },
 
   client: {
@@ -100,6 +108,8 @@ export const env = createEnv({
     ENCRYPTION_MASTER_KEY: process.env.ENCRYPTION_MASTER_KEY,
     ENCRYPTION_PREVIOUS_MASTER_KEYS:
       process.env.ENCRYPTION_PREVIOUS_MASTER_KEYS,
+    USAGE_STATEMENT_SHOWS_PLATFORM_COST:
+      process.env.USAGE_STATEMENT_SHOWS_PLATFORM_COST,
 
     NEXT_PUBLIC_ENV: process.env.NEXT_PUBLIC_ENV,
     NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY:

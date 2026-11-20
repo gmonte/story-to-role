@@ -19,6 +19,7 @@ import {
 import { SidebarMenuButton } from "@repo/web/components/ui/sidebar";
 
 import { useCredits } from "../hooks/use-credits";
+import { useUsageStatement } from "../hooks/use-usage-statement";
 
 /**
  * The credit meter (billing spec, "Credit meter"): what the user can still
@@ -159,6 +160,7 @@ export function CreditMeter() {
           )}
         </div>
         <DropdownMenuSeparator />
+        <UsageLine />
         {data.storedLocked > 0 && (
           <DropdownMenuItem asChild>
             <Link href="/app/billing#finish-with-credits">
@@ -183,6 +185,42 @@ export function CreditMeter() {
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
+  );
+}
+
+/**
+ * What the user spent in the plan's current credit month (the last 30
+ * days on Free), debited and as a credit equivalent, with a link to the
+ * usage statement.
+ */
+function UsageLine() {
+  const t = useTranslation();
+  const { data } = useUsageStatement();
+  if (!data) return null;
+  const credits = data.totals.reduce((total, row) => total + row.credits, 0);
+  const tokens = data.totals.reduce(
+    (total, row) => total + row.inputTokens + row.outputTokens,
+    0
+  );
+  return (
+    <DropdownMenuItem asChild>
+      <Link href="/app/billing/usage" className="flex flex-col items-start">
+        <span>{t.formatMessage({ defaultMessage: "Usage statement" })}</span>
+        <span className="text-muted-foreground text-xs">
+          {t.formatMessage(
+            {
+              defaultMessage:
+                "{credits} credits and {tokens} tokens since {date}",
+            },
+            {
+              credits: t.formatNumber(credits, { maximumFractionDigits: 1 }),
+              tokens: t.formatNumber(tokens),
+              date: t.formatDate(data.window.from, { dateStyle: "medium" }),
+            }
+          )}
+        </span>
+      </Link>
+    </DropdownMenuItem>
   );
 }
 

@@ -11,12 +11,15 @@ import {
   ensureMonthlyCredits,
   lockedStoredCredits,
 } from "./credit-ledger";
-import { currentPlan } from "./credit-plan";
+import { currentPlan, paidMonth } from "./credit-plan";
 import { creditCap, usdForUsage } from "./credit-pricing";
 import { creditReserve, nearReserve, resumeEstimate } from "./credit-reserve";
 import { settleTask } from "./settle-task";
 import { CreditsRepository } from "./credits-repository";
 import type { CourtesyGrant, CreditSummary } from "./schemas/credits";
+import type { UsageStatement } from "./schemas/usage-statement";
+import { buildUsageStatement } from "./usage-statement";
+import { UsageStatementRepository } from "./usage-statement-repository";
 import { grantWelcomeCredits } from "./welcome-credits";
 
 export class CreditsService {
@@ -93,6 +96,55 @@ export class CreditsService {
       now,
       billingMonth(now).next
     );
+  }
+
+  /**
+   * The usage statement (billing spec, "Usage statement") for a window,
+   * by default the plan's current credit month: the subscription's billing
+   * month, the calendar month for a courtesy grant, else the last 30 days.
+   */
+  async usageStatement(
+    userId: string,
+    input: {
+      from?: Date;
+      to?: Date;
+      showsPlatformCost: boolean;
+      now?: Date;
+    }
+  ): Promise<UsageStatement> {
+    const now = input.now ?? new Date();
+    const fallback = await this.defaultUsageWindow(userId, now);
+    const window = {
+      from: input.from ?? fallback.from,
+      to: input.to ?? fallback.to,
+    };
+    if (window.from >= window.to) throw new TRPCError({ code: "BAD_REQUEST" });
+    const repository = new UsageStatementRepository(this.db);
+    const calls = await repository.callsBetween(userId, window.from, window.to);
+    const taskIds = [
+      ...new Set(calls.flatMap((call) => (call.taskId ? [call.taskId] : []))),
+    ];
+    return buildUsageStatement({
+      calls,
+      debitedByTask: await repository.debitedByTask(taskIds),
+      window,
+      showsPlatformCost: input.showsPlatformCost,
+    });
+  }
+
+  private async defaultUsageWindow(userId: string, now: Date) {
+    const { subscription, courtesy } = await currentPlan(this.db, userId, now);
+    const { paidPeriodStart, paidPeriodEnd } = subscription ?? {};
+    const paid =
+      paidPeriodStart && paidPeriodEnd
+        ? paidMonth({ start: paidPeriodStart, end: paidPeriodEnd }, now)
+        : null;
+    if (paid) return { from: paid.start, to: paid.end };
+    if (courtesy) {
+      const { start, next } = billingMonth(now);
+      return { from: start, to: next };
+    }
+    return { from: new Date(now.getTime() - 30 * 24 * 3600 * 1000), to: now };
   }
 
   private async keyFunding(tx: DbClient, userId: string, now: Date) {

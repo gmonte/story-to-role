@@ -247,3 +247,11 @@ _Avoid_: Usage allowance, quota, budget
 **Welcome credits**:
 Credits granted once to every new account, which never expire.
 _Avoid_: Trial credits, bonus
+
+**Credit equivalent**:
+What an operation not paid with the user's credits (paid by their own key or by StoryToRole) would have cost in credits.
+_Avoid_: Estimated cost, virtual credits
+
+**Usage statement**:
+The list of a user's AI operations, each with who paid for it, its tokens and its credits.
+_Avoid_: History, log, report

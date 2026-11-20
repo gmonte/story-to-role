@@ -103,10 +103,10 @@ function SimilarRow({
   const refresh = useRefreshDocuments();
   const copy = useMutation(
     trpc.library.copyIntoApplication.mutationOptions({
-      onSuccess: async () => {
+      onSuccess: async (_result, input) => {
         await refresh();
         toast.success(
-          other
+          input.language !== document.language
             ? t.formatMessage({
                 defaultMessage:
                   "Adapting it into this opening's resume as a new version.",
@@ -121,7 +121,8 @@ function SimilarRow({
     })
   );
   const { source } = document;
-  // In another language than the output language it is adapted instead.
+  // In another language than the opening's: used as is in its own
+  // language, or translated into the opening's (a generation).
   const other = document.language !== defaultLanguage;
 
   return (
@@ -141,17 +142,6 @@ function SimilarRow({
             )}
       </span>
       <span className="text-muted-foreground">{labels.version(document)}</span>
-      {other && (
-        <span className="text-muted-foreground">
-          {t.formatMessage(
-            {
-              defaultMessage:
-                "Using it as is adapts it into {language}, which counts as a generation.",
-            },
-            { language: labels.language(defaultLanguage) }
-          )}
-        </span>
-      )}
       <div className="flex gap-1">
         <Button
           size="sm"
@@ -161,14 +151,34 @@ function SimilarRow({
             copy.mutate({
               openingId,
               versionId: document.versionId,
-              language: defaultLanguage,
+              language: document.language,
             })
           }
         >
-          {other
-            ? t.formatMessage({ defaultMessage: "Adapt and use" })
-            : t.formatMessage({ defaultMessage: "Use as is" })}
+          {t.formatMessage({ defaultMessage: "Use as is" })}
         </Button>
+        {other && (
+          <Button
+            size="sm"
+            variant="ghost"
+            disabled={copy.isPending}
+            title={t.formatMessage({
+              defaultMessage: "Counts as a generation.",
+            })}
+            onClick={() =>
+              copy.mutate({
+                openingId,
+                versionId: document.versionId,
+                language: defaultLanguage,
+              })
+            }
+          >
+            {t.formatMessage(
+              { defaultMessage: "Translate into {language}" },
+              { language: labels.language(defaultLanguage) }
+            )}
+          </Button>
+        )}
         <GenerateResumeDialog
           openingId={openingId}
           defaultLanguage={defaultLanguage}

@@ -40,7 +40,7 @@ import { useTRPC } from "~/tools/trpc/client";
 import { useDocumentLabels } from "../hooks/use-document-labels";
 import { useDocumentSettings } from "../hooks/use-document-settings";
 import { useRefreshDocuments } from "../hooks/use-opening-documents";
-import { DocumentSettings, PublishProfileNotice } from "./document-settings";
+import { PublishProfileNotice } from "./document-settings";
 
 const languages: OutputLanguage[] = ["en-US", "pt-BR"];
 const tones: Tone[] = ["your_style", "formal", "direct", "warm", "technical"];
@@ -96,6 +96,8 @@ function LinkedinForm({
   );
   const [writingLevel, setWritingLevel] = useState<WritingLevel>("standard");
   const [tone, setTone] = useState<Tone>(defaultTone);
+  // Only whether the profile is published: a LinkedIn text takes no
+  // document settings (every position, 3 to 4 bullets, no page limit).
   const documentSettings = useDocumentSettings(true);
   const generate = useMutation(
     trpc.linkedin.generate.mutationOptions({
@@ -175,29 +177,14 @@ function LinkedinForm({
             </SelectContent>
           </Select>
         </div>
-        <DocumentSettings
-          value={documentSettings.value}
-          onChange={documentSettings.onChange}
-        />
       </div>
       <DialogFooter className="items-center">
         <CreditCost
           credits={linkedinCredits(credits.data?.estimates, writingLevel)}
         />
         <Button
-          disabled={
-            generate.isPending ||
-            documentSettings.unpublished ||
-            documentSettings.invalid
-          }
-          onClick={() =>
-            generate.mutate({
-              language,
-              writingLevel,
-              tone,
-              settings: documentSettings.settings,
-            })
-          }
+          disabled={generate.isPending || documentSettings.unpublished}
+          onClick={() => generate.mutate({ language, writingLevel, tone })}
         >
           {t.formatMessage({ defaultMessage: "Generate" })}
         </Button>

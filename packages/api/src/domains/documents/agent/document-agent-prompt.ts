@@ -170,7 +170,9 @@ export function buildDocumentAgentPrompt(input: DocumentAgentPromptInput) {
         context.kind === "linkedin"
           ? `Bullets per experience and project: ${linkedinBullets.fewest} to ${linkedinBullets.most}`
           : `Bullets per recent experience (ended within ${settings.recentYears} years): ${settings.bulletsRecent}; per older experience: ${settings.bulletsOlder}`,
-        `Experiences ended ${settings.veryOldYears}+ years ago: ${settings.veryOld.replace("_", " ")}`,
+        context.kind === "linkedin"
+          ? "Every position is written, new or old"
+          : `Experiences ended ${settings.veryOldYears}+ years ago: ${settings.veryOld.replace("_", " ")}`,
         context.kind === "resume"
           ? `Resume length: at most ${settings.resumeMaxPages} page(s)`
           : context.kind === "linkedin"

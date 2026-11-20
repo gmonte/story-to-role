@@ -252,7 +252,7 @@ describe("LinkedIn text", () => {
           ],
         },
         {
-          // Very old: the default rule leaves it out without a requirement.
+          // Very old: LinkedIn writes it like any other position.
           position_id: ctx.acme.id,
           bullets: [
             {
@@ -274,7 +274,8 @@ describe("LinkedIn text", () => {
     expect(content.about.text).toBe(
       "I lead platform teams.\n\nI cut deploy time by 40% with Kubernetes."
     );
-    // Locked facts are the profile's, and the very old position is out.
+    // Locked facts are the profile's; every position is written, the very
+    // old one too.
     expect(content.experiences).toMatchObject([
       {
         positionId: ctx.globex.id,
@@ -283,7 +284,20 @@ describe("LinkedIn text", () => {
         startDate: "2021-03",
         endDate: null,
       },
+      {
+        positionId: ctx.acme.id,
+        employer: "Acme",
+        startDate: "2001-01",
+        lines: [{ text: "Built the order services in Perl." }],
+      },
     ]);
+    // No finding for a very old position, and the writer writes them all.
+    expect(
+      version.coverage?.findings.map((finding) => finding.code)
+    ).not.toContain("veryOld");
+    expect(fake.generateObject.mock.calls[0][0].system).toContain(
+      "every position"
+    );
     // Refused: the estimated figure, no evidence, a studied competency.
     expect(content.experiences[0].lines.map((line) => line.text)).toEqual([
       "Cut deploy time by 40%.",
@@ -902,10 +916,10 @@ describe("LinkedIn text", () => {
     ]);
     const limited = assemble(draft);
 
-    // “Keep”: the very old position is written like an older one.
+    // Every position, whatever the very old setting says.
     const kept = assemble(draft, {
       ...defaultGenerationSettings,
-      veryOld: "keep",
+      veryOld: "leave_out",
     });
     expect(kept.content.experiences.map((entry) => entry.employer)).toEqual([
       "Globex",

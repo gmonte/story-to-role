@@ -1,20 +1,28 @@
 "use client";
 
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 
 import { useMutation } from "@tanstack/react-query";
-import { RotateCcw } from "lucide-react";
+import { Check, ListTree, Pencil, RotateCcw } from "lucide-react";
 import Link from "next/link";
 
 import type { VersionView } from "@repo/api/domains/documents/schemas/document-view";
 import { useTranslation } from "@repo/intl/use-translation";
 import { Button } from "@repo/web/components/ui/button";
 import { toast } from "@repo/web/components/ui/sonner";
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from "@repo/web/components/ui/sheet";
 import { Tabs, TabsList, TabsTrigger } from "@repo/web/components/ui/tabs";
 import { cn } from "@repo/web/lib/utils";
 
 import { useTRPC } from "~/tools/trpc/client";
 import { ResizableAside } from "~/domains/workspace/components/resizable-aside";
+import { usePhone } from "~/domains/workspace/hooks/use-desktop";
 
 import { useDocumentLabels } from "../hooks/use-document-labels";
 import { useRefreshDocuments } from "../hooks/use-opening-documents";
@@ -52,19 +60,51 @@ export function DocumentWorkspace({
   /** The left column's index, when the document has its own (LinkedIn). */
   index?: ReactNode;
 }) {
+  const t = useTranslation();
+  const phone = usePhone();
+  // A phone reads the document first; Edit turns the keyboard on.
+  const [editing, setEditing] = useState(false);
+  const [indexOpen, setIndexOpen] = useState(false);
+  const left = (
+    <>
+      {index ?? <DocumentIndex />}
+      <DocumentFindings />
+      {aside}
+    </>
+  );
   return (
-    <DocumentEditorProvider key={version.id} version={version}>
+    <DocumentEditorProvider
+      key={version.id}
+      version={version}
+      editable={!phone || editing}
+    >
       <div className="flex min-h-0 flex-1">
-        <ResizableAside
-          storageKey="document-index-width"
-          className="space-y-6 p-4"
-        >
-          {index ?? <DocumentIndex />}
-          <DocumentFindings />
-          {aside}
-        </ResizableAside>
+        {!phone && (
+          <ResizableAside
+            storageKey="document-index-width"
+            className="space-y-6 p-4"
+          >
+            {left}
+          </ResizableAside>
+        )}
         <div className="min-w-0 flex-1 overflow-y-auto">
-          <DocumentToolbar versions={versions} select={select} />
+          <DocumentToolbar
+            versions={versions}
+            select={select}
+            indexButton={
+              phone && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-10"
+                  onClick={() => setIndexOpen(true)}
+                >
+                  <ListTree />
+                  {t.formatMessage({ defaultMessage: "Index" })}
+                </Button>
+              )
+            }
+          />
           <DocumentChangesBar />
           <div className="mx-auto flex w-full max-w-[52rem] flex-col gap-2 px-6 pt-4 empty:hidden">
             <NewerProfileNotice />
@@ -72,6 +112,32 @@ export function DocumentWorkspace({
           </div>
           <DocumentEditor />
         </div>
+        {phone && (
+          <>
+            <Button
+              className="fixed right-4 bottom-[calc(5.5rem+env(safe-area-inset-bottom))] z-20 h-12 rounded-full px-5 shadow-lg"
+              onClick={() => setEditing((current) => !current)}
+            >
+              {editing ? <Check /> : <Pencil />}
+              {editing
+                ? t.formatMessage({ defaultMessage: "Done" })
+                : t.formatMessage({ defaultMessage: "Edit" })}
+            </Button>
+            <Sheet open={indexOpen} onOpenChange={setIndexOpen}>
+              <SheetContent className="w-[min(100vw,24rem)] gap-0 overflow-y-auto p-4 pt-12">
+                <SheetHeader className="sr-only">
+                  <SheetTitle>
+                    {t.formatMessage({ defaultMessage: "Index" })}
+                  </SheetTitle>
+                  <SheetDescription>
+                    {t.formatMessage({ defaultMessage: "Index" })}
+                  </SheetDescription>
+                </SheetHeader>
+                <div className="space-y-6">{left}</div>
+              </SheetContent>
+            </Sheet>
+          </>
+        )}
       </div>
     </DocumentEditorProvider>
   );
@@ -141,9 +207,12 @@ function NewerProfileNotice() {
 function DocumentToolbar({
   versions,
   select,
+  indexButton,
 }: {
   versions: VersionView[];
   select: (versionId: string) => void;
+  /** A phone's way to the index and the findings. */
+  indexButton?: ReactNode;
 }) {
   const t = useTranslation();
   const labels = useDocumentLabels();
@@ -169,6 +238,7 @@ function DocumentToolbar({
     <div className="bg-background/95 sticky top-0 z-10 flex flex-col gap-2 border-b px-4 py-2 backdrop-blur">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex flex-wrap items-center gap-3">
+          {indexButton}
           {/* One version needs no tabs: they'd be a button doing nothing. */}
           {versions.length > 1 && (
             <Tabs value={version.id} onValueChange={select}>

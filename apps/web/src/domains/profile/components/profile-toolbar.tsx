@@ -119,12 +119,14 @@ export function ProfileToolbar() {
               )
           : t.formatMessage({ defaultMessage: "Not published yet" })}
       </span>
-      <div className="ml-auto flex items-center gap-1">
+      <div className="ml-auto flex shrink-0 items-center gap-1">
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="ghost" size="sm">
               <Plus className="size-4" />
-              {t.formatMessage({ defaultMessage: "Add" })}
+              <span className="max-sm:sr-only">
+                {t.formatMessage({ defaultMessage: "Add" })}
+              </span>
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
@@ -140,7 +142,9 @@ export function ProfileToolbar() {
         </DropdownMenu>
         <Button variant="ghost" size="sm" onClick={download}>
           <Download className="size-4" />
-          {t.formatMessage({ defaultMessage: "Download" })}
+          <span className="max-sm:sr-only">
+            {t.formatMessage({ defaultMessage: "Download" })}
+          </span>
         </Button>
         {!!versions.data?.length && (
           <Button
@@ -149,7 +153,9 @@ export function ProfileToolbar() {
             onClick={() => setVersionsOpen(true)}
           >
             <History className="size-4" />
-            {t.formatMessage({ defaultMessage: "Versions" })}
+            <span className="max-sm:sr-only">
+              {t.formatMessage({ defaultMessage: "Versions" })}
+            </span>
           </Button>
         )}
         <Tooltip>
@@ -165,7 +171,9 @@ export function ProfileToolbar() {
                 ) : (
                   <Send className="size-4" />
                 )}
-                {t.formatMessage({ defaultMessage: "Publish" })}
+                <span className="max-sm:sr-only">
+                  {t.formatMessage({ defaultMessage: "Publish" })}
+                </span>
               </Button>
             </span>
           </TooltipTrigger>

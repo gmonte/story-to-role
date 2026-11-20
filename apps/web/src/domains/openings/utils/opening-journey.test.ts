@@ -3,9 +3,49 @@ import { describe, expect, it } from "vitest";
 import {
   availableViews,
   type JourneyState,
+  phoneActionTarget,
   primaryAction,
   resolveView,
 } from "./opening-journey";
+
+describe("phoneActionTarget", () => {
+  it("sends the questions to the Fit sheet", () => {
+    expect(phoneActionTarget("answer_questions")).toEqual({
+      kind: "sheet",
+      sheet: "fit",
+    });
+  });
+
+  it("opens the document pages for writing", () => {
+    expect(phoneActionTarget("generate_resume")).toEqual({
+      kind: "view",
+      view: "resume",
+    });
+    expect(phoneActionTarget("write_letter")).toEqual({
+      kind: "view",
+      view: "letter",
+    });
+  });
+
+  it("opens the Application sheet to apply or record a reply", () => {
+    expect(phoneActionTarget("mark_applied")).toEqual({
+      kind: "sheet",
+      sheet: "application",
+    });
+    expect(phoneActionTarget("record_reply")).toEqual({
+      kind: "sheet",
+      sheet: "application",
+    });
+  });
+
+  it("has none when the header carries the action or nothing applies", () => {
+    expect(phoneActionTarget(null)).toBeNull();
+    expect(phoneActionTarget("analyze")).toBeNull();
+    expect(phoneActionTarget("reopen")).toBeNull();
+    expect(phoneActionTarget("go_to_career")).toBeNull();
+    expect(phoneActionTarget("add_again")).toBeNull();
+  });
+});
 
 const analyzed: JourneyState = {
   status: "analyzed",

@@ -29,7 +29,11 @@ import { GenerateLetterDialog } from "~/domains/documents/components/generate-le
 import { GenerateResumeDialog } from "~/domains/documents/components/generate-resume-dialog";
 import { useSelectedVersion } from "~/domains/documents/hooks/use-selected-version";
 import { WorkspaceBody } from "~/domains/workspace/components/workspace-body";
-import { useDesktop, useWide } from "~/domains/workspace/hooks/use-desktop";
+import {
+  useDesktop,
+  usePhone,
+  useWide,
+} from "~/domains/workspace/hooks/use-desktop";
 
 import { useOpening, useRefreshOpenings } from "../hooks/use-opening";
 import {
@@ -73,6 +77,7 @@ function OpeningScreen({
   const pathname = usePathname();
   const desktop = useDesktop();
   const wide = useWide();
+  const phone = usePhone();
   const journey = useOpeningJourney(openingId, opening);
   const [sheetOpen, setSheetOpen] = useState(false);
   const view = resolveView(
@@ -109,7 +114,13 @@ function OpeningScreen({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [journey.resumeGenerating, journey.letterGenerating]);
 
-  const layout: OpeningLayout = wide ? "three" : desktop ? "two" : "stack";
+  const layout: OpeningLayout = phone
+    ? "phone"
+    : wide
+      ? "three"
+      : desktop
+        ? "two"
+        : "stack";
   const worked =
     opening.status === "analyzed" ||
     opening.status === "closed" ||
@@ -141,7 +152,7 @@ function OpeningScreen({
         icon: <PanelRight />,
         onClick: () => setSheetOpen(true),
       }
-    : view !== "opening" && !desktop && hasDocumentPanel
+    : view !== "opening" && !desktop && !phone && hasDocumentPanel
       ? {
           label: t.formatMessage({ defaultMessage: "Agent and versions" }),
           icon: <PanelRight />,
@@ -164,6 +175,8 @@ function OpeningScreen({
             openingId={openingId}
             opening={opening}
             layout={layout}
+            action={journey.action}
+            openView={setView}
           />
         ) : (
           <WorkspaceBody
@@ -180,6 +193,8 @@ function OpeningScreen({
             panel={desktop ? documentColumn || undefined : undefined}
           />
         )}
+        {/* A phone: the column is a bottom bar of sheets under the page. */}
+        {view !== "opening" && phone && documentColumn}
         {sideButton && (
           <Sheet open={sheetOpen} onOpenChange={setSheetOpen}>
             <SheetContent className="w-[min(100vw,24rem)] overflow-y-auto p-4 pt-10">

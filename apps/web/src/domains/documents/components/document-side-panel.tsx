@@ -36,8 +36,16 @@ import {
   TabsList,
   TabsTrigger,
 } from "@repo/web/components/ui/tabs";
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from "@repo/web/components/ui/sheet";
 import { cn } from "@repo/web/lib/utils";
 
+import { usePhone } from "~/domains/workspace/hooks/use-desktop";
 import { useTRPC } from "~/tools/trpc/client";
 
 import { useDocumentLabels } from "../hooks/use-document-labels";
@@ -82,6 +90,18 @@ export function DocumentSidePanel({
     setSeenTopic(topic.id);
     setTab("agent");
   }
+  const phone = usePhone();
+  if (phone) {
+    return (
+      <PhoneDocumentBar
+        version={version}
+        versions={versions}
+        agent={agent}
+        preview={preview}
+        topicId={topic ? String(topic.id) : undefined}
+      />
+    );
+  }
   return (
     <Tabs
       value={tab}
@@ -122,6 +142,96 @@ export function DocumentSidePanel({
         {versions}
       </TabsContent>
     </Tabs>
+  );
+}
+
+/**
+ * The panel on a phone: a bottom bar with Agent, Preview and Versions,
+ * each opening a tall sheet. A new topic for the agent opens its sheet.
+ */
+function PhoneDocumentBar({
+  version,
+  versions,
+  agent,
+  preview,
+  topicId,
+}: {
+  version: VersionView;
+  versions: ReactNode;
+  agent?: ReactNode;
+  preview: boolean;
+  topicId?: string;
+}) {
+  const t = useTranslation();
+  // Closed until the person taps a button (or hands the agent a topic).
+  const [open, setOpen] = useState<string | null>(null);
+  const [seen, setSeen] = useState(topicId);
+  if (agent && topicId && topicId !== seen) {
+    setSeen(topicId);
+    setOpen("agent");
+  }
+  const tabs = [
+    agent && {
+      key: "agent",
+      label: t.formatMessage({ defaultMessage: "Agent" }),
+    },
+    preview && {
+      key: "preview",
+      label: t.formatMessage({ defaultMessage: "Preview" }),
+    },
+    {
+      key: "versions",
+      label: t.formatMessage({ defaultMessage: "Versions" }),
+    },
+  ].filter((tab) => !!tab);
+  const current = tabs.find((tab) => tab.key === open);
+
+  return (
+    <>
+      <div className="bg-background/95 flex shrink-0 gap-2 border-t px-3 pt-2 pb-[calc(0.5rem+env(safe-area-inset-bottom))] backdrop-blur">
+        {tabs.map((tab) => (
+          <Button
+            key={tab.key}
+            variant="outline"
+            className="h-11 flex-1"
+            onClick={() => setOpen(tab.key)}
+          >
+            {tab.label}
+          </Button>
+        ))}
+      </div>
+      <Sheet
+        open={open !== null}
+        onOpenChange={(next) => !next && setOpen(null)}
+      >
+        <SheetContent
+          side="bottom"
+          className="h-[92dvh] gap-0 p-0 pb-[env(safe-area-inset-bottom)]"
+        >
+          <SheetHeader className="border-b p-4 pr-12">
+            <SheetTitle>{current?.label}</SheetTitle>
+            <SheetDescription className="sr-only">
+              {current?.label}
+            </SheetDescription>
+          </SheetHeader>
+          {open === "agent" && (
+            <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+              {agent}
+            </div>
+          )}
+          {open === "preview" && (
+            <div className="min-h-0 flex-1 overflow-y-auto p-4">
+              <PdfPreview key={version.id} version={version} />
+            </div>
+          )}
+          {open === "versions" && (
+            <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto p-4">
+              {versions}
+            </div>
+          )}
+        </SheetContent>
+      </Sheet>
+    </>
   );
 }
 

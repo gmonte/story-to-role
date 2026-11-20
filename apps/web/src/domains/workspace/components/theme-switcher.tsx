@@ -15,13 +15,21 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@repo/web/components/ui/dropdown-menu";
+import { Button } from "@repo/web/components/ui/button";
 import { SidebarMenuButton } from "@repo/web/components/ui/sidebar";
 
 // Nothing to subscribe to: the snapshots only tell the server and browser apart.
 const subscribe = () => () => undefined;
 
-/** Light, dark or following the system, remembered by next-themes in this browser. */
-export function ThemeSwitcher() {
+/**
+ * Light, dark or following the system, remembered by next-themes in this
+ * browser. `icon` is a bare icon button, for a page without the sidebar.
+ */
+export function ThemeSwitcher({
+  variant = "sidebar",
+}: {
+  variant?: "sidebar" | "icon";
+}) {
   const t = useTranslation();
   const { theme, setTheme } = useTheme();
   // The stored theme is only known in the browser, so the server renders "system".
@@ -54,14 +62,28 @@ export function ThemeSwitcher() {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <SidebarMenuButton
-          tooltip={t.formatMessage({ defaultMessage: "Theme" })}
-        >
-          <current.icon />
-          <span>{current.label}</span>
-        </SidebarMenuButton>
+        {variant === "icon" ? (
+          <Button
+            variant="ghost"
+            size="icon"
+            aria-label={t.formatMessage({ defaultMessage: "Theme" })}
+          >
+            <current.icon />
+          </Button>
+        ) : (
+          <SidebarMenuButton
+            tooltip={t.formatMessage({ defaultMessage: "Theme" })}
+          >
+            <current.icon />
+            <span>{current.label}</span>
+          </SidebarMenuButton>
+        )}
       </DropdownMenuTrigger>
-      <DropdownMenuContent side="top" align="start" className="w-56">
+      <DropdownMenuContent
+        side={variant === "icon" ? "bottom" : "top"}
+        align={variant === "icon" ? "end" : "start"}
+        className="w-56"
+      >
         <DropdownMenuLabel>
           {t.formatMessage({ defaultMessage: "Theme" })}
         </DropdownMenuLabel>

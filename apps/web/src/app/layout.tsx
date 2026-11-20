@@ -3,7 +3,7 @@ import "~/styles/globals.css";
 import { enUS, ptBR } from "@clerk/localizations";
 import { ClerkProvider } from "@clerk/nextjs";
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Geist, Geist_Mono, Space_Grotesk } from "next/font/google";
 import { ThemeProvider } from "next-themes";
 
 import { getTranslation } from "@repo/intl/get-translation";
@@ -22,6 +22,13 @@ const geistSans = Geist({
 const geistMono = Geist_Mono({
   variable: "--font-geist-mono",
   subsets: ["latin"],
+});
+
+// The brand's display face: the lockup and the landing page's headings.
+const spaceGrotesk = Space_Grotesk({
+  variable: "--font-space-grotesk",
+  subsets: ["latin"],
+  weight: ["600"],
 });
 
 export async function generateMetadata(): Promise<Metadata> {
@@ -58,6 +65,7 @@ export default async function RootLayout({
           className={cn(
             geistSans.variable,
             geistMono.variable,
+            spaceGrotesk.variable,
             "bg-background font-sans antialiased"
           )}
         >

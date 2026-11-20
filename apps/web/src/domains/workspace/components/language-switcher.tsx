@@ -16,12 +16,20 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@repo/web/components/ui/dropdown-menu";
+import { Button } from "@repo/web/components/ui/button";
 import { SidebarMenuButton } from "@repo/web/components/ui/sidebar";
 
 import { setLocaleAction } from "~/tools/intl/actions/set-locale-action";
 
-/** The interface language, independent of every other language. */
-export function LanguageSwitcher() {
+/**
+ * The interface language, independent of every other language. `icon` is a
+ * bare icon button, for a page without the sidebar.
+ */
+export function LanguageSwitcher({
+  variant = "sidebar",
+}: {
+  variant?: "sidebar" | "icon";
+}) {
   const t = useTranslation();
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -36,12 +44,29 @@ export function LanguageSwitcher() {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <SidebarMenuButton disabled={isPending}>
-          <Languages />
-          <span>{intlConfig.locales[t.locale].translatedName}</span>
-        </SidebarMenuButton>
+        {variant === "icon" ? (
+          <Button
+            variant="ghost"
+            size="icon"
+            disabled={isPending}
+            aria-label={t.formatMessage({
+              defaultMessage: "Interface language",
+            })}
+          >
+            <Languages />
+          </Button>
+        ) : (
+          <SidebarMenuButton disabled={isPending}>
+            <Languages />
+            <span>{intlConfig.locales[t.locale].translatedName}</span>
+          </SidebarMenuButton>
+        )}
       </DropdownMenuTrigger>
-      <DropdownMenuContent side="top" align="start" className="w-56">
+      <DropdownMenuContent
+        side={variant === "icon" ? "bottom" : "top"}
+        align={variant === "icon" ? "end" : "start"}
+        className="w-56"
+      >
         <DropdownMenuLabel>
           {t.formatMessage({ defaultMessage: "Interface language" })}
         </DropdownMenuLabel>

@@ -17,14 +17,14 @@ The tracker follows every application the user pursues, from the first document 
 
 The method's columns, beyond company, title, link and status:
 
-| Field                       | Notes                                                                                                                                                                               |
-| --------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Source                      | Where the opening was found: LinkedIn, the company's site, a referral, a job board (a short list plus free text)                                                                    |
-| Application type            | Simplified (one-click on a job board) or external (the company's own form)                                                                                                          |
-| Resume sent                 | The family and version sent, recorded automatically when the document comes from StoryToRole, or picked by hand for an external application: what the user promised                 |
-| Next step                   | Free text ("HR interview on Sep 20"), shown on the application and in reminders                                                                                                     |
-| Notes                       | Free text                                                                                                                                                                           |
-| Decline reason (the user's) | Why the user gave up, asked in a dialog when the status is set to Withdrawn (optional, editable later); it can become a rule in the job preferences document, which screening reads |
+| Field                       | Notes                                                                                                                                                                                                             |
+| --------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Source                      | Where the opening was found: LinkedIn, the company's site, a referral, a job board (a short list plus free text)                                                                                                  |
+| Application type            | Simplified (a single profile the person reuses across openings: a job board's quick apply, a talent platform) or dedicated (a document generated or a form filled in for this opening only; stored as `external`) |
+| Resume sent                 | The family and version sent, recorded automatically when the document comes from StoryToRole, or picked by hand for an external application: what the user promised                                               |
+| Next step                   | Free text ("HR interview on Sep 20"), shown on the application and in reminders                                                                                                                                   |
+| Notes                       | Free text                                                                                                                                                                                                         |
+| Decline reason (the user's) | Why the user gave up, asked in a dialog when the status is set to Withdrawn (optional, editable later); it can become a rule in the job preferences document, which screening reads                               |
 
 There is no field for recruiter contacts. Notes and next steps are free text, where names, emails and phone numbers end up: they are encrypted with the user's key and never reach any prompt. Anything the AI reads of the tracker is its structured fields (source, application type, resume sent, status, dates, decline reason).
 

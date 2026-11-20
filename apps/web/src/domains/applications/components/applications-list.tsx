@@ -43,7 +43,7 @@ function useTypeNames() {
   const t = useTranslation();
   const names: Record<ApplicationType, string> = {
     simplified: t.formatMessage({ defaultMessage: "Simplified" }),
-    external: t.formatMessage({ defaultMessage: "External" }),
+    external: t.formatMessage({ defaultMessage: "Dedicated" }),
   };
   return names;
 }

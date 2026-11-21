@@ -29,12 +29,12 @@ export function ChatPlaceholder({
         <p className="text-muted-foreground max-w-md text-sm">{description}</p>
       </div>
       <div className="mx-auto w-full max-w-3xl p-4">
-        <div className="bg-card relative rounded-xl border shadow-sm">
+        <div className="bg-card relative rounded-lg border">
           <Textarea
             disabled
             rows={2}
             placeholder={t.formatMessage({ defaultMessage: "Coming soon." })}
-            className="resize-none border-0 pr-12 shadow-none focus-visible:ring-0"
+            className="resize-none border-0 bg-transparent pr-12 shadow-none focus-visible:ring-0 dark:bg-transparent"
           />
           <Button
             size="icon"

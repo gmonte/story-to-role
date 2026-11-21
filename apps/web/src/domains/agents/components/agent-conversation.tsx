@@ -415,7 +415,7 @@ export function AgentComposer({
           })}
         </p>
       )}
-      <div className="bg-card flex flex-col rounded-xl border shadow-sm">
+      <div className="bg-card focus-within:border-ring/60 flex flex-col rounded-lg border transition-colors">
         <Textarea
           ref={inputRef}
           rows={2}
@@ -465,7 +465,7 @@ export function AgentComposer({
             } else if (decision === "send") onSubmit(event);
           }}
           placeholder={placeholder}
-          className="max-h-40 resize-none border-0 shadow-none focus-visible:ring-0"
+          className="max-h-40 resize-none border-0 bg-transparent shadow-none focus-visible:ring-0 dark:bg-transparent"
         />
         {/* Below the text, not over it: a long message scrolls clear of it. */}
         <div className="flex items-center gap-1 pr-2 pb-2 pl-3">

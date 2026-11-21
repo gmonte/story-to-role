@@ -579,4 +579,68 @@ describe("usage statement", () => {
     ]);
     expect(second.nextCursor).toBeNull();
   });
+
+  it("sums every user's operations for the admin, with an average per model", async () => {
+    const ctx = await setup();
+    await ctx.task({
+      type: "analyze_opening",
+      funding: "credits",
+      calls: [sonnetCall, haikuCall],
+      debited: 50,
+    });
+    const other = await createTestUser("grace@example.com");
+    const otherTask = await new TasksRepository(ctx.db).create({
+      userId: other.id,
+      type: "analyze_opening",
+      funding: "key",
+    });
+    await new AiUsageRepository(ctx.db).record({
+      userId: other.id,
+      provider: "anthropic",
+      role: "writing",
+      taskId: otherTask.id,
+      funding: "key",
+      purpose: "analyze_opening",
+      createdAt: at("2026-11-14T09:00:00Z"),
+      ...sonnetCall,
+    });
+    await new TasksRepository(ctx.db).markCompleted(otherTask.id);
+
+    const usage = await new CreditsService(ctx.db).platformUsage({
+      ...window,
+      now,
+    });
+    expect(usage.showsPlatformCost).toBe(true);
+    expect(
+      usage.totals.map((row) => [row.payer, row.operations, row.credits])
+    ).toEqual([
+      ["credits", 1, 50],
+      ["key", 1, 45],
+    ]);
+    expect(usage.summary.map((row) => [row.count, row.averageCredits])).toEqual(
+      [[2, 47.5]]
+    );
+    // Sonnet ran in both operations, Haiku in one: averages per operation.
+    expect(
+      usage.models.map((row) => [
+        row.model,
+        row.operations,
+        row.averageInputTokens,
+        row.averageOutputTokens,
+      ])
+    ).toEqual([
+      ["claude-sonnet-5-5", 2, 100_000, 10_000],
+      ["claude-haiku-5-5", 1, 100_000, 20_000],
+    ]);
+    expect(usage.models[0].averageUsd).toBeCloseTo(0.3);
+    expect(usage.models[0].totalUsd).toBeCloseTo(0.6);
+  });
+
+  it("covers the current calendar month for the admin by default", async () => {
+    await setup();
+    const usage = await new CreditsService(
+      await getTestDatabase()
+    ).platformUsage({ now });
+    expect(usage.window).toEqual(window);
+  });
 });

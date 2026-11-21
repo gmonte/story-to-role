@@ -43,7 +43,7 @@ const fromDay = (value: string) => new Date(`${value}T00:00:00Z`);
  * The window in the URL (`?from=…&to=…`, both days included), so a window
  * can be kept as a link; none means the plan's current credit month.
  */
-function usePeriod() {
+export function usePeriod() {
   const params = useSearchParams();
   const router = useRouter();
   const pathname = usePathname();
@@ -115,12 +115,15 @@ export function UsageStatementView() {
   );
 }
 
-function PeriodPicker({
+export function PeriodPicker({
   statement,
   setPeriod,
+  defaultLabel,
 }: {
   statement: UsageStatement | undefined;
   setPeriod: (next: { from: string; to: string } | null) => void;
+  /** The button back to the window shown with none (the credit month). */
+  defaultLabel?: string;
 }) {
   const t = useTranslation();
   if (!statement) return <Skeleton className="h-16 w-full" />;
@@ -167,7 +170,8 @@ function PeriodPicker({
       </div>
       <div className="flex flex-wrap gap-2">
         <Button variant="outline" onClick={() => setPeriod(null)}>
-          {t.formatMessage({ defaultMessage: "Current credit month" })}
+          {defaultLabel ??
+            t.formatMessage({ defaultMessage: "Current credit month" })}
         </Button>
         <Button
           variant="outline"
@@ -193,7 +197,7 @@ function PeriodPicker({
   );
 }
 
-function useFormats() {
+export function useFormats() {
   const t = useTranslation();
   return {
     tokens: (value: number) => t.formatNumber(value),
@@ -233,18 +237,37 @@ function useFormats() {
   };
 }
 
-function Totals({ statement }: { statement: UsageStatement }) {
+/**
+ * The totals by payer, for the user or, on the admin's statement, for
+ * everyone.
+ */
+export function Totals({
+  statement,
+  audience = "you",
+}: {
+  statement: UsageStatement;
+  audience?: "you" | "everyone";
+}) {
   const t = useTranslation();
   const format = useFormats();
   // What was spent, never a balance: by the user, on their key, or by
   // StoryToRole on the user's behalf.
-  const spentBy: Record<UsagePayer, string> = {
-    credits: t.formatMessage({ defaultMessage: "Spent by you" }),
-    key: t.formatMessage({ defaultMessage: "Spent on your key" }),
-    storytorole: t.formatMessage({
-      defaultMessage: "Spent by StoryToRole on you",
-    }),
-  };
+  const spentBy: Record<UsagePayer, string> =
+    audience === "you"
+      ? {
+          credits: t.formatMessage({ defaultMessage: "Spent by you" }),
+          key: t.formatMessage({ defaultMessage: "Spent on your key" }),
+          storytorole: t.formatMessage({
+            defaultMessage: "Spent by StoryToRole on you",
+          }),
+        }
+      : {
+          credits: t.formatMessage({ defaultMessage: "Spent by everyone" }),
+          key: t.formatMessage({ defaultMessage: "Spent on everyone's keys" }),
+          storytorole: t.formatMessage({
+            defaultMessage: "Spent by StoryToRole on everyone",
+          }),
+        };
   return (
     <section className="grid gap-3 sm:grid-cols-3">
       {statement.totals.map((total) => (
@@ -292,16 +315,21 @@ function Totals({ statement }: { statement: UsageStatement }) {
         </div>
       ))}
       <p className="text-muted-foreground text-xs sm:col-span-3">
-        {t.formatMessage({
-          defaultMessage:
-            "Credits marked ≈ are a credit equivalent: what the operation would have cost in credits, since it did not come out of yours.",
-        })}
+        {audience === "you"
+          ? t.formatMessage({
+              defaultMessage:
+                "Credits marked ≈ are a credit equivalent: what the operation would have cost in credits, since it did not come out of yours.",
+            })
+          : t.formatMessage({
+              defaultMessage:
+                "Credits marked ≈ are a credit equivalent: what the operation would have cost in credits, since it did not come out of the user's.",
+            })}
       </p>
     </section>
   );
 }
 
-function Summary({ statement }: { statement: UsageStatement }) {
+export function Summary({ statement }: { statement: UsageStatement }) {
   const t = useTranslation();
   const format = useFormats();
   const showsUsd = statement.summary.some((row) => row.averageUsd !== null);

@@ -14,6 +14,7 @@ import { paginationParamsSchema } from "@repo/api/utils/schemas/pagination";
 import { CreditsService } from "./credits-service";
 import { courtesyGrantSchema, creditSummarySchema } from "./schemas/credits";
 import {
+  platformUsageSchema,
   usageOperationsSchema,
   usageStatementSchema,
 } from "./schemas/usage-statement";
@@ -77,6 +78,24 @@ export const creditsRouter = createTRPCRouter({
         showsPlatformCost: env.USAGE_STATEMENT_SHOWS_PLATFORM_COST,
       })
     ),
+
+  platformUsage: adminProcedure
+    .meta(
+      openApiMeta(
+        "credits",
+        "GET",
+        "/admin/usage",
+        "Returns the usage statement over every user, with averages per operation and per model (admin only)"
+      )
+    )
+    .input(
+      z.object({
+        from: z.coerce.date().optional(),
+        to: z.coerce.date().optional(),
+      })
+    )
+    .output(platformUsageSchema)
+    .query(({ input }) => new CreditsService(db).platformUsage(input)),
 
   listCourtesyGrants: adminProcedure
     .meta(

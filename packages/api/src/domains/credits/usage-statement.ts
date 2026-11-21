@@ -11,6 +11,7 @@ import type {
 
 import { creditsForUsage, usdForUsage } from "./credit-pricing";
 import type {
+  PlatformUsage,
   UsageOperation,
   UsageOperationRow,
   UsagePayer,
@@ -165,10 +166,7 @@ export function buildUsageStatement(input: {
   window: { from: Date; to: Date };
   showsPlatformCost: boolean;
 }): UsageStatement {
-  const operations = buildOperations(input).filter(
-    (operation) =>
-      operation.at >= input.window.from && operation.at < input.window.to
-  );
+  const operations = operationsInWindow(input);
 
   const payers: UsagePayer[] = ["credits", "key", "storytorole"];
   const totals = payers
@@ -222,6 +220,57 @@ export function buildUsageStatement(input: {
     totals,
     summary,
   };
+}
+
+/** The operations whose last call falls in the window. */
+function operationsInWindow(input: {
+  calls: UsageCall[];
+  debitedByTask: Map<string, number>;
+  window: { from: Date; to: Date };
+  showsPlatformCost: boolean;
+}) {
+  return buildOperations(input).filter(
+    (operation) =>
+      operation.at >= input.window.from && operation.at < input.window.to
+  );
+}
+
+/**
+ * The usage statement over every user's calls (the admin's), with the
+ * platform's cost, and each model's average use over the completed
+ * operations that called it, the costliest model first.
+ */
+export function buildPlatformUsage(input: {
+  calls: UsageCall[];
+  debitedByTask: Map<string, number>;
+  window: { from: Date; to: Date };
+}): PlatformUsage {
+  const scope = { ...input, showsPlatformCost: true };
+  const parts = new Map<string, Array<UsageOperationRow["models"][number]>>();
+  for (const operation of operationsInWindow(scope)) {
+    if (operation.status !== "completed") continue;
+    for (const part of operation.models) {
+      parts.set(part.model, [...(parts.get(part.model) ?? []), part]);
+    }
+  }
+  const models = [...parts.entries()]
+    .map(([model, rows]) => {
+      const count = rows.length;
+      const sum = (pick: (row: (typeof rows)[number]) => number) =>
+        rows.reduce((total, row) => total + pick(row), 0);
+      const totalUsd = sum((row) => row.usd ?? 0);
+      return {
+        model,
+        operations: count,
+        averageInputTokens: Math.round(sum((row) => row.inputTokens) / count),
+        averageOutputTokens: Math.round(sum((row) => row.outputTokens) / count),
+        averageCredits: oneDecimal(sum((row) => row.credits) / count),
+        averageUsd: roundUsd(totalUsd / count),
+        totalUsd: roundUsd(totalUsd),
+      };
+    })
+    .sort((a, b) => b.totalUsd - a.totalUsd);
+  return { ...buildUsageStatement(scope), models };
 }
 
 function isFinished(status: TaskStatus | null) {

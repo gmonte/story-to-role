@@ -19,10 +19,15 @@ import { settleTask } from "./settle-task";
 import { CreditsRepository } from "./credits-repository";
 import type { CourtesyGrant, CreditSummary } from "./schemas/credits";
 import type {
+  PlatformUsage,
   UsageOperations,
   UsageStatement,
 } from "./schemas/usage-statement";
-import { buildUsageOperations, buildUsageStatement } from "./usage-statement";
+import {
+  buildPlatformUsage,
+  buildUsageOperations,
+  buildUsageStatement,
+} from "./usage-statement";
 import { UsageStatementRepository } from "./usage-statement-repository";
 import { grantWelcomeCredits } from "./welcome-credits";
 
@@ -235,6 +240,30 @@ export class CreditsService {
         "key",
       spentThisMonthUsd: Math.round(usdForUsage(usage) * 100) / 100,
     };
+  }
+
+  /**
+   * The usage statement over every user, for the admin; without a window,
+   * the current calendar month.
+   */
+  async platformUsage(input: {
+    from?: Date;
+    to?: Date;
+    now?: Date;
+  }): Promise<PlatformUsage> {
+    const month = billingMonth(input.now ?? new Date());
+    const window = {
+      from: input.from ?? month.start,
+      to: input.to ?? month.next,
+    };
+    if (window.from >= window.to) throw new TRPCError({ code: "BAD_REQUEST" });
+    const repository = new UsageStatementRepository(this.db);
+    const calls = await repository.callsBetween(null, window.from, window.to);
+    return buildPlatformUsage({
+      calls,
+      debitedByTask: await repository.debitedByTask(taskIdsOf(calls)),
+      window,
+    });
   }
 
   listCourtesyGrants(): Promise<CourtesyGrant[]> {

@@ -61,6 +61,26 @@ export const usageStatementSchema = z.object({
 });
 export type UsageStatement = z.infer<typeof usageStatementSchema>;
 
+/**
+ * The usage statement over every user, for the admin: the platform's cost
+ * always shows, and each model's average use per operation that ran it.
+ */
+export const platformUsageSchema = usageStatementSchema.extend({
+  models: z.array(
+    z.object({
+      model: z.string(),
+      // Completed operations that called it.
+      operations: z.number().int(),
+      averageInputTokens: z.number(),
+      averageOutputTokens: z.number(),
+      averageCredits: z.number(),
+      averageUsd: z.number(),
+      totalUsd: z.number(),
+    })
+  ),
+});
+export type PlatformUsage = z.infer<typeof platformUsageSchema>;
+
 /** One operation of the usage statement, with its calls split by model. */
 export const usageOperationRowSchema = z.object({
   operationId: z.string(),

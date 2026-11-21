@@ -4,7 +4,11 @@ import { index, unique } from "drizzle-orm/pg-core";
 import { usersTable } from "@repo/api/domains/users/db/users-tables";
 import { createTable } from "@repo/api/utils/db/create-table";
 
-import type { BillingInterval, SubscriptionStatus } from "../schemas/billing";
+import type {
+  BillingInterval,
+  SubscriptionPlan,
+  SubscriptionStatus,
+} from "../schemas/billing";
 
 /**
  * A user's Stripe customer in this environment (billing spec, "Payments").
@@ -51,6 +55,7 @@ export const subscriptionsTable = createTable(
       .notNull()
       .references(() => usersTable.id, { onDelete: "cascade" }),
     stripeSubscriptionId: d.text().notNull(),
+    plan: d.text().$type<SubscriptionPlan>().notNull().default("credits"),
     status: d.text().$type<SubscriptionStatus>().notNull(),
     interval: d.text().$type<BillingInterval>().notNull(),
     currentPeriodStart: d.timestamp({ withTimezone: true }).notNull(),
@@ -62,6 +67,9 @@ export const subscriptionsTable = createTable(
     paidInvoiceId: d.text(),
     paidPeriodStart: d.timestamp({ withTimezone: true }),
     paidPeriodEnd: d.timestamp({ withTimezone: true }),
+    // A credit subscription the own-key one replaced (billing spec,
+    // "Switching plans"): its paid period keeps granting monthly credits.
+    replacedAt: d.timestamp({ withTimezone: true }),
   }),
   (t) => [
     unique("subscriptions_stripe_subscription_id_unique").on(

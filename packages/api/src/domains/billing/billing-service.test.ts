@@ -1,6 +1,7 @@
 import type Stripe from "stripe";
 import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { AiKeysRepository } from "@repo/api/domains/ai/ai-keys-repository";
 import { spendableTotal } from "@repo/api/domains/credits/credit-ledger";
 import { paidMonth } from "@repo/api/domains/credits/credit-plan";
 import { CreditsService } from "@repo/api/domains/credits/credits-service";
@@ -24,7 +25,8 @@ const nowSeconds = Math.floor(Date.now() / 1000);
 
 function subscription(
   status: Stripe.Subscription.Status = "active",
-  invoiceStatus: Stripe.Invoice.Status = "paid"
+  invoiceStatus: Stripe.Invoice.Status = "paid",
+  product = "storytorole_subscription"
 ) {
   const period = { start: nowSeconds - 2 * day, end: nowSeconds + 28 * day };
   return {
@@ -41,7 +43,7 @@ function subscription(
     items: {
       data: [
         {
-          price: { recurring: { interval: "month" } },
+          price: { product, recurring: { interval: "month" } },
           current_period_start: period.start,
           current_period_end: period.end,
         },
@@ -141,6 +143,61 @@ describe("billing service", () => {
     const summary = await new CreditsService(ctx.db).summary(ctx.user.id);
     expect(summary.plan).toBe("subscription");
     expect(summary.reserve).toBe(0);
+  });
+
+  it("puts an own-key subscriber on that plan, with Free's monthly fit checks only", async () => {
+    const ctx = await setup({
+      subscription: subscription("active", "paid", "storytorole_own_key"),
+    });
+    await ctx.billing.handleEvent(
+      event("invoice.paid", {
+        customer: "cus_ada",
+        parent: { subscription_details: { subscription: "sub_1" } },
+      })
+    );
+
+    const summary = await new CreditsService(ctx.db).summary(ctx.user.id);
+    expect(summary.plan).toBe("own_key");
+    expect(await ctx.spendable()).toBe(0);
+    expect(
+      await spendableTotal(ctx.db, ctx.user.id, "fit_check", new Date())
+    ).toBe(10);
+    expect((await ctx.billing.status(ctx.user.id)).subscription?.plan).toBe(
+      "own_key"
+    );
+  });
+
+  it("deletes the key when the own-key plan ends, unless a courtesy grant uses it", async () => {
+    const ended = subscription("canceled", "paid", "storytorole_own_key");
+    const ctx = await setup({ subscription: ended });
+    const keys = new AiKeysRepository(ctx.db);
+    const keep = () =>
+      keys.upsert({
+        userId: ctx.user.id,
+        encryptedKey: "encrypted",
+        lastCharacters: "WXYZ",
+        status: "active",
+        now: new Date(),
+      });
+    const deleted = event("customer.subscription.deleted", {
+      id: "sub_1",
+      customer: "cus_ada",
+    });
+
+    await keep();
+    await ctx.billing.handleEvent(deleted);
+    expect(await keys.findByUserId(ctx.user.id)).toBeNull();
+
+    const owner = await createTestUser("owner@example.com", { credits: 0 });
+    await new CreditsService(ctx.db).grantCourtesy({
+      adminUserId: owner.id,
+      email: "ada@example.com",
+      monthlyCredits: 0,
+      endsAt: null,
+    });
+    await keep();
+    await ctx.billing.handleEvent(deleted);
+    expect(await keys.findByUserId(ctx.user.id)).not.toBeNull();
   });
 
   it("grants nothing until the invoice is paid, yet keeps the paid plan", async () => {

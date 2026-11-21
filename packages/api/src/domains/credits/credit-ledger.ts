@@ -89,9 +89,12 @@ export async function ensureMonthlyCredits(
 ) {
   const { key, next } = billingMonth(now);
   const plan = await currentPlan(tx, userId, now);
-  const { subscription, courtesy } = plan;
-  if (subscription) {
-    const { paidInvoiceId, paidPeriodStart, paidPeriodEnd } = subscription;
+  const { subscription, courtesy, carryover } = plan;
+  // The credit subscription's month, or on the own-key plan the month of
+  // the credit subscription it replaced, while that paid period lasts.
+  const paying = plan.kind === "subscription" ? subscription : carryover;
+  if (paying) {
+    const { paidInvoiceId, paidPeriodStart, paidPeriodEnd } = paying;
     const month =
       paidInvoiceId && paidPeriodStart && paidPeriodEnd
         ? paidMonth({ start: paidPeriodStart, end: paidPeriodEnd }, now)
@@ -105,8 +108,8 @@ export async function ensureMonthlyCredits(
         expiresAt: month.end,
       });
     }
-    return;
   }
+  if (plan.kind === "subscription") return;
   if (courtesy) {
     await grantCredits(tx, {
       userId,

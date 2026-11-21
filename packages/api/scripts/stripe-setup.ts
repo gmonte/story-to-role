@@ -1,7 +1,8 @@
 /**
  * Creates StoryToRole's products, prices and Customer Portal settings in
  * the Stripe account of STRIPE_SECRET_KEY (billing spec, "Payments").
- * Idempotent: what exists is left as is. Run it through lerna so the root
+ * Idempotent: products and prices that exist are left as is; the portal
+ * configurations are brought up to date. Run it through lerna so the root
  * `.env.local` is loaded:
  *
  *   pnpm exec lerna run stripe:setup --scope=@repo/api
@@ -53,37 +54,85 @@ async function ensurePrice(
 }
 
 await ensureProduct(billingCatalog.products.subscription);
+await ensureProduct(billingCatalog.products.own_key);
 await ensureProduct(billingCatalog.products.pack);
 const monthly = await ensurePrice(billingCatalog.prices.subscription_monthly);
 const annual = await ensurePrice(billingCatalog.prices.subscription_annual);
+const ownKeyMonthly = await ensurePrice(billingCatalog.prices.own_key_monthly);
+const ownKeyAnnual = await ensurePrice(billingCatalog.prices.own_key_annual);
 await ensurePrice(billingCatalog.prices.pack);
 
-// The Customer Portal: card, invoices, monthly or annual, cancelling.
+const businessProfile = { headline: "StoryToRole" };
+const basics = {
+  customer_update: {
+    enabled: true,
+    allowed_updates: ["email", "address"],
+  },
+  invoice_history: { enabled: true },
+  payment_method_update: { enabled: true },
+  subscription_cancel: { enabled: true, mode: "at_period_end" },
+} satisfies Stripe.BillingPortal.ConfigurationCreateParams.Features;
+
+// The default Customer Portal: card, invoices, cancelling. No price
+// change: listing both subscriptions would let a credit subscriber switch
+// to the own-key one without a key check (billing spec, "Payments").
+const defaults = {
+  business_profile: businessProfile,
+  features: { ...basics, subscription_update: { enabled: false } },
+};
 const portals = await stripe.billingPortal.configurations.list({
-  is_default: true,
-  limit: 1,
+  limit: 100,
 });
-if (portals.data.length === 0) {
-  logger.info(["stripe:setup"], "creating the Customer Portal configuration");
-  await stripe.billingPortal.configurations.create({
-    business_profile: { headline: "StoryToRole" },
-    features: {
-      customer_update: { enabled: true, allowed_updates: ["email", "address"] },
-      invoice_history: { enabled: true },
-      payment_method_update: { enabled: true },
-      subscription_cancel: { enabled: true, mode: "at_period_end" },
-      subscription_update: {
-        enabled: true,
-        default_allowed_updates: ["price"],
-        proration_behavior: "create_prorations",
-        products: [
-          {
-            product: billingCatalog.products.subscription.id,
-            prices: [monthly.id, annual.id],
-          },
+const defaultPortal = portals.data.find((portal) => portal.is_default);
+if (defaultPortal) {
+  logger.info(["stripe:setup"], "updating the default Customer Portal");
+  await stripe.billingPortal.configurations.update(defaultPortal.id, defaults);
+} else {
+  logger.info(["stripe:setup"], "creating the default Customer Portal");
+  await stripe.billingPortal.configurations.create(defaults);
+}
+
+// The portal the app opens to switch between monthly and annual within one
+// subscription (`subscription_update_confirm`): a dearer change applies at
+// once, a shorter interval waits for the period's end.
+const changes = {
+  business_profile: businessProfile,
+  metadata: { purpose: billingCatalog.intervalChangePortal },
+  features: {
+    ...basics,
+    subscription_update: {
+      enabled: true,
+      default_allowed_updates: ["price"],
+      proration_behavior: "always_invoice",
+      products: [
+        {
+          product: billingCatalog.products.subscription.id,
+          prices: [monthly.id, annual.id],
+        },
+        {
+          product: billingCatalog.products.own_key.id,
+          prices: [ownKeyMonthly.id, ownKeyAnnual.id],
+        },
+      ],
+      schedule_at_period_end: {
+        conditions: [
+          { type: "shortening_interval" },
+          { type: "decreasing_item_amount" },
         ],
       },
     },
-  });
+  },
+} satisfies Stripe.BillingPortal.ConfigurationCreateParams;
+const changesPortal = portals.data.find(
+  (portal) =>
+    portal.metadata?.purpose === billingCatalog.intervalChangePortal &&
+    portal.active
+);
+if (changesPortal) {
+  logger.info(["stripe:setup"], "updating the interval-change portal");
+  await stripe.billingPortal.configurations.update(changesPortal.id, changes);
+} else {
+  logger.info(["stripe:setup"], "creating the interval-change portal");
+  await stripe.billingPortal.configurations.create(changes);
 }
 logger.info(["stripe:setup"], "Stripe catalog ready");

@@ -4,23 +4,27 @@ import type { DbClient } from "@repo/api/tools/db-client";
 import { CreditsRepository } from "./credits-repository";
 
 /**
- * The user's plan (billing spec, "Plans and AI funding"): the paid plan
- * through a live Stripe subscription or, for a user without one, a
- * courtesy grant; else Free.
+ * The user's plan (billing spec, "Plans and AI funding"): the credit or
+ * the own-key subscription through a live Stripe subscription or, for a
+ * user without one, a courtesy grant; else Free. On the own-key plan,
+ * `carryover` is the credit subscription it replaced, while its paid
+ * period still grants credits.
  */
 export async function currentPlan(db: DbClient, userId: string, now: Date) {
-  const subscription = await new BillingRepository(db).findLiveSubscription(
-    userId,
-    now
-  );
+  const billing = new BillingRepository(db);
+  const subscription = await billing.findLiveSubscription(userId, now);
   const courtesy = subscription
     ? null
     : await new CreditsRepository(db).activeCourtesy(userId, now);
+  const ownKey = subscription?.plan === "own_key";
   return {
     subscription,
     courtesy,
+    carryover: ownKey ? await billing.findCarryover(userId, now) : null,
     kind: subscription
-      ? ("subscription" as const)
+      ? ownKey
+        ? ("own_key" as const)
+        : ("subscription" as const)
       : courtesy
         ? ("courtesy" as const)
         : ("free" as const),

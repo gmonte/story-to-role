@@ -1,0 +1,2 @@
+ALTER TABLE "subscriptions" ADD COLUMN IF NOT EXISTS "plan" text DEFAULT 'credits' NOT NULL;--> statement-breakpoint
+ALTER TABLE "subscriptions" ADD COLUMN IF NOT EXISTS "replacedAt" timestamp with time zone;

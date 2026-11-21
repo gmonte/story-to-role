@@ -2,6 +2,7 @@ import { clerkClient } from "@clerk/nextjs/server";
 import { TRPCError } from "@trpc/server";
 import type Stripe from "stripe";
 
+import { AiKeysRepository } from "@repo/api/domains/ai/ai-keys-repository";
 import {
   ensureMonthlyCredits,
   grantCredits,
@@ -9,13 +10,14 @@ import {
   packOrigin,
   revokeLots,
 } from "@repo/api/domains/credits/credit-ledger";
+import { currentPlan } from "@repo/api/domains/credits/credit-plan";
 import { creditSettings } from "@repo/api/domains/credits/credit-pricing";
 import { UsersRepository } from "@repo/api/domains/users/users-repository";
 import type { DbClient } from "@repo/api/tools/db-client";
 import { getStripe } from "@repo/api/tools/stripe/stripe-client";
 import { logger } from "@repo/common/tools/logger";
 
-import { billingCatalog } from "./billing-catalog";
+import { billingCatalog, planOfProduct } from "./billing-catalog";
 import { BillingRepository } from "./billing-repository";
 import {
   type BillingStatus,
@@ -73,6 +75,7 @@ export class BillingService {
     const subscription = await repository.findSubscriptionByUserId(userId);
     return {
       subscription: subscription && {
+        plan: subscription.plan,
         status: subscription.status,
         interval: subscription.interval,
         currentPeriodEnd: subscription.currentPeriodEnd,
@@ -344,7 +347,9 @@ export class BillingService {
 
   /**
    * Saves Stripe's current view of a subscription, records its latest
-   * invoice when paid, and grants that month's credits from it.
+   * invoice when paid, and grants that month's credits from it. When the
+   * own-key plan ends (its period over, or switched to the credit
+   * subscription), the key goes too, unless a courtesy grant still uses it.
    */
   private async syncSubscription(subscriptionId: string, userId: string) {
     const subscription = await this.stripe.subscriptions.retrieve(
@@ -358,12 +363,18 @@ export class BillingService {
         ? subscription.latest_invoice
         : null;
     const period = invoice?.status === "paid" ? paidPeriod(invoice) : null;
+    const plan = planOfProduct(idOf(item.price.product));
+    const status = subscription.status as SubscriptionStatus;
     await this.db.transaction(async (tx) => {
       const repository = new BillingRepository(tx);
+      const before = await repository.findSubscriptionByStripeId(
+        subscription.id
+      );
       await repository.upsertSubscription({
         userId,
         stripeSubscriptionId: subscription.id,
-        status: subscription.status as SubscriptionStatus,
+        plan,
+        status,
         interval: item.price.recurring?.interval === "year" ? "year" : "month",
         currentPeriodStart: new Date(item.current_period_start * 1000),
         currentPeriodEnd: new Date(item.current_period_end * 1000),
@@ -377,7 +388,15 @@ export class BillingService {
           periodEnd: period.end,
         });
       }
-      await ensureMonthlyCredits(tx, userId, new Date());
+      const now = new Date();
+      await ensureMonthlyCredits(tx, userId, now);
+      const leftOwnKey =
+        (before?.plan === "own_key" && plan === "credits") ||
+        (plan === "own_key" && !isLiveSubscription(status));
+      const { kind } = await currentPlan(tx, userId, now);
+      if (leftOwnKey && kind !== "own_key" && kind !== "courtesy") {
+        await new AiKeysRepository(tx).delete(userId);
+      }
     });
   }
 

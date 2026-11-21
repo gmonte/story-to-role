@@ -19,6 +19,7 @@ import {
 import { grantCredits, spendableTotal } from "./credit-ledger";
 import { CreditsService } from "./credits-service";
 import { aiKeysTable } from "../ai/db/ai-tables";
+import { subscriptionsTable } from "../billing/db/billing-tables";
 import { tasksTable } from "../tasks/db/tasks-tables";
 
 vi.mock("@repo/common/env/web.env", () => ({
@@ -50,23 +51,28 @@ async function setup() {
       monthlyCredits,
       endsAt: null,
     });
-  const subscribe = async () => {
+  const subscribe = async (
+    plan: "credits" | "own_key" = "credits",
+    stripeSubscriptionId = "sub_1",
+    days = 29
+  ) => {
     const billing = new BillingRepository(db);
     const now = Date.now();
     await billing.upsertSubscription({
       userId: user.id,
-      stripeSubscriptionId: "sub_1",
+      stripeSubscriptionId,
+      plan,
       status: "active",
-      interval: "month",
+      interval: days > 31 ? "year" : "month",
       currentPeriodStart: new Date(now - 86_400_000),
-      currentPeriodEnd: new Date(now + 29 * 86_400_000),
+      currentPeriodEnd: new Date(now + days * 86_400_000),
       cancelAtPeriodEnd: false,
     });
     await billing.recordPaidInvoice({
-      stripeSubscriptionId: "sub_1",
-      invoiceId: "in_1",
+      stripeSubscriptionId,
+      invoiceId: `in_${stripeSubscriptionId}`,
       periodStart: new Date(now - 86_400_000),
-      periodEnd: new Date(now + 29 * 86_400_000),
+      periodEnd: new Date(now + days * 86_400_000),
     });
   };
   const funding = async (taskId: string) =>
@@ -84,7 +90,7 @@ describe("own keys and funding", () => {
     await closeTestDatabase();
   });
 
-  it("keeps keys for the paid plan, encrypted, showing only their end", async () => {
+  it("keeps keys for the own-key and courtesy plans, encrypted, showing only their end", async () => {
     const ctx = await setup();
     await expect(
       ctx.keys.save({ userId: ctx.user.id, apiKey })
@@ -166,10 +172,52 @@ describe("own keys and funding", () => {
     );
   });
 
-  it("spends a subscriber's plan credits before their key", async () => {
+  it("funds an own-key subscriber with their key, granting Free's fit checks only", async () => {
     const ctx = await setup();
-    await ctx.subscribe();
-    // The paid plan through the subscription: a key is allowed.
+    await ctx.subscribe("own_key");
+    await ctx.keys.save({ userId: ctx.user.id, apiKey });
+
+    const { task } = await ctx.tasks.start({
+      userId: ctx.user.id,
+      type: "generate_document",
+    });
+
+    expect(await ctx.funding(task.id)).toBe("key");
+    expect(await spendableTotal(ctx.db, ctx.user.id, "any", new Date())).toBe(
+      0
+    );
+    expect(
+      await spendableTotal(ctx.db, ctx.user.id, "fit_check", new Date())
+    ).toBe(10);
+  });
+
+  it("never funds a credit subscriber with a key left saved", async () => {
+    const ctx = await setup();
+    await ctx.courtesy(0);
+    await ctx.keys.save({ userId: ctx.user.id, apiKey });
+    await ctx.subscribe("credits");
+    await expect(
+      ctx.keys.save({ userId: ctx.user.id, apiKey })
+    ).rejects.toMatchObject({ code: "PRECONDITION_FAILED" });
+
+    const asked = await ctx.tasks.start({
+      userId: ctx.user.id,
+      type: "analyze_opening",
+    });
+    const unasked = await ctx.tasks.start({
+      userId: ctx.user.id,
+      type: "sample",
+    });
+
+    expect(await ctx.funding(asked.task.id)).toBe("credits");
+    expect(await ctx.funding(unasked.task.id)).toBe("credits");
+  });
+
+  it("spends what a replaced annual plan still grants before the own key", async () => {
+    const ctx = await setup();
+    await ctx.subscribe("credits", "sub_annual", 200);
+    await new BillingRepository(ctx.db).markReplaced("sub_annual", new Date());
+    await ctx.subscribe("own_key", "sub_key");
     await ctx.keys.save({ userId: ctx.user.id, apiKey });
 
     const largest = { positions: 20, thorough: true, maximum: true };
@@ -180,13 +228,40 @@ describe("own keys and funding", () => {
     });
     expect(await ctx.funding(first.task.id)).toBe("credits");
 
-    // What is left of the 600 monthly credits can't cover it: the key pays.
+    // What is left of the month's 600 can't cover it: the key pays.
     const second = await ctx.tasks.start({
       userId: ctx.user.id,
       type: "generate_document",
       hints: largest,
     });
     expect(await ctx.funding(second.task.id)).toBe("key");
+
+    // A month later the old year still grants its 600.
+    const later = new Date(Date.now() + 31 * 86_400_000);
+    await ctx.credits.summary(ctx.user.id, later);
+    expect(
+      await spendableTotal(ctx.db, ctx.user.id, "any", later)
+    ).toBeGreaterThanOrEqual(600);
+  });
+
+  it("removes an own-key subscriber's key only once the plan is cancelled", async () => {
+    const ctx = await setup();
+    await ctx.subscribe("own_key");
+    await ctx.keys.save({ userId: ctx.user.id, apiKey });
+    // Replacing the key is always allowed.
+    await ctx.keys.save({ userId: ctx.user.id, apiKey: `${apiKey}2` });
+
+    await expect(ctx.keys.remove(ctx.user.id)).rejects.toMatchObject({
+      code: "PRECONDITION_FAILED",
+    });
+
+    const [row] = await ctx.db.select().from(subscriptionsTable);
+    await new BillingRepository(ctx.db).upsertSubscription({
+      ...row,
+      cancelAtPeriodEnd: true,
+    });
+    await ctx.keys.remove(ctx.user.id);
+    expect(await ctx.keys.get(ctx.user.id)).toBeNull();
   });
 
   it("asks before spending stored credits once the key ran out", async () => {

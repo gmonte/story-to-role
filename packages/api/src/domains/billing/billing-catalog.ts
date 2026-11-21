@@ -1,4 +1,4 @@
-import type { CheckoutProduct } from "./schemas/billing";
+import type { CheckoutProduct, SubscriptionPlan } from "./schemas/billing";
 
 /**
  * What StoryToRole sells, created in Stripe by `stripe:setup` (billing
@@ -9,10 +9,17 @@ import type { CheckoutProduct } from "./schemas/billing";
  * new lookup key (v2), never an edit.
  */
 export const billingCatalog = {
+  // The metadata that marks the Customer Portal configuration for
+  // switching between monthly and annual (stripe:setup creates it).
+  intervalChangePortal: "interval_change",
   products: {
     subscription: {
       id: "storytorole_subscription",
       name: "StoryToRole subscription",
+    },
+    own_key: {
+      id: "storytorole_own_key",
+      name: "StoryToRole own-key subscription",
     },
     pack: { id: "storytorole_pack", name: "StoryToRole credit pack" },
   },
@@ -31,6 +38,20 @@ export const billingCatalog = {
       usd: 12000,
       brl: 59000,
     },
+    own_key_monthly: {
+      lookupKey: "own_key_monthly_v1",
+      product: "own_key",
+      interval: "month",
+      usd: 500,
+      brl: 1990,
+    },
+    own_key_annual: {
+      lookupKey: "own_key_annual_v1",
+      product: "own_key",
+      interval: "year",
+      usd: 5000,
+      brl: 19900,
+    },
     pack: {
       lookupKey: "pack_300_v1",
       product: "pack",
@@ -40,18 +61,26 @@ export const billingCatalog = {
     },
   },
 } as const satisfies {
+  intervalChangePortal: string;
   products: Record<string, { id: string; name: string }>;
   prices: Record<
     CheckoutProduct,
     {
       lookupKey: string;
-      product: "subscription" | "pack";
+      product: "subscription" | "own_key" | "pack";
       interval: "month" | "year" | null;
       usd: number;
       brl: number;
     }
   >;
 };
+
+/**
+ * The plan a Stripe product subscribes to (billing spec, "Subscription"):
+ * the own-key subscription, else the credit subscription.
+ */
+export const planOfProduct = (productId: string | null): SubscriptionPlan =>
+  productId === billingCatalog.products.own_key.id ? "own_key" : "credits";
 
 /** The webhook events StoryToRole handles (and `stripe:listen` forwards). */
 export const stripeEvents = [

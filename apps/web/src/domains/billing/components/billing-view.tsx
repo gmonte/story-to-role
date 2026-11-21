@@ -67,7 +67,10 @@ export function BillingView() {
                 {
                   free: t.formatMessage({ defaultMessage: "Free" }),
                   subscription: t.formatMessage({
-                    defaultMessage: "Subscription",
+                    defaultMessage: "Credit subscription",
+                  }),
+                  own_key: t.formatMessage({
+                    defaultMessage: "Own-key subscription",
                   }),
                   courtesy: t.formatMessage({ defaultMessage: "Courtesy" }),
                 }[credits.data.plan]

@@ -90,8 +90,10 @@ export const platformUsageUserSchema = z.object({
   operations: z.number().int(),
   // Debited from their credits.
   creditsSpent: z.number(),
-  // What their key and StoryToRole paid, in credits.
-  creditEquivalent: z.number(),
+  // What their key paid, in credits.
+  keyCredits: z.number(),
+  // What StoryToRole paid on them, in credits.
+  storytoroleCredits: z.number(),
   usd: z.number(),
   summary: z.array(usageSummaryRowSchema),
 });

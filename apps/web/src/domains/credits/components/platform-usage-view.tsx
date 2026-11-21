@@ -227,7 +227,10 @@ function UserUsage({ period }: { period: { from?: Date; to?: Date } }) {
                 {t.formatMessage({ defaultMessage: "Credits spent" })}
               </TableHead>
               <TableHead className="text-right">
-                {t.formatMessage({ defaultMessage: "Credit equivalent" })}
+                {t.formatMessage({ defaultMessage: "On their key" })}
+              </TableHead>
+              <TableHead className="text-right">
+                {t.formatMessage({ defaultMessage: "By StoryToRole" })}
               </TableHead>
               <TableHead className="text-right">
                 {t.formatMessage({ defaultMessage: "US$" })}
@@ -271,7 +274,13 @@ function UserUsage({ period }: { period: { from?: Date; to?: Date } }) {
                       {format.credits(user.creditsSpent)}
                     </TableCell>
                     <TableCell className="text-right">
-                      {format.rowCredits("key", user.creditEquivalent)}
+                      {format.rowCredits("key", user.keyCredits)}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      {format.rowCredits(
+                        "storytorole",
+                        user.storytoroleCredits
+                      )}
                     </TableCell>
                     <TableCell className="text-right">
                       {format.usd(user.usd)}
@@ -302,7 +311,7 @@ function UserUsage({ period }: { period: { from?: Date; to?: Date } }) {
                             { tokens: format.tokens(row.averageTokens) }
                           )}
                         </TableCell>
-                        <TableCell colSpan={2} className="text-right">
+                        <TableCell colSpan={3} className="text-right">
                           {t.formatMessage(
                             { defaultMessage: "{credits} credits on average" },
                             { credits: format.credits(row.averageCredits) }
@@ -316,7 +325,7 @@ function UserUsage({ period }: { period: { from?: Date; to?: Date } }) {
                   {expanded && user.summary.length === 0 && (
                     <TableRow className="text-muted-foreground text-xs">
                       <TableCell />
-                      <TableCell colSpan={5}>
+                      <TableCell colSpan={6}>
                         {t.formatMessage({
                           defaultMessage: "No completed operation to average.",
                         })}

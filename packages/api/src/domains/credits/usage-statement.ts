@@ -307,26 +307,28 @@ export function buildPlatformUsers(input: {
     .map(([userId, rows]) => {
       const sum = (pick: (row: Operation) => number) =>
         rows.reduce((total, row) => total + pick(row), 0);
+      const paidBy = (payer: UsagePayer) =>
+        oneDecimal(sum((row) => (row.payer === payer ? row.credits : 0)));
       return {
         userId,
         email: input.users.get(userId)?.email ?? "",
         name: input.users.get(userId)?.name ?? null,
         operations: rows.length,
-        creditsSpent: sum((row) => (row.payer === "credits" ? row.credits : 0)),
-        creditEquivalent: oneDecimal(
-          sum((row) => (row.payer === "credits" ? 0 : row.credits))
-        ),
+        creditsSpent: paidBy("credits"),
+        keyCredits: paidBy("key"),
+        storytoroleCredits: paidBy("storytorole"),
         usd: roundUsd(sum((row) => row.rawUsd)),
         summary: summarize(rows),
       };
     })
     .sort(
       (a, b) =>
-        b.creditsSpent +
-          b.creditEquivalent -
-          (a.creditsSpent + a.creditEquivalent) ||
-        a.email.localeCompare(b.email)
+        totalCredits(b) - totalCredits(a) || a.email.localeCompare(b.email)
     );
+}
+
+function totalCredits(user: PlatformUsageUser) {
+  return user.creditsSpent + user.keyCredits + user.storytoroleCredits;
 }
 
 function isFinished(status: TaskStatus | null) {

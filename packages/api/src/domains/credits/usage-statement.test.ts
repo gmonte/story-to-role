@@ -646,11 +646,12 @@ describe("usage statement", () => {
         row.email,
         row.operations,
         row.creditsSpent,
-        row.creditEquivalent,
+        row.keyCredits,
+        row.storytoroleCredits,
       ])
     ).toEqual([
-      ["ada@example.com", 1, 50, 0],
-      ["grace@example.com", 1, 0, 45],
+      ["ada@example.com", 1, 50, 0, 0],
+      ["grace@example.com", 1, 0, 45, 0],
     ]);
     expect(
       users.data[0].summary.map((row) => [row.count, row.averageCredits])
@@ -705,6 +706,13 @@ describe("usage statement", () => {
       cursor: first.nextCursor,
     });
     expect(second.data.map((row) => row.email)).toEqual(["linus@example.com"]);
+    // A call outside a task debits nothing: StoryToRole paid its equivalent.
+    expect(
+      first.data.map((row) => [row.creditsSpent, row.storytoroleCredits])
+    ).toEqual([
+      [0, 45],
+      [0, 3],
+    ]);
     expect(second.nextCursor).toBeNull();
 
     const found = await credits.platformUsageUsers({

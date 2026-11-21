@@ -105,7 +105,7 @@ export function ProfileSuggestionsBar() {
             {stale.map((suggestion) => (
               <li
                 key={suggestion.id}
-                className="bg-background flex items-start gap-2 rounded border px-2 py-1"
+                className="bg-card flex items-start gap-2 rounded border px-2 py-1"
               >
                 <span className="line-clamp-2 min-w-0 flex-1 whitespace-pre-wrap">
                   {suggestion.replace || suggestion.find}

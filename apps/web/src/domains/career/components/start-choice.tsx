@@ -83,7 +83,7 @@ export function StartChoice() {
             disabled={choose.isPending}
             onClick={() => choose.mutate({ path: option.path })}
             className={cn(
-              "bg-background hover:border-primary flex flex-col gap-2 rounded-xl border p-5 text-left transition-colors",
+              "bg-card hover:border-primary flex flex-col gap-2 rounded-xl border p-5 text-left transition-colors",
               option.highlighted && "border-primary ring-primary/20 ring-4"
             )}
           >

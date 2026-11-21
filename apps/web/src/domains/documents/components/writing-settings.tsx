@@ -143,7 +143,7 @@ function TemplateForm({
           {sections.map((section, index) => (
             <li
               key={section.kind}
-              className="flex flex-col gap-2 rounded-lg border p-3"
+              className="bg-card flex flex-col gap-2 rounded-lg border p-3"
             >
               <label className="flex items-center gap-2 text-sm font-medium">
                 <Checkbox
@@ -340,7 +340,7 @@ function StyleForm({
       <CreditCost credits={credits.data?.estimates.styleProfile} />
 
       {profile && status !== "extracting" && (
-        <div className="flex flex-col gap-3 rounded-lg border p-4">
+        <div className="bg-card flex flex-col gap-3 rounded-lg border p-4">
           <p className="text-sm font-medium">
             {status === "approved"
               ? t.formatMessage({

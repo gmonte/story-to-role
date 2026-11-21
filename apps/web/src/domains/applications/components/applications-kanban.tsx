@@ -161,7 +161,7 @@ function KanbanCard({
       }}
       onDragEnd={onDragEnd}
       className={cn(
-        "bg-background hover:border-primary flex cursor-grab items-start gap-1 rounded-md border p-2 text-xs",
+        "bg-card hover:border-primary flex cursor-grab items-start gap-1 rounded-md border p-2 text-xs",
         dragging && "opacity-50"
       )}
     >

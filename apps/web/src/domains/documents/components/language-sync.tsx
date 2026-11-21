@@ -158,7 +158,7 @@ function SyncDialog({
           {changes.map((change) => (
             <li
               key={change.lineId}
-              className="grid gap-1 rounded-md border p-2 text-xs"
+              className="bg-card grid gap-1 rounded-md border p-2 text-xs"
             >
               <label className="flex items-start gap-2">
                 <Checkbox
@@ -263,7 +263,7 @@ export function SyncProposal({
   const busy = accept.isPending || discard.isPending;
 
   return (
-    <div className="bg-background flex flex-col gap-2 rounded-lg border border-sky-500/40 p-2.5 text-xs">
+    <div className="bg-card flex flex-col gap-2 rounded-lg border border-sky-500/40 p-2.5 text-xs">
       <p className="text-sm font-medium">
         {document.kind === "cover_letter"
           ? t.formatMessage({

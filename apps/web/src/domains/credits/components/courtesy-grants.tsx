@@ -64,7 +64,7 @@ export function CourtesyGrants() {
           })}
         </p>
         <form
-          className="grid gap-3 rounded-lg border p-4 sm:grid-cols-[1fr_8rem_10rem_auto] sm:items-end"
+          className="bg-card grid gap-3 rounded-lg border p-4 sm:grid-cols-[1fr_8rem_10rem_auto] sm:items-end"
           onSubmit={(event) => {
             event.preventDefault();
             grant.mutate({
@@ -121,7 +121,7 @@ export function CourtesyGrants() {
           return (
             <li
               key={row.id}
-              className="flex flex-wrap items-center justify-between gap-2 rounded-lg border p-3 text-sm"
+              className="bg-card flex flex-wrap items-center justify-between gap-2 rounded-lg border p-3 text-sm"
             >
               <span className="flex flex-col">
                 <span className="font-medium">

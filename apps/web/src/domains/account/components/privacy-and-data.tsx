@@ -33,7 +33,7 @@ export function PrivacyAndData() {
   const t = useTranslation();
   return (
     <div className="mx-auto flex w-full max-w-3xl flex-col gap-6 overflow-y-auto p-6 text-sm">
-      <section className="flex flex-col gap-2 rounded-lg border p-4">
+      <section className="bg-card flex flex-col gap-2 rounded-lg border p-4">
         <h2 className="font-medium">
           {t.formatMessage({ defaultMessage: "Download your data" })}
         </h2>
@@ -51,7 +51,7 @@ export function PrivacyAndData() {
         </Button>
       </section>
 
-      <section className="flex flex-col gap-2 rounded-lg border border-red-500/40 p-4">
+      <section className="bg-card flex flex-col gap-2 rounded-lg border border-red-500/40 p-4">
         <h2 className="font-medium">
           {t.formatMessage({ defaultMessage: "Delete your account" })}
         </h2>

@@ -309,7 +309,7 @@ function FitCheckItem({
   return (
     <li
       id={`fit-item-${item.id}`}
-      className="bg-background flex flex-col gap-1.5 rounded-lg border p-3"
+      className="bg-card flex flex-col gap-1.5 rounded-lg border p-3"
     >
       <div className="flex items-center gap-1.5">
         <Badge

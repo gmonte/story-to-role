@@ -34,7 +34,7 @@ export function HeadlineOptions() {
   }
   const chosen = content.headline?.id;
   return (
-    <section className="bg-background flex flex-col gap-1.5 rounded-lg border p-3">
+    <section className="bg-card flex flex-col gap-1.5 rounded-lg border p-3">
       <h3 className="text-muted-foreground text-xs font-medium">
         {t.formatMessage({ defaultMessage: "Headline options" })}
       </h3>

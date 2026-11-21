@@ -84,7 +84,7 @@ export function DocumentChangesBar() {
             .map((change) => (
               <li
                 key={change.id}
-                className="bg-background flex items-start gap-2 rounded border px-2 py-1"
+                className="bg-card flex items-start gap-2 rounded border px-2 py-1"
               >
                 <span className="min-w-0 flex-1">
                   <span className="text-muted-foreground block">

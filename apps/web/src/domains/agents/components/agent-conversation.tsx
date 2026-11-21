@@ -378,7 +378,7 @@ export function AgentComposer({
         <ul
           id={`${id}-command-list`}
           role="listbox"
-          className="bg-background mb-2 rounded-md border text-xs shadow-sm"
+          className="bg-card mb-2 rounded-md border text-xs shadow-sm"
         >
           {commands.map((command, index) => (
             <li
@@ -415,7 +415,7 @@ export function AgentComposer({
           })}
         </p>
       )}
-      <div className="bg-background flex flex-col rounded-xl border shadow-sm">
+      <div className="bg-card flex flex-col rounded-xl border shadow-sm">
         <Textarea
           ref={inputRef}
           rows={2}

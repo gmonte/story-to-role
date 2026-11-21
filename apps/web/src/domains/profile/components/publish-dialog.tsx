@@ -219,7 +219,7 @@ export function PublishDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <section className="space-y-3 rounded-lg border p-4">
+        <section className="bg-card space-y-3 rounded-lg border p-4">
           <h3 className="flex items-center gap-2 text-sm font-medium">
             <Sparkles className="text-primary size-4" />
             {t.formatMessage({ defaultMessage: "1. Validate (optional)" })}
@@ -305,7 +305,7 @@ export function PublishDialog({
           )}
         </section>
 
-        <section className="space-y-2 rounded-lg border p-4">
+        <section className="bg-card space-y-2 rounded-lg border p-4">
           <h3 className="flex items-center gap-2 text-sm font-medium">
             <Send className="size-4" />
             {t.formatMessage({ defaultMessage: "2. Publish" })}
@@ -322,7 +322,7 @@ export function PublishDialog({
                 })}
           </p>
           {!blocked && pending.length > 0 && (
-            <div className="space-y-1.5 rounded-md border p-3 text-sm">
+            <div className="bg-muted/50 space-y-1.5 rounded-md border p-3 text-sm">
               <p className="flex items-center gap-2 font-medium">
                 <CircleAlert className="size-4 text-amber-600" />
                 {t.formatMessage({

@@ -58,7 +58,7 @@ export function LibraryView() {
         {documents.map((document) => (
           <li
             key={document.id}
-            className="bg-background hover:border-primary flex items-center gap-1 rounded-lg border pr-2"
+            className="bg-card hover:border-primary flex items-center gap-1 rounded-lg border pr-2"
           >
             <Link
               href={`/app/library/${document.id}`}

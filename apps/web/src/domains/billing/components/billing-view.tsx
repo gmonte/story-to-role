@@ -111,7 +111,7 @@ export function BillingView() {
 
   return (
     <div className="mx-auto flex w-full max-w-3xl flex-col gap-6 overflow-y-auto p-6 text-sm">
-      <section className="flex flex-col gap-2 rounded-lg border p-4">
+      <section className="bg-card flex flex-col gap-2 rounded-lg border p-4">
         <div className="flex items-center justify-between gap-2">
           <h2 className="font-medium">
             {t.formatMessage({ defaultMessage: "Your plan" })}
@@ -435,7 +435,7 @@ function Offer({
   onClick: () => void;
 }) {
   return (
-    <div className="flex items-center justify-between gap-3 rounded-lg border p-4">
+    <div className="bg-card flex items-center justify-between gap-3 rounded-lg border p-4">
       <span className="flex flex-col">
         <span className="font-medium">{title}</span>
         <span className="text-muted-foreground">{price}</span>

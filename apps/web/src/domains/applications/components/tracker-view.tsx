@@ -194,7 +194,7 @@ function SettingsForm({ initial }: { initial: TrackerSettings }) {
   );
   return (
     <form
-      className="flex flex-col gap-3 rounded-lg border p-4"
+      className="bg-card flex flex-col gap-3 rounded-lg border p-4"
       onSubmit={(event) => {
         event.preventDefault();
         save.mutate(value);

@@ -41,7 +41,7 @@ export function TrackerMetricsPanel() {
   };
 
   return (
-    <section className="flex flex-col gap-3 rounded-lg border p-4">
+    <section className="bg-card flex flex-col gap-3 rounded-lg border p-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h2 className="font-medium">
           {t.formatMessage({ defaultMessage: "Metrics" })}

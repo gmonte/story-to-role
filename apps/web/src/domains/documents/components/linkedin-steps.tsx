@@ -175,7 +175,7 @@ export function LinkedinStepCard({
   const next = steps[at + 1];
 
   return (
-    <section className="bg-background flex flex-col gap-3 rounded-lg border p-3">
+    <section className="bg-card flex flex-col gap-3 rounded-lg border p-3">
       <div className="flex flex-col gap-1">
         <p className="text-muted-foreground text-xs">
           {t.formatMessage(

@@ -71,7 +71,7 @@ export function VersionHistorySheet({ versionId }: { versionId: string }) {
           {history.data?.map((snapshot, index) => (
             <li
               key={snapshot.id}
-              className="flex items-center justify-between gap-2 rounded-lg border p-2.5 text-sm"
+              className="bg-card flex items-center justify-between gap-2 rounded-lg border p-2.5 text-sm"
             >
               <div className="flex flex-col">
                 <span className="flex items-center gap-1.5">

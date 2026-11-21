@@ -60,7 +60,7 @@ export function OwnKeyOffer({
         </Badge>
       </div>
       <p className="text-muted-foreground">{description}</p>
-      <div className="flex flex-col gap-3 rounded-lg border p-4">
+      <div className="bg-card flex flex-col gap-3 rounded-lg border p-4">
         <div className="grid gap-1.5">
           <Label htmlFor="own-key-offer">
             {t.formatMessage({ defaultMessage: "Anthropic API key" })}

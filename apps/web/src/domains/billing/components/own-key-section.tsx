@@ -100,7 +100,7 @@ export function OwnKeySection({ canRemove }: { canRemove: boolean }) {
       </p>
 
       {saved ? (
-        <div className="flex flex-col gap-2 rounded-lg border p-4">
+        <div className="bg-card flex flex-col gap-2 rounded-lg border p-4">
           <span className="flex items-center gap-2">
             <KeyRound className="size-4" />
             {t.formatMessage(

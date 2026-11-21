@@ -82,7 +82,7 @@ export function CoverageScore({ version }: { version: VersionView }) {
   }
 
   return (
-    <div className="bg-background flex flex-col gap-2 rounded-lg border p-2.5 text-xs">
+    <div className="bg-card flex flex-col gap-2 rounded-lg border p-2.5 text-xs">
       <button
         type="button"
         aria-expanded={open}
@@ -440,7 +440,7 @@ function ReviewerList({ review }: { review: Review }) {
           <Collapsible
             key={round.round}
             defaultOpen={round.kept && needsAttention}
-            className="rounded-md border"
+            className="bg-muted/50 rounded-md border"
           >
             <CollapsibleTrigger
               disabled={empty}

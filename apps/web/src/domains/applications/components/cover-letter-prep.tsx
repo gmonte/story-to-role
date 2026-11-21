@@ -182,7 +182,7 @@ function InterviewDone({
   const [open, setOpen] = useState(false);
   return (
     <div className="flex flex-col gap-6">
-      <section className="flex flex-col gap-3 rounded-lg border p-5">
+      <section className="bg-card flex flex-col gap-3 rounded-lg border p-5">
         <div className="flex flex-col gap-1">
           <h2 className="flex items-center gap-2 font-medium">
             <CheckCircle2 className="size-4 text-emerald-600" />
@@ -583,7 +583,7 @@ function PointsReview({
         {motivation.points.map((point) => (
           <li
             key={point.id}
-            className="bg-background flex flex-col gap-1.5 rounded-lg border p-2.5 text-sm"
+            className="bg-card flex flex-col gap-1.5 rounded-lg border p-2.5 text-sm"
           >
             <span>{point.text}</span>
             {point.status === "draft" ? (

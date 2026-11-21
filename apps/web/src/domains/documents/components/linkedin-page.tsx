@@ -77,7 +77,7 @@ function LinkedinEmpty() {
   ];
   return (
     <div className="flex flex-1 items-start justify-center overflow-y-auto p-6">
-      <div className="bg-background flex w-full max-w-xl flex-col gap-4 rounded-lg border p-6">
+      <div className="bg-card flex w-full max-w-xl flex-col gap-4 rounded-lg border p-6">
         <div className="flex flex-col gap-1">
           <h2 className="text-lg font-semibold">
             {t.formatMessage({ defaultMessage: "Your LinkedIn, written" })}

@@ -107,7 +107,7 @@ export function DocumentEditor() {
           {t.formatMessage({ defaultMessage: "Talk about this" })}
         </button>
       )}
-      <article className="bg-background rounded-lg border px-12 py-10 shadow-sm">
+      <article className="bg-card rounded-lg border px-12 py-10 shadow-sm">
         <EditorContent editor={editor} />
       </article>
       <TraceHoverCard

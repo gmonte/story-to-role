@@ -241,7 +241,7 @@ function Totals({ statement }: { statement: UsageStatement }) {
       {statement.totals.map((total) => (
         <div
           key={total.payer}
-          className="flex flex-col gap-1 rounded-lg border p-4"
+          className="bg-card flex flex-col gap-1 rounded-lg border p-4"
         >
           <span className="text-muted-foreground text-xs">
             {spentBy[total.payer]}

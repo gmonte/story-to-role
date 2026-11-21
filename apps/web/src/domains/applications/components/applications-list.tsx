@@ -246,7 +246,7 @@ function ApplicationListRow({
     <li>
       <Link
         href={`/app/openings/${application.openingId}`}
-        className="bg-background hover:border-primary flex flex-wrap items-center justify-between gap-2 rounded-lg border p-3"
+        className="bg-card hover:border-primary flex flex-wrap items-center justify-between gap-2 rounded-lg border p-3"
       >
         <span className="flex min-w-0 flex-col">
           <span className="truncate font-medium">

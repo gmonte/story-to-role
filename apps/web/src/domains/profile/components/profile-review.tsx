@@ -124,7 +124,10 @@ export function ProfileReview() {
           </p>
           <ul className="space-y-1">
             {proposals.map((proposal) => (
-              <li key={proposal.name} className="rounded border p-2 text-xs">
+              <li
+                key={proposal.name}
+                className="bg-card rounded border p-2 text-xs"
+              >
                 <p>
                   <span className="font-medium">{proposal.name}</span>
                   {labelSeparator}

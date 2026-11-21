@@ -172,7 +172,7 @@ export function ConfirmedInstructions({
       {points.map((point) => (
         <li
           key={point.id}
-          className="bg-background flex items-start justify-between gap-2 rounded-md border p-2 text-xs"
+          className="bg-muted/50 flex items-start justify-between gap-2 rounded-md border p-2 text-xs"
         >
           <span className="flex flex-col gap-1">
             {point.text}
@@ -270,7 +270,7 @@ function DraftReview({
   );
 
   return (
-    <div className="grid gap-2 rounded-md border p-2.5">
+    <div className="bg-card grid gap-2 rounded-md border p-2.5">
       <p className="text-muted-foreground text-xs">
         {t.formatMessage({
           defaultMessage:

@@ -454,7 +454,7 @@ function DescriptionBody({ opening }: { opening: OpeningDetail }) {
   return (
     <>
       {opening.status === "external" && (
-        <div className="flex flex-col gap-2 rounded-lg border p-4 text-sm">
+        <div className="bg-card flex flex-col gap-2 rounded-lg border p-4 text-sm">
           <p>
             {t.formatMessage({
               defaultMessage:

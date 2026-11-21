@@ -29,7 +29,7 @@ export function ChatPlaceholder({
         <p className="text-muted-foreground max-w-md text-sm">{description}</p>
       </div>
       <div className="mx-auto w-full max-w-3xl p-4">
-        <div className="bg-background relative rounded-xl border shadow-sm">
+        <div className="bg-card relative rounded-xl border shadow-sm">
           <Textarea
             disabled
             rows={2}

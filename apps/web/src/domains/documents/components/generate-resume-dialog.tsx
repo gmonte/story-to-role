@@ -235,7 +235,7 @@ export function GenerateResumeDialog({
                 {(["quick", "thorough"] as const).map((option) => (
                   <label
                     key={option}
-                    className="flex items-start gap-2 rounded-md border p-2.5 text-sm"
+                    className="bg-card flex items-start gap-2 rounded-md border p-2.5 text-sm"
                   >
                     <RadioGroupItem value={option} className="mt-0.5" />
                     <span>

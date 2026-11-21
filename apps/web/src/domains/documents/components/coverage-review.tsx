@@ -46,13 +46,13 @@ export function CoverageReviewBlock({ version }: { version: VersionView }) {
   const { findings, review } = coverage;
 
   return (
-    <div className="bg-background flex flex-col gap-2 rounded-lg border p-2.5 text-xs">
+    <div className="bg-card flex flex-col gap-2 rounded-lg border p-2.5 text-xs">
       <p className="text-sm font-medium">
         {t.formatMessage({ defaultMessage: "Coverage review" })}
       </p>
 
       {findings.length > 0 ? (
-        <div className="flex flex-col gap-1.5 rounded-lg border p-2.5">
+        <div className="bg-muted/50 flex flex-col gap-1.5 rounded-lg border p-2.5">
           <p className="flex items-center gap-1.5 font-medium">
             <AlertTriangle className="size-3.5 shrink-0 text-amber-600" />
             {t.formatMessage({

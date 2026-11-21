@@ -128,7 +128,7 @@ export function DocumentSidePanel({
         <TabsContent
           value="agent"
           forceMount
-          className="bg-background -mx-4 flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border data-[state=inactive]:hidden"
+          className="bg-card -mx-4 flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border data-[state=inactive]:hidden"
         >
           {agent}
         </TabsContent>
@@ -362,7 +362,7 @@ export function VersionList({
             type="button"
             onClick={() => select(row.id)}
             className={cn(
-              "bg-background flex w-full items-center justify-between rounded-lg border p-2.5 text-left text-sm",
+              "bg-card flex w-full items-center justify-between rounded-lg border p-2.5 text-left text-sm",
               version.id === row.id && "border-primary"
             )}
           >

@@ -9,6 +9,13 @@ import { useTranslation } from "@repo/intl/use-translation";
 import { InfiniteScroll } from "@repo/web/components/pagination/infinite-scroll";
 import { Badge } from "@repo/web/components/ui/badge";
 import { Input } from "@repo/web/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@repo/web/components/ui/select";
 import { Skeleton } from "@repo/web/components/ui/skeleton";
 import {
   Table,
@@ -34,7 +41,11 @@ export function AdminUsers() {
     const timer = setTimeout(() => setSearch(query.trim()), 300);
     return () => clearTimeout(timer);
   }, [query]);
-  const users = useAdminUsers(search);
+  const [plan, setPlan] = useState<AdminUser["plan"] | "all">("all");
+  const users = useAdminUsers({
+    search,
+    plan: plan === "all" ? undefined : plan,
+  });
   const plans: Record<AdminUser["plan"], string> = {
     free: t.formatMessage({ defaultMessage: "Free" }),
     subscription: t.formatMessage({ defaultMessage: "Credit subscription" }),
@@ -61,20 +72,43 @@ export function AdminUsers() {
                   { total: users.total }
                 )}
           </h2>
-          <div className="relative w-full sm:w-72">
-            <Search className="text-muted-foreground pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2" />
-            <Input
-              type="search"
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-              placeholder={t.formatMessage({
-                defaultMessage: "Search by name or email",
-              })}
-              aria-label={t.formatMessage({
-                defaultMessage: "Search by name or email",
-              })}
-              className="pl-8"
-            />
+          <div className="flex w-full flex-wrap gap-2 sm:w-auto">
+            <Select
+              value={plan}
+              onValueChange={(value) => setPlan(value as typeof plan)}
+            >
+              <SelectTrigger
+                aria-label={t.formatMessage({ defaultMessage: "Plan" })}
+                className="w-full sm:w-56"
+              >
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">
+                  {t.formatMessage({ defaultMessage: "All plans" })}
+                </SelectItem>
+                {(Object.keys(plans) as Array<AdminUser["plan"]>).map((key) => (
+                  <SelectItem key={key} value={key}>
+                    {plans[key]}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <div className="relative w-full sm:w-72">
+              <Search className="text-muted-foreground pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2" />
+              <Input
+                type="search"
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+                placeholder={t.formatMessage({
+                  defaultMessage: "Search by name or email",
+                })}
+                aria-label={t.formatMessage({
+                  defaultMessage: "Search by name or email",
+                })}
+                className="pl-8"
+              />
+            </div>
           </div>
         </div>
         <div className="bg-card overflow-hidden rounded-lg border">

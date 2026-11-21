@@ -13,6 +13,7 @@ import { paginationParamsSchema } from "@repo/api/utils/schemas/pagination";
 
 import { CreditsService } from "./credits-service";
 import {
+  adminUserSchema,
   adminUsersSchema,
   courtesyGrantSchema,
   creditSummarySchema,
@@ -133,6 +134,7 @@ export const creditsRouter = createTRPCRouter({
     .input(
       paginationParamsSchema.extend({
         search: z.string().max(200).optional(),
+        plan: adminUserSchema.shape.plan.optional(),
       })
     )
     .output(adminUsersSchema)

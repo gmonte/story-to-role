@@ -1,6 +1,7 @@
 import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { AiKeysRepository } from "@repo/api/domains/ai/ai-keys-repository";
+import { BillingRepository } from "@repo/api/domains/billing/billing-repository";
 import { createTestUser } from "@repo/api/test/create-test-user";
 import {
   clearTestDatabase,
@@ -85,5 +86,53 @@ describe("admin users", () => {
     });
     expect(found.total).toBe(1);
     expect(found.data.map((row) => row.email)).toEqual(["grace@example.com"]);
+  });
+
+  it("filters users by plan, telling the two subscriptions apart", async () => {
+    const db = await getTestDatabase();
+    const owner = await createTestUser("owner@example.com");
+    const ada = await createTestUser("ada@example.com");
+    const grace = await createTestUser("grace@example.com");
+    await createTestUser("linus@example.com");
+    const billing = new BillingRepository(db);
+    const subscribe = (userId: string, plan: "credits" | "own_key") =>
+      billing.upsertSubscription({
+        userId,
+        stripeSubscriptionId: `sub_${plan}`,
+        plan,
+        status: "active",
+        interval: "month",
+        currentPeriodStart: new Date("2026-11-01T00:00:00Z"),
+        currentPeriodEnd: new Date("2026-12-01T00:00:00Z"),
+        cancelAtPeriodEnd: false,
+      });
+    await subscribe(ada.id, "credits");
+    await subscribe(grace.id, "own_key");
+    const credits = new CreditsService(db);
+    await credits.grantCourtesy({
+      adminUserId: owner.id,
+      email: "owner@example.com",
+      monthlyCredits: 100,
+      endsAt: null,
+      now,
+    });
+
+    const plans = async (
+      plan: "free" | "subscription" | "own_key" | "courtesy"
+    ) =>
+      (await credits.adminUsers({ limit: 20, now, plan })).data.map((row) => [
+        row.email,
+        row.plan,
+      ]);
+    expect(await plans("subscription")).toEqual([
+      ["ada@example.com", "subscription"],
+    ]);
+    expect(await plans("own_key")).toEqual([["grace@example.com", "own_key"]]);
+    expect(await plans("courtesy")).toEqual([
+      ["owner@example.com", "courtesy"],
+    ]);
+    expect(await plans("free")).toEqual([["linus@example.com", "free"]]);
+    const all = await credits.adminUsers({ limit: 20, now });
+    expect(all.total).toBe(4);
   });
 });

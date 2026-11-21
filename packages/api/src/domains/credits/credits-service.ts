@@ -4,7 +4,6 @@ import type { DbClient } from "@repo/api/tools/db-client";
 import { AiKeysRepository } from "@repo/api/domains/ai/ai-keys-repository";
 import { AiUsageRepository } from "@repo/api/domains/ai/ai-usage-repository";
 import { TasksRepository } from "@repo/api/domains/tasks/tasks-repository";
-import { UsersRepository } from "@repo/api/domains/users/users-repository";
 import { decodeCursor, encodeCursor } from "@repo/api/utils/db/keyset";
 
 import { decideFunding } from "./credit-funding";
@@ -13,7 +12,12 @@ import {
   ensureMonthlyCredits,
   lockedStoredCredits,
 } from "./credit-ledger";
-import { currentPlan, paidMonth, planUsesKey } from "./credit-plan";
+import {
+  currentPlan,
+  paidMonth,
+  planUsesKey,
+  type PlanKind,
+} from "./credit-plan";
 import { creditCap, usdForUsage } from "./credit-pricing";
 import { creditReserve, nearReserve, resumeEstimate } from "./credit-reserve";
 import { settleTask } from "./settle-task";
@@ -324,16 +328,18 @@ export class CreditsService {
    */
   async adminUsers(input: {
     search?: string;
+    plan?: PlanKind;
     cursor?: string | null;
     limit: number;
     now?: Date;
   }): Promise<AdminUsers> {
     const now = input.now ?? new Date();
-    const users = new UsersRepository(this.db);
-    const keys = new AiKeysRepository(this.db);
+    const repository = new CreditsRepository(this.db);
     const after = decodeCursor(input.cursor);
-    const page = await users.page({
+    const page = await repository.adminUsersPage({
       search: input.search,
+      plan: input.plan,
+      now,
       cursor:
         after && typeof after.keys[0] === "string"
           ? { createdAt: after.keys[0], userId: after.id }
@@ -342,30 +348,21 @@ export class CreditsService {
       limit: input.limit + 1,
     });
     const shown = page.slice(0, input.limit);
-    const data = await Promise.all(
-      shown.map(async (user) => {
-        const [plan, key] = await Promise.all([
-          currentPlan(this.db, user.userId, now),
-          keys.findByUserId(user.userId),
-        ]);
-        return {
-          userId: user.userId,
-          email: user.email,
-          name: user.name || null,
-          createdAt: user.createdAt,
-          plan: plan.kind,
-          keyStatus: key?.status ?? null,
-        };
-      })
-    );
     const last = shown[shown.length - 1];
     return {
-      data,
+      data: shown.map((user) => ({
+        userId: user.userId,
+        email: user.email,
+        name: user.name || null,
+        createdAt: user.createdAt,
+        plan: user.plan,
+        keyStatus: user.keyStatus,
+      })),
       nextCursor:
         page.length > input.limit && last
           ? encodeCursor({ keys: [last.createdAtText], id: last.userId })
           : null,
-      total: await users.count(input.search),
+      total: await repository.countAdminUsers({ ...input, now }),
     };
   }
 

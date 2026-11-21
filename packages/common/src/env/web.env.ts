@@ -16,6 +16,9 @@ export const env = createEnv({
     // (`vercel deploy -b/-e APP_URL=...`), and production sets it as a Vercel
     // Production env var (storytorole.vercel.app).
     APP_URL: z.string().optional(),
+    // A host other than localhost that may load the dev server's assets
+    // (no scheme), such as the ngrok tunnel: `next dev` blocks it otherwise.
+    ALLOWED_DEV_ORIGIN: z.string().optional(),
 
     DATABASE_URL: z.string(),
     DATABASE_DB_PREFIX: z.string().default(""),
@@ -90,6 +93,7 @@ export const env = createEnv({
     PORT: process.env.PORT,
     VERCEL_URL: process.env.VERCEL_URL,
     APP_URL: process.env.APP_URL,
+    ALLOWED_DEV_ORIGIN: process.env.ALLOWED_DEV_ORIGIN,
     DATABASE_URL: process.env.DATABASE_URL,
     DATABASE_DB_PREFIX: process.env.DATABASE_DB_PREFIX,
     DB_MIGRATING: process.env.DB_MIGRATING,

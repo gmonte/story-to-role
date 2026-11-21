@@ -194,6 +194,7 @@ function OpeningScreen({
             }
             // One mount only: the column, or the sheet on a narrow screen.
             panel={desktop ? documentColumn || undefined : undefined}
+            flushPanel
           />
         )}
         {/* A phone: the column is a bottom bar of sheets under the page. */}

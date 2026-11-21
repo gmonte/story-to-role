@@ -64,6 +64,7 @@ function LinkedinWorkspace({ documentId }: { documentId: string }) {
     <DocumentAgentProvider>
       <WorkspaceBody
         layoutId="linkedin"
+        flushPanel
         chat={<LinkedinView documentId={documentId} />}
         panel={<LinkedinPanel documentId={documentId} />}
       />

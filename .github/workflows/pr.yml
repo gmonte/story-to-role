@@ -156,15 +156,15 @@ jobs:
           # doesn't expose on its own (getBaseUrl reads it). Previews share one
           # Upstash database, so each gets its own REDIS_KEY_PREFIX.
           REDIS_KEY_PREFIX="pr-${{ github.event.pull_request.number }}:"
+          # No TRIGGER_DEPLOY here: a preview never deploys the Trigger.dev
+          # tasks, because the Preview project's only environment is staging's.
           # Deploy flags are collected in the positional params so each value
           # stays one quoted argument.
           set -- -b "APP_URL=$PREVIEW_URL" -e "APP_URL=$PREVIEW_URL" -b "REDIS_KEY_PREFIX=$REDIS_KEY_PREFIX" -e "REDIS_KEY_PREFIX=$REDIS_KEY_PREFIX"
 
           if [ -n "$DATABASE_URL" ]; then
             echo "Deploying against the PR's own Neon branch"
-            # DATABASE_BRANCH tells predeploy to skip trigger:deploy: the shared
-            # Trigger.dev worker reads staging's database, not this branch.
-            set -- "$@" -b "DATABASE_URL=$DATABASE_URL" -e "DATABASE_URL=$DATABASE_URL" -b "DATABASE_BRANCH=preview/pr-${{ github.event.pull_request.number }}"
+            set -- "$@" -b "DATABASE_URL=$DATABASE_URL" -e "DATABASE_URL=$DATABASE_URL"
           fi
 
           DEPLOY_URL=$(vercel deploy --token $VERCEL_TOKEN --target preview "$@")

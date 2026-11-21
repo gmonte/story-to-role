@@ -3,7 +3,13 @@
 import { useState, type ReactNode } from "react";
 
 import { useMutation } from "@tanstack/react-query";
-import { Check, ListTree, Pencil, RotateCcw } from "lucide-react";
+import {
+  Check,
+  ListTree,
+  Pencil,
+  RotateCcw,
+  TriangleAlert,
+} from "lucide-react";
 import Link from "next/link";
 
 import type { VersionView } from "@repo/api/domains/documents/schemas/document-view";
@@ -173,8 +179,9 @@ function NewerProfileNotice() {
   const newer = version.profile.newer;
   if (!newer) return null;
   return (
-    <div className="border-warning-border bg-warning-soft flex flex-wrap items-center justify-between gap-2 rounded-lg border p-2.5 text-xs">
-      <span>
+    <div className="border-warning-border bg-warning-soft flex items-center gap-3 rounded-lg border p-3 text-xs">
+      <TriangleAlert className="text-warning size-4 shrink-0" />
+      <span className="min-w-0 flex-1">
         {t.formatMessage(
           {
             defaultMessage:
@@ -191,6 +198,7 @@ function NewerProfileNotice() {
       </span>
       <Button
         size="sm"
+        className="shrink-0"
         disabled={use.isPending || saveStatus !== "saved"}
         onClick={() => use.mutate({ versionId: version.id })}
       >

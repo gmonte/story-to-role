@@ -3,6 +3,7 @@
 import { useTranslation } from "@repo/intl/use-translation";
 import { cn } from "@repo/web/lib/utils";
 
+import { useActiveLine } from "../hooks/use-active-line";
 import { useProfileEditor } from "./profile-editor-context";
 
 // The profile's own separator, not a translated word.
@@ -14,7 +15,18 @@ const titleSeparator = " — ";
  */
 export function ProfileIndex() {
   const t = useTranslation();
-  const { blocks, structure, findings, goToLine } = useProfileEditor();
+  const { blocks, structure, findings, goToLine, editor } = useProfileEditor();
+  // The section (or position) being read is marked, as in a table of
+  // contents that follows the page.
+  const active = useActiveLine(
+    editor,
+    structure.sections.flatMap((section) => [
+      section.heading,
+      ...(section.key === "experience"
+        ? structure.experiences.map((experience) => experience.heading)
+        : []),
+    ])
+  );
 
   const formatLines = new Set(
     findings
@@ -42,9 +54,13 @@ export function ProfileIndex() {
               <button
                 type="button"
                 onClick={() => goToLine(section.heading)}
+                aria-current={
+                  active === section.heading ? "location" : undefined
+                }
                 className={cn(
-                  "hover:bg-muted flex w-full items-center gap-2 rounded px-2 py-1 text-left",
-                  !section.key && "text-muted-foreground italic"
+                  "hover:bg-accent flex w-full items-center gap-2 rounded px-2 py-1 text-left",
+                  !section.key && "text-muted-foreground italic",
+                  active === section.heading && "bg-accent font-medium"
                 )}
               >
                 <span className="truncate">{title}</span>
@@ -59,7 +75,14 @@ export function ProfileIndex() {
                       <button
                         type="button"
                         onClick={() => goToLine(experience.heading)}
-                        className="text-muted-foreground hover:bg-muted hover:text-foreground w-full truncate rounded px-2 py-0.5 text-left text-xs"
+                        aria-current={
+                          active === experience.heading ? "location" : undefined
+                        }
+                        className={cn(
+                          "text-muted-foreground hover:bg-accent hover:text-foreground w-full truncate rounded px-2 py-0.5 text-left text-xs",
+                          active === experience.heading &&
+                            "bg-accent text-foreground font-medium"
+                        )}
                       >
                         {experience.parsed
                           ? [

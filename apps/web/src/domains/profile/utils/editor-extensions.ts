@@ -281,7 +281,7 @@ export const ProfileMarks = Extension.create({
                     pos + 1 + match.index + match[0].length,
                     {
                       class: cn(
-                        "rounded-sm px-1 font-mono text-[0.82em] whitespace-nowrap",
+                        "rounded-sm px-1 font-mono text-[0.82em] box-decoration-clone",
                         markTone[kind]
                       ),
                     }

@@ -59,11 +59,11 @@ export function OpeningsByStatus() {
     openings.data.filter((opening) => inGroup(opening) === group);
   const groups: Array<{ label: string; items: OpeningSummary[] }> = [
     {
-      label: t.formatMessage({ defaultMessage: "Being analyzed" }),
+      label: t.formatMessage({ defaultMessage: "Openings being analyzed" }),
       items: byGroup("processing"),
     },
     {
-      label: t.formatMessage({ defaultMessage: "Analyzed" }),
+      label: t.formatMessage({ defaultMessage: "Analyzed openings" }),
       items: byGroup("analyzed"),
     },
     {
@@ -89,12 +89,12 @@ export function OpeningsByStatus() {
   ];
 
   return (
-    <div className="flex flex-col gap-2">
+    <div className="flex flex-col gap-3">
       {groups
         .filter((group) => group.items.length > 0)
         .map((group) => (
           <div key={group.label} className="flex flex-col gap-1">
-            <span className="text-muted-foreground px-2 text-[11px] uppercase">
+            <span className="text-muted-foreground px-2 text-[11px] font-semibold tracking-[0.07em] uppercase">
               {group.label}
             </span>
             <SidebarMenu>

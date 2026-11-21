@@ -19,7 +19,6 @@ import {
   SidebarFooter,
   SidebarGroup,
   SidebarGroupContent,
-  SidebarGroupLabel,
   SidebarHeader,
   SidebarMenu,
   SidebarMenuBadge,
@@ -120,9 +119,6 @@ export function AppSidebar() {
 
         <SidebarSeparator className="mx-4 group-data-[collapsible=icon]:hidden" />
         <SidebarGroup className="group-data-[collapsible=icon]:hidden">
-          <SidebarGroupLabel>
-            {t.formatMessage({ defaultMessage: "Openings" })}
-          </SidebarGroupLabel>
           <SidebarGroupContent>
             <OpeningsByStatus />
           </SidebarGroupContent>

@@ -5,7 +5,14 @@ import { useEffect, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useChatActions } from "@trigger.dev/sdk/chat/react";
 import type { UIMessage } from "ai";
-import { Loader2, Paperclip, Sparkles } from "lucide-react";
+import {
+  Check,
+  Loader2,
+  Paperclip,
+  PencilLine,
+  Sparkles,
+  X,
+} from "lucide-react";
 
 import { composeAgentMessage } from "@repo/api/domains/agents/agent-message";
 import { agentSettings } from "@repo/api/domains/agents/agent-settings";
@@ -121,6 +128,8 @@ function Conversation({
     suggestions,
     goToLine,
     scrollToLine,
+    acceptSuggestions,
+    rejectSuggestions,
   } = useProfileEditor();
   const [text, setText] = useState("");
   const [turnDone, setTurnDone] = useState(0);
@@ -372,33 +381,75 @@ function Conversation({
                     return null;
                   }
                   const waiting = suggestions.find((s) => s.id === proposed);
+                  if (waiting) {
+                    // The change itself, to answer here or in the text.
+                    return (
+                      <div
+                        key={index}
+                        className="bg-card flex flex-col gap-2 rounded-lg border p-3 text-sm"
+                      >
+                        <button
+                          type="button"
+                          disabled={!waiting.range}
+                          onClick={() =>
+                            waiting.range && goToLine(waiting.range.start)
+                          }
+                          className="text-muted-foreground hover:text-foreground flex items-center gap-1.5 text-left text-xs"
+                        >
+                          <PencilLine className="size-3.5 shrink-0" />
+                          {t.formatMessage(
+                            { defaultMessage: "Suggestion for {part}" },
+                            { part: waiting.part }
+                          )}
+                        </button>
+                        {waiting.find && (
+                          <p className="text-muted-foreground line-through decoration-1">
+                            {waiting.find}
+                          </p>
+                        )}
+                        <p className="bg-fit-high-soft rounded-md px-2.5 py-2">
+                          {waiting.replace}
+                        </p>
+                        {call.input?.reason && (
+                          <p className="text-muted-foreground text-xs">
+                            {call.input.reason}
+                          </p>
+                        )}
+                        <div className="flex gap-2">
+                          <Button
+                            size="sm"
+                            onClick={() => acceptSuggestions([waiting.id])}
+                          >
+                            <Check />
+                            {t.formatMessage({ defaultMessage: "Accept" })}
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => rejectSuggestions([waiting.id])}
+                          >
+                            <X />
+                            {t.formatMessage({ defaultMessage: "Reject" })}
+                          </Button>
+                        </div>
+                      </div>
+                    );
+                  }
                   return (
-                    <button
+                    <p
                       key={index}
-                      type="button"
-                      disabled={!waiting?.range}
-                      onClick={() =>
-                        waiting?.range && goToLine(waiting.range.start)
-                      }
-                      className="bg-primary/5 hover:bg-primary/10 flex items-start gap-2 rounded-md border px-2.5 py-1.5 text-left text-xs disabled:opacity-60"
+                      className="text-muted-foreground flex items-start gap-2 rounded-md border px-2.5 py-1.5 text-xs"
                     >
                       <Sparkles className="text-brand-accent mt-0.5 size-3.5 shrink-0" />
                       <span>
-                        <span className="block font-medium">
-                          {waiting
-                            ? t.formatMessage({
-                                defaultMessage:
-                                  "Suggestion waiting in the text",
-                              })
-                            : t.formatMessage({
-                                defaultMessage: "Suggestion answered",
-                              })}
+                        <span className="text-foreground block font-medium">
+                          {t.formatMessage({
+                            defaultMessage: "Suggestion answered",
+                          })}
                         </span>
-                        <span className="text-muted-foreground">
-                          {call.input?.reason}
-                        </span>
+                        {call.input?.reason}
                       </span>
-                    </button>
+                    </p>
                   );
                 })}
               </li>

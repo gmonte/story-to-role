@@ -136,7 +136,7 @@ export function AppSidebar() {
                 isActive={pathname.startsWith("/app/admin")}
                 tooltip={adminLabel}
               >
-                <Link href="/app/admin">
+                <Link href="/app/admin/usage">
                   <ShieldCheck />
                   <span>{adminLabel}</span>
                 </Link>

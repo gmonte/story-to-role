@@ -1,16 +1,6 @@
-import { getTranslation } from "@repo/intl/get-translation";
+import { redirect } from "next/navigation";
 
-import { AdminView } from "~/domains/credits/components/admin-view";
-import { WorkspacePage } from "~/domains/workspace/components/workspace-page";
-import { getLocaleFromNextCookies } from "~/tools/intl/utils/get-locale-from-next-cookies";
-
-export default async function AdminPage() {
-  const t = await getTranslation(await getLocaleFromNextCookies());
-
-  return (
-    <WorkspacePage
-      title={t.formatMessage({ defaultMessage: "Admin" })}
-      chat={<AdminView />}
-    />
-  );
+/** The admin opens on its first tab. */
+export default function AdminPage() {
+  redirect("/app/admin/usage");
 }

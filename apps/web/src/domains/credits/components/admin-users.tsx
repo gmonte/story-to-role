@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 import { Search } from "lucide-react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
 import type { AdminUser } from "@repo/api/domains/credits/schemas/credits";
 import { useTranslation } from "@repo/intl/use-translation";
@@ -28,24 +29,61 @@ import {
 
 import { useAdminUsers } from "../hooks/use-admin-users";
 
+const planValues: Array<AdminUser["plan"]> = [
+  "free",
+  "subscription",
+  "own_key",
+  "courtesy",
+];
+
+/**
+ * The list's filters in the URL (`?q=…&plan=…`), so a filtered list can
+ * be reloaded or kept as a link.
+ */
+function useUserFilters() {
+  const params = useSearchParams();
+  const router = useRouter();
+  const pathname = usePathname();
+  const search = params.get("q") ?? "";
+  const planParam = params.get("plan");
+  const plan = planValues.find((value) => value === planParam);
+  const setFilters = useCallback(
+    (next: { search?: string; plan?: AdminUser["plan"] }) => {
+      const query = new URLSearchParams(params);
+      if ("search" in next) {
+        if (next.search) query.set("q", next.search);
+        else query.delete("q");
+      }
+      if ("plan" in next) {
+        if (next.plan) query.set("plan", next.plan);
+        else query.delete("plan");
+      }
+      const searchString = query.toString();
+      router.replace(searchString ? `${pathname}?${searchString}` : pathname, {
+        scroll: false,
+      });
+    },
+    [params, pathname, router]
+  );
+  return { search, plan, setFilters };
+}
+
 /**
  * The admin's accounts, newest first: name, email and plan; a courtesy
  * plan runs on the user's key, so it says whether they have one.
  */
 export function AdminUsers() {
   const t = useTranslation();
-  const [query, setQuery] = useState("");
-  const [search, setSearch] = useState("");
+  const { search, plan, setFilters } = useUserFilters();
+  const [query, setQuery] = useState(search);
   // Searches once typing pauses, not on every key.
   useEffect(() => {
-    const timer = setTimeout(() => setSearch(query.trim()), 300);
+    const timer = setTimeout(() => {
+      if (query.trim() !== search) setFilters({ search: query.trim() });
+    }, 300);
     return () => clearTimeout(timer);
-  }, [query]);
-  const [plan, setPlan] = useState<AdminUser["plan"] | "all">("all");
-  const users = useAdminUsers({
-    search,
-    plan: plan === "all" ? undefined : plan,
-  });
+  }, [query, search, setFilters]);
+  const users = useAdminUsers({ search, plan });
   const plans: Record<AdminUser["plan"], string> = {
     free: t.formatMessage({ defaultMessage: "Free" }),
     subscription: t.formatMessage({ defaultMessage: "Credit subscription" }),
@@ -74,8 +112,13 @@ export function AdminUsers() {
           </h2>
           <div className="flex w-full flex-wrap gap-2 sm:w-auto">
             <Select
-              value={plan}
-              onValueChange={(value) => setPlan(value as typeof plan)}
+              value={plan ?? "all"}
+              onValueChange={(value) =>
+                setFilters({
+                  plan:
+                    value === "all" ? undefined : (value as AdminUser["plan"]),
+                })
+              }
             >
               <SelectTrigger
                 aria-label={t.formatMessage({ defaultMessage: "Plan" })}

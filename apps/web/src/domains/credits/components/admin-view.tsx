@@ -1,42 +1,48 @@
 "use client";
 
+import type { ReactNode } from "react";
+
+import Link from "next/link";
+import { usePathname } from "next/navigation";
+
 import { useTranslation } from "@repo/intl/use-translation";
-import {
-  Tabs,
-  TabsContent,
-  TabsList,
-  TabsTrigger,
-} from "@repo/web/components/ui/tabs";
+import { Tabs, TabsList, TabsTrigger } from "@repo/web/components/ui/tabs";
 
-import { AdminUsers } from "./admin-users";
-import { CourtesyGrants } from "./courtesy-grants";
-import { PlatformUsageView } from "./platform-usage-view";
-
-/** The admin page: everyone's AI usage, the users and the courtesy grants. */
-export function AdminView() {
+/**
+ * An admin page under the admin's tabs (everyone's AI usage, the users
+ * and the courtesy grants), each tab a page of its own.
+ */
+export function AdminView({ children }: { children: ReactNode }) {
   const t = useTranslation();
+  const pathname = usePathname();
+  const tabs = [
+    {
+      href: "/app/admin/usage",
+      label: t.formatMessage({ defaultMessage: "Usage" }),
+    },
+    {
+      href: "/app/admin/users",
+      label: t.formatMessage({ defaultMessage: "Users" }),
+    },
+    {
+      href: "/app/admin/courtesy",
+      label: t.formatMessage({ defaultMessage: "Courtesy grants" }),
+    },
+  ];
+  const current = tabs.find((tab) => pathname.startsWith(tab.href))?.href;
+
   return (
-    <Tabs defaultValue="usage" className="min-h-0 flex-1 gap-0">
-      <TabsList className="mx-6 mt-4">
-        <TabsTrigger value="usage">
-          {t.formatMessage({ defaultMessage: "Usage" })}
-        </TabsTrigger>
-        <TabsTrigger value="users">
-          {t.formatMessage({ defaultMessage: "Users" })}
-        </TabsTrigger>
-        <TabsTrigger value="courtesy">
-          {t.formatMessage({ defaultMessage: "Courtesy grants" })}
-        </TabsTrigger>
-      </TabsList>
-      <TabsContent value="usage" className="flex min-h-0 flex-1">
-        <PlatformUsageView />
-      </TabsContent>
-      <TabsContent value="users" className="flex min-h-0 flex-1">
-        <AdminUsers />
-      </TabsContent>
-      <TabsContent value="courtesy" className="flex min-h-0 flex-1">
-        <CourtesyGrants />
-      </TabsContent>
-    </Tabs>
+    <div className="flex min-h-0 flex-1 flex-col">
+      <Tabs value={current}>
+        <TabsList className="mx-6 mt-4">
+          {tabs.map((tab) => (
+            <TabsTrigger key={tab.href} value={tab.href} asChild>
+              <Link href={tab.href}>{tab.label}</Link>
+            </TabsTrigger>
+          ))}
+        </TabsList>
+      </Tabs>
+      <div className="flex min-h-0 flex-1">{children}</div>
+    </div>
   );
 }

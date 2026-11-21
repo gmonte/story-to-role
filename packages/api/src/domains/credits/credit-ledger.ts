@@ -90,11 +90,15 @@ export async function ensureMonthlyCredits(
   const { key, next } = billingMonth(now);
   const plan = await currentPlan(tx, userId, now);
   const { subscription, courtesy, carryover } = plan;
-  // The credit subscription's month, or on the own-key plan the month of
-  // the credit subscription it replaced, while that paid period lasts.
-  const paying = plan.kind === "subscription" ? subscription : carryover;
-  if (paying) {
-    const { paidInvoiceId, paidPeriodStart, paidPeriodEnd } = paying;
+  // The credit subscription's month, and the month of a credit
+  // subscription the own-key one replaced while that paid period lasts.
+  const paying = [
+    plan.kind === "subscription" ? subscription : null,
+    carryover,
+  ];
+  for (const paid of paying) {
+    if (!paid) continue;
+    const { paidInvoiceId, paidPeriodStart, paidPeriodEnd } = paid;
     const month =
       paidInvoiceId && paidPeriodStart && paidPeriodEnd
         ? paidMonth({ start: paidPeriodStart, end: paidPeriodEnd }, now)

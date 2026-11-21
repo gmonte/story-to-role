@@ -223,8 +223,10 @@ describe("billing service", () => {
   });
 
   it("deletes the key when the own-key plan ends, unless a courtesy grant uses it", async () => {
-    const ended = subscription("canceled", "paid", "storytorole_own_key");
-    const ctx = await setup({ subscription: ended });
+    const state = {
+      subscription: subscription("active", "paid", "storytorole_own_key"),
+    };
+    const ctx = await setup(state);
     const keys = new AiKeysRepository(ctx.db);
     const keep = () =>
       keys.upsert({
@@ -238,8 +240,16 @@ describe("billing service", () => {
       id: "sub_1",
       customer: "cus_ada",
     });
+    const updated = event("customer.subscription.updated", {
+      id: "sub_1",
+      customer: "cus_ada",
+    });
+    const live = state.subscription;
+    const ended = subscription("canceled", "paid", "storytorole_own_key");
 
     await keep();
+    await ctx.billing.handleEvent(updated);
+    state.subscription = ended;
     await ctx.billing.handleEvent(deleted);
     expect(await keys.findByUserId(ctx.user.id)).toBeNull();
 
@@ -251,6 +261,9 @@ describe("billing service", () => {
       endsAt: null,
     });
     await keep();
+    state.subscription = live;
+    await ctx.billing.handleEvent(updated);
+    state.subscription = ended;
     await ctx.billing.handleEvent(deleted);
     expect(await keys.findByUserId(ctx.user.id)).not.toBeNull();
   });
@@ -515,6 +528,29 @@ describe("billing service", () => {
         },
       },
     ]);
+  });
+
+  it("keeps the key just checked while the first own-key payment is pending", async () => {
+    const ctx = await setup({
+      subscription: subscription("incomplete", "open", "storytorole_own_key"),
+    });
+    const keys = new AiKeysRepository(ctx.db);
+    await keys.upsert({
+      userId: ctx.user.id,
+      encryptedKey: "encrypted",
+      lastCharacters: "WXYZ",
+      status: "active",
+      now: new Date(),
+    });
+
+    await ctx.billing.handleEvent(
+      event("invoice.payment_failed", {
+        customer: "cus_ada",
+        parent: { subscription_details: { subscription: "sub_1" } },
+      })
+    );
+
+    expect(await keys.findByUserId(ctx.user.id)).not.toBeNull();
   });
 
   it("grants nothing until the invoice is paid, yet keeps the paid plan", async () => {

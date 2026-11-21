@@ -12,7 +12,7 @@ import {
   ensureMonthlyCredits,
   lockedStoredCredits,
 } from "./credit-ledger";
-import { currentPlan, paidMonth } from "./credit-plan";
+import { currentPlan, paidMonth, planUsesKey } from "./credit-plan";
 import { creditCap, usdForUsage } from "./credit-pricing";
 import { creditReserve, nearReserve, resumeEstimate } from "./credit-reserve";
 import { settleTask } from "./settle-task";
@@ -215,7 +215,7 @@ export class CreditsService {
   /** The user's key, on the plans that use one (own-key, courtesy). */
   private async keyFunding(tx: DbClient, userId: string, now: Date) {
     const { kind } = await currentPlan(tx, userId, now);
-    if (kind !== "own_key" && kind !== "courtesy") return null;
+    if (!planUsesKey(kind)) return null;
     const key = await new AiKeysRepository(tx).findByUserId(userId);
     if (!key) return null;
     const { start: monthStart } = billingMonth(now);

@@ -38,7 +38,7 @@ As SaaS products usually do (GitHub, Slack, Notion), a switch to a dearer plan a
 | From → to | When | Money | Credits |
 | --- | --- | --- | --- |
 | Credit subscription (monthly or annual) → own-key | At once, through a new Checkout; the old subscription is cancelled only once the new one is paid | No refund | The period already paid keeps granting: the current month's credits until it ends and, on an annual plan, 600 credits for each month left until the date the year would have ended |
-| Own-key → credit subscription | At once; the billing period restarts now | The unused own-key time is credited on the first invoice | The new month's 600 once its invoice is paid; the key is deleted |
+| Own-key → credit subscription | At once; the billing period restarts now | The unused own-key time is credited on the first invoice | The new month's 600 once its invoice is paid; credits still carried over from an earlier credit subscription keep coming; the key is deleted |
 | Monthly → annual, same subscription | At once | The unused month is credited | The year starts now |
 | Annual → monthly, same subscription | At the end of the paid year | None | Nothing changes until then |
 

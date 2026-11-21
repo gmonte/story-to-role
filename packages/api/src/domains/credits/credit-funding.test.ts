@@ -246,6 +246,19 @@ describe("own keys and funding", () => {
     ).toBeGreaterThanOrEqual(600);
   });
 
+  it("keeps a replaced year's credits after switching back to credits", async () => {
+    const ctx = await setup();
+    await ctx.subscribe("credits", "sub_annual", 200);
+    await new BillingRepository(ctx.db).markReplaced("sub_annual", new Date());
+    // Own key first, then back to credits on the same subscription.
+    await ctx.subscribe("credits", "sub_key");
+
+    await ctx.credits.summary(ctx.user.id);
+    expect(await spendableTotal(ctx.db, ctx.user.id, "any", new Date())).toBe(
+      1200
+    );
+  });
+
   it("removes an own-key subscriber's key only once the plan is cancelled", async () => {
     const ctx = await setup();
     await ctx.subscribe("own_key");

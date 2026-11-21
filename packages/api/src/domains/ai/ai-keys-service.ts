@@ -1,6 +1,9 @@
 import { TRPCError } from "@trpc/server";
 
-import { currentPlan } from "@repo/api/domains/credits/credit-plan";
+import {
+  currentPlan,
+  planUsesKey,
+} from "@repo/api/domains/credits/credit-plan";
 import { getUserCipher } from "@repo/api/domains/encryption/user-cipher";
 import type { DbClient } from "@repo/api/tools/db-client";
 
@@ -42,7 +45,7 @@ export class AiKeysService {
 
   async save(input: { userId: string; apiKey: string }) {
     const { kind } = await currentPlan(this.db, input.userId, new Date());
-    if (kind !== "own_key" && kind !== "courtesy") {
+    if (!planUsesKey(kind)) {
       throw new TRPCError({ code: "PRECONDITION_FAILED" });
     }
     return this.store(input);

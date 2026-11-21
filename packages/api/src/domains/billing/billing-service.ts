@@ -11,14 +11,17 @@ import {
   revokeLots,
 } from "@repo/api/domains/credits/credit-ledger";
 import { AiKeysService } from "@repo/api/domains/ai/ai-keys-service";
-import { currentPlan } from "@repo/api/domains/credits/credit-plan";
+import {
+  currentPlan,
+  planUsesKey,
+} from "@repo/api/domains/credits/credit-plan";
 import { creditSettings } from "@repo/api/domains/credits/credit-pricing";
 import { UsersRepository } from "@repo/api/domains/users/users-repository";
 import type { DbClient } from "@repo/api/tools/db-client";
 import { getStripe } from "@repo/api/tools/stripe/stripe-client";
 import { logger } from "@repo/common/tools/logger";
 
-import { billingCatalog, planOfProduct } from "./billing-catalog";
+import { billingCatalog, offerFor, planOfProduct } from "./billing-catalog";
 import { BillingRepository } from "./billing-repository";
 import {
   type BillingStatus,
@@ -189,11 +192,7 @@ export class BillingService {
       throw new TRPCError({ code: "PRECONDITION_FAILED" });
     }
     const item = await this.itemOf(current.stripeSubscriptionId);
-    const price = await this.priceId(
-      current.interval === "year"
-        ? "subscription_annual"
-        : "subscription_monthly"
-    );
+    const price = await this.priceId(offerFor("credits", current.interval));
     const params: Stripe.SubscriptionUpdateParams = {
       items: [{ id: item.id, price }],
       billing_cycle_anchor: { type: "now" },
@@ -224,14 +223,10 @@ export class BillingService {
       throw new TRPCError({ code: "PRECONDITION_FAILED" });
     }
     const item = await this.itemOf(current.stripeSubscriptionId);
-    const target: CheckoutProduct =
-      current.plan === "own_key"
-        ? current.interval === "year"
-          ? "own_key_monthly"
-          : "own_key_annual"
-        : current.interval === "year"
-          ? "subscription_monthly"
-          : "subscription_annual";
+    const target = offerFor(
+      current.plan,
+      current.interval === "year" ? "month" : "year"
+    );
     const configuration = (
       await this.stripe.billingPortal.configurations.list({ limit: 100 })
     ).data.find(
@@ -347,10 +342,7 @@ export class BillingService {
           .autoPagingToArray({ limit: 1000 });
         for (const session of sessions) {
           // A switch to the own-key plan whose return and webhook were lost.
-          const replaces = session.metadata?.replaces;
-          if (replaces && session.payment_status === "paid") {
-            await this.endReplaced(replaces, customer.userId);
-          }
+          await this.endReplaced(session, customer.userId);
           if (session.mode !== "payment") continue;
           await this.applyCheckout(session, customer.userId);
           const charge = (session.payment_intent as Stripe.PaymentIntent | null)
@@ -463,10 +455,7 @@ export class BillingService {
     if (session.mode === "subscription") {
       const subscriptionId = idOf(session.subscription);
       if (subscriptionId) await this.syncSubscription(subscriptionId, userId);
-      const replaces = session.metadata?.replaces;
-      if (replaces && session.payment_status === "paid") {
-        await this.endReplaced(replaces, userId);
-      }
+      await this.endReplaced(session, userId);
       return;
     }
     // A pack: granted once paid (Pix completes asynchronously).
@@ -532,11 +521,14 @@ export class BillingService {
       }
       const now = new Date();
       await ensureMonthlyCredits(tx, userId, now);
+      // Only a live own-key plan ends: a first payment still pending (or
+      // failed) keeps the key the user just checked.
       const leftOwnKey =
-        (before?.plan === "own_key" && plan === "credits") ||
-        (plan === "own_key" && !isLiveSubscription(status));
+        before?.plan === "own_key" &&
+        isLiveSubscription(before.status) &&
+        (plan === "credits" || !isLiveSubscription(status));
       const { kind } = await currentPlan(tx, userId, now);
-      if (leftOwnKey && kind !== "own_key" && kind !== "courtesy") {
+      if (leftOwnKey && !planUsesKey(kind)) {
         await new AiKeysRepository(tx).delete(userId);
       }
     });
@@ -548,7 +540,9 @@ export class BillingService {
    * granting credits. Done once: the return from Checkout, the webhook and
    * reconciliation may all get here.
    */
-  private async endReplaced(stripeSubscriptionId: string, userId: string) {
+  private async endReplaced(session: Stripe.Checkout.Session, userId: string) {
+    const stripeSubscriptionId = session.metadata?.replaces;
+    if (!stripeSubscriptionId || session.payment_status !== "paid") return;
     const repository = new BillingRepository(this.db);
     const old =
       await repository.findSubscriptionByStripeId(stripeSubscriptionId);

@@ -1,4 +1,8 @@
-import type { CheckoutProduct, SubscriptionPlan } from "./schemas/billing";
+import type {
+  BillingInterval,
+  CheckoutProduct,
+  SubscriptionPlan,
+} from "./schemas/billing";
 
 /**
  * What StoryToRole sells, created in Stripe by `stripe:setup` (billing
@@ -81,6 +85,20 @@ export const billingCatalog = {
  */
 export const planOfProduct = (productId: string | null): SubscriptionPlan =>
   productId === billingCatalog.products.own_key.id ? "own_key" : "credits";
+
+const offers = {
+  credits: { month: "subscription_monthly", year: "subscription_annual" },
+  own_key: { month: "own_key_monthly", year: "own_key_annual" },
+} as const satisfies Record<
+  SubscriptionPlan,
+  Record<BillingInterval, CheckoutProduct>
+>;
+
+/** The catalog offer of a subscription plan, monthly or annual. */
+export const offerFor = (
+  plan: SubscriptionPlan,
+  interval: BillingInterval
+): CheckoutProduct => offers[plan][interval];
 
 /** The webhook events StoryToRole handles (and `stripe:listen` forwards). */
 export const stripeEvents = [

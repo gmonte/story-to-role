@@ -6,9 +6,9 @@ import { CreditsRepository } from "./credits-repository";
 /**
  * The user's plan (billing spec, "Plans and AI funding"): the credit or
  * the own-key subscription through a live Stripe subscription or, for a
- * user without one, a courtesy grant; else Free. On the own-key plan,
- * `carryover` is the credit subscription it replaced, while its paid
- * period still grants credits.
+ * user without one, a courtesy grant; else Free. `carryover` is a credit
+ * subscription the own-key one replaced, while its paid period still
+ * grants credits; it keeps granting if the user switches back to credits.
  */
 export async function currentPlan(db: DbClient, userId: string, now: Date) {
   const billing = new BillingRepository(db);
@@ -20,7 +20,7 @@ export async function currentPlan(db: DbClient, userId: string, now: Date) {
   return {
     subscription,
     courtesy,
-    carryover: ownKey ? await billing.findCarryover(userId, now) : null,
+    carryover: subscription ? await billing.findCarryover(userId, now) : null,
     kind: subscription
       ? ownKey
         ? ("own_key" as const)
@@ -30,6 +30,12 @@ export async function currentPlan(db: DbClient, userId: string, now: Date) {
         : ("free" as const),
   };
 }
+
+/** Billing spec: the own-key subscription and the courtesy plan use a key. */
+export const planUsesKey = (kind: PlanKind) =>
+  kind === "own_key" || kind === "courtesy";
+
+export type PlanKind = Awaited<ReturnType<typeof currentPlan>>["kind"];
 
 /** `months` calendar months after `date`, its day clamped to the month's end. */
 function addMonths(date: Date, months: number) {

@@ -3,7 +3,7 @@ import { AiKeysRepository } from "@repo/api/domains/ai/ai-keys-repository";
 import type { DbClient } from "@repo/api/tools/db-client";
 
 import { ensureMonthlyCredits, spendableTotal } from "./credit-ledger";
-import { currentPlan } from "./credit-plan";
+import { currentPlan, planUsesKey } from "./credit-plan";
 import type { CreditScope } from "./schemas/credits";
 
 /**
@@ -34,9 +34,7 @@ export async function decideFunding(
 ): Promise<AiFunding> {
   const plan = await currentPlan(tx, input.userId, input.now);
   const key = await new AiKeysRepository(tx).findByUserId(input.userId);
-  const usableKey =
-    key?.status === "active" &&
-    (plan.kind === "own_key" || plan.kind === "courtesy");
+  const usableKey = key?.status === "active" && planUsesKey(plan.kind);
   // Free to the user (StoryToRole's cost): their own key when they use one.
   if (input.cap <= 0) return usableKey ? "key" : "credits";
   if (plan.kind === "free" || plan.kind === "subscription") return "credits";

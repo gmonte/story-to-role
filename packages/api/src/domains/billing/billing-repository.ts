@@ -38,7 +38,6 @@ export class BillingRepository {
     return this.tx.select().from(billingCustomersTable);
   }
 
-  /** The user's latest subscription (the one whose period ends last). */
   findSubscriptionByStripeId(stripeSubscriptionId: string) {
     return this.tx
       .select()

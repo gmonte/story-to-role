@@ -29,17 +29,17 @@ export function ChatPlaceholder({
         <p className="text-muted-foreground max-w-md text-sm">{description}</p>
       </div>
       <div className="mx-auto w-full max-w-3xl p-4">
-        <div className="bg-card relative rounded-lg border">
+        <div className="bg-card border-input relative rounded-[10px] border px-3 py-2.5">
           <Textarea
             disabled
             rows={2}
             placeholder={t.formatMessage({ defaultMessage: "Coming soon." })}
-            className="resize-none border-0 bg-transparent pr-12 shadow-none focus-visible:ring-0 dark:bg-transparent"
+            className="min-h-10 resize-none rounded-none border-0 bg-transparent p-0 pr-10 text-sm shadow-none focus-visible:ring-0 md:text-sm dark:bg-transparent"
           />
           <Button
             size="icon"
             disabled
-            className="absolute right-2 bottom-2 size-8 rounded-full"
+            className="absolute right-3 bottom-2.5 size-7 rounded-full"
             aria-label={t.formatMessage({ defaultMessage: "Send" })}
           >
             <ArrowUp />

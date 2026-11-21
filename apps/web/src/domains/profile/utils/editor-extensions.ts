@@ -24,6 +24,8 @@ import { findLinks } from "./find-links";
 import {
   blocksToDoc,
   docToBlocks,
+  introNote,
+  introNoteOffsets,
   isLockedNode,
   lockedNodeOffsets,
   sameLockedHeadings,
@@ -201,9 +203,10 @@ export const ProfileClipboard = Extension.create({
 export const allowStructure = "allowStructure";
 
 /**
- * The document's title and the template's sections are fixed: a typed,
- * deleted or dragged change to them is rejected, unless the app made it
- * on purpose (paste, undo, fixes, inserts, restores).
+ * The document's title, its opening note and the template's sections are
+ * fixed: a typed, deleted or dragged change to them is rejected, unless the
+ * app made it on purpose (paste, undo, fixes, inserts, restores). The title
+ * and the note can't take the cursor at all.
  */
 export const ProfileLockedHeadings = Extension.create({
   name: "profileLockedHeadings",
@@ -220,16 +223,34 @@ export const ProfileLockedHeadings = Extension.create({
           ) {
             return true;
           }
-          return sameLockedHeadings(state.doc, tr.doc);
+          const before = introNote(state.doc);
+          const after = introNote(tr.doc);
+          return (
+            sameLockedHeadings(state.doc, tr.doc) &&
+            before.length === after.length &&
+            before.every((line, index) => line === after[index])
+          );
         },
         props: {
           decorations: (state) => {
             const decorations: Decoration[] = [];
             for (const offset of lockedNodeOffsets(state.doc)) {
               const node = state.doc.nodeAt(offset)!;
+              const title =
+                node.type.name === "heading" && node.attrs.level === 1;
               decorations.push(
                 Decoration.node(offset, offset + node.nodeSize, {
                   class: "profile-locked-heading",
+                  ...(title ? { contenteditable: "false" } : {}),
+                })
+              );
+            }
+            for (const offset of introNoteOffsets(state.doc)) {
+              const node = state.doc.nodeAt(offset)!;
+              decorations.push(
+                Decoration.node(offset, offset + node.nodeSize, {
+                  class: "profile-locked-heading",
+                  contenteditable: "false",
                 })
               );
             }

@@ -415,7 +415,7 @@ export function AgentComposer({
           })}
         </p>
       )}
-      <div className="bg-card focus-within:border-ring/60 flex flex-col rounded-lg border transition-colors">
+      <div className="bg-card border-input focus-within:border-ring/60 flex flex-col gap-3.5 rounded-[10px] border px-3 py-2.5 transition-colors">
         <Textarea
           ref={inputRef}
           rows={2}
@@ -465,10 +465,10 @@ export function AgentComposer({
             } else if (decision === "send") onSubmit(event);
           }}
           placeholder={placeholder}
-          className="max-h-40 resize-none border-0 bg-transparent shadow-none focus-visible:ring-0 dark:bg-transparent"
+          className="max-h-40 min-h-10 resize-none rounded-none border-0 bg-transparent p-0 text-sm shadow-none focus-visible:ring-0 md:text-sm dark:bg-transparent"
         />
         {/* Below the text, not over it: a long message scrolls clear of it. */}
-        <div className="flex items-center gap-1 pr-2 pb-2 pl-3">
+        <div className="text-muted-foreground flex items-center gap-1.5">
           <CreditCost credits={cost} />
           {actionsStart}
           <span className="mr-auto" />
@@ -483,7 +483,7 @@ export function AgentComposer({
             <Button
               type="button"
               size="icon"
-              className="size-8 rounded-full"
+              className="size-7 rounded-full"
               aria-label={t.formatMessage({ defaultMessage: "Stop" })}
               title={t.formatMessage({ defaultMessage: "Stop" })}
               onClick={onStop}
@@ -495,7 +495,7 @@ export function AgentComposer({
               type="submit"
               size="icon"
               disabled={!canSend}
-              className="size-8 rounded-full"
+              className="size-7 rounded-full"
               aria-label={t.formatMessage({ defaultMessage: "Send" })}
             >
               <ArrowUp />

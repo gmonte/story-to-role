@@ -553,7 +553,7 @@ function Conversation({
             type="button"
             size="icon"
             variant="ghost"
-            className="size-8"
+            className="text-muted-foreground size-8"
             aria-label={attachLabel}
             title={attachLabel}
             onClick={() => fileInput.current?.click()}

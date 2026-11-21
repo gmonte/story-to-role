@@ -137,6 +137,29 @@ export function sameLockedHeadings(a: ProseMirrorNode, b: ProseMirrorNode) {
   );
 }
 
+/**
+ * Where the profile's opening note starts (the template's quote lines
+ * before the first section): fixed like the title.
+ */
+export function introNoteOffsets(doc: ProseMirrorNode) {
+  const offsets: number[] = [];
+  let reachedSection = false;
+  doc.forEach((node, offset) => {
+    if (reachedSection) return;
+    if (node.type.name === "heading" && (node.attrs.level as number) >= 2) {
+      reachedSection = true;
+    } else if (node.type.name === "profileQuote") {
+      offsets.push(offset);
+    }
+  });
+  return offsets;
+}
+
+/** The opening note's lines, to tell whether a change touched them. */
+export function introNote(doc: ProseMirrorNode) {
+  return introNoteOffsets(doc).map((offset) => doc.nodeAt(offset)?.textContent);
+}
+
 /** Whether a top-level node is one of the locked headings. */
 export function isLockedNode(node: ProseMirrorNode) {
   return (

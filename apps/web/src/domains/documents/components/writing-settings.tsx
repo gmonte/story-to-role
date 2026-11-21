@@ -22,6 +22,7 @@ import { Textarea } from "@repo/web/components/ui/textarea";
 import { CreditCost } from "~/domains/credits/components/credit-cost";
 import { useCredits } from "~/domains/credits/hooks/use-credits";
 import { useTRPC } from "~/tools/trpc/client";
+import { PageSkeleton } from "~/domains/workspace/components/workspace-skeleton";
 
 import { useDocumentLabels } from "../hooks/use-document-labels";
 import { GenerationSettingsFields } from "./generation-settings-fields";
@@ -49,7 +50,7 @@ export function WritingSettings() {
   const refresh = () =>
     queryClient.invalidateQueries({ queryKey: trpc.writing.pathKey() });
 
-  if (!setup.data) return null;
+  if (!setup.data) return <PageSkeleton />;
 
   return (
     <div className="h-full overflow-y-auto">

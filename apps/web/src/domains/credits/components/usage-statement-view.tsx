@@ -83,11 +83,20 @@ export function UsageStatementView() {
   const { data, isPending } = useUsageStatement(period);
 
   return (
-    <div className="bg-muted/50 w-full overflow-y-auto">
+    <div className="w-full overflow-y-auto">
       <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 p-6 text-sm">
         <PeriodPicker statement={data} setPeriod={setPeriod} />
         {isPending || !data ? (
-          <Skeleton className="h-40 w-full" />
+          // The statement's shape while it loads: totals, then a table.
+          <div className="flex flex-col gap-6">
+            <div className="grid gap-3 sm:grid-cols-3">
+              <Skeleton className="h-36 rounded-lg" />
+            </div>
+            <div className="flex flex-col gap-2">
+              <Skeleton className="h-6 w-48" />
+              <Skeleton className="h-72 w-full rounded-lg" />
+            </div>
+          </div>
         ) : data.totals.length === 0 ? (
           <p className="text-muted-foreground">
             {t.formatMessage({

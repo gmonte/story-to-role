@@ -37,7 +37,15 @@ export function CreditMeter() {
   const { data } = useCredits();
   // The statement loads with the button, not when the menu opens.
   useUsageStatement();
-  if (!data) return null;
+  // Its row, held while the balance loads, so the footer doesn't shift.
+  if (!data) {
+    return (
+      <SidebarMenuButton disabled>
+        <Coins className="text-brand-accent" />
+        <Skeleton className="h-4 w-24" />
+      </SidebarMenuButton>
+    );
+  }
 
   // Fit-check-only credits buy no resume nor letter.
   const general = data.lots

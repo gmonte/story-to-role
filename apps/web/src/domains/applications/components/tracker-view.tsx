@@ -14,6 +14,7 @@ import { Input } from "@repo/web/components/ui/input";
 import { Label } from "@repo/web/components/ui/label";
 import { toast } from "@repo/web/components/ui/sonner";
 import { Tabs, TabsList, TabsTrigger } from "@repo/web/components/ui/tabs";
+import { Skeleton } from "@repo/web/components/ui/skeleton";
 
 import { useTRPC } from "~/tools/trpc/client";
 
@@ -122,7 +123,32 @@ export function TrackerView() {
 
         <TrackerMetricsPanel />
 
-        {tracker.data && applications.length === 0 ? (
+        {!tracker.data ? (
+          // The view's room while the applications load: rows for the
+          // list, columns of cards for the kanban.
+          <div className="flex flex-col gap-3">
+            <Skeleton className="h-9 w-44" />
+            {view === "list" ? (
+              [0, 1, 2, 3, 4].map((index) => (
+                <Skeleton key={index} className="h-14 w-full rounded-lg" />
+              ))
+            ) : (
+              <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+                {[3, 2, 2, 1].map((cards, column) => (
+                  <div key={column} className="flex flex-col gap-2">
+                    <Skeleton className="h-4 w-24" />
+                    {Array.from({ length: cards }, (_, index) => (
+                      <Skeleton
+                        key={index}
+                        className="h-20 w-full rounded-md"
+                      />
+                    ))}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        ) : applications.length === 0 ? (
           <p className="text-muted-foreground rounded-lg border border-dashed p-6 text-center">
             {t.formatMessage({
               defaultMessage:

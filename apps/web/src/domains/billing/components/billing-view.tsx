@@ -23,6 +23,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@repo/web/components/ui/dialog";
+import { Skeleton } from "@repo/web/components/ui/skeleton";
 import { toast } from "@repo/web/components/ui/sonner";
 import { cn } from "@repo/web/lib/utils";
 
@@ -109,6 +110,21 @@ export function BillingView() {
   const buy = (product: CheckoutProduct) => checkout.mutate({ product });
   const date = (value: Date) => t.formatDate(value, { dateStyle: "medium" });
   const carryoverEndsAt = status.data?.carryoverEndsAt;
+
+  // Until the plan and the balance are known, the page keeps its shape:
+  // which offers show depends on them.
+  if (status.isPending || !credits.data) {
+    return (
+      <div className="w-full overflow-y-auto">
+        <div className="mx-auto flex w-full max-w-3xl flex-col gap-6 p-6 text-sm">
+          <h1 className="text-[28px] leading-tight font-semibold">
+            {t.formatMessage({ defaultMessage: "Plan and credits" })}
+          </h1>
+          <BillingSkeleton />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="w-full overflow-y-auto">
@@ -445,6 +461,40 @@ export function BillingView() {
         </section>
       </div>
     </div>
+  );
+}
+
+/** The page's sections in outline: the plan card, two offers, the pack. */
+function BillingSkeleton() {
+  return (
+    <>
+      <section className="bg-card flex flex-col gap-3 rounded-lg border p-5">
+        <Skeleton className="h-4 w-28" />
+        <Skeleton className="h-10 w-40" />
+        <Skeleton className="h-8 w-36" />
+      </section>
+      <section className="flex flex-col gap-2">
+        <Skeleton className="h-6 w-52" />
+        <Skeleton className="h-4 w-full" />
+        <div className="grid gap-2 sm:grid-cols-2">
+          {[0, 1].map((index) => (
+            <div
+              key={index}
+              className="bg-card flex flex-col gap-3 rounded-lg border p-5"
+            >
+              <Skeleton className="h-4 w-20" />
+              <Skeleton className="h-8 w-32" />
+              <Skeleton className="h-9 w-full" />
+            </div>
+          ))}
+        </div>
+      </section>
+      <section className="flex flex-col gap-2">
+        <Skeleton className="h-6 w-56" />
+        <Skeleton className="h-4 w-3/4" />
+        <Skeleton className="h-40 w-full rounded-lg" />
+      </section>
+    </>
   );
 }
 

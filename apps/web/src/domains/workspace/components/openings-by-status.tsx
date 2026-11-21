@@ -12,7 +12,9 @@ import {
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
+  SidebarMenuSkeleton,
 } from "@repo/web/components/ui/sidebar";
+import { Skeleton } from "@repo/web/components/ui/skeleton";
 
 import { useOpeningLabels } from "~/domains/openings/hooks/use-opening-labels";
 import { useTRPC } from "~/tools/trpc/client";
@@ -36,6 +38,17 @@ export function OpeningsByStatus() {
   const pathname = usePathname();
   const openings = useQuery(trpc.openings.list.queryOptions({}));
 
+  // While they load, rows in outline: never the "no openings yet" hint.
+  if (openings.isPending) {
+    return (
+      <div className="flex flex-col gap-1">
+        <Skeleton className="mx-2 mb-1 h-3 w-28" />
+        {[0, 1, 2, 3, 4].map((index) => (
+          <SidebarMenuSkeleton key={index} showIcon />
+        ))}
+      </div>
+    );
+  }
   if (!openings.data?.length) {
     return (
       <p className="text-muted-foreground px-2 py-1 text-xs">
@@ -94,7 +107,7 @@ export function OpeningsByStatus() {
         .filter((group) => group.items.length > 0)
         .map((group) => (
           <div key={group.label} className="flex flex-col gap-1">
-            <span className="text-muted-foreground px-2 text-[11px] font-semibold tracking-[0.07em] uppercase">
+            <span className="text-muted-foreground truncate px-2 text-[11px] font-semibold tracking-[0.07em] whitespace-nowrap uppercase">
               {group.label}
             </span>
             <SidebarMenu>

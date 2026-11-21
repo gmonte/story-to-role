@@ -14,6 +14,7 @@ import { cn } from "@repo/web/lib/utils";
 
 import { NewOpeningForm } from "~/domains/openings/components/new-opening-form";
 import { useTRPC } from "~/tools/trpc/client";
+import { PageSkeleton } from "~/domains/workspace/components/workspace-skeleton";
 
 import { useTimeline } from "../hooks/use-career-queries";
 import { Sources } from "./sources";
@@ -40,7 +41,7 @@ export function GuidedOpeningStart() {
     })
   );
   const published = useQuery(trpc.profile.draft.queryOptions({}));
-  if (!timeline.data) return null;
+  if (!timeline.data) return <PageSkeleton />;
   const { profile, documents } = timeline.data;
 
   const steps = [

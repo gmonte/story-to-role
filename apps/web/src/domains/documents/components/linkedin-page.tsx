@@ -9,6 +9,7 @@ import { useTranslation } from "@repo/intl/use-translation";
 import { Button } from "@repo/web/components/ui/button";
 
 import { WorkspaceBody } from "~/domains/workspace/components/workspace-body";
+import { WorkspaceSkeleton } from "~/domains/workspace/components/workspace-skeleton";
 
 import { useLibrary, useLibraryDocument } from "../hooks/use-library";
 import { useSelectedVersion } from "../hooks/use-selected-version";
@@ -50,8 +51,15 @@ function useLinkedinDocumentId() {
  */
 export function LinkedinBody() {
   const { loaded, documentId } = useLinkedinDocumentId();
-  if (!loaded) return null;
+  if (!loaded) return <WorkspaceSkeleton />;
   if (!documentId) return <LinkedinEmpty />;
+  return <LinkedinWorkspace documentId={documentId} />;
+}
+
+/** The LinkedIn text in the document workspace, once it has loaded. */
+function LinkedinWorkspace({ documentId }: { documentId: string }) {
+  const document = useLibraryDocument(documentId);
+  if (!document.data) return <WorkspaceSkeleton />;
   return (
     <DocumentAgentProvider>
       <WorkspaceBody

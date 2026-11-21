@@ -4,6 +4,7 @@ import { Coins } from "lucide-react";
 
 import { useTranslation } from "@repo/intl/use-translation";
 import { cn } from "@repo/web/lib/utils";
+import { Skeleton } from "@repo/web/components/ui/skeleton";
 
 /**
  * "Up to N credits" (billing spec, "Estimate with a cap"): the most an
@@ -17,7 +18,10 @@ export function CreditCost({
   className?: string;
 }) {
   const t = useTranslation();
-  if (credits === undefined || credits <= 0) return null;
+  if (credits === undefined) {
+    return <Skeleton className={cn("inline-block h-4 w-24", className)} />;
+  }
+  if (credits <= 0) return null;
   return (
     <span
       className={cn(

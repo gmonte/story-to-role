@@ -8,6 +8,7 @@ import {
   ProfileWorkspace,
 } from "~/domains/profile/components/profile-workspace";
 import { WorkspaceBody } from "~/domains/workspace/components/workspace-body";
+import { WorkspaceSkeleton } from "~/domains/workspace/components/workspace-skeleton";
 
 import { useTimeline } from "../hooks/use-career-queries";
 import { CareerSidePanel } from "./career-side-panel";
@@ -25,7 +26,7 @@ export function CareerBody() {
   const { previewSourceDocumentId, setPreviewSourceDocumentId } =
     useCareerWorkspace();
 
-  if (!timeline.data) return null;
+  if (!timeline.data) return <WorkspaceSkeleton />;
   // Nothing is written or uploaded before the privacy notice is
   // acknowledged.
   if (!timeline.data.profile.privacyNoticeAccepted) {

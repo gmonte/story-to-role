@@ -6,6 +6,7 @@ import Link from "next/link";
 import { useTranslation } from "@repo/intl/use-translation";
 import { Badge } from "@repo/web/components/ui/badge";
 import { Button } from "@repo/web/components/ui/button";
+import { Skeleton } from "@repo/web/components/ui/skeleton";
 
 import { DeleteDocumentDialog } from "./delete-document-dialog";
 import { useDocumentLabels } from "../hooks/use-document-labels";
@@ -54,6 +55,14 @@ export function LibraryView() {
                 "No library documents yet. Start with a “General” resume, written from your published profile.",
             })}
           </p>
+        )}
+        {/* The list's rows in outline while it loads. */}
+        {!library.data && (
+          <div className="grid gap-2">
+            {[0, 1, 2, 3].map((index) => (
+              <Skeleton key={index} className="h-12 w-full rounded-lg" />
+            ))}
+          </div>
         )}
         <ul className="grid gap-2">
           {documents.map((document) => (

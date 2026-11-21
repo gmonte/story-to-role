@@ -9,6 +9,7 @@ import { useTranslation } from "@repo/intl/use-translation";
 import { Button } from "@repo/web/components/ui/button";
 
 import { WorkspaceBody } from "~/domains/workspace/components/workspace-body";
+import { WorkspaceSkeleton } from "~/domains/workspace/components/workspace-skeleton";
 
 import { useLibraryDocument } from "../hooks/use-library";
 import { useSelectedVersion } from "../hooks/use-selected-version";
@@ -27,6 +28,9 @@ import { ResumeWorkspace } from "./resume-workspace";
 
 /** A library document's screen: the workspace and its side panel. */
 export function LibraryDocumentBody({ documentId }: { documentId: string }) {
+  const document = useLibraryDocument(documentId);
+  // The whole screen in outline until the document arrives.
+  if (!document.data) return <WorkspaceSkeleton />;
   return (
     <DocumentAgentProvider>
       <WorkspaceBody

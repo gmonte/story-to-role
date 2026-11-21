@@ -330,7 +330,7 @@ export function ProfileDocument() {
   return (
     <div
       ref={wrapper}
-      className="relative mx-auto w-full max-w-3xl py-8 pr-6 pl-16"
+      className="relative mx-auto w-full max-w-3xl px-4 py-8 md:pr-6 md:pl-16"
       onMouseMove={track}
       onMouseLeave={() =>
         !drag && blockMenu === null && !addMenuOpen && setHovered(null)
@@ -338,7 +338,8 @@ export function ProfileDocument() {
     >
       {hovered && editor && (
         <div
-          className="absolute left-4 flex items-center gap-0.5"
+          // The add and drag controls need a mouse: phones keep the margin.
+          className="absolute left-4 hidden items-center gap-0.5 md:flex"
           style={{ top: hovered.top }}
         >
           <DropdownMenu open={addMenuOpen} onOpenChange={setAddMenuOpen}>

@@ -205,7 +205,7 @@ export function LinkedinStepCard({
                 write.mutate({ versionId: version.id, section: step.section! })
               }
             >
-              <Sparkles />
+              <Sparkles className="text-brand-accent" />
               {step.written
                 ? t.formatMessage({ defaultMessage: "Write again" })
                 : t.formatMessage({ defaultMessage: "Write this section" })}

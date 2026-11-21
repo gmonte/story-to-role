@@ -167,7 +167,7 @@ export function FindingHoverCard({
                 close();
               }}
             >
-              <Sparkles className="size-3" />
+              <Sparkles className="text-brand-accent size-3" />
               {t.formatMessage({ defaultMessage: "Talk to the agent" })}
             </Button>
           )}

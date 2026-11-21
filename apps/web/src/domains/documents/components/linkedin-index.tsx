@@ -293,7 +293,7 @@ function RedoSectionButton({
             disabled={busy || saveStatus !== "saved"}
             onClick={() => setOpen(true)}
           >
-            <Sparkles className="size-3.5" />
+            <Sparkles className="text-brand-accent size-3.5" />
           </Button>
         </TooltipTrigger>
         <TooltipContent>{label}</TooltipContent>
@@ -325,7 +325,7 @@ function RedoSectionButton({
               disabled={redo.isPending}
               onClick={() => redo.mutate({ versionId: version.id, section })}
             >
-              <Sparkles />
+              <Sparkles className="text-brand-accent" />
               {t.formatMessage({ defaultMessage: "Generate again" })}
             </Button>
           </DialogFooter>

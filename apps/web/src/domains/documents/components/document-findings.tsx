@@ -9,9 +9,9 @@ import {
   EyeOff,
   Languages,
   Loader2,
-  MessageSquare,
   SearchCheck,
   Send,
+  Sparkles,
   UserPlus,
   Wand2,
 } from "lucide-react";
@@ -178,7 +178,7 @@ function TalkButton({ onClick }: { onClick: () => void }) {
           aria-label={label}
           onClick={onClick}
         >
-          <MessageSquare className="size-3" />
+          <Sparkles className="text-brand-accent size-3" />
         </Button>
       </TooltipTrigger>
       <TooltipContent>{label}</TooltipContent>

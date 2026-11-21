@@ -274,7 +274,7 @@ export function AttachmentCard({
   const attachmentLabel = useAttachmentLabel();
   return (
     <div className="bg-muted/60 mb-2 flex items-start gap-2 rounded-md border px-2.5 py-1.5 text-xs">
-      <Sparkles className="text-muted-foreground mt-0.5 size-3.5 shrink-0" />
+      <Sparkles className="text-brand-accent mt-0.5 size-3.5 shrink-0" />
       <span className="min-w-0 flex-1">
         <span className="text-muted-foreground block font-medium">
           {attachmentLabel(attachment.kind)}

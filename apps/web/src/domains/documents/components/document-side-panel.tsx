@@ -458,7 +458,7 @@ export function VersionActions({
       {generateAgain?.(
         version,
         <Button size="sm" variant="ghost">
-          <Sparkles />
+          <Sparkles className="text-brand-accent" />
           {t.formatMessage({ defaultMessage: "Generate again" })}
         </Button>
       )}

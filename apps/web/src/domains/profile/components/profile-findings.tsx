@@ -6,7 +6,7 @@ import {
   ChevronDown,
   ChevronRight,
   EyeOff,
-  MessageSquare,
+  Sparkles,
   Wand2,
 } from "lucide-react";
 
@@ -176,7 +176,7 @@ export function ProfileFindings() {
               })
             }
           >
-            <MessageSquare className="size-3" />
+            <Sparkles className="text-brand-accent size-3" />
           </Button>
         )}
         {finding.kind === "content" && (

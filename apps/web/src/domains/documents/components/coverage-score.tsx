@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 
-import { ChevronDown, MessageSquare } from "lucide-react";
+import { ChevronDown, Sparkles } from "lucide-react";
 
 import {
   reviewerAttachment,
@@ -245,7 +245,7 @@ function TalkAboutButton({
       title={label}
       onClick={() => agent.talkAbout({ attachment })}
     >
-      <MessageSquare className="size-3" />
+      <Sparkles className="text-brand-accent size-3" />
     </Button>
   );
 }
@@ -416,7 +416,7 @@ function TalkAboutWholeReview({
         })
       }
     >
-      <MessageSquare className="size-3" />
+      <Sparkles className="text-brand-accent size-3" />
       {t.formatMessage({ defaultMessage: "Talk about this review" })}
     </Button>
   );

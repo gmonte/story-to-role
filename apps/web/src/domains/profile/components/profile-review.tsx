@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 
-import { Check, CircleAlert, EyeOff, MessageSquare, X } from "lucide-react";
+import { Check, CircleAlert, EyeOff, Sparkles, X } from "lucide-react";
 
 import { useTranslation } from "@repo/intl/use-translation";
 import { extractProfile } from "@repo/api/domains/profile/truth/extract";
@@ -104,7 +104,7 @@ export function ProfileReview() {
                   })
                 }
               >
-                <MessageSquare className="size-3" />
+                <Sparkles className="text-brand-accent size-3" />
               </Button>
               <Button
                 size="sm"

@@ -100,7 +100,7 @@ function LinkedinEmpty() {
         <LinkedinDialog
           trigger={
             <Button className="self-start">
-              <Sparkles />
+              <Sparkles className="text-brand-accent" />
               {t.formatMessage({ defaultMessage: "Create my LinkedIn" })}
             </Button>
           }

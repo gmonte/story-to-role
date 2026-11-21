@@ -99,72 +99,77 @@ export function TrackerView() {
   };
 
   return (
-    <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 overflow-y-auto p-6 text-sm">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <p className="text-muted-foreground">
-          {t.formatMessage({
-            defaultMessage:
-              "Every application from its first document to the outcome. Openings you only analyzed stay out of it.",
-          })}
-        </p>
-        <ExternalApplicationDialog
-          trigger={
-            <Button size="sm" variant="outline">
-              <Plus />
-              {t.formatMessage({ defaultMessage: "Applied elsewhere" })}
-            </Button>
-          }
-        />
-      </div>
+    <div className="w-full overflow-y-auto">
+      <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 p-6 text-sm">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <p className="text-muted-foreground">
+            {t.formatMessage({
+              defaultMessage:
+                "Every application from its first document to the outcome. Openings you only analyzed stay out of it.",
+            })}
+          </p>
+          <ExternalApplicationDialog
+            trigger={
+              <Button size="sm" variant="outline">
+                <Plus />
+                {t.formatMessage({ defaultMessage: "Applied elsewhere" })}
+              </Button>
+            }
+          />
+        </div>
 
-      <ReminderList />
+        <ReminderList />
 
-      <TrackerMetricsPanel />
+        <TrackerMetricsPanel />
 
-      {tracker.data && applications.length === 0 ? (
-        <p className="text-muted-foreground rounded-lg border border-dashed p-6 text-center">
-          {t.formatMessage({
-            defaultMessage:
-              "No applications yet. One starts when you generate a document for an opening, or add one you made elsewhere.",
-          })}
-        </p>
-      ) : (
-        <section className="flex min-w-0 flex-col gap-3">
-          <Tabs value={view} onValueChange={(value) => setView(value as View)}>
-            <TabsList>
-              <TabsTrigger value="list">
-                <List />
-                {t.formatMessage({ defaultMessage: "List" })}
-              </TabsTrigger>
-              <TabsTrigger value="kanban">
-                <Columns3 />
-                {t.formatMessage({ defaultMessage: "Kanban" })}
-              </TabsTrigger>
-            </TabsList>
-          </Tabs>
-          {view === "list" ? (
-            <ApplicationsList
-              applications={applications}
-              filters={filters}
-              onFiltersChange={setFilters}
-            />
-          ) : (
-            <div className="flex min-w-0 flex-col gap-3">
-              <ApplicationFiltersBar
-                filters={filters}
-                onChange={setFilters}
-                withSort={false}
-              />
-              <ApplicationsKanban
+        {tracker.data && applications.length === 0 ? (
+          <p className="text-muted-foreground rounded-lg border border-dashed p-6 text-center">
+            {t.formatMessage({
+              defaultMessage:
+                "No applications yet. One starts when you generate a document for an opening, or add one you made elsewhere.",
+            })}
+          </p>
+        ) : (
+          <section className="flex min-w-0 flex-col gap-3">
+            <Tabs
+              value={view}
+              onValueChange={(value) => setView(value as View)}
+            >
+              <TabsList>
+                <TabsTrigger value="list">
+                  <List />
+                  {t.formatMessage({ defaultMessage: "List" })}
+                </TabsTrigger>
+                <TabsTrigger value="kanban">
+                  <Columns3 />
+                  {t.formatMessage({ defaultMessage: "Kanban" })}
+                </TabsTrigger>
+              </TabsList>
+            </Tabs>
+            {view === "list" ? (
+              <ApplicationsList
                 applications={applications}
                 filters={filters}
+                onFiltersChange={setFilters}
               />
-            </div>
-          )}
-        </section>
-      )}
+            ) : (
+              <div className="flex min-w-0 flex-col gap-3">
+                <ApplicationFiltersBar
+                  filters={filters}
+                  onChange={setFilters}
+                  withSort={false}
+                />
+                <ApplicationsKanban
+                  applications={applications}
+                  filters={filters}
+                />
+              </div>
+            )}
+          </section>
+        )}
 
-      <TrackerSettingsForm />
+        <TrackerSettingsForm />
+      </div>
     </div>
   );
 }

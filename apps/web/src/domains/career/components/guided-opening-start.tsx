@@ -55,119 +55,123 @@ export function GuidedOpeningStart() {
   ] as const;
 
   return (
-    <div className="mx-auto flex w-full max-w-2xl flex-col gap-6 overflow-y-auto p-6">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <ol className="flex items-center gap-2 text-sm">
-          {steps.map((item, index) => (
-            <li
-              key={item.key}
-              className={cn(
-                "flex items-center gap-2",
-                item.key === step ? "font-medium" : "text-muted-foreground"
-              )}
-            >
-              <span
+    <div className="w-full overflow-y-auto">
+      <div className="mx-auto flex w-full max-w-2xl flex-col gap-6 p-6">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <ol className="flex items-center gap-2 text-sm">
+            {steps.map((item, index) => (
+              <li
+                key={item.key}
                 className={cn(
-                  "flex size-6 items-center justify-center rounded-full border text-xs",
-                  item.key === step &&
-                    "border-primary bg-primary text-primary-foreground"
+                  "flex items-center gap-2",
+                  item.key === step ? "font-medium" : "text-muted-foreground"
                 )}
               >
-                {index + 1}
-              </span>
-              {item.label}
-            </li>
-          ))}
-        </ol>
-        <Button
-          size="sm"
-          variant="ghost"
-          disabled={switchPath.isPending}
-          onClick={() => switchPath.mutate({ path: "career" })}
-        >
-          {t.formatMessage({
-            defaultMessage: "Organize my career first instead",
-          })}
-        </Button>
-      </div>
+                <span
+                  className={cn(
+                    "flex size-6 items-center justify-center rounded-full border text-xs",
+                    item.key === step &&
+                      "border-primary bg-primary text-primary-foreground"
+                  )}
+                >
+                  {index + 1}
+                </span>
+                {item.label}
+              </li>
+            ))}
+          </ol>
+          <Button
+            size="sm"
+            variant="ghost"
+            disabled={switchPath.isPending}
+            onClick={() => switchPath.mutate({ path: "career" })}
+          >
+            {t.formatMessage({
+              defaultMessage: "Organize my career first instead",
+            })}
+          </Button>
+        </div>
 
-      {step === "resume" &&
-        // The privacy notice comes only now, when career data is about to
-        // arrive (workspace spec: "only when needed").
-        (!profile.privacyNoticeAccepted ? (
-          <PrivacyNotice />
-        ) : (
+        {step === "resume" &&
+          // The privacy notice comes only now, when career data is about to
+          // arrive (workspace spec: "only when needed").
+          (!profile.privacyNoticeAccepted ? (
+            <PrivacyNotice />
+          ) : (
+            <section className="flex flex-col gap-4">
+              <div className="flex flex-col gap-1">
+                <h2 className="font-display text-2xl font-semibold tracking-tight">
+                  {t.formatMessage({ defaultMessage: "Your current resume" })}
+                </h2>
+                <p className="text-muted-foreground text-sm">
+                  {t.formatMessage({
+                    defaultMessage:
+                      "Upload your resume, your LinkedIn PDF or a text file about your career. It is read into a first draft of your profile, which you review and publish in My career.",
+                  })}
+                </p>
+              </div>
+              <Sources documents={documents} />
+              {/* ADR 0006: the profile is reviewed and published before the
+                opening, since the fit check reads the published version. */}
+              <div className="flex flex-wrap gap-2">
+                {published.data?.publishedVersion ? (
+                  <Button onClick={() => setStep("opening")}>
+                    {t.formatMessage({
+                      defaultMessage: "Continue to the opening",
+                    })}
+                    <ArrowRight />
+                  </Button>
+                ) : documents.length > 0 ? (
+                  <>
+                    <Button asChild>
+                      <Link href="/app/career">
+                        {t.formatMessage({
+                          defaultMessage: "Review and publish my profile",
+                        })}
+                        <ArrowRight />
+                      </Link>
+                    </Button>
+                    <Button variant="ghost" onClick={() => setStep("opening")}>
+                      {t.formatMessage({
+                        defaultMessage: "Go to the opening without publishing",
+                      })}
+                    </Button>
+                  </>
+                ) : (
+                  <Button variant="ghost" onClick={() => setStep("opening")}>
+                    {t.formatMessage({
+                      defaultMessage: "I don’t have a resume",
+                    })}
+                  </Button>
+                )}
+              </div>
+            </section>
+          ))}
+
+        {step === "opening" && (
           <section className="flex flex-col gap-4">
             <div className="flex flex-col gap-1">
               <h2 className="font-display text-2xl font-semibold tracking-tight">
-                {t.formatMessage({ defaultMessage: "Your current resume" })}
+                {t.formatMessage({ defaultMessage: "The opening" })}
               </h2>
               <p className="text-muted-foreground text-sm">
                 {t.formatMessage({
                   defaultMessage:
-                    "Upload your resume, your LinkedIn PDF or a text file about your career. It is read into a first draft of your profile, which you review and publish in My career.",
+                    "Paste it or its link. You’ll see how you fit right away, answer a few questions about what it needs, and get your resume.",
                 })}
               </p>
             </div>
-            <Sources documents={documents} />
-            {/* ADR 0006: the profile is reviewed and published before the
-                opening, since the fit check reads the published version. */}
-            <div className="flex flex-wrap gap-2">
-              {published.data?.publishedVersion ? (
-                <Button onClick={() => setStep("opening")}>
-                  {t.formatMessage({
-                    defaultMessage: "Continue to the opening",
-                  })}
-                  <ArrowRight />
-                </Button>
-              ) : documents.length > 0 ? (
-                <>
-                  <Button asChild>
-                    <Link href="/app/career">
-                      {t.formatMessage({
-                        defaultMessage: "Review and publish my profile",
-                      })}
-                      <ArrowRight />
-                    </Link>
-                  </Button>
-                  <Button variant="ghost" onClick={() => setStep("opening")}>
-                    {t.formatMessage({
-                      defaultMessage: "Go to the opening without publishing",
-                    })}
-                  </Button>
-                </>
-              ) : (
-                <Button variant="ghost" onClick={() => setStep("opening")}>
-                  {t.formatMessage({ defaultMessage: "I don’t have a resume" })}
-                </Button>
-              )}
-            </div>
+            <NewOpeningForm embedded />
+            <Button
+              variant="ghost"
+              className="self-start"
+              onClick={() => setStep("resume")}
+            >
+              {t.formatMessage({ defaultMessage: "Back to your resume" })}
+            </Button>
           </section>
-        ))}
-
-      {step === "opening" && (
-        <section className="flex flex-col gap-4">
-          <div className="flex flex-col gap-1">
-            <h2 className="font-display text-2xl font-semibold tracking-tight">
-              {t.formatMessage({ defaultMessage: "The opening" })}
-            </h2>
-            <p className="text-muted-foreground text-sm">
-              {t.formatMessage({
-                defaultMessage:
-                  "Paste it or its link. You’ll see how you fit right away, answer a few questions about what it needs, and get your resume.",
-              })}
-            </p>
-          </div>
-          <NewOpeningForm embedded />
-          <Button
-            variant="ghost"
-            className="self-start"
-            onClick={() => setStep("resume")}
-          >
-            {t.formatMessage({ defaultMessage: "Back to your resume" })}
-          </Button>
-        </section>
-      )}
+        )}
+      </div>
     </div>
   );
 }

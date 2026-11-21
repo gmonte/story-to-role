@@ -110,313 +110,319 @@ export function BillingView() {
   const carryoverEndsAt = status.data?.carryoverEndsAt;
 
   return (
-    <div className="mx-auto flex w-full max-w-3xl flex-col gap-6 overflow-y-auto p-6 text-sm">
-      <section className="bg-card flex flex-col gap-2 rounded-lg border p-4">
-        <div className="flex items-center justify-between gap-2">
-          <h2 className="font-medium">
-            {t.formatMessage({ defaultMessage: "Your plan" })}
-          </h2>
-          {credits.data && (
-            <Badge variant="outline">
-              {
+    <div className="w-full overflow-y-auto">
+      <div className="mx-auto flex w-full max-w-3xl flex-col gap-6 p-6 text-sm">
+        <section className="bg-card flex flex-col gap-2 rounded-lg border p-4">
+          <div className="flex items-center justify-between gap-2">
+            <h2 className="font-medium">
+              {t.formatMessage({ defaultMessage: "Your plan" })}
+            </h2>
+            {credits.data && (
+              <Badge variant="outline">
                 {
-                  free: t.formatMessage({ defaultMessage: "Free" }),
-                  subscription: t.formatMessage({
-                    defaultMessage: "Credit subscription",
-                  }),
-                  own_key: t.formatMessage({
-                    defaultMessage: "Own-key subscription",
-                  }),
-                  courtesy: t.formatMessage({ defaultMessage: "Courtesy" }),
-                }[credits.data.plan]
-              }
-            </Badge>
-          )}
-        </div>
-        {subscription && subscribed && (
-          <p className="text-muted-foreground">
-            {subscription.status === "past_due"
-              ? plan === "own_key"
-                ? t.formatMessage({
-                    defaultMessage:
-                      "Your last payment failed. Update your card to keep your subscription.",
-                  })
-                : t.formatMessage({
-                    defaultMessage:
-                      "Your last payment failed. Update your card to keep receiving monthly credits.",
-                  })
-              : subscription.cancelAtPeriodEnd
+                  {
+                    free: t.formatMessage({ defaultMessage: "Free" }),
+                    subscription: t.formatMessage({
+                      defaultMessage: "Credit subscription",
+                    }),
+                    own_key: t.formatMessage({
+                      defaultMessage: "Own-key subscription",
+                    }),
+                    courtesy: t.formatMessage({ defaultMessage: "Courtesy" }),
+                  }[credits.data.plan]
+                }
+              </Badge>
+            )}
+          </div>
+          {subscription && subscribed && (
+            <p className="text-muted-foreground">
+              {subscription.status === "past_due"
                 ? plan === "own_key"
-                  ? t.formatMessage(
-                      {
-                        defaultMessage:
-                          "Cancelled: it ends on {date}, and your key keeps working until then. You can remove your key now.",
-                      },
-                      { date: date(subscription.currentPeriodEnd) }
-                    )
-                  : t.formatMessage(
-                      {
-                        defaultMessage:
-                          "Cancelled: it ends on {date}, and you keep this month’s credits until then.",
-                      },
-                      { date: date(subscription.currentPeriodEnd) }
-                    )
-                : subscription.scheduledInterval === "month"
-                  ? t.formatMessage(
-                      {
-                        defaultMessage:
-                          "Billed yearly until {date}, then monthly from that day.",
-                      },
-                      { date: date(subscription.currentPeriodEnd) }
-                    )
-                  : annual
+                  ? t.formatMessage({
+                      defaultMessage:
+                        "Your last payment failed. Update your card to keep your subscription.",
+                    })
+                  : t.formatMessage({
+                      defaultMessage:
+                        "Your last payment failed. Update your card to keep receiving monthly credits.",
+                    })
+                : subscription.cancelAtPeriodEnd
+                  ? plan === "own_key"
                     ? t.formatMessage(
-                        { defaultMessage: "Billed yearly. Renews on {date}." },
+                        {
+                          defaultMessage:
+                            "Cancelled: it ends on {date}, and your key keeps working until then. You can remove your key now.",
+                        },
                         { date: date(subscription.currentPeriodEnd) }
                       )
                     : t.formatMessage(
-                        { defaultMessage: "Billed monthly. Renews on {date}." },
+                        {
+                          defaultMessage:
+                            "Cancelled: it ends on {date}, and you keep this month’s credits until then.",
+                        },
                         { date: date(subscription.currentPeriodEnd) }
-                      )}
-          </p>
-        )}
-        {plan === "own_key" && carryoverEndsAt && (
-          <p className="text-muted-foreground">
-            {t.formatMessage(
-              {
-                defaultMessage:
-                  "Your previous credit subscription was already paid until {date}: its monthly credits keep coming until then, and they’re spent before your key.",
-              },
-              { date: date(carryoverEndsAt) }
+                      )
+                  : subscription.scheduledInterval === "month"
+                    ? t.formatMessage(
+                        {
+                          defaultMessage:
+                            "Billed yearly until {date}, then monthly from that day.",
+                        },
+                        { date: date(subscription.currentPeriodEnd) }
+                      )
+                    : annual
+                      ? t.formatMessage(
+                          {
+                            defaultMessage: "Billed yearly. Renews on {date}.",
+                          },
+                          { date: date(subscription.currentPeriodEnd) }
+                        )
+                      : t.formatMessage(
+                          {
+                            defaultMessage: "Billed monthly. Renews on {date}.",
+                          },
+                          { date: date(subscription.currentPeriodEnd) }
+                        )}
+            </p>
+          )}
+          {plan === "own_key" && carryoverEndsAt && (
+            <p className="text-muted-foreground">
+              {t.formatMessage(
+                {
+                  defaultMessage:
+                    "Your previous credit subscription was already paid until {date}: its monthly credits keep coming until then, and they’re spent before your key.",
+                },
+                { date: date(carryoverEndsAt) }
+              )}
+            </p>
+          )}
+          {subscribed &&
+            !subscription.cancelAtPeriodEnd &&
+            !subscription.scheduledInterval && (
+              <Button
+                variant="outline"
+                className="self-start"
+                disabled={busy}
+                onClick={() => changeInterval.mutate({})}
+              >
+                <CalendarSync />
+                {annual
+                  ? t.formatMessage({
+                      defaultMessage: "Switch to monthly billing",
+                    })
+                  : t.formatMessage({
+                      defaultMessage: "Switch to annual billing",
+                    })}
+              </Button>
             )}
-          </p>
-        )}
-        {subscribed &&
-          !subscription.cancelAtPeriodEnd &&
-          !subscription.scheduledInterval && (
+          {status.data?.hasCustomer && (
             <Button
               variant="outline"
               className="self-start"
               disabled={busy}
-              onClick={() => changeInterval.mutate({})}
+              onClick={() => portal.mutate({})}
             >
-              <CalendarSync />
-              {annual
-                ? t.formatMessage({
-                    defaultMessage: "Switch to monthly billing",
-                  })
-                : t.formatMessage({
-                    defaultMessage: "Switch to annual billing",
-                  })}
+              <ExternalLink />
+              {t.formatMessage({
+                defaultMessage: "Manage payments and cancel",
+              })}
             </Button>
           )}
-        {status.data?.hasCustomer && (
-          <Button
-            variant="outline"
-            className="self-start"
-            disabled={busy}
-            onClick={() => portal.mutate({})}
-          >
-            <ExternalLink />
-            {t.formatMessage({
-              defaultMessage: "Manage payments and cancel",
-            })}
+          <Button variant="outline" className="self-start" asChild>
+            <Link href="/app/billing/usage">
+              <ReceiptText />
+              {t.formatMessage({ defaultMessage: "Usage statement" })}
+            </Link>
           </Button>
-        )}
-        <Button variant="outline" className="self-start" asChild>
-          <Link href="/app/billing/usage">
-            <ReceiptText />
-            {t.formatMessage({ defaultMessage: "Usage statement" })}
-          </Link>
-        </Button>
-      </section>
-
-      <FinishWithCredits />
-
-      {(plan === "own_key" || credits.data?.plan === "courtesy") && (
-        <OwnKeySection
-          canRemove={
-            plan === "own_key" ? !!subscription?.cancelAtPeriodEnd : true
-          }
-        />
-      )}
-
-      {!subscribed && (
-        <section className="flex flex-col gap-3">
-          <h2 className="font-medium">
-            {t.formatMessage({ defaultMessage: "Credit subscription" })}
-          </h2>
-          <p className="text-muted-foreground">
-            {t.formatMessage(
-              {
-                defaultMessage:
-                  "{credits, number} credits every month for applying regularly: the full career interview, fit checks, resumes and cover letters. Monthly credits don’t roll over.",
-              },
-              { credits: creditSettings.subscriptionMonthlyCredits }
-            )}
-          </p>
-          <div className="grid gap-3 sm:grid-cols-2">
-            <Offer
-              title={t.formatMessage({ defaultMessage: "Monthly" })}
-              price={t.formatMessage(
-                { defaultMessage: "{price} a month" },
-                { price: price("subscription_monthly") }
-              )}
-              action={t.formatMessage({ defaultMessage: "Subscribe" })}
-              disabled={busy}
-              onClick={() => buy("subscription_monthly")}
-            />
-            <Offer
-              title={t.formatMessage({ defaultMessage: "Annual" })}
-              price={t.formatMessage(
-                { defaultMessage: "{price} a year" },
-                { price: price("subscription_annual") }
-              )}
-              action={t.formatMessage({ defaultMessage: "Subscribe" })}
-              disabled={busy}
-              onClick={() => buy("subscription_annual")}
-            />
-          </div>
         </section>
-      )}
 
-      {!subscribed && (
-        <OwnKeyOffer
-          title={t.formatMessage({ defaultMessage: "Own-key subscription" })}
-          description={t.formatMessage(
-            {
-              defaultMessage:
-                "Your own Anthropic key pays for the AI, and the subscription pays for the platform. It keeps the {credits, number} monthly credits for fit checks, for when your key can’t pay.",
-            },
-            { credits: creditSettings.monthlyFreeCredits }
-          )}
-          price={price}
-        />
-      )}
+        <FinishWithCredits />
 
-      {live?.plan === "credits" && !live.cancelAtPeriodEnd && (
-        <OwnKeyOffer
-          title={t.formatMessage({
-            defaultMessage: "Switch to the own-key subscription",
-          })}
-          description={
-            annual
-              ? t.formatMessage(
-                  {
-                    defaultMessage:
-                      "Your own Anthropic key pays for the AI from now on. Nothing is refunded and nothing is lost: your year was paid until {date}, so this month’s credits stay and each month left still brings {credits, number} credits until then, spent before your key.",
-                  },
-                  {
-                    date: date(live.currentPeriodEnd),
-                    credits: creditSettings.subscriptionMonthlyCredits,
-                  }
-                )
-              : t.formatMessage(
-                  {
-                    defaultMessage:
-                      "Your own Anthropic key pays for the AI from now on. Nothing is refunded and nothing is lost: this month’s credits stay until {date}, spent before your key.",
-                  },
-                  { date: date(live.currentPeriodEnd) }
-                )
-          }
-          price={price}
-        />
-      )}
+        {(plan === "own_key" || credits.data?.plan === "courtesy") && (
+          <OwnKeySection
+            canRemove={
+              plan === "own_key" ? !!subscription?.cancelAtPeriodEnd : true
+            }
+          />
+        )}
 
-      {live?.plan === "own_key" && !live.cancelAtPeriodEnd && (
+        {!subscribed && (
+          <section className="flex flex-col gap-3">
+            <h2 className="font-medium">
+              {t.formatMessage({ defaultMessage: "Credit subscription" })}
+            </h2>
+            <p className="text-muted-foreground">
+              {t.formatMessage(
+                {
+                  defaultMessage:
+                    "{credits, number} credits every month for applying regularly: the full career interview, fit checks, resumes and cover letters. Monthly credits don’t roll over.",
+                },
+                { credits: creditSettings.subscriptionMonthlyCredits }
+              )}
+            </p>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <Offer
+                title={t.formatMessage({ defaultMessage: "Monthly" })}
+                price={t.formatMessage(
+                  { defaultMessage: "{price} a month" },
+                  { price: price("subscription_monthly") }
+                )}
+                action={t.formatMessage({ defaultMessage: "Subscribe" })}
+                disabled={busy}
+                onClick={() => buy("subscription_monthly")}
+              />
+              <Offer
+                title={t.formatMessage({ defaultMessage: "Annual" })}
+                price={t.formatMessage(
+                  { defaultMessage: "{price} a year" },
+                  { price: price("subscription_annual") }
+                )}
+                action={t.formatMessage({ defaultMessage: "Subscribe" })}
+                disabled={busy}
+                onClick={() => buy("subscription_annual")}
+              />
+            </div>
+          </section>
+        )}
+
+        {!subscribed && (
+          <OwnKeyOffer
+            title={t.formatMessage({ defaultMessage: "Own-key subscription" })}
+            description={t.formatMessage(
+              {
+                defaultMessage:
+                  "Your own Anthropic key pays for the AI, and the subscription pays for the platform. It keeps the {credits, number} monthly credits for fit checks, for when your key can’t pay.",
+              },
+              { credits: creditSettings.monthlyFreeCredits }
+            )}
+            price={price}
+          />
+        )}
+
+        {live?.plan === "credits" && !live.cancelAtPeriodEnd && (
+          <OwnKeyOffer
+            title={t.formatMessage({
+              defaultMessage: "Switch to the own-key subscription",
+            })}
+            description={
+              annual
+                ? t.formatMessage(
+                    {
+                      defaultMessage:
+                        "Your own Anthropic key pays for the AI from now on. Nothing is refunded and nothing is lost: your year was paid until {date}, so this month’s credits stay and each month left still brings {credits, number} credits until then, spent before your key.",
+                    },
+                    {
+                      date: date(live.currentPeriodEnd),
+                      credits: creditSettings.subscriptionMonthlyCredits,
+                    }
+                  )
+                : t.formatMessage(
+                    {
+                      defaultMessage:
+                        "Your own Anthropic key pays for the AI from now on. Nothing is refunded and nothing is lost: this month’s credits stay until {date}, spent before your key.",
+                    },
+                    { date: date(live.currentPeriodEnd) }
+                  )
+            }
+            price={price}
+          />
+        )}
+
+        {live?.plan === "own_key" && !live.cancelAtPeriodEnd && (
+          <section className="flex flex-col gap-3">
+            <h2 className="font-medium">
+              {t.formatMessage({
+                defaultMessage: "Switch to the credit subscription",
+              })}
+            </h2>
+            <p className="text-muted-foreground">
+              {t.formatMessage(
+                {
+                  defaultMessage:
+                    "{credits, number} credits every month instead of your key, for {price}. It starts today: what’s left of your current period is discounted on the first invoice, and your key is deleted.",
+                },
+                {
+                  credits: creditSettings.subscriptionMonthlyCredits,
+                  price: annual
+                    ? t.formatMessage(
+                        { defaultMessage: "{price} a year" },
+                        { price: price("subscription_annual") }
+                      )
+                    : t.formatMessage(
+                        { defaultMessage: "{price} a month" },
+                        { price: price("subscription_monthly") }
+                      ),
+                }
+              )}
+            </p>
+            <Dialog>
+              <DialogTrigger asChild>
+                <Button className="self-start" disabled={busy}>
+                  {t.formatMessage({ defaultMessage: "Switch to credits" })}
+                </Button>
+              </DialogTrigger>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>
+                    {t.formatMessage({
+                      defaultMessage: "Switch to the credit subscription?",
+                    })}
+                  </DialogTitle>
+                  <DialogDescription>
+                    {t.formatMessage({
+                      defaultMessage:
+                        "Your card is charged now, minus what’s left of your current period. Your key is deleted, and the month’s credits arrive once the payment goes through.",
+                    })}
+                  </DialogDescription>
+                </DialogHeader>
+                <DialogFooter>
+                  <DialogClose asChild>
+                    <Button variant="outline">
+                      {t.formatMessage({ defaultMessage: "Keep my key" })}
+                    </Button>
+                  </DialogClose>
+                  <DialogClose asChild>
+                    <Button
+                      disabled={busy}
+                      onClick={() => switchToCredits.mutate({})}
+                    >
+                      {t.formatMessage({ defaultMessage: "Switch and pay" })}
+                    </Button>
+                  </DialogClose>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+          </section>
+        )}
+
         <section className="flex flex-col gap-3">
           <h2 className="font-medium">
-            {t.formatMessage({
-              defaultMessage: "Switch to the credit subscription",
-            })}
+            {t.formatMessage({ defaultMessage: "Credit pack" })}
           </h2>
           <p className="text-muted-foreground">
             {t.formatMessage(
               {
                 defaultMessage:
-                  "{credits, number} credits every month instead of your key, for {price}. It starts today: what’s left of your current period is discounted on the first invoice, and your key is deleted.",
+                  "{credits, number} credits with no subscription, valid for {months, number} months. Pack credits cost more than the subscription’s.",
               },
               {
-                credits: creditSettings.subscriptionMonthlyCredits,
-                price: annual
-                  ? t.formatMessage(
-                      { defaultMessage: "{price} a year" },
-                      { price: price("subscription_annual") }
-                    )
-                  : t.formatMessage(
-                      { defaultMessage: "{price} a month" },
-                      { price: price("subscription_monthly") }
-                    ),
+                credits: creditSettings.packCredits,
+                months: creditSettings.packValidityMonths,
               }
             )}
           </p>
-          <Dialog>
-            <DialogTrigger asChild>
-              <Button className="self-start" disabled={busy}>
-                {t.formatMessage({ defaultMessage: "Switch to credits" })}
-              </Button>
-            </DialogTrigger>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>
-                  {t.formatMessage({
-                    defaultMessage: "Switch to the credit subscription?",
-                  })}
-                </DialogTitle>
-                <DialogDescription>
-                  {t.formatMessage({
-                    defaultMessage:
-                      "Your card is charged now, minus what’s left of your current period. Your key is deleted, and the month’s credits arrive once the payment goes through.",
-                  })}
-                </DialogDescription>
-              </DialogHeader>
-              <DialogFooter>
-                <DialogClose asChild>
-                  <Button variant="outline">
-                    {t.formatMessage({ defaultMessage: "Keep my key" })}
-                  </Button>
-                </DialogClose>
-                <DialogClose asChild>
-                  <Button
-                    disabled={busy}
-                    onClick={() => switchToCredits.mutate({})}
-                  >
-                    {t.formatMessage({ defaultMessage: "Switch and pay" })}
-                  </Button>
-                </DialogClose>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
+          <Offer
+            title={t.formatMessage(
+              { defaultMessage: "{credits, number} credits" },
+              { credits: creditSettings.packCredits }
+            )}
+            price={price("pack")}
+            action={t.formatMessage({ defaultMessage: "Buy" })}
+            disabled={busy}
+            onClick={() => buy("pack")}
+          />
         </section>
-      )}
-
-      <section className="flex flex-col gap-3">
-        <h2 className="font-medium">
-          {t.formatMessage({ defaultMessage: "Credit pack" })}
-        </h2>
-        <p className="text-muted-foreground">
-          {t.formatMessage(
-            {
-              defaultMessage:
-                "{credits, number} credits with no subscription, valid for {months, number} months. Pack credits cost more than the subscription’s.",
-            },
-            {
-              credits: creditSettings.packCredits,
-              months: creditSettings.packValidityMonths,
-            }
-          )}
-        </p>
-        <Offer
-          title={t.formatMessage(
-            { defaultMessage: "{credits, number} credits" },
-            { credits: creditSettings.packCredits }
-          )}
-          price={price("pack")}
-          action={t.formatMessage({ defaultMessage: "Buy" })}
-          disabled={busy}
-          onClick={() => buy("pack")}
-        />
-      </section>
+      </div>
     </div>
   );
 }

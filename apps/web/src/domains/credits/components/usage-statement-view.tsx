@@ -83,23 +83,25 @@ export function UsageStatementView() {
   const { data, isPending } = useUsageStatement(period);
 
   return (
-    <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 overflow-y-auto p-6 text-sm">
-      <PeriodPicker statement={data} setPeriod={setPeriod} />
-      {isPending || !data ? (
-        <Skeleton className="h-40 w-full" />
-      ) : data.totals.length === 0 ? (
-        <p className="text-muted-foreground">
-          {t.formatMessage({
-            defaultMessage: "No AI operation in this period.",
-          })}
-        </p>
-      ) : (
-        <>
-          <Totals statement={data} />
-          <Summary statement={data} />
-          <Operations statement={data} period={period} />
-        </>
-      )}
+    <div className="w-full overflow-y-auto">
+      <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 p-6 text-sm">
+        <PeriodPicker statement={data} setPeriod={setPeriod} />
+        {isPending || !data ? (
+          <Skeleton className="h-40 w-full" />
+        ) : data.totals.length === 0 ? (
+          <p className="text-muted-foreground">
+            {t.formatMessage({
+              defaultMessage: "No AI operation in this period.",
+            })}
+          </p>
+        ) : (
+          <>
+            <Totals statement={data} />
+            <Summary statement={data} />
+            <Operations statement={data} period={period} />
+          </>
+        )}
+      </div>
     </div>
   );
 }

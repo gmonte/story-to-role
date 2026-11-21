@@ -32,40 +32,42 @@ import { useTRPC } from "~/tools/trpc/client";
 export function PrivacyAndData() {
   const t = useTranslation();
   return (
-    <div className="mx-auto flex w-full max-w-3xl flex-col gap-6 overflow-y-auto p-6 text-sm">
-      <section className="bg-card flex flex-col gap-2 rounded-lg border p-4">
-        <h2 className="font-medium">
-          {t.formatMessage({ defaultMessage: "Download your data" })}
-        </h2>
-        <p className="text-muted-foreground">
-          {t.formatMessage({
-            defaultMessage:
-              "A ZIP with everything StoryToRole holds for you: your career timeline and evidence, interviews, openings, applications, every version of your documents as JSON, their PDFs and the files you imported. Your own API key is not included.",
-          })}
-        </p>
-        <Button asChild variant="outline" className="self-start">
-          <a href="/api/account/export" download>
-            <Download />
-            {t.formatMessage({ defaultMessage: "Download my data" })}
-          </a>
-        </Button>
-      </section>
-
-      <section className="bg-card flex flex-col gap-2 rounded-lg border border-red-500/40 p-4">
-        <h2 className="font-medium">
-          {t.formatMessage({ defaultMessage: "Delete your account" })}
-        </h2>
-        <p className="text-muted-foreground">
-          {t.formatMessage(
-            {
+    <div className="w-full overflow-y-auto">
+      <div className="mx-auto flex w-full max-w-3xl flex-col gap-6 p-6 text-sm">
+        <section className="bg-card flex flex-col gap-2 rounded-lg border p-4">
+          <h2 className="font-medium">
+            {t.formatMessage({ defaultMessage: "Download your data" })}
+          </h2>
+          <p className="text-muted-foreground">
+            {t.formatMessage({
               defaultMessage:
-                "Everything is deleted right away and can’t be recovered. The database’s recovery history keeps a copy for up to {hours, plural, one {# hour} other {# hours}}, with your career content unreadable, and then it’s gone. A subscription ends now. Stripe keeps only the invoices the law requires.",
-            },
-            { hours: privacySettings.databaseHistoryHours }
-          )}
-        </p>
-        <DeleteAccountDialog />
-      </section>
+                "A ZIP with everything StoryToRole holds for you: your career timeline and evidence, interviews, openings, applications, every version of your documents as JSON, their PDFs and the files you imported. Your own API key is not included.",
+            })}
+          </p>
+          <Button asChild variant="outline" className="self-start">
+            <a href="/api/account/export" download>
+              <Download />
+              {t.formatMessage({ defaultMessage: "Download my data" })}
+            </a>
+          </Button>
+        </section>
+
+        <section className="bg-card flex flex-col gap-2 rounded-lg border border-red-500/40 p-4">
+          <h2 className="font-medium">
+            {t.formatMessage({ defaultMessage: "Delete your account" })}
+          </h2>
+          <p className="text-muted-foreground">
+            {t.formatMessage(
+              {
+                defaultMessage:
+                  "Everything is deleted right away and can’t be recovered. The database’s recovery history keeps a copy for up to {hours, plural, one {# hour} other {# hours}}, with your career content unreadable, and then it’s gone. A subscription ends now. Stripe keeps only the invoices the law requires.",
+              },
+              { hours: privacySettings.databaseHistoryHours }
+            )}
+          </p>
+          <DeleteAccountDialog />
+        </section>
+      </div>
     </div>
   );
 }

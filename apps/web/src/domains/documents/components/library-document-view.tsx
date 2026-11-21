@@ -35,6 +35,7 @@ export function LibraryDocumentBody({ documentId }: { documentId: string }) {
     <DocumentAgentProvider>
       <WorkspaceBody
         layoutId="library-document"
+        flushPanel
         chat={<LibraryDocumentView documentId={documentId} />}
         panel={<LibraryDocumentPanel documentId={documentId} />}
       />

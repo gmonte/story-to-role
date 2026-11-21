@@ -106,12 +106,11 @@ export function DocumentSidePanel({
     <Tabs
       value={tab}
       onValueChange={setTab}
-      className={cn(
-        "gap-3",
-        (tab === "agent" || tab === "preview") && "h-full min-h-0 flex-col"
-      )}
+      // Flush in its column, as My career's: the tabs and each tab's
+      // content keep their own margins.
+      className="flex h-full min-h-0 flex-col gap-0"
     >
-      <TabsList>
+      <TabsList className="mx-3 mt-3 self-start">
         {agent && (
           <TabsTrigger value="agent">
             {t.formatMessage({ defaultMessage: "Agent" })}
@@ -137,11 +136,17 @@ export function DocumentSidePanel({
         </TabsContent>
       )}
       {preview && (
-        <TabsContent value="preview" className="flex min-h-0 flex-1 flex-col">
+        <TabsContent
+          value="preview"
+          className="flex min-h-0 flex-1 flex-col p-4"
+        >
           <PdfPreview key={version.id} version={version} fill />
         </TabsContent>
       )}
-      <TabsContent value="versions" className="flex flex-col gap-4">
+      <TabsContent
+        value="versions"
+        className="flex min-h-0 flex-col gap-4 overflow-y-auto p-4"
+      >
         {versions}
       </TabsContent>
     </Tabs>

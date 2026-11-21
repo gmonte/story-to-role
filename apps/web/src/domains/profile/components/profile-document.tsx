@@ -18,7 +18,7 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuLabel,
+  DropdownMenuHeader,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@repo/web/components/ui/dropdown-menu";
@@ -354,9 +354,9 @@ export function ProfileDocument() {
               </button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="start">
-              <DropdownMenuLabel>
+              <DropdownMenuHeader>
                 {t.formatMessage({ defaultMessage: "Add to the profile" })}
-              </DropdownMenuLabel>
+              </DropdownMenuHeader>
               {entryKinds.map((kind) => (
                 <DropdownMenuItem key={kind} onSelect={() => setDialog(kind)}>
                   {entryLabels[kind]}
@@ -383,9 +383,9 @@ export function ProfileDocument() {
                 </button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="start">
-                <DropdownMenuLabel>
+                <DropdownMenuHeader>
                   {t.formatMessage({ defaultMessage: "Turn into" })}
-                </DropdownMenuLabel>
+                </DropdownMenuHeader>
                 {blockKinds.map((block) => (
                   <DropdownMenuItem
                     key={block.kind}

@@ -3,7 +3,7 @@
 import * as React from "react";
 
 import { DropdownMenu as DropdownMenuPrimitive } from "radix-ui";
-import { CheckIcon, ChevronRightIcon, CircleIcon } from "lucide-react";
+import { CheckIcon, ChevronRightIcon } from "lucide-react";
 
 import { cn } from "@repo/web/lib/utils";
 
@@ -88,6 +88,26 @@ function DropdownMenuSeparator({
   );
 }
 
+/**
+ * A menu's title on a tinted band (ADR 0012), set apart from the choices
+ * below it; it replaces a label followed by a separator.
+ */
+function DropdownMenuHeader({
+  className,
+  ...props
+}: React.ComponentProps<typeof DropdownMenuPrimitive.Label>) {
+  return (
+    <DropdownMenuPrimitive.Label
+      data-slot="dropdown-menu-header"
+      className={cn(
+        "bg-muted/60 -mx-1 -mt-1 mb-1 rounded-t-md border-b px-3 py-2 text-sm font-medium",
+        className
+      )}
+      {...props}
+    />
+  );
+}
+
 function DropdownMenuLabel({
   className,
   inset,
@@ -161,7 +181,7 @@ function DropdownMenuRadioItem({
     >
       <span className="pointer-events-none absolute left-2 flex size-3.5 items-center justify-center">
         <DropdownMenuPrimitive.ItemIndicator>
-          <CircleIcon className="size-2 fill-current" />
+          <CheckIcon className="text-brand-accent size-4" />
         </DropdownMenuPrimitive.ItemIndicator>
       </span>
       {children}
@@ -236,6 +256,7 @@ export {
   DropdownMenuPortal,
   DropdownMenuTrigger,
   DropdownMenuContent,
+  DropdownMenuHeader,
   DropdownMenuLabel,
   DropdownMenuItem,
   DropdownMenuCheckboxItem,

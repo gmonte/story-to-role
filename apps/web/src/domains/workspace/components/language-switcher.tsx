@@ -10,10 +10,9 @@ import { useTranslation } from "@repo/intl/use-translation";
 import {
   DropdownMenu,
   DropdownMenuContent,
-  DropdownMenuLabel,
+  DropdownMenuHeader,
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem,
-  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@repo/web/components/ui/dropdown-menu";
 import { Button } from "@repo/web/components/ui/button";
@@ -70,10 +69,9 @@ export function LanguageSwitcher({
         align={variant === "icon" ? "end" : "start"}
         className="w-56"
       >
-        <DropdownMenuLabel>
+        <DropdownMenuHeader>
           {t.formatMessage({ defaultMessage: "Interface language" })}
-        </DropdownMenuLabel>
-        <DropdownMenuSeparator />
+        </DropdownMenuHeader>
         <DropdownMenuRadioGroup value={t.locale} onValueChange={changeLocale}>
           {intlConfig.localeCodes.map((locale) => (
             <DropdownMenuRadioItem key={locale} value={locale}>

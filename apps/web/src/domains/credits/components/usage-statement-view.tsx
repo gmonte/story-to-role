@@ -83,7 +83,7 @@ export function UsageStatementView() {
   const { data, isPending } = useUsageStatement(period);
 
   return (
-    <div className="w-full overflow-y-auto">
+    <div className="bg-muted/50 w-full overflow-y-auto">
       <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 p-6 text-sm">
         <PeriodPicker statement={data} setPeriod={setPeriod} />
         {isPending || !data ? (
@@ -157,12 +157,11 @@ function PeriodPicker({
         />
       </div>
       <div className="flex flex-wrap gap-2">
-        <Button variant="outline" size="sm" onClick={() => setPeriod(null)}>
+        <Button variant="outline" onClick={() => setPeriod(null)}>
           {t.formatMessage({ defaultMessage: "Current credit month" })}
         </Button>
         <Button
           variant="outline"
-          size="sm"
           onClick={() =>
             setPeriod({
               from: toDay(new Date(today.getTime() - 29 * day)),
@@ -174,7 +173,6 @@ function PeriodPicker({
         </Button>
         <Button
           variant="outline"
-          size="sm"
           onClick={() =>
             setPeriod({ from: toDay(lastMonthStart), to: toDay(lastMonthEnd) })
           }
@@ -245,10 +243,10 @@ function Totals({ statement }: { statement: UsageStatement }) {
           key={total.payer}
           className="bg-card flex flex-col gap-1 rounded-lg border p-4"
         >
-          <span className="text-muted-foreground text-xs">
+          <span className="text-muted-foreground text-[11.5px] font-semibold tracking-[0.07em] uppercase">
             {spentBy[total.payer]}
           </span>
-          <span className="text-lg font-medium">
+          <span className="font-display text-2xl font-semibold">
             {t.formatMessage(
               { defaultMessage: "{credits} credits spent" },
               { credits: format.rowCredits(total.payer, total.credits) }
@@ -300,59 +298,61 @@ function Summary({ statement }: { statement: UsageStatement }) {
   const showsUsd = statement.summary.some((row) => row.averageUsd !== null);
   return (
     <section className="flex flex-col gap-2">
-      <h2 className="font-medium">
+      <h2 className="text-lg font-semibold">
         {t.formatMessage({ defaultMessage: "Average per operation" })}
       </h2>
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead>
-              {t.formatMessage({ defaultMessage: "Operation" })}
-            </TableHead>
-            <TableHead className="text-right">
-              {t.formatMessage({ defaultMessage: "Count" })}
-            </TableHead>
-            <TableHead className="text-right">
-              {t.formatMessage({ defaultMessage: "Average credits" })}
-            </TableHead>
-            <TableHead className="text-right">
-              {t.formatMessage({ defaultMessage: "Average tokens" })}
-            </TableHead>
-            {showsUsd && (
-              <TableHead className="text-right">
-                {t.formatMessage({ defaultMessage: "Average US$" })}
+      <div className="bg-card overflow-hidden rounded-lg border">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>
+                {t.formatMessage({ defaultMessage: "Operation" })}
               </TableHead>
-            )}
-            <TableHead className="text-right">
-              {t.formatMessage({ defaultMessage: "Total credits" })}
-            </TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {statement.summary.map((row) => (
-            <TableRow key={JSON.stringify(row.operation)}>
-              <TableCell>{usageOperationLabel(t, row.operation)}</TableCell>
-              <TableCell className="text-right">
-                {format.tokens(row.count)}
-              </TableCell>
-              <TableCell className="text-right">
-                {format.credits(row.averageCredits)}
-              </TableCell>
-              <TableCell className="text-right">
-                {format.tokens(row.averageTokens)}
-              </TableCell>
+              <TableHead className="text-right">
+                {t.formatMessage({ defaultMessage: "Count" })}
+              </TableHead>
+              <TableHead className="text-right">
+                {t.formatMessage({ defaultMessage: "Average credits" })}
+              </TableHead>
+              <TableHead className="text-right">
+                {t.formatMessage({ defaultMessage: "Average tokens" })}
+              </TableHead>
               {showsUsd && (
-                <TableCell className="text-right">
-                  {format.usd(row.averageUsd)}
-                </TableCell>
+                <TableHead className="text-right">
+                  {t.formatMessage({ defaultMessage: "Average US$" })}
+                </TableHead>
               )}
-              <TableCell className="text-right">
-                {format.credits(row.totalCredits)}
-              </TableCell>
+              <TableHead className="text-right">
+                {t.formatMessage({ defaultMessage: "Total credits" })}
+              </TableHead>
             </TableRow>
-          ))}
-        </TableBody>
-      </Table>
+          </TableHeader>
+          <TableBody>
+            {statement.summary.map((row) => (
+              <TableRow key={JSON.stringify(row.operation)}>
+                <TableCell>{usageOperationLabel(t, row.operation)}</TableCell>
+                <TableCell className="text-right">
+                  {format.tokens(row.count)}
+                </TableCell>
+                <TableCell className="text-right">
+                  {format.credits(row.averageCredits)}
+                </TableCell>
+                <TableCell className="text-right">
+                  {format.tokens(row.averageTokens)}
+                </TableCell>
+                {showsUsd && (
+                  <TableCell className="text-right">
+                    {format.usd(row.averageUsd)}
+                  </TableCell>
+                )}
+                <TableCell className="text-right">
+                  {format.credits(row.totalCredits)}
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </div>
     </section>
   );
 }
@@ -381,7 +381,7 @@ function Operations({
 
   return (
     <section className="flex flex-col gap-2">
-      <h2 className="font-medium">
+      <h2 className="text-lg font-semibold">
         {operations.total === undefined
           ? t.formatMessage({ defaultMessage: "Operations" })
           : t.formatMessage(
@@ -389,124 +389,128 @@ function Operations({
               { total: operations.total }
             )}
       </h2>
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead className="w-8" />
-            <TableHead>{t.formatMessage({ defaultMessage: "When" })}</TableHead>
-            <TableHead>
-              {t.formatMessage({ defaultMessage: "Operation" })}
-            </TableHead>
-            <TableHead>
-              {t.formatMessage({ defaultMessage: "Paid by" })}
-            </TableHead>
-            <TableHead className="text-right">
-              {t.formatMessage({ defaultMessage: "Input tokens" })}
-            </TableHead>
-            <TableHead className="text-right">
-              {t.formatMessage({ defaultMessage: "Output tokens" })}
-            </TableHead>
-            <TableHead className="text-right">
-              {t.formatMessage({ defaultMessage: "Cache read / write" })}
-            </TableHead>
-            <TableHead className="text-right">
-              {t.formatMessage({ defaultMessage: "Credits" })}
-            </TableHead>
-            {showsUsd && (
-              <TableHead className="text-right">
-                {t.formatMessage({ defaultMessage: "US$" })}
+      <div className="bg-card overflow-hidden rounded-lg border">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead className="w-8" />
+              <TableHead>
+                {t.formatMessage({ defaultMessage: "When" })}
               </TableHead>
-            )}
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {operations.rows.map((row) => {
-            const expanded = open.includes(row.operationId);
-            return (
-              <Fragment key={row.operationId}>
-                <TableRow>
-                  <TableCell>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="size-6"
-                      aria-expanded={expanded}
-                      aria-label={t.formatMessage({
-                        defaultMessage: "Show by model",
-                      })}
-                      onClick={() => toggle(row.operationId)}
-                    >
-                      {expanded ? <ChevronDown /> : <ChevronRight />}
-                    </Button>
-                  </TableCell>
-                  <TableCell>
-                    {t.formatDate(row.at, {
-                      dateStyle: "short",
-                      timeStyle: "short",
-                    })}
-                  </TableCell>
-                  <TableCell className="whitespace-normal">
-                    <span className="flex items-center gap-2">
-                      {usageOperationLabel(t, row.operation)}
-                      {row.status === "failed" && (
-                        <Badge variant="outline">
-                          {t.formatMessage({ defaultMessage: "Failed" })}
-                        </Badge>
-                      )}
-                    </span>
-                  </TableCell>
-                  <TableCell>{format.payer(row.payer)}</TableCell>
-                  <TableCell className="text-right">
-                    {format.tokens(row.inputTokens)}
-                  </TableCell>
-                  <TableCell className="text-right">
-                    {format.tokens(row.outputTokens)}
-                  </TableCell>
-                  <TableCell className="text-right">
-                    {format.cache(row)}
-                  </TableCell>
-                  <TableCell className="text-right">
-                    {format.rowCredits(row.payer, row.credits)}
-                  </TableCell>
-                  {showsUsd && (
-                    <TableCell className="text-right">
-                      {format.usd(row.usd)}
+              <TableHead>
+                {t.formatMessage({ defaultMessage: "Operation" })}
+              </TableHead>
+              <TableHead>
+                {t.formatMessage({ defaultMessage: "Paid by" })}
+              </TableHead>
+              <TableHead className="text-right">
+                {t.formatMessage({ defaultMessage: "Input tokens" })}
+              </TableHead>
+              <TableHead className="text-right">
+                {t.formatMessage({ defaultMessage: "Output tokens" })}
+              </TableHead>
+              <TableHead className="text-right">
+                {t.formatMessage({ defaultMessage: "Cache read / write" })}
+              </TableHead>
+              <TableHead className="text-right">
+                {t.formatMessage({ defaultMessage: "Credits" })}
+              </TableHead>
+              {showsUsd && (
+                <TableHead className="text-right">
+                  {t.formatMessage({ defaultMessage: "US$" })}
+                </TableHead>
+              )}
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {operations.rows.map((row) => {
+              const expanded = open.includes(row.operationId);
+              return (
+                <Fragment key={row.operationId}>
+                  <TableRow>
+                    <TableCell>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="size-6"
+                        aria-expanded={expanded}
+                        aria-label={t.formatMessage({
+                          defaultMessage: "Show by model",
+                        })}
+                        onClick={() => toggle(row.operationId)}
+                      >
+                        {expanded ? <ChevronDown /> : <ChevronRight />}
+                      </Button>
                     </TableCell>
-                  )}
-                </TableRow>
-                {expanded &&
-                  row.models.map((model) => (
-                    <TableRow
-                      key={model.model}
-                      className="bg-muted/30 text-muted-foreground text-xs"
-                    >
-                      <TableCell />
-                      <TableCell />
-                      <TableCell colSpan={2}>{model.model}</TableCell>
+                    <TableCell>
+                      {t.formatDate(row.at, {
+                        dateStyle: "short",
+                        timeStyle: "short",
+                      })}
+                    </TableCell>
+                    <TableCell className="whitespace-normal">
+                      <span className="flex items-center gap-2">
+                        {usageOperationLabel(t, row.operation)}
+                        {row.status === "failed" && (
+                          <Badge variant="outline">
+                            {t.formatMessage({ defaultMessage: "Failed" })}
+                          </Badge>
+                        )}
+                      </span>
+                    </TableCell>
+                    <TableCell>{format.payer(row.payer)}</TableCell>
+                    <TableCell className="text-right">
+                      {format.tokens(row.inputTokens)}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      {format.tokens(row.outputTokens)}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      {format.cache(row)}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      {format.rowCredits(row.payer, row.credits)}
+                    </TableCell>
+                    {showsUsd && (
                       <TableCell className="text-right">
-                        {format.tokens(model.inputTokens)}
+                        {format.usd(row.usd)}
                       </TableCell>
-                      <TableCell className="text-right">
-                        {format.tokens(model.outputTokens)}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        {format.cache(model)}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        {format.rowCredits(row.payer, model.credits)}
-                      </TableCell>
-                      {showsUsd && (
+                    )}
+                  </TableRow>
+                  {expanded &&
+                    row.models.map((model) => (
+                      <TableRow
+                        key={model.model}
+                        className="bg-muted/30 text-muted-foreground text-xs"
+                      >
+                        <TableCell />
+                        <TableCell />
+                        <TableCell colSpan={2}>{model.model}</TableCell>
                         <TableCell className="text-right">
-                          {format.usd(model.usd)}
+                          {format.tokens(model.inputTokens)}
                         </TableCell>
-                      )}
-                    </TableRow>
-                  ))}
-              </Fragment>
-            );
-          })}
-        </TableBody>
-      </Table>
+                        <TableCell className="text-right">
+                          {format.tokens(model.outputTokens)}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          {format.cache(model)}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          {format.rowCredits(row.payer, model.credits)}
+                        </TableCell>
+                        {showsUsd && (
+                          <TableCell className="text-right">
+                            {format.usd(model.usd)}
+                          </TableCell>
+                        )}
+                      </TableRow>
+                    ))}
+                </Fragment>
+              );
+            })}
+          </TableBody>
+        </Table>
+      </div>
       {operations.isLoading && <Skeleton className="h-24 w-full" />}
       <InfiniteScroll
         hasMore={operations.hasMore}

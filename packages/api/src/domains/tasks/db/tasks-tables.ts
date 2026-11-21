@@ -4,6 +4,10 @@ import { index } from "drizzle-orm/pg-core";
 import { usersTable } from "@repo/api/domains/users/db/users-tables";
 import type { AiFunding } from "@repo/api/domains/ai/ai-funding";
 import { createTable } from "@repo/api/utils/db/create-table";
+import type {
+  DocumentKind,
+  GenerationKind,
+} from "@repo/api/domains/documents/schemas/document";
 
 import type { TaskProgress, TaskStatus, TaskType } from "../schemas/task";
 
@@ -34,6 +38,11 @@ export const tasksTable = createTable(
     subjectId: d.uuid(),
     // Parallel reviewers a review task runs (1 or 3), read by the run.
     reviewers: d.integer().notNull().default(1),
+    // A document operation's kinds, kept when the task is created so the
+    // usage statement still names it after the document is deleted (which
+    // deletes the generation the subject points to).
+    documentKind: d.text().$type<DocumentKind>(),
+    generationKind: d.text().$type<GenerationKind>(),
     status: d.text().$type<TaskStatus>().notNull().default("pending"),
     runId: d.text(),
     progress: d.jsonb().$type<TaskProgress>(),

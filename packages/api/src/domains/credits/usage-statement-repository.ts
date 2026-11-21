@@ -17,6 +17,10 @@ import {
   documentsTable,
   generationsTable,
 } from "@repo/api/domains/documents/db/documents-tables";
+import type {
+  DocumentKind,
+  GenerationKind,
+} from "@repo/api/domains/documents/schemas/document";
 import { tasksTable } from "@repo/api/domains/tasks/db/tasks-tables";
 import type { DbClient } from "@repo/api/tools/db-client";
 
@@ -171,8 +175,9 @@ export class UsageStatementRepository {
         taskId: tasksTable.id,
         taskType: tasksTable.type,
         taskStatus: tasksTable.status,
-        documentKind: documentsTable.kind,
-        generationKind: generationsTable.kind,
+        // The task keeps the kinds once the document is deleted.
+        documentKind: sql<DocumentKind | null>`coalesce(${documentsTable.kind}, ${tasksTable.documentKind})`,
+        generationKind: sql<GenerationKind | null>`coalesce(${generationsTable.kind}, ${tasksTable.generationKind})`,
       })
       .from(aiUsageTable)
       .leftJoin(tasksTable, eq(tasksTable.id, aiUsageTable.taskId))

@@ -158,10 +158,21 @@ export class TasksService {
           now,
           keep,
         });
-        const created = await new TasksRepository(tx).create({
+        const repository = new TasksRepository(tx);
+        // A document operation keeps its kinds: deleting the document
+        // deletes the generation the subject points to.
+        const kinds =
+          input.subjectId &&
+          (input.type === "generate_document" ||
+            input.type === "adapt_document")
+            ? await repository.generationKinds(input.subjectId)
+            : null;
+        const created = await repository.create({
           userId: input.userId,
           type: input.type,
           subjectId: input.subjectId,
+          documentKind: kinds?.documentKind,
+          generationKind: kinds?.generationKind,
           funding,
           reviewers: input.hints?.reviewers,
         });

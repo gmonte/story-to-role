@@ -41,7 +41,6 @@ import {
 } from "@repo/web/components/ui/tooltip";
 import { cn } from "@repo/web/lib/utils";
 
-import { useTrackerLabels } from "~/domains/applications/hooks/use-tracker-labels";
 import { CreditCost } from "~/domains/credits/components/credit-cost";
 import { useCredits } from "~/domains/credits/hooks/use-credits";
 import { useDownloadZip } from "~/domains/documents/components/download-zip-button";
@@ -49,6 +48,7 @@ import { useOpeningDocuments } from "~/domains/documents/hooks/use-opening-docum
 import { useTRPC } from "~/tools/trpc/client";
 import { CoverageScoreBadge } from "~/domains/documents/components/coverage-score";
 import { useSelectedVersion } from "~/domains/documents/hooks/use-selected-version";
+import { ApplicationStatusBadge } from "~/domains/applications/components/application-status-badge";
 
 import { useRefreshOpenings } from "../hooks/use-opening";
 import { isRecheck } from "./opening-view";
@@ -62,6 +62,8 @@ import {
 } from "../utils/opening-journey";
 import {
   bandClassName,
+  bandDotClassName,
+  bandTextClassName,
   pendingGaps,
   useExcludeCompany,
 } from "./fit-check-panel";
@@ -133,7 +135,6 @@ export function OpeningHeader({
 }) {
   const t = useTranslation();
   const labels = useOpeningLabels();
-  const trackerLabels = useTrackerLabels();
   const journey = useOpeningJourney(openingId, opening);
   const processing = opening.status === "processing";
   // The score of the resume version open on the resume page (the first one
@@ -163,7 +164,7 @@ export function OpeningHeader({
     letter: <Mail className="size-4" />,
   };
   const switcher = journey.views.length > 1 && (
-    <nav className="-mb-px flex items-end gap-1 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+    <nav className="-mb-px flex items-end gap-6 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
       {openingViews.map((step) => {
         const enabled = journey.views.includes(step);
         const active = view === step;
@@ -176,17 +177,16 @@ export function OpeningHeader({
             aria-current={active ? "page" : undefined}
             onClick={() => setView(step)}
             className={cn(
-              "text-muted-foreground flex shrink-0 items-center gap-2 rounded-t-md border border-transparent px-4 py-2 text-sm transition-colors max-sm:min-h-11",
+              "text-muted-foreground flex shrink-0 items-center gap-2 border-b-2 border-transparent px-1 py-2.5 text-sm transition-colors max-sm:min-h-11",
               enabled && "hover:text-foreground",
               !enabled && "opacity-50",
-              active &&
-                "bg-background text-foreground border-border border-b-background font-medium"
+              active && "text-foreground border-foreground font-medium"
             )}
           >
             {stepIcons[step]}
             {stepLabels[step]}
             {hint !== "" && hint !== undefined && (
-              <span className="bg-muted text-foreground rounded-full px-2 text-xs font-medium">
+              <span className="bg-secondary text-secondary-foreground rounded-sm px-1.5 font-mono text-[11px] font-medium">
                 {hint}
               </span>
             )}
@@ -243,10 +243,18 @@ export function OpeningHeader({
                   <Badge
                     variant="outline"
                     className={cn(
-                      "cursor-default",
-                      bandClassName(opening.fitCheck.band)
+                      "cursor-default gap-1.5 border-transparent",
+                      bandClassName(opening.fitCheck.band),
+                      bandTextClassName(opening.fitCheck.band)
                     )}
                   >
+                    <span
+                      aria-hidden="true"
+                      className={cn(
+                        "size-1.5 rounded-full",
+                        bandDotClassName(opening.fitCheck.band)
+                      )}
+                    />
                     {labels.band(opening.fitCheck.band)}
                   </Badge>
                 </TooltipTrigger>
@@ -259,9 +267,7 @@ export function OpeningHeader({
               </Tooltip>
             )}
             {opening.applicationStatus && (
-              <Badge variant="secondary">
-                {trackerLabels.status(opening.applicationStatus)}
-              </Badge>
+              <ApplicationStatusBadge status={opening.applicationStatus} />
             )}
             {opening.status === "closed" && (
               <Badge variant="outline">
@@ -289,7 +295,7 @@ export function OpeningHeader({
                 <TooltipTrigger asChild>
                   <Badge
                     variant="outline"
-                    className="cursor-default border-amber-500/40 bg-amber-500/10"
+                    className="border-warning-border bg-warning-soft cursor-default"
                   >
                     <TriangleAlert className="size-3" />
                     {t.formatMessage(

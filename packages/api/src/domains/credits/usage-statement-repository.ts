@@ -22,6 +22,7 @@ import type {
   GenerationKind,
 } from "@repo/api/domains/documents/schemas/document";
 import { tasksTable } from "@repo/api/domains/tasks/db/tasks-tables";
+import { usersTable } from "@repo/api/domains/users/db/users-tables";
 import type { DbClient } from "@repo/api/tools/db-client";
 
 import { creditEntriesTable } from "./db/credits-tables";
@@ -35,14 +36,15 @@ export class UsageStatementRepository {
    * any call in the window brings all its calls, so its operation stays
    * whole; which window it belongs to is decided by its last call.
    */
-  callsBetween(userId: string, from: Date, to: Date) {
+  /** `userId` null takes every user's calls (the admin's statement). */
+  callsBetween(userId: string | null, from: Date, to: Date) {
     const inWindow = alias(aiUsageTable, "in_window");
     const tasksInWindow = this.tx
       .selectDistinct({ taskId: inWindow.taskId })
       .from(inWindow)
       .where(
         and(
-          eq(inWindow.userId, userId),
+          userId ? eq(inWindow.userId, userId) : undefined,
           gte(inWindow.createdAt, from),
           lt(inWindow.createdAt, to)
         )
@@ -159,11 +161,12 @@ export class UsageStatementRepository {
    * Calls with their task and, for a document generation, the kinds of
    * document and generation, oldest first.
    */
-  /** Only the user's own calls, whatever else `where` asks. */
-  private calls(userId: string, where: SQL | undefined) {
+  /** Only the user's own calls (every user's with null), whatever else `where` asks. */
+  private calls(userId: string | null, where: SQL | undefined) {
     return this.tx
       .select({
         callId: aiUsageTable.id,
+        userId: aiUsageTable.userId,
         createdAt: aiUsageTable.createdAt,
         purpose: aiUsageTable.purpose,
         funding: aiUsageTable.funding,
@@ -186,8 +189,26 @@ export class UsageStatementRepository {
         documentsTable,
         eq(documentsTable.id, generationsTable.documentId)
       )
-      .where(and(eq(aiUsageTable.userId, userId), where))
+      .where(and(userId ? eq(aiUsageTable.userId, userId) : undefined, where))
       .orderBy(aiUsageTable.createdAt);
+  }
+
+  /** The users' email and name, for the admin's statement. */
+  async usersByIds(userIds: string[]) {
+    if (userIds.length === 0) {
+      return new Map<string, { email: string; name: string | null }>();
+    }
+    const rows = await this.tx
+      .select({
+        id: usersTable.id,
+        email: usersTable.email,
+        name: usersTable.fullName,
+      })
+      .from(usersTable)
+      .where(inArray(usersTable.id, userIds));
+    return new Map(
+      rows.map((row) => [row.id, { email: row.email, name: row.name || null }])
+    );
   }
 
   /** What each task took from the user's credits: debits less refunds. */

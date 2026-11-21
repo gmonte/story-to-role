@@ -51,16 +51,16 @@ export function OwnKeyOffer({
     checkout.mutate({ product, apiKey: apiKey.trim() });
 
   return (
-    <section className="flex flex-col gap-3">
+    <section className="flex flex-col gap-2">
       <div className="flex flex-wrap items-center gap-2">
-        <h2 className="font-medium">{title}</h2>
+        <h2 className="text-lg font-semibold">{title}</h2>
         <Badge variant="outline" className="gap-1">
           <BadgeCheck className="size-3.5" />
           {t.formatMessage({ defaultMessage: "Anthropic · certified" })}
         </Badge>
       </div>
       <p className="text-muted-foreground">{description}</p>
-      <div className="flex flex-col gap-3 rounded-lg border p-4">
+      <div className="bg-card flex flex-col gap-3 rounded-lg border p-4">
         <div className="grid gap-1.5">
           <Label htmlFor="own-key-offer">
             {t.formatMessage({ defaultMessage: "Anthropic API key" })}

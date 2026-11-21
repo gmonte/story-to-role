@@ -106,20 +106,23 @@ export function DocumentSidePanel({
     <Tabs
       value={tab}
       onValueChange={setTab}
-      className={cn("gap-3", tab === "agent" && "h-full min-h-0 flex-col")}
+      className={cn(
+        "gap-3",
+        (tab === "agent" || tab === "preview") && "h-full min-h-0 flex-col"
+      )}
     >
-      <TabsList className="w-full">
+      <TabsList>
         {agent && (
-          <TabsTrigger value="agent" className="flex-1">
+          <TabsTrigger value="agent">
             {t.formatMessage({ defaultMessage: "Agent" })}
           </TabsTrigger>
         )}
         {preview && (
-          <TabsTrigger value="preview" className="flex-1">
+          <TabsTrigger value="preview">
             {t.formatMessage({ defaultMessage: "Preview" })}
           </TabsTrigger>
         )}
-        <TabsTrigger value="versions" className="flex-1">
+        <TabsTrigger value="versions">
           {t.formatMessage({ defaultMessage: "Versions" })}
         </TabsTrigger>
       </TabsList>
@@ -128,14 +131,14 @@ export function DocumentSidePanel({
         <TabsContent
           value="agent"
           forceMount
-          className="bg-background -mx-4 flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border data-[state=inactive]:hidden"
+          className="flex min-h-0 flex-1 flex-col overflow-hidden data-[state=inactive]:hidden"
         >
           {agent}
         </TabsContent>
       )}
       {preview && (
-        <TabsContent value="preview">
-          <PdfPreview key={version.id} version={version} />
+        <TabsContent value="preview" className="flex min-h-0 flex-1 flex-col">
+          <PdfPreview key={version.id} version={version} fill />
         </TabsContent>
       )}
       <TabsContent value="versions" className="flex flex-col gap-4">
@@ -242,7 +245,14 @@ const previewRenderDelayMs = 2500;
  * it refreshes with every saved change. Open findings ask once for
  * "Generate PDF anyway".
  */
-export function PdfPreview({ version }: { version: VersionView }) {
+export function PdfPreview({
+  version,
+  fill = false,
+}: {
+  version: VersionView;
+  // Fill the column's height (desktop) instead of a page's proportion.
+  fill?: boolean;
+}) {
   const t = useTranslation();
   const trpc = useTRPC();
   const refresh = useRefreshDocuments();
@@ -286,7 +296,7 @@ export function PdfPreview({ version }: { version: VersionView }) {
           })}
           onConfirm={() => setAcknowledged(true)}
         />
-        <div className="flex flex-col gap-2 rounded-lg border border-amber-500/40 bg-amber-500/10 p-2.5 text-xs">
+        <div className="border-warning-border bg-warning-soft flex flex-col gap-2 rounded-lg border p-2.5 text-xs">
           <p>
             {t.formatMessage({
               defaultMessage:
@@ -306,16 +316,26 @@ export function PdfPreview({ version }: { version: VersionView }) {
     );
   }
   return (
-    <div className="flex flex-col gap-2">
+    <div className={cn("flex flex-col gap-2", fill && "min-h-0 flex-1")}>
       {ready ? (
         <iframe
           key={snapshotId}
           title={t.formatMessage({ defaultMessage: "PDF preview" })}
           src={`/api/documents/versions/${version.id}/pdf?inline=1${acknowledged ? "&acknowledge=1" : ""}#toolbar=0&view=FitH`}
-          className="bg-muted aspect-[1/1.414] w-full rounded-lg border"
+          className={cn(
+            "bg-muted w-full rounded-lg border",
+            // In the column it takes the height left above its footer; in
+            // the phone's sheet, which scrolls, a page's proportion.
+            fill ? "min-h-0 flex-1" : "aspect-[1/1.414]"
+          )}
         />
       ) : (
-        <div className="bg-muted/40 text-muted-foreground flex aspect-[1/1.414] w-full flex-col items-center justify-center gap-2 rounded-lg border text-xs">
+        <div
+          className={cn(
+            "bg-muted/40 text-muted-foreground flex w-full flex-col items-center justify-center gap-2 rounded-lg border text-xs",
+            fill ? "min-h-0 flex-1" : "aspect-[1/1.414]"
+          )}
+        >
           <Loader2 className="size-4 animate-spin" />
           {t.formatMessage({ defaultMessage: "Rendering the PDF…" })}
         </div>
@@ -362,7 +382,7 @@ export function VersionList({
             type="button"
             onClick={() => select(row.id)}
             className={cn(
-              "bg-background flex w-full items-center justify-between rounded-lg border p-2.5 text-left text-sm",
+              "bg-card flex w-full items-center justify-between rounded-lg border p-2.5 text-left text-sm",
               version.id === row.id && "border-primary"
             )}
           >
@@ -458,7 +478,7 @@ export function VersionActions({
       {generateAgain?.(
         version,
         <Button size="sm" variant="ghost">
-          <Sparkles />
+          <Sparkles className="text-brand-accent" />
           {t.formatMessage({ defaultMessage: "Generate again" })}
         </Button>
       )}

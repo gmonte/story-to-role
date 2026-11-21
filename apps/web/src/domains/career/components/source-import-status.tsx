@@ -122,7 +122,7 @@ export function SourceImportStatus({ document }: { document: SourceDocument }) {
   }
   if (document.importStatus === "rejected" && document.importRejection) {
     return (
-      <p className="text-xs text-amber-600">
+      <p className="text-warning text-xs">
         {rejections[document.importRejection]}
       </p>
     );

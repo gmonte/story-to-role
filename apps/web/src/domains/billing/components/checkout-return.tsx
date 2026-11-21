@@ -45,7 +45,7 @@ export function CheckoutReturn({
         </p>
       ) : complete.data.paid ? (
         <p className="flex items-center gap-2">
-          <CheckCircle2 className="size-4 text-green-600" />
+          <CheckCircle2 className="text-success size-4" />
           {complete.data.product === "pack"
             ? t.formatMessage({
                 defaultMessage: "Payment confirmed: your credits are ready.",

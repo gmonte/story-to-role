@@ -232,11 +232,11 @@ export const DocumentBlockNode = Node.create<{
         return block(cn("mt-1 font-semibold"), 0);
       case "contacts":
       case "city":
-        return block(cn("text-muted-foreground text-xs"), 0);
+        return block(cn("text-doc-muted text-xs"), 0);
       case "sectionTitle":
         return block(
           cn(
-            "text-doc-accent border-doc-accent/60 mt-5 mb-1.5 border-b pb-0.5 text-xs font-bold tracking-wide uppercase"
+            "text-doc-accent border-doc-rule mt-5 mb-1.5 border-b pb-0.5 text-xs font-bold tracking-wide uppercase"
           ),
           0
         );
@@ -258,7 +258,7 @@ export const DocumentBlockNode = Node.create<{
       // in the document, so the employer's block flows beside it.
       case "entryPeriod":
         return block(
-          cn("text-muted-foreground float-right mt-2.5 ml-2 pt-0.5 text-xs"),
+          cn("text-doc-muted float-right mt-2.5 ml-2 pt-0.5 text-xs"),
           0
         );
       case "entry":
@@ -266,12 +266,12 @@ export const DocumentBlockNode = Node.create<{
       case "entryTitle":
         return block(cn("italic"), 0);
       case "entryContext":
-        return block(cn("text-muted-foreground text-xs italic"), 0);
+        return block(cn("text-doc-muted text-xs italic"), 0);
       case "entryLink":
-        return block(cn("text-muted-foreground text-xs italic"), 0);
+        return block(cn("text-doc-muted text-xs italic"), 0);
       case "entryNote":
         return block(
-          cn("text-muted-foreground text-xs"),
+          cn("text-doc-muted text-xs"),
           ["span", { contenteditable: "false" }, `${this.options.notePrefix} `],
           ["span", {}, 0] as unknown as DOMOutputSpec
         );
@@ -295,8 +295,8 @@ export const DocumentBlockNode = Node.create<{
             class: cn(
               attrs.type === "headline"
                 ? "font-semibold"
-                : "text-muted-foreground mb-1 text-xs",
-              "has-[br.ProseMirror-trailingBreak:only-child]:before:text-muted-foreground/60 has-[br.ProseMirror-trailingBreak:only-child]:before:pointer-events-none has-[br.ProseMirror-trailingBreak:only-child]:before:float-left has-[br.ProseMirror-trailingBreak:only-child]:before:content-[attr(data-placeholder)]"
+                : "text-doc-muted mb-1 text-xs",
+              "has-[br.ProseMirror-trailingBreak:only-child]:before:text-doc-muted/60 has-[br.ProseMirror-trailingBreak:only-child]:before:pointer-events-none has-[br.ProseMirror-trailingBreak:only-child]:before:float-left has-[br.ProseMirror-trailingBreak:only-child]:before:content-[attr(data-placeholder)]"
             ),
           },
           0,

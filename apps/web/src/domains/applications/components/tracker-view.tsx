@@ -14,6 +14,7 @@ import { Input } from "@repo/web/components/ui/input";
 import { Label } from "@repo/web/components/ui/label";
 import { toast } from "@repo/web/components/ui/sonner";
 import { Tabs, TabsList, TabsTrigger } from "@repo/web/components/ui/tabs";
+import { Skeleton } from "@repo/web/components/ui/skeleton";
 
 import { useTRPC } from "~/tools/trpc/client";
 
@@ -99,72 +100,102 @@ export function TrackerView() {
   };
 
   return (
-    <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 overflow-y-auto p-6 text-sm">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <p className="text-muted-foreground">
-          {t.formatMessage({
-            defaultMessage:
-              "Every application from its first document to the outcome. Openings you only analyzed stay out of it.",
-          })}
-        </p>
-        <ExternalApplicationDialog
-          trigger={
-            <Button size="sm" variant="outline">
-              <Plus />
-              {t.formatMessage({ defaultMessage: "Applied elsewhere" })}
-            </Button>
-          }
-        />
-      </div>
+    <div className="w-full overflow-y-auto">
+      <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 p-6 text-sm">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <p className="text-muted-foreground">
+            {t.formatMessage({
+              defaultMessage:
+                "Every application from its first document to the outcome. Openings you only analyzed stay out of it.",
+            })}
+          </p>
+          <ExternalApplicationDialog
+            trigger={
+              <Button size="sm" variant="outline">
+                <Plus />
+                {t.formatMessage({ defaultMessage: "Applied elsewhere" })}
+              </Button>
+            }
+          />
+        </div>
 
-      <ReminderList />
+        <ReminderList />
 
-      <TrackerMetricsPanel />
+        <TrackerMetricsPanel />
 
-      {tracker.data && applications.length === 0 ? (
-        <p className="text-muted-foreground rounded-lg border border-dashed p-6 text-center">
-          {t.formatMessage({
-            defaultMessage:
-              "No applications yet. One starts when you generate a document for an opening, or add one you made elsewhere.",
-          })}
-        </p>
-      ) : (
-        <section className="flex min-w-0 flex-col gap-3">
-          <Tabs value={view} onValueChange={(value) => setView(value as View)}>
-            <TabsList>
-              <TabsTrigger value="list">
-                <List />
-                {t.formatMessage({ defaultMessage: "List" })}
-              </TabsTrigger>
-              <TabsTrigger value="kanban">
-                <Columns3 />
-                {t.formatMessage({ defaultMessage: "Kanban" })}
-              </TabsTrigger>
-            </TabsList>
-          </Tabs>
-          {view === "list" ? (
-            <ApplicationsList
-              applications={applications}
-              filters={filters}
-              onFiltersChange={setFilters}
-            />
-          ) : (
-            <div className="flex min-w-0 flex-col gap-3">
-              <ApplicationFiltersBar
-                filters={filters}
-                onChange={setFilters}
-                withSort={false}
-              />
-              <ApplicationsKanban
+        {!tracker.data ? (
+          // The view's room while the applications load: rows for the
+          // list, columns of cards for the kanban.
+          <div className="flex flex-col gap-3">
+            <Skeleton className="h-9 w-44" />
+            {view === "list" ? (
+              [0, 1, 2, 3, 4].map((index) => (
+                <Skeleton key={index} className="h-14 w-full rounded-lg" />
+              ))
+            ) : (
+              <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+                {[3, 2, 2, 1].map((cards, column) => (
+                  <div key={column} className="flex flex-col gap-2">
+                    <Skeleton className="h-4 w-24" />
+                    {Array.from({ length: cards }, (_, index) => (
+                      <Skeleton
+                        key={index}
+                        className="h-20 w-full rounded-md"
+                      />
+                    ))}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        ) : applications.length === 0 ? (
+          <p className="text-muted-foreground rounded-lg border border-dashed p-6 text-center">
+            {t.formatMessage({
+              defaultMessage:
+                "No applications yet. One starts when you generate a document for an opening, or add one you made elsewhere.",
+            })}
+          </p>
+        ) : (
+          <section className="flex min-w-0 flex-col gap-3">
+            <Tabs
+              value={view}
+              onValueChange={(value) => setView(value as View)}
+            >
+              <TabsList>
+                <TabsTrigger value="list">
+                  <List />
+                  {t.formatMessage({ defaultMessage: "List" })}
+                </TabsTrigger>
+                <TabsTrigger value="kanban">
+                  <Columns3 />
+                  {t.formatMessage({ defaultMessage: "Kanban" })}
+                </TabsTrigger>
+              </TabsList>
+            </Tabs>
+            {view === "list" ? (
+              <ApplicationsList
                 applications={applications}
                 filters={filters}
+                onFiltersChange={setFilters}
               />
-            </div>
-          )}
-        </section>
-      )}
+            ) : (
+              <div className="flex min-w-0 flex-col gap-3">
+                <ApplicationFiltersBar
+                  filters={filters}
+                  onChange={setFilters}
+                  withSort={false}
+                />
+                <ApplicationsKanban
+                  applications={applications}
+                  filters={filters}
+                />
+              </div>
+            )}
+          </section>
+        )}
 
-      <TrackerSettingsForm />
+        <TrackerSettingsForm />
+      </div>
     </div>
   );
 }
@@ -194,7 +225,7 @@ function SettingsForm({ initial }: { initial: TrackerSettings }) {
   );
   return (
     <form
-      className="flex flex-col gap-3 rounded-lg border p-4"
+      className="bg-card flex flex-col gap-3 rounded-lg border p-4"
       onSubmit={(event) => {
         event.preventDefault();
         save.mutate(value);

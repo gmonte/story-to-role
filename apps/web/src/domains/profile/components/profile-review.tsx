@@ -2,11 +2,13 @@
 
 import { useState } from "react";
 
-import { Check, CircleAlert, EyeOff, MessageSquare, X } from "lucide-react";
+import { Check, CircleAlert, EyeOff, Sparkles, X } from "lucide-react";
 
 import { useTranslation } from "@repo/intl/use-translation";
 import { extractProfile } from "@repo/api/domains/profile/truth/extract";
 import { Button } from "@repo/web/components/ui/button";
+
+import { decisionButton } from "~/domains/workspace/utils/decision-buttons";
 
 import { useProfileLabels } from "../hooks/use-profile-labels";
 import { useLatestValidation } from "../hooks/use-profile-validation";
@@ -56,7 +58,7 @@ export function ProfileReview() {
           { count: reviewFindings.length }
         )}
         {reviewFindings.length > 0 && (
-          <CircleAlert className="size-3.5 text-amber-600" />
+          <CircleAlert className="text-warning size-3.5" />
         )}
       </p>
       {reviewFindings.length === 0 && (
@@ -67,26 +69,29 @@ export function ProfileReview() {
           })}
         </p>
       )}
-      <ul className="space-y-1">
+      <ul className="space-y-2">
         {reviewFindings.map((finding, index) => (
-          <li key={`${finding.quote}-${index}`}>
+          <li
+            key={`${finding.quote}-${index}`}
+            className="bg-card flex flex-col gap-2 rounded-lg border p-3 text-[13px] leading-snug"
+          >
             <button
               type="button"
               onClick={() =>
                 goToLine(finding.line, { from: finding.from, to: finding.to })
               }
-              className="hover:bg-muted w-full rounded px-2 py-1 text-left text-xs"
+              className="text-left hover:underline"
             >
-              <span className="text-primary block font-medium">
+              <span className="block font-medium">
                 {reviewKinds[finding.kind]}
               </span>
               <span className="text-muted-foreground">{finding.message}</span>
             </button>
-            <div className="flex flex-wrap items-center gap-1 px-2 pb-1">
+            <div className="flex flex-wrap items-center gap-1.5">
               <Button
                 size="sm"
                 variant="ghost"
-                className="text-muted-foreground h-6 px-2 text-xs"
+                className="text-muted-foreground h-7 px-2.5 text-xs"
                 title={t.formatMessage({ defaultMessage: "Talk about this" })}
                 aria-label={t.formatMessage({
                   defaultMessage: "Talk about this",
@@ -99,12 +104,13 @@ export function ProfileReview() {
                   })
                 }
               >
-                <MessageSquare className="size-3" />
+                <Sparkles className="text-brand-accent size-3" />
+                {t.formatMessage({ defaultMessage: "Chat" })}
               </Button>
               <Button
                 size="sm"
                 variant="ghost"
-                className="text-muted-foreground h-6 px-2 text-xs"
+                className="text-muted-foreground h-7 px-2.5 text-xs"
                 title={t.formatMessage({
                   defaultMessage: "This finding doesn't apply: stop showing it",
                 })}
@@ -122,38 +128,36 @@ export function ProfileReview() {
           <p className="text-muted-foreground text-xs font-medium">
             {t.formatMessage({ defaultMessage: "Proposed competency levels" })}
           </p>
-          <ul className="space-y-1">
+          <ul className="space-y-2">
             {proposals.map((proposal) => (
-              <li key={proposal.name} className="rounded border p-2 text-xs">
+              <li
+                key={proposal.name}
+                className="bg-card flex flex-col gap-2 rounded-lg border p-3 text-[13px] leading-snug"
+              >
                 <p>
                   <span className="font-medium">{proposal.name}</span>
                   {labelSeparator}
                   {levelLabels[proposal.level]}
                 </p>
-                <p className="text-muted-foreground mt-0.5">
-                  {proposal.reason}
-                </p>
-                <div className="mt-1 flex gap-1">
+                <p className="text-muted-foreground">{proposal.reason}</p>
+                <div className="flex gap-1.5">
                   <Button
-                    size="sm"
-                    variant="outline"
-                    className="h-6 px-2 text-xs"
+                    className={decisionButton}
                     onClick={() =>
                       applyCompetencyLevel(proposal.name, proposal.level)
                     }
                   >
-                    <Check className="size-3" />
+                    <Check />
                     {t.formatMessage({ defaultMessage: "Accept" })}
                   </Button>
                   <Button
-                    size="sm"
-                    variant="ghost"
-                    className="h-6 px-2 text-xs"
+                    variant="outline"
+                    className={decisionButton}
                     onClick={() =>
                       setRejected((names) => [...names, proposal.name])
                     }
                   >
-                    <X className="size-3" />
+                    <X />
                     {t.formatMessage({ defaultMessage: "Reject" })}
                   </Button>
                 </div>

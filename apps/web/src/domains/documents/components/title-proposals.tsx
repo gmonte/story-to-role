@@ -52,7 +52,7 @@ function TitleProposal({
   );
 
   return (
-    <div className="flex flex-wrap items-center gap-2 rounded-lg border border-sky-500/40 bg-sky-500/10 p-2.5 text-xs">
+    <div className="border-origin-edited/40 bg-origin-edited/10 flex flex-wrap items-center gap-2 rounded-lg border p-2.5 text-xs">
       <span>
         {t.formatMessage(
           { defaultMessage: "“{current}” in {language}:" },

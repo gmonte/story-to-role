@@ -200,7 +200,10 @@ export function VoiceInputButton({
       type="button"
       size="icon"
       variant={state === "listening" ? "default" : "ghost"}
-      className={cn("size-8", state === "listening" && "animate-pulse")}
+      className={cn(
+        "size-8",
+        state === "listening" ? "animate-pulse" : "text-muted-foreground"
+      )}
       disabled={state === "checking"}
       onClick={toggle}
       aria-label={

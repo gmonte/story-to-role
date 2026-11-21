@@ -12,8 +12,15 @@ import {
 import { paginationParamsSchema } from "@repo/api/utils/schemas/pagination";
 
 import { CreditsService } from "./credits-service";
-import { courtesyGrantSchema, creditSummarySchema } from "./schemas/credits";
 import {
+  adminUserSchema,
+  adminUsersSchema,
+  courtesyGrantSchema,
+  creditSummarySchema,
+} from "./schemas/credits";
+import {
+  platformUsageSchema,
+  platformUsageUsersSchema,
   usageOperationsSchema,
   usageStatementSchema,
 } from "./schemas/usage-statement";
@@ -77,6 +84,61 @@ export const creditsRouter = createTRPCRouter({
         showsPlatformCost: env.USAGE_STATEMENT_SHOWS_PLATFORM_COST,
       })
     ),
+
+  platformUsage: adminProcedure
+    .meta(
+      openApiMeta(
+        "credits",
+        "GET",
+        "/admin/usage",
+        "Returns the usage statement over every user, with averages per operation and per model (admin only)"
+      )
+    )
+    .input(
+      z.object({
+        from: z.coerce.date().optional(),
+        to: z.coerce.date().optional(),
+      })
+    )
+    .output(platformUsageSchema)
+    .query(({ input }) => new CreditsService(db).platformUsage(input)),
+
+  platformUsageUsers: adminProcedure
+    .meta(
+      openApiMeta(
+        "credits",
+        "GET",
+        "/admin/usage/users",
+        "Returns a page of every user's spending in a window, the biggest first, filtered by name or email (admin only)"
+      )
+    )
+    .input(
+      paginationParamsSchema.extend({
+        from: z.coerce.date().optional(),
+        to: z.coerce.date().optional(),
+        search: z.string().max(200).optional(),
+      })
+    )
+    .output(platformUsageUsersSchema)
+    .query(({ input }) => new CreditsService(db).platformUsageUsers(input)),
+
+  adminUsers: adminProcedure
+    .meta(
+      openApiMeta(
+        "credits",
+        "GET",
+        "/admin/users",
+        "Returns a page of the accounts, newest first, with their plan and key, found by name or email (admin only)"
+      )
+    )
+    .input(
+      paginationParamsSchema.extend({
+        search: z.string().max(200).optional(),
+        plan: adminUserSchema.shape.plan.optional(),
+      })
+    )
+    .output(adminUsersSchema)
+    .query(({ input }) => new CreditsService(db).adminUsers(input)),
 
   listCourtesyGrants: adminProcedure
     .meta(

@@ -101,7 +101,7 @@ export function ConditionAnswer({
           {note && <span className="whitespace-pre-wrap">{note}</span>}
         </p>
         {stance === "blocker" && (
-          <p className="text-xs font-medium text-red-600 dark:text-red-400">
+          <p className="text-destructive text-xs font-medium">
             {t.formatMessage({
               defaultMessage:
                 "You marked this as a blocker: think twice before applying.",

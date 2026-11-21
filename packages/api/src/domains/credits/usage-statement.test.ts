@@ -451,6 +451,25 @@ describe("usage statement", () => {
         averageTokens: 115_000,
         averageUsd: 0.16,
         totalCredits: 48,
+        // Each model's share of the average, adding up to it.
+        models: [
+          {
+            model: "claude-sonnet-5-5",
+            operations: 1,
+            averageInputTokens: 50_000,
+            averageOutputTokens: 5_000,
+            averageCredits: 22.5,
+            averageUsd: 0.15,
+          },
+          {
+            model: "claude-haiku-5-5",
+            operations: 1,
+            averageInputTokens: 50_000,
+            averageOutputTokens: 10_000,
+            averageCredits: 1.5,
+            averageUsd: 0.01,
+          },
+        ],
       },
     ]);
   });
@@ -578,5 +597,149 @@ describe("usage statement", () => {
       at("2026-11-05T09:00:00Z"),
     ]);
     expect(second.nextCursor).toBeNull();
+  });
+
+  it("sums every user's operations for the admin, with an average per model", async () => {
+    const ctx = await setup();
+    await ctx.task({
+      type: "analyze_opening",
+      funding: "credits",
+      calls: [sonnetCall, haikuCall],
+      debited: 50,
+    });
+    const other = await createTestUser("grace@example.com");
+    const otherTask = await new TasksRepository(ctx.db).create({
+      userId: other.id,
+      type: "analyze_opening",
+      funding: "key",
+    });
+    await new AiUsageRepository(ctx.db).record({
+      userId: other.id,
+      provider: "anthropic",
+      role: "writing",
+      taskId: otherTask.id,
+      funding: "key",
+      purpose: "analyze_opening",
+      createdAt: at("2026-11-14T09:00:00Z"),
+      ...sonnetCall,
+    });
+    await new TasksRepository(ctx.db).markCompleted(otherTask.id);
+
+    const usage = await new CreditsService(ctx.db).platformUsage({
+      ...window,
+      now,
+    });
+    expect(usage.showsPlatformCost).toBe(true);
+    expect(
+      usage.totals.map((row) => [row.payer, row.operations, row.credits])
+    ).toEqual([
+      ["credits", 1, 50],
+      ["key", 1, 45],
+    ]);
+    expect(usage.summary.map((row) => [row.count, row.averageCredits])).toEqual(
+      [[2, 47.5]]
+    );
+    // Sonnet ran in both operations, Haiku in one: averages per operation.
+    expect(
+      usage.models.map((row) => [
+        row.model,
+        row.operations,
+        row.averageInputTokens,
+        row.averageOutputTokens,
+      ])
+    ).toEqual([
+      ["claude-sonnet-5-5", 2, 100_000, 10_000],
+      ["claude-haiku-5-5", 1, 100_000, 20_000],
+    ]);
+    expect(usage.models[0].averageUsd).toBeCloseTo(0.3);
+    expect(usage.models[0].totalUsd).toBeCloseTo(0.6);
+    // Each user's spending, the biggest first, with their own averages.
+    const users = await new CreditsService(ctx.db).platformUsageUsers({
+      ...window,
+      now,
+      limit: 20,
+    });
+    expect(users.total).toBe(2);
+    expect(
+      users.data.map((row) => [
+        row.email,
+        row.operations,
+        row.creditsSpent,
+        row.keyCredits,
+        row.storytoroleCredits,
+      ])
+    ).toEqual([
+      ["ada@example.com", 1, 50, 0, 0],
+      ["grace@example.com", 1, 0, 45, 0],
+    ]);
+    expect(
+      users.data[0].summary.map((row) => [row.count, row.averageCredits])
+    ).toEqual([[1, 50]]);
+  });
+
+  it("covers the current calendar month for the admin by default", async () => {
+    await setup();
+    const usage = await new CreditsService(
+      await getTestDatabase()
+    ).platformUsage({ now });
+    expect(usage.window).toEqual(window);
+  });
+
+  it("pages the admin's users and filters them by name or email", async () => {
+    const ctx = await setup();
+    const usage = new AiUsageRepository(ctx.db);
+    for (const email of ["grace@example.com", "linus@example.com"]) {
+      const user = await createTestUser(email);
+      await usage.record({
+        userId: user.id,
+        provider: "anthropic",
+        role: "writing",
+        funding: "credits",
+        purpose: "gap_answer_sentence",
+        createdAt: at("2026-11-12T09:00:00Z"),
+        ...haikuCall,
+      });
+    }
+    await ctx.call({
+      funding: "credits",
+      purpose: "gap_answer_sentence",
+      createdAt: at("2026-11-12T09:00:00Z"),
+      ...sonnetCall,
+    });
+    const credits = new CreditsService(ctx.db);
+
+    const first = await credits.platformUsageUsers({
+      ...window,
+      now,
+      limit: 2,
+    });
+    expect(first.total).toBe(3);
+    expect(first.data.map((row) => row.email)).toEqual([
+      "ada@example.com",
+      "grace@example.com",
+    ]);
+    const second = await credits.platformUsageUsers({
+      ...window,
+      now,
+      limit: 2,
+      cursor: first.nextCursor,
+    });
+    expect(second.data.map((row) => row.email)).toEqual(["linus@example.com"]);
+    // A call outside a task debits nothing: StoryToRole paid its equivalent.
+    expect(
+      first.data.map((row) => [row.creditsSpent, row.storytoroleCredits])
+    ).toEqual([
+      [0, 45],
+      [0, 3],
+    ]);
+    expect(second.nextCursor).toBeNull();
+
+    const found = await credits.platformUsageUsers({
+      ...window,
+      now,
+      limit: 20,
+      search: "  LINUS ",
+    });
+    expect(found.data.map((row) => row.email)).toEqual(["linus@example.com"]);
   });
 });

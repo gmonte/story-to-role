@@ -14,6 +14,8 @@ import {
 import { useTranslation } from "@repo/intl/use-translation";
 import { Button } from "@repo/web/components/ui/button";
 
+import { decisionButton } from "~/domains/workspace/utils/decision-buttons";
+
 import { useProfileEditor } from "./profile-editor-context";
 
 type Suggestion = ReturnType<typeof useProfileEditor>["suggestions"][number];
@@ -105,17 +107,17 @@ export function ProfileSuggestionsBar() {
             {stale.map((suggestion) => (
               <li
                 key={suggestion.id}
-                className="bg-background flex items-start gap-2 rounded border px-2 py-1"
+                className="bg-card flex items-start gap-2 rounded border px-2 py-1"
               >
                 <span className="line-clamp-2 min-w-0 flex-1 whitespace-pre-wrap">
                   {suggestion.replace || suggestion.find}
                 </span>
                 <Button
-                  size="sm"
-                  variant="ghost"
-                  className="h-6 px-2 text-xs"
+                  variant="outline"
+                  className={decisionButton}
                   onClick={() => rejectSuggestions([suggestion.id])}
                 >
+                  <X />
                   {t.formatMessage({ defaultMessage: "Reject" })}
                 </Button>
               </li>
@@ -127,7 +129,7 @@ export function ProfileSuggestionsBar() {
         <div className="grid grid-cols-1 items-center gap-2 md:grid-cols-[1fr_auto_1fr]">
           <span className="hidden md:block" />
           <div className="flex flex-wrap items-center justify-center gap-2">
-            <Sparkles className="text-primary size-3.5" />
+            <Sparkles className="text-brand-accent size-3.5" />
             <span>
               <span className="font-medium">
                 {t.formatMessage(
@@ -201,21 +203,19 @@ export function ProfileSuggestionsBar() {
           <div className="flex items-center justify-center gap-1 md:justify-end">
             {located.length > 0 && (
               <Button
-                size="sm"
-                className="h-6 px-2 text-xs"
+                className={decisionButton}
                 onClick={() => acceptSuggestions()}
               >
-                <Check className="size-3" />
+                <Check />
                 {t.formatMessage({ defaultMessage: "Accept all" })}
               </Button>
             )}
             <Button
-              size="sm"
               variant="outline"
-              className="h-6 px-2 text-xs"
+              className={decisionButton}
               onClick={() => rejectSuggestions()}
             >
-              <X className="size-3" />
+              <X />
               {t.formatMessage({ defaultMessage: "Reject all" })}
             </Button>
           </div>

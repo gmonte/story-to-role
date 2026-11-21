@@ -188,7 +188,7 @@ export function GenerateResumeDialog({
         )}
 
         {pendingGaps > 0 && (
-          <p className="rounded-md border border-amber-500/40 bg-amber-500/10 p-2.5 text-xs">
+          <p className="border-warning-border bg-warning-soft rounded-md border p-2.5 text-xs">
             {t.formatMessage(
               {
                 defaultMessage:
@@ -235,7 +235,7 @@ export function GenerateResumeDialog({
                 {(["quick", "thorough"] as const).map((option) => (
                   <label
                     key={option}
-                    className="flex items-start gap-2 rounded-md border p-2.5 text-sm"
+                    className="bg-card flex items-start gap-2 rounded-md border p-2.5 text-sm"
                   >
                     <RadioGroupItem value={option} className="mt-0.5" />
                     <span>
@@ -312,7 +312,7 @@ export function GenerateResumeDialog({
         </div>
 
         {repeatsLanguage && (
-          <p className="rounded-md border border-amber-500/40 bg-amber-500/10 p-2.5 text-xs">
+          <p className="border-warning-border bg-warning-soft rounded-md border p-2.5 text-xs">
             {t.formatMessage(
               {
                 defaultMessage:

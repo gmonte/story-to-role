@@ -940,11 +940,11 @@ export function DocumentEditorProvider({
       });
     });
     const lit = (key: string) =>
-      key === hoveredFinding ? "bg-amber-500/20 rounded-sm" : "";
+      key === hoveredFinding ? "bg-warning-soft rounded-sm" : "";
     findings.forEach((finding, index) => {
       const key = `finding-${index}`;
       const underline = cn(
-        "underline decoration-amber-500/70 decoration-dotted decoration-2 underline-offset-4",
+        "underline decoration-warning/70 decoration-dotted decoration-2 underline-offset-4",
         lit(key)
       );
       if (finding.lineId) {
@@ -976,7 +976,7 @@ export function DocumentEditorProvider({
           from: range.from,
           to: range.to,
           className: cn(
-            "-mx-2 rounded-sm px-2 ring-1 ring-amber-500/50",
+            "-mx-2 rounded-sm px-2 ring-1 ring-warning/50",
             lit(key)
           ),
           finding: key,
@@ -1108,7 +1108,7 @@ export function DocumentEditorProvider({
           kind: "inline",
           from: range.from + 1,
           to: range.from + 1 + block.text.length,
-          className: "bg-amber-500/20 rounded-sm",
+          className: "bg-warning-soft rounded-sm",
           key: "hovered-passage",
         });
       }

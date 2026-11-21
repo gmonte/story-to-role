@@ -9,10 +9,9 @@ import { useTranslation } from "@repo/intl/use-translation";
 import {
   DropdownMenu,
   DropdownMenuContent,
-  DropdownMenuLabel,
+  DropdownMenuHeader,
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem,
-  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@repo/web/components/ui/dropdown-menu";
 import { Button } from "@repo/web/components/ui/button";
@@ -84,10 +83,9 @@ export function ThemeSwitcher({
         align={variant === "icon" ? "end" : "start"}
         className="w-56"
       >
-        <DropdownMenuLabel>
+        <DropdownMenuHeader>
           {t.formatMessage({ defaultMessage: "Theme" })}
-        </DropdownMenuLabel>
-        <DropdownMenuSeparator />
+        </DropdownMenuHeader>
         <DropdownMenuRadioGroup value={current.value} onValueChange={setTheme}>
           {themes.map((option) => (
             <DropdownMenuRadioItem key={option.value} value={option.value}>

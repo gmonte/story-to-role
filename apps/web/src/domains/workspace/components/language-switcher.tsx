@@ -10,10 +10,9 @@ import { useTranslation } from "@repo/intl/use-translation";
 import {
   DropdownMenu,
   DropdownMenuContent,
-  DropdownMenuLabel,
+  DropdownMenuHeader,
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem,
-  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@repo/web/components/ui/dropdown-menu";
 import { Button } from "@repo/web/components/ui/button";
@@ -56,7 +55,10 @@ export function LanguageSwitcher({
             <Languages />
           </Button>
         ) : (
-          <SidebarMenuButton disabled={isPending}>
+          <SidebarMenuButton
+            disabled={isPending}
+            tooltip={t.formatMessage({ defaultMessage: "Interface language" })}
+          >
             <Languages />
             <span>{intlConfig.locales[t.locale].translatedName}</span>
           </SidebarMenuButton>
@@ -67,10 +69,9 @@ export function LanguageSwitcher({
         align={variant === "icon" ? "end" : "start"}
         className="w-56"
       >
-        <DropdownMenuLabel>
+        <DropdownMenuHeader>
           {t.formatMessage({ defaultMessage: "Interface language" })}
-        </DropdownMenuLabel>
-        <DropdownMenuSeparator />
+        </DropdownMenuHeader>
         <DropdownMenuRadioGroup value={t.locale} onValueChange={changeLocale}>
           {intlConfig.localeCodes.map((locale) => (
             <DropdownMenuRadioItem key={locale} value={locale}>

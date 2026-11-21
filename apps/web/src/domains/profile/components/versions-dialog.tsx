@@ -213,9 +213,9 @@ export function VersionsDialog({
                           key={index}
                           className={cn(
                             change.type === "added" &&
-                              "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300",
+                              "bg-fit-high-soft text-success",
                             change.type === "removed" &&
-                              "bg-red-500/15 text-red-700 line-through dark:text-red-300"
+                              "bg-destructive/10 text-destructive line-through"
                           )}
                         >
                           {changePrefix[change.type]}

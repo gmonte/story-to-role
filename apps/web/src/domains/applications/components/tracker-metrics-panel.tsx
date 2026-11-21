@@ -12,6 +12,7 @@ import {
 } from "@repo/api/domains/applications/schemas/tracker";
 import { useTranslation } from "@repo/intl/use-translation";
 import { Button } from "@repo/web/components/ui/button";
+import { Skeleton } from "@repo/web/components/ui/skeleton";
 
 import { useTRPC } from "~/tools/trpc/client";
 import { useOpeningLabels } from "~/domains/openings/hooks/use-opening-labels";
@@ -41,7 +42,7 @@ export function TrackerMetricsPanel() {
   };
 
   return (
-    <section className="flex flex-col gap-3 rounded-lg border p-4">
+    <section className="bg-card flex flex-col gap-3 rounded-lg border p-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h2 className="font-medium">
           {t.formatMessage({ defaultMessage: "Metrics" })}
@@ -60,6 +61,17 @@ export function TrackerMetricsPanel() {
           ))}
         </div>
       </div>
+      {/* The figures' room, held while they load. */}
+      {metrics.isPending && (
+        <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+          {[0, 1, 2, 3, 4, 5, 6, 7].map((index) => (
+            <div key={index} className="flex flex-col gap-1.5">
+              <Skeleton className="h-3 w-20" />
+              <Skeleton className="h-4 w-14" />
+            </div>
+          ))}
+        </div>
+      )}
       {metrics.data &&
         (metrics.data.sent === 0 ? (
           <p className="text-muted-foreground">

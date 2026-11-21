@@ -4,6 +4,14 @@ import { buttonVariants } from "@repo/web/components/ui/button";
 import { cn } from "@repo/web/lib/utils";
 
 import {
+  acceptButtonClass,
+  checkIcon,
+  decisionButton,
+  rejectButtonClass,
+  xIcon,
+} from "~/domains/workspace/utils/decision-buttons";
+
+import {
   suggestionEditor,
   type SuggestionEditorLabels,
 } from "./suggestion-editor";
@@ -18,13 +26,20 @@ export type SuggestionWidgetLabels = SuggestionEditorLabels & {
 };
 
 // The app's Button, small, as classes: the widget is plain DOM.
-const small = "h-7 px-2.5 text-xs";
+const small = decisionButton;
 
-function button(label: string, className: string, onClick: () => void) {
+function button(
+  label: string,
+  className: string,
+  onClick: () => void,
+  icon?: string
+) {
   const element = document.createElement("button");
   element.type = "button";
   element.className = className;
-  element.textContent = label;
+  // A static, local SVG (decision-buttons), then the label as text.
+  if (icon) element.innerHTML = icon;
+  element.append(label);
   // The editor keeps its selection: the click isn't a place in the text.
   element.addEventListener("mousedown", (event) => event.preventDefault());
   element.addEventListener("click", onClick);
@@ -115,14 +130,18 @@ export function suggestionWidget(
   });
   footer.append(
     reason,
-    button(labels.accept, cn(buttonVariants(), small), () =>
-      handlers.accept(suggestion.id)
+    button(
+      labels.accept,
+      acceptButtonClass,
+      () => handlers.accept(suggestion.id),
+      checkIcon
     ),
     editor.editButton,
     button(
       labels.reject,
-      cn(buttonVariants({ variant: "outline" }), small),
-      () => handlers.reject(suggestion.id)
+      rejectButtonClass,
+      () => handlers.reject(suggestion.id),
+      xIcon
     ),
     // Only a suggestion that replaces lines with new ones can keep both.
     ...(suggestion.find.trim() && suggestion.replace.trim()

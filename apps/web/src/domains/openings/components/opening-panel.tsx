@@ -34,6 +34,8 @@ import {
   usePhone,
   useWide,
 } from "~/domains/workspace/hooks/use-desktop";
+import { WorkspaceSkeleton } from "~/domains/workspace/components/workspace-skeleton";
+import { useOpeningDocuments } from "~/domains/documents/hooks/use-opening-documents";
 
 import { useOpening, useRefreshOpenings } from "../hooks/use-opening";
 import {
@@ -59,7 +61,8 @@ import {
  */
 export function OpeningBody({ openingId }: { openingId: string }) {
   const opening = useOpening(openingId);
-  if (!opening.data) return null;
+  const documents = useOpeningDocuments(openingId);
+  if (!opening.data || !documents.data) return <WorkspaceSkeleton header />;
   return <OpeningScreen openingId={openingId} opening={opening.data} />;
 }
 

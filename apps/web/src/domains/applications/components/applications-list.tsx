@@ -37,6 +37,7 @@ import {
   type SentFilter,
   type SortKey,
 } from "../utils/application-filters";
+import { ApplicationStatusBadge } from "./application-status-badge";
 
 /** The short name of each application type. */
 function useTypeNames() {
@@ -246,7 +247,7 @@ function ApplicationListRow({
     <li>
       <Link
         href={`/app/openings/${application.openingId}`}
-        className="bg-background hover:border-primary flex flex-wrap items-center justify-between gap-2 rounded-lg border p-3"
+        className="bg-card hover:border-primary flex flex-wrap items-center justify-between gap-2 rounded-lg border p-3"
       >
         <span className="flex min-w-0 flex-col">
           <span className="truncate font-medium">
@@ -294,7 +295,7 @@ function ApplicationListRow({
               {t.formatMessage({ defaultMessage: "Elsewhere" })}
             </Badge>
           )}
-          <Badge variant="secondary">{labels.status(application.status)}</Badge>
+          <ApplicationStatusBadge status={application.status} />
         </span>
       </Link>
     </li>

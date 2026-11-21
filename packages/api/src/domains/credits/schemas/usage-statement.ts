@@ -26,6 +26,29 @@ export const usageOperationSchema = z.object({
 });
 export type UsageOperation = z.infer<typeof usageOperationSchema>;
 
+/** The average of one kind of completed operation. */
+const usageSummaryRowSchema = z.object({
+  operation: usageOperationSchema,
+  count: z.number().int(),
+  averageCredits: z.number(),
+  averageTokens: z.number(),
+  averageUsd: z.number().nullable(),
+  totalCredits: z.number(),
+  // Each model's share of the averages (over every operation of the kind,
+  // so the shares add up to them), the costliest first.
+  models: z.array(
+    z.object({
+      model: z.string(),
+      // Operations of the kind that called it.
+      operations: z.number().int(),
+      averageInputTokens: z.number(),
+      averageOutputTokens: z.number(),
+      averageCredits: z.number(),
+      averageUsd: z.number().nullable(),
+    })
+  ),
+});
+
 const tokensShape = {
   inputTokens: z.number().int(),
   outputTokens: z.number().int(),
@@ -48,18 +71,51 @@ export const usageStatementSchema = z.object({
     })
   ),
   // Completed operations of each kind: failed ones stay out of averages.
-  summary: z.array(
+  summary: z.array(usageSummaryRowSchema),
+});
+export type UsageStatement = z.infer<typeof usageStatementSchema>;
+
+/**
+ * The usage statement over every user, for the admin: the platform's cost
+ * always shows, and each model's average use per operation that ran it.
+ */
+export const platformUsageSchema = usageStatementSchema.extend({
+  models: z.array(
     z.object({
-      operation: usageOperationSchema,
-      count: z.number().int(),
+      model: z.string(),
+      // Completed operations that called it.
+      operations: z.number().int(),
+      averageInputTokens: z.number(),
+      averageOutputTokens: z.number(),
       averageCredits: z.number(),
-      averageTokens: z.number(),
-      averageUsd: z.number().nullable(),
-      totalCredits: z.number(),
+      averageUsd: z.number(),
+      totalUsd: z.number(),
     })
   ),
 });
-export type UsageStatement = z.infer<typeof usageStatementSchema>;
+export type PlatformUsage = z.infer<typeof platformUsageSchema>;
+
+/** One user's spending on the admin's statement, with their own averages. */
+export const platformUsageUserSchema = z.object({
+  userId: z.string(),
+  email: z.string(),
+  name: z.string().nullable(),
+  operations: z.number().int(),
+  // Debited from their credits.
+  creditsSpent: z.number(),
+  // What their key paid, in credits.
+  keyCredits: z.number(),
+  // What StoryToRole paid on them, in credits.
+  storytoroleCredits: z.number(),
+  usd: z.number(),
+  summary: z.array(usageSummaryRowSchema),
+});
+export type PlatformUsageUser = z.infer<typeof platformUsageUserSchema>;
+
+export const platformUsageUsersSchema = createPaginationOutputSchema({
+  dataSchema: platformUsageUserSchema,
+});
+export type PlatformUsageUsers = z.infer<typeof platformUsageUsersSchema>;
 
 /** One operation of the usage statement, with its calls split by model. */
 export const usageOperationRowSchema = z.object({

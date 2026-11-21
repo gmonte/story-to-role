@@ -53,7 +53,9 @@ A key saved for an own-key Checkout that expires unpaid is deleted (the `checkou
 
 ## Currencies
 
-Two independent price tables: BRL for Brazil and USD for everyone else, chosen by billing country, not by converting at the day's exchange rate. BRL prices follow local purchasing power and always stay above AI cost plus margin. A credit buys the same AI work in both currencies.
+Two independent price tables, BRL and USD, never converted at the day's exchange rate. BRL prices follow Brazilian purchasing power and always stay above AI cost plus margin. A credit buys the same AI work in both currencies.
+
+The user chooses the currency, whatever the interface language: a BRL/USD switch beside the prices on the landing and on the plan page, kept in a cookie. Until they choose, the Brazilian interface shows reais and the others dollars. Checkout charges in the chosen currency, except a switch from the credit to the own-key subscription, which keeps the currency of the subscription it replaces (one customer's subscriptions share a currency). Anyone can pick BRL; that is accepted. A Brazilian card can only be charged in BRL, so a Brazilian who picks USD is refused by the card at Checkout.
 
 Stripe's presentment-currency list for Brazil-based accounts (docs.stripe.com/currencies, checked 2026-11-14) includes USD, with these exceptions: Brazilian cards can only be charged in BRL; American Express is not accepted in any currency; the list applies to cards, while local methods (Pix, boleto) take only their own currency. Brazilian accounts settle only in BRL, so USD charges are converted to BRL; the conversion fee is still to be confirmed with Stripe and goes into the USD price margin. Adaptive Pricing (BRL prices shown in the customer's currency, conversion paid by the customer) remains the fallback.
 

@@ -7,6 +7,7 @@ import Link from "next/link";
 import { billingCatalog } from "@repo/api/domains/billing/billing-catalog";
 import {
   type CheckoutProduct,
+  type Currency,
   isLiveSubscription,
 } from "@repo/api/domains/billing/schemas/billing";
 import { creditSettings } from "@repo/api/domains/credits/credit-pricing";
@@ -31,6 +32,7 @@ import { FinishWithCredits } from "~/domains/credits/components/finish-with-cred
 import { useCredits } from "~/domains/credits/hooks/use-credits";
 import { useTRPC } from "~/tools/trpc/client";
 
+import { CurrencySwitcher } from "./currency-switcher";
 import { OwnKeyOffer } from "./own-key-offer";
 import { OwnKeySection } from "./own-key-section";
 
@@ -42,7 +44,11 @@ import { OwnKeySection } from "./own-key-section";
  * Brazilian interface and in dollars otherwise; Checkout charges by the
  * customer's country.
  */
-export function BillingView() {
+/**
+ * `currency` is the one the user chose for prices (billing spec,
+ * "Currencies"), read from its cookie by the page.
+ */
+export function BillingView({ currency }: { currency: Currency }) {
   const t = useTranslation();
   const trpc = useTRPC();
   const credits = useCredits();
@@ -91,7 +97,6 @@ export function BillingView() {
     })
   );
 
-  const currency = t.locale === "pt-BR" ? "brl" : "usd";
   const price = (product: CheckoutProduct) =>
     t.formatNumber(billingCatalog.prices[product][currency] / 100, {
       style: "currency",
@@ -107,7 +112,8 @@ export function BillingView() {
     portal.isPending ||
     changeInterval.isPending ||
     switchToCredits.isPending;
-  const buy = (product: CheckoutProduct) => checkout.mutate({ product });
+  const buy = (product: CheckoutProduct) =>
+    checkout.mutate({ product, currency });
   const date = (value: Date) => t.formatDate(value, { dateStyle: "medium" });
   const carryoverEndsAt = status.data?.carryoverEndsAt;
 
@@ -129,9 +135,12 @@ export function BillingView() {
   return (
     <div className="w-full overflow-y-auto">
       <div className="mx-auto flex w-full max-w-3xl flex-col gap-6 p-6 text-sm">
-        <h1 className="text-[28px] leading-tight font-semibold">
-          {t.formatMessage({ defaultMessage: "Plan and credits" })}
-        </h1>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <h1 className="text-[28px] leading-tight font-semibold">
+            {t.formatMessage({ defaultMessage: "Plan and credits" })}
+          </h1>
+          <CurrencySwitcher currency={currency} />
+        </div>
         <section className="bg-card flex flex-col gap-2 rounded-lg border p-5">
           <div className="flex items-center gap-2">
             <h2 className="text-muted-foreground font-sans text-[11.5px] font-semibold tracking-[0.07em] uppercase">
@@ -310,8 +319,15 @@ export function BillingView() {
               />
               <Offer
                 title={t.formatMessage({ defaultMessage: "Annual" })}
-                amount={price("subscription_annual")}
-                period={t.formatMessage({ defaultMessage: "a year" })}
+                amount={t.formatNumber(
+                  billingCatalog.prices.subscription_annual[currency] / 1200,
+                  { style: "currency", currency: currency.toUpperCase() }
+                )}
+                period={t.formatMessage({ defaultMessage: "a month" })}
+                note={t.formatMessage(
+                  { defaultMessage: "Billed {price} a year" },
+                  { price: price("subscription_annual") }
+                )}
                 badge={t.formatMessage({ defaultMessage: "2 months free" })}
                 action={t.formatMessage({ defaultMessage: "Subscribe" })}
                 disabled={busy}
@@ -332,6 +348,7 @@ export function BillingView() {
               { credits: creditSettings.monthlyFreeCredits }
             )}
             price={price}
+            currency={currency}
           />
         )}
 
@@ -361,6 +378,7 @@ export function BillingView() {
                   )
             }
             price={price}
+            currency={currency}
           />
         )}
 
@@ -506,6 +524,7 @@ function Offer({
   title,
   amount,
   period,
+  note,
   badge,
   action,
   disabled,
@@ -514,6 +533,8 @@ function Offer({
   title: string;
   amount: string;
   period: string;
+  // Under the amount: how it is billed.
+  note?: string;
   badge?: string;
   action: string;
   disabled: boolean;
@@ -538,8 +559,11 @@ function Offer({
         <span className="font-display text-3xl leading-none font-semibold tabular-nums">
           {amount}
         </span>
-        <span className="text-muted-foreground">{period}</span>
+        <span className="text-muted-foreground whitespace-nowrap">
+          {period}
+        </span>
       </span>
+      {note && <span className="-mt-1.5 text-sm font-medium">{note}</span>}
       <Button className="w-full" disabled={disabled} onClick={onClick}>
         {action}
       </Button>

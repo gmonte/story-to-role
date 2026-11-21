@@ -8,7 +8,7 @@ import type {
  * What StoryToRole sells, created in Stripe by `stripe:setup` (billing
  * spec, "Payments": products and prices come from a versioned script so
  * every environment matches). One price per offer with a BRL and a USD
- * amount; Checkout presents the customer's currency. Amounts are the
+ * amount; Checkout charges in the currency the user chose. Amounts are the
  * spec's initial hypothesis, in the smallest unit; a price change gets a
  * new lookup key (v2), never an edit.
  */

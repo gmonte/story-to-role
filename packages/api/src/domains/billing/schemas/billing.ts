@@ -32,6 +32,13 @@ export const subscriptionPlanSchema = z.enum(["credits", "own_key"]);
 export type SubscriptionPlan = z.infer<typeof subscriptionPlanSchema>;
 
 /** What a checkout buys: a subscription, monthly or annual, or a pack. */
+/**
+ * The currency prices show and Checkout charges in (billing spec,
+ * "Currencies"): the user's choice, BRL or USD, whatever the language.
+ */
+export const currencySchema = z.enum(["brl", "usd"]);
+export type Currency = z.infer<typeof currencySchema>;
+
 export const checkoutProductSchema = z.enum([
   "subscription_monthly",
   "subscription_annual",

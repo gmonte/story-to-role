@@ -9,13 +9,15 @@ import {
   AccordionTrigger,
 } from "@repo/web/components/ui/accordion";
 
+import { getCurrencyFromNextCookies } from "~/domains/billing/utils/get-currency-from-next-cookies";
+
 import { LandingContainer, SectionHeading } from "./section-heading";
 
 /** The questions people ask before signing up. */
 export async function LandingFaq({ locale }: { locale: Locale }) {
   const t = await getTranslation(locale);
   const welcome = t.formatNumber(creditSettings.welcomeCredits);
-  const currency = locale === "pt-BR" ? "brl" : "usd";
+  const currency = await getCurrencyFromNextCookies(locale);
   const ownKeyPrice = t.formatNumber(
     billingCatalog.prices.own_key_monthly[currency] / 100,
     { style: "currency", currency: currency.toUpperCase() }

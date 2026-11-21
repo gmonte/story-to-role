@@ -10,7 +10,11 @@ import {
 import { getBaseUrl } from "@repo/common/utils/get-base-url";
 
 import { BillingService } from "./billing-service";
-import { billingStatusSchema, checkoutProductSchema } from "./schemas/billing";
+import {
+  billingStatusSchema,
+  checkoutProductSchema,
+  currencySchema,
+} from "./schemas/billing";
 
 const urlSchema = z.object({ url: z.string() });
 
@@ -42,6 +46,7 @@ export const billingRouter = createTRPCRouter({
       z.object({
         product: checkoutProductSchema,
         apiKey: z.string().trim().min(20).max(300).optional(),
+        currency: currencySchema,
       })
     )
     .output(urlSchema)
@@ -50,6 +55,7 @@ export const billingRouter = createTRPCRouter({
         userId: ctx.userId,
         product: input.product,
         apiKey: input.apiKey,
+        currency: input.currency,
         baseUrl: getBaseUrl(),
       })
     ),

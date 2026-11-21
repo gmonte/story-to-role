@@ -5,7 +5,10 @@ import { useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { BadgeCheck } from "lucide-react";
 
-import type { CheckoutProduct } from "@repo/api/domains/billing/schemas/billing";
+import type {
+  CheckoutProduct,
+  Currency,
+} from "@repo/api/domains/billing/schemas/billing";
 import { useTranslation } from "@repo/intl/use-translation";
 import { Badge } from "@repo/web/components/ui/badge";
 import { Button } from "@repo/web/components/ui/button";
@@ -24,10 +27,12 @@ export function OwnKeyOffer({
   title,
   description,
   price,
+  currency,
 }: {
   title: string;
   description: string;
   price: (product: CheckoutProduct) => string;
+  currency: Currency;
 }) {
   const t = useTranslation();
   const trpc = useTRPC();
@@ -48,7 +53,7 @@ export function OwnKeyOffer({
   );
   const ready = apiKey.trim().length >= 20 && !checkout.isPending;
   const subscribe = (product: CheckoutProduct) =>
-    checkout.mutate({ product, apiKey: apiKey.trim() });
+    checkout.mutate({ product, apiKey: apiKey.trim(), currency });
 
   return (
     <section className="flex flex-col gap-2">

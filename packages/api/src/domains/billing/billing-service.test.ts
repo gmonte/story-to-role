@@ -29,7 +29,8 @@ function subscription(
   invoiceStatus: Stripe.Invoice.Status = "paid",
   product = "storytorole_subscription",
   id = "sub_1",
-  interval: "month" | "year" = "month"
+  interval: "month" | "year" = "month",
+  currency: "usd" | "brl" = "usd"
 ) {
   const period = {
     start: nowSeconds - 2 * day,
@@ -38,6 +39,7 @@ function subscription(
   return {
     id,
     status,
+    currency,
     cancel_at_period_end: false,
     latest_invoice: {
       id: id.replace("sub_", "in_"),
@@ -282,6 +284,7 @@ describe("billing service", () => {
         userId: ctx.user.id,
         product: "own_key_monthly",
         apiKey,
+        currency: "usd",
         baseUrl: "https://app.test",
       });
 
@@ -293,6 +296,7 @@ describe("billing service", () => {
       ctx.billing.startCheckout({
         userId: ctx.user.id,
         product: "own_key_monthly",
+        currency: "usd",
         baseUrl: "https://app.test",
       })
     ).rejects.toMatchObject({ code: "BAD_REQUEST" });
@@ -355,6 +359,7 @@ describe("billing service", () => {
       userId: ctx.user.id,
       product: "own_key_annual",
       apiKey,
+      currency: "usd",
       baseUrl: "https://app.test",
     });
     expect(
@@ -419,6 +424,46 @@ describe("billing service", () => {
     ).toBeGreaterThanOrEqual(600);
   });
 
+  it("charges Checkout in the currency chosen, and a switch in its subscription's", async () => {
+    const ctx = await setup({
+      subscription: subscription(
+        "active",
+        "paid",
+        "storytorole_subscription",
+        "sub_1",
+        "month",
+        "brl"
+      ),
+    });
+    const currencies = () =>
+      vi
+        .mocked(ctx.stripe.checkout.sessions)
+        .create.mock.calls.map(([params]) => params?.currency);
+
+    await ctx.billing.startCheckout({
+      userId: ctx.user.id,
+      product: "pack",
+      currency: "usd",
+      baseUrl: "https://app.test",
+    });
+    // A credit subscriber switching to the own key: the same currency.
+    await ctx.billing.handleEvent(
+      event("customer.subscription.updated", {
+        id: "sub_1",
+        customer: "cus_ada",
+      })
+    );
+    await ctx.billing.startCheckout({
+      userId: ctx.user.id,
+      product: "own_key_monthly",
+      apiKey,
+      currency: "usd",
+      baseUrl: "https://app.test",
+    });
+
+    expect(currencies()).toEqual(["usd", "brl"]);
+  });
+
   it("refuses a second Checkout for the plan the user already has", async () => {
     const ctx = await setup({
       subscription: subscription("active", "paid", "storytorole_own_key"),
@@ -439,6 +484,7 @@ describe("billing service", () => {
           userId: ctx.user.id,
           product,
           apiKey,
+          currency: "usd",
           baseUrl: "https://app.test",
         })
       ).rejects.toMatchObject({ code: "CONFLICT" });

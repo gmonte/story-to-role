@@ -18,22 +18,29 @@ import {
 } from "@repo/web/components/ui/card";
 import { cn } from "@repo/web/lib/utils";
 
+import { CurrencySwitcher } from "~/domains/billing/components/currency-switcher";
+import { getCurrencyFromNextCookies } from "~/domains/billing/utils/get-currency-from-next-cookies";
+
 import { LandingContainer, SectionHeading } from "./section-heading";
 
 /**
  * The offer (billing spec): Free, the credit and own-key subscriptions and
- * credit packs, priced
- * from the same catalog as Stripe, in reais for the Brazilian interface and
- * in dollars otherwise, as the billing page shows them.
+ * credit packs, priced from the same catalog as Stripe in the currency the
+ * visitor chose, as the billing page shows them. A subscription leads with
+ * the annual plan's price a month, the monthly plan's right below it.
  */
 export async function LandingPricing({ locale }: { locale: Locale }) {
   const t = await getTranslation(locale);
-  const currency = locale === "pt-BR" ? "brl" : "usd";
-  const price = (product: CheckoutProduct) =>
-    t.formatNumber(billingCatalog.prices[product][currency] / 100, {
+  const currency = await getCurrencyFromNextCookies(locale);
+  const money = (cents: number) =>
+    t.formatNumber(cents / 100, {
       style: "currency",
       currency: currency.toUpperCase(),
     });
+  const price = (product: CheckoutProduct) =>
+    money(billingCatalog.prices[product][currency]);
+  const annualMonth = (product: CheckoutProduct) =>
+    money(billingCatalog.prices[product][currency] / 12);
   const number = (value: number) => t.formatNumber(value);
 
   const plans = [
@@ -69,14 +76,17 @@ export async function LandingPricing({ locale }: { locale: Locale }) {
     },
     {
       name: t.formatMessage({ defaultMessage: "Credit subscription" }),
-      price: price("subscription_monthly"),
+      price: annualMonth("subscription_annual"),
       period: t.formatMessage({ defaultMessage: "a month" }),
-      description: t.formatMessage(
-        {
-          defaultMessage: "For an active search. Or {price} a year.",
-        },
+      billed: t.formatMessage(
+        { defaultMessage: "Annual plan, billed {price} a year" },
         { price: price("subscription_annual") }
       ),
+      monthly: t.formatMessage(
+        { defaultMessage: "Monthly plan: {price} a month" },
+        { price: price("subscription_monthly") }
+      ),
+      description: t.formatMessage({ defaultMessage: "For an active search." }),
       features: [
         t.formatMessage(
           { defaultMessage: "{credits} credits every month" },
@@ -92,15 +102,19 @@ export async function LandingPricing({ locale }: { locale: Locale }) {
     },
     {
       name: t.formatMessage({ defaultMessage: "Own-key subscription" }),
-      price: price("own_key_monthly"),
+      price: annualMonth("own_key_annual"),
       period: t.formatMessage({ defaultMessage: "a month" }),
-      description: t.formatMessage(
-        {
-          defaultMessage:
-            "Your own Anthropic key pays for the AI. Or {price} a year.",
-        },
+      billed: t.formatMessage(
+        { defaultMessage: "Annual plan, billed {price} a year" },
         { price: price("own_key_annual") }
       ),
+      monthly: t.formatMessage(
+        { defaultMessage: "Monthly plan: {price} a month" },
+        { price: price("own_key_monthly") }
+      ),
+      description: t.formatMessage({
+        defaultMessage: "Your own Anthropic key pays for the AI.",
+      }),
       features: [
         t.formatMessage({
           defaultMessage: "Every AI call paid by your key, not credits",
@@ -154,6 +168,9 @@ export async function LandingPricing({ locale }: { locale: Locale }) {
               "Every AI action spends credits, and each shows its estimate before you confirm.",
           })}
         />
+        <div className="-mt-6 flex justify-center">
+          <CurrencySwitcher currency={currency} />
+        </div>
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
           {plans.map((plan) => (
             <Card
@@ -177,11 +194,22 @@ export async function LandingPricing({ locale }: { locale: Locale }) {
                     {plan.price}
                   </span>
                   {plan.period && (
-                    <span className="text-muted-foreground text-sm">
+                    <span className="text-muted-foreground text-sm whitespace-nowrap">
                       {plan.period}
                     </span>
                   )}
                 </p>
+                {"billed" in plan && (
+                  <div className="flex flex-col gap-1.5">
+                    <span className="text-muted-foreground text-xs">
+                      {plan.billed}
+                    </span>
+                    {/* The monthly plan, in plain sight beside the annual. */}
+                    <span className="bg-muted rounded-md px-2.5 py-1.5 text-sm">
+                      {plan.monthly}
+                    </span>
+                  </div>
+                )}
                 <CardDescription className="text-pretty">
                   {plan.description}
                 </CardDescription>

@@ -28,6 +28,7 @@ import {
   billingIntervalSchema,
   type BillingStatus,
   type CheckoutProduct,
+  type Currency,
   checkoutProductSchema,
   isLiveSubscription,
   type SubscriptionStatus,
@@ -113,6 +114,7 @@ export class BillingService {
     userId: string;
     product: CheckoutProduct;
     apiKey?: string;
+    currency: Currency;
     baseUrl: string;
   }) {
     const price = billingCatalog.prices[input.product];
@@ -135,6 +137,12 @@ export class BillingService {
       if (!input.apiKey) throw new TRPCError({ code: "BAD_REQUEST" });
       await this.keys.store({ userId: input.userId, apiKey: input.apiKey });
     }
+    // A switch keeps the currency of the subscription it replaces: one
+    // customer's subscriptions share a currency.
+    const currency = replaces
+      ? ((await this.stripe.subscriptions.retrieve(replaces))
+          .currency as Currency)
+      : input.currency;
     const stripePrice = await this.priceId(input.product);
     const customer = await this.customerFor(input.userId);
     const metadata = {
@@ -147,6 +155,7 @@ export class BillingService {
       customer,
       client_reference_id: input.userId,
       line_items: [{ price: stripePrice, quantity: 1 }],
+      currency,
       metadata,
       ...(subscribing
         ? { subscription_data: { metadata } }

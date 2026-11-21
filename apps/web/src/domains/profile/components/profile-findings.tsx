@@ -129,7 +129,7 @@ export function ProfileFindings() {
   const item = (finding: ProfileFinding, index: number) => (
     <li
       key={`${finding.code}-${finding.line}-${finding.from}-${index}`}
-      className="flex flex-col"
+      className="bg-card flex flex-col gap-1 rounded-lg border p-1.5"
     >
       <button
         type="button"
@@ -139,9 +139,7 @@ export function ProfileFindings() {
         }
         className={cn(
           "hover:bg-muted w-full rounded px-2 py-1 text-left text-xs",
-          finding.kind === "format"
-            ? "text-destructive"
-            : "text-muted-foreground"
+          finding.kind === "format" ? "text-destructive" : "text-foreground"
         )}
       >
         {findingMessage(finding, structure.language)}
@@ -230,7 +228,7 @@ export function ProfileFindings() {
         )}
       </div>
       {open && (
-        <ul className="space-y-0.5">
+        <ul className="space-y-2">
           {format.map(item)}
           {(showAll ? content : content.slice(0, shownContent)).map(item)}
           {!showAll && content.length > shownContent && (

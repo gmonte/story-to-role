@@ -128,7 +128,7 @@ export function ActivityRow({
       role="status"
       className="text-muted-foreground flex items-center gap-2 self-start text-sm"
     >
-      <Sparkles className="text-primary size-4 motion-safe:animate-pulse" />
+      <Sparkles className="text-brand-accent size-4 motion-safe:animate-pulse" />
       <span className="from-foreground via-muted-foreground to-foreground motion-safe:animate-shimmer bg-linear-to-r bg-[length:200%_100%] bg-clip-text text-transparent">
         {phase === "recovering"
           ? t.formatMessage({ defaultMessage: "Reconnecting to the agent…" })

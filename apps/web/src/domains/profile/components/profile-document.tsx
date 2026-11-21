@@ -437,7 +437,7 @@ export function ProfileDocument() {
             setSelection(null);
           }}
         >
-          <Sparkles className="text-primary size-3.5" />
+          <Sparkles className="text-brand-accent size-3.5" />
           {t.formatMessage({ defaultMessage: "Talk about this" })}
         </button>
       )}

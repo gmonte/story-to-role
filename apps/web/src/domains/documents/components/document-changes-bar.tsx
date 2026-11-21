@@ -23,7 +23,7 @@ export function DocumentChangesBar() {
   return (
     <div className="bg-primary/5 border-b text-xs">
       <div className="flex flex-wrap items-center gap-2 px-4 py-1.5">
-        <Sparkles className="text-primary size-3.5" />
+        <Sparkles className="text-brand-accent size-3.5" />
         <span>
           {t.formatMessage(
             {

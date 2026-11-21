@@ -25,7 +25,7 @@ export function CreditCost({
         className
       )}
     >
-      <Coins className="size-3.5" />
+      <Coins className="text-brand-accent size-3.5" />
       {t.formatMessage(
         {
           defaultMessage:

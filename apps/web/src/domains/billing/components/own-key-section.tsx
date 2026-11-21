@@ -85,7 +85,7 @@ export function OwnKeySection({ canRemove }: { canRemove: boolean }) {
   return (
     <section className="flex flex-col gap-2">
       <div className="flex items-center gap-2">
-        <h2 className="font-medium">
+        <h2 className="text-lg font-semibold">
           {t.formatMessage({ defaultMessage: "Your own API key" })}
         </h2>
         <Badge variant="outline" className="gap-1">

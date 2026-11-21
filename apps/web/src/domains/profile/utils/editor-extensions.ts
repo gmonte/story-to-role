@@ -241,6 +241,63 @@ export const ProfileLockedHeadings = Extension.create({
   },
 });
 
+/**
+ * The profile's figure marks (profile-truth spec): `[medido]` / `[measured]`,
+ * `[estimado]` / `[estimated]` and `[sem número]` / `[no number]`, an
+ * optional source after a colon.
+ */
+const markPattern =
+  /\[(medido|measured|estimado|estimated|sem número|no number)(?::[^\]]*)?\]/giu;
+
+const markTone: Record<string, string> = {
+  medido: "bg-fit-high-soft text-fit-high",
+  measured: "bg-fit-high-soft text-fit-high",
+  estimado: "bg-fit-mid-soft text-fit-mid",
+  estimated: "bg-fit-mid-soft text-fit-mid",
+  "sem número": "bg-secondary text-status-analyzed",
+  "no number": "bg-secondary text-status-analyzed",
+};
+
+/**
+ * Sets the figure marks apart in mono, tinted by how sure the figure is
+ * (ADR 0012); the stored text stays plain.
+ */
+export const ProfileMarks = Extension.create({
+  name: "profileMarks",
+  addProseMirrorPlugins() {
+    return [
+      new Plugin({
+        key: new PluginKey("profileMarks"),
+        props: {
+          decorations: (state) => {
+            const decorations: Decoration[] = [];
+            state.doc.descendants((node, pos) => {
+              if (!node.isTextblock) return true;
+              for (const match of node.textContent.matchAll(markPattern)) {
+                const kind = (match[1] ?? "").toLowerCase();
+                decorations.push(
+                  Decoration.inline(
+                    pos + 1 + match.index,
+                    pos + 1 + match.index + match[0].length,
+                    {
+                      class: cn(
+                        "rounded-sm px-1 font-mono text-[0.82em] whitespace-nowrap",
+                        markTone[kind]
+                      ),
+                    }
+                  )
+                );
+              }
+              return false;
+            });
+            return DecorationSet.create(state.doc, decorations);
+          },
+        },
+      }),
+    ];
+  },
+});
+
 /** The link the cursor is in (no selection), with its document range. */
 export function linkAtCursor(state: EditorState) {
   const { selection } = state;
@@ -430,6 +487,7 @@ export function profileExtensions() {
     ProfileLockedHeadings,
     ProfileDecorations,
     ProfileLinks,
+    ProfileMarks,
   ];
 }
 

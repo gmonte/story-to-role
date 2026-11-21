@@ -25,7 +25,9 @@ import {
   SidebarMenuBadge,
   SidebarMenuButton,
   SidebarMenuItem,
+  SidebarSeparator,
 } from "@repo/web/components/ui/sidebar";
+import { cn } from "@repo/web/lib/utils";
 
 import { BrandLockup } from "~/domains/brand/components/brand-lockup";
 import { BrandMark } from "~/domains/brand/components/brand-mark";
@@ -89,27 +91,34 @@ export function AppSidebar() {
         <SidebarGroup>
           <SidebarGroupContent>
             <SidebarMenu>
-              {items.map((item) => (
-                <SidebarMenuItem key={item.href}>
-                  <SidebarMenuButton
-                    asChild
-                    isActive={pathname.startsWith(item.href)}
-                    tooltip={item.label}
-                  >
-                    <Link href={item.href}>
-                      <item.icon />
-                      <span>{item.label}</span>
-                    </Link>
-                  </SidebarMenuButton>
-                  {"count" in item && !!item.count && (
-                    <SidebarMenuBadge>{item.count}</SidebarMenuBadge>
-                  )}
-                </SidebarMenuItem>
-              ))}
+              {items.map((item) => {
+                const active = pathname.startsWith(item.href);
+                return (
+                  <SidebarMenuItem key={item.href}>
+                    <SidebarMenuButton
+                      asChild
+                      isActive={active}
+                      tooltip={item.label}
+                    >
+                      <Link href={item.href}>
+                        {/* ADR 0012: the orange marks where you are. */}
+                        <item.icon
+                          className={cn(active && "text-brand-accent")}
+                        />
+                        <span>{item.label}</span>
+                      </Link>
+                    </SidebarMenuButton>
+                    {"count" in item && !!item.count && (
+                      <SidebarMenuBadge>{item.count}</SidebarMenuBadge>
+                    )}
+                  </SidebarMenuItem>
+                );
+              })}
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
 
+        <SidebarSeparator className="mx-4 group-data-[collapsible=icon]:hidden" />
         <SidebarGroup className="group-data-[collapsible=icon]:hidden">
           <SidebarGroupLabel>
             {t.formatMessage({ defaultMessage: "Openings" })}
@@ -121,6 +130,7 @@ export function AppSidebar() {
       </SidebarContent>
 
       <SidebarFooter>
+        <SidebarSeparator className="mx-2" />
         <SidebarMenu>
           {/* Admin heads the footer: a tool apart from the work above. */}
           {isAdmin && (

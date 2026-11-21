@@ -127,7 +127,7 @@ export function ProfileSuggestionsBar() {
         <div className="grid grid-cols-1 items-center gap-2 md:grid-cols-[1fr_auto_1fr]">
           <span className="hidden md:block" />
           <div className="flex flex-wrap items-center justify-center gap-2">
-            <Sparkles className="text-primary size-3.5" />
+            <Sparkles className="text-brand-accent size-3.5" />
             <span>
               <span className="font-medium">
                 {t.formatMessage(

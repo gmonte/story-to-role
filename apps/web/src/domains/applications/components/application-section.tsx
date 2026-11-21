@@ -26,7 +26,9 @@ export function Section({
   return (
     <section className="flex min-w-0 flex-col gap-1.5 border-b py-3 first:pt-0 last:border-b-0">
       <div className="flex min-h-6 items-center justify-between gap-2">
-        <h3 className="text-muted-foreground text-xs font-medium">{label}</h3>
+        <h3 className="text-muted-foreground font-sans text-[11.5px] font-semibold tracking-[0.07em] uppercase">
+          {label}
+        </h3>
         {action}
       </div>
       {children}

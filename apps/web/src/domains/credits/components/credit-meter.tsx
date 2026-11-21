@@ -1,6 +1,6 @@
 "use client";
 
-import { Coins } from "lucide-react";
+import { ArrowRight, Coins, Package, ReceiptText } from "lucide-react";
 import Link from "next/link";
 
 import {
@@ -44,35 +44,60 @@ export function CreditMeter() {
             { credits: data.available }
           )}
         >
-          <Coins />
-          <span>
+          <Coins className="text-brand-accent" />
+          <span className="flex items-baseline gap-1.5">
+            <span className="font-mono font-medium tabular-nums">
+              {t.formatNumber(data.available)}
+            </span>
             {t.formatMessage(
-              { defaultMessage: "{credits, number} credits" },
+              {
+                defaultMessage:
+                  "{credits, plural, one {credit} other {credits}}",
+              },
               { credits: data.available }
             )}
           </span>
         </SidebarMenuButton>
       </DropdownMenuTrigger>
       <DropdownMenuContent side="top" align="start" className="w-80">
-        <DropdownMenuLabel className="font-normal">
-          {t.formatMessage(
-            {
-              defaultMessage:
-                "You can still spend {credits, number} credits (about {resumes, plural, one {# resume} other {# resumes}} or {letters, plural, one {# cover letter} other {# cover letters}}).",
-            },
-            {
-              credits: data.available,
-              resumes: Math.floor(general / Math.max(1, data.estimates.resume)),
-              letters: Math.floor(
-                general / Math.max(1, data.estimates.coverLetter)
-              ),
-            }
-          )}
+        <DropdownMenuLabel className="flex flex-col gap-1.5 px-2 py-2 font-normal">
+          <span className="flex items-baseline gap-2">
+            <span className="font-display text-3xl leading-none font-semibold tabular-nums">
+              {t.formatNumber(data.available)}
+            </span>
+            {t.formatMessage(
+              {
+                defaultMessage:
+                  "{credits, plural, one {credit available} other {credits available}}",
+              },
+              { credits: data.available }
+            )}
+          </span>
+          <span className="text-muted-foreground text-xs">
+            {t.formatMessage(
+              {
+                defaultMessage:
+                  "Enough for about {resumes, plural, one {# resume} other {# resumes}} or {letters, plural, one {# cover letter} other {# cover letters}}.",
+              },
+              {
+                resumes: Math.floor(
+                  general / Math.max(1, data.estimates.resume)
+                ),
+                letters: Math.floor(
+                  general / Math.max(1, data.estimates.coverLetter)
+                ),
+              }
+            )}
+          </span>
+          <SpendBar available={data.available} />
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
         <div className="flex flex-col gap-1 px-2 py-1.5 text-xs">
           {data.lots.map((lot, index) => (
-            <LotLine key={index} lot={lot} />
+            <span key={index} className="flex items-center gap-2">
+              <Package className="text-muted-foreground size-3.5 shrink-0" />
+              <LotLine lot={lot} />
+            </span>
           ))}
           {data.reserved > 0 && (
             <span className="text-muted-foreground">
@@ -175,12 +200,14 @@ export function CreditMeter() {
           </DropdownMenuItem>
         )}
         <DropdownMenuItem asChild>
-          <Link href="/app/billing">
+          <Link href="/app/billing" className="font-medium">
+            <Coins className="text-brand-accent" />
             {data.plan === "free"
               ? t.formatMessage({
                   defaultMessage: "Subscribe or buy credits",
                 })
               : t.formatMessage({ defaultMessage: "Plan and credits" })}
+            <ArrowRight className="ml-auto" />
           </Link>
         </DropdownMenuItem>
       </DropdownMenuContent>
@@ -204,23 +231,66 @@ function UsageLine() {
   );
   return (
     <DropdownMenuItem asChild>
-      <Link href="/app/billing/usage" className="flex flex-col items-start">
-        <span>{t.formatMessage({ defaultMessage: "Usage statement" })}</span>
-        <span className="text-muted-foreground text-xs">
-          {t.formatMessage(
-            {
-              defaultMessage:
-                "{credits} credits and {tokens} tokens since {date}",
-            },
-            {
-              credits: t.formatNumber(credits, { maximumFractionDigits: 1 }),
-              tokens: t.formatNumber(tokens),
-              date: t.formatDate(data.window.from, { dateStyle: "medium" }),
-            }
-          )}
+      <Link href="/app/billing/usage" className="items-start">
+        <ReceiptText className="mt-0.5" />
+        <span className="flex flex-col">
+          <span className="font-medium">
+            {t.formatMessage({ defaultMessage: "Usage statement" })}
+          </span>
+          <span className="text-muted-foreground text-xs">
+            {t.formatMessage(
+              {
+                defaultMessage:
+                  "{credits} credits and {tokens} tokens since {date}",
+              },
+              {
+                credits: t.formatNumber(credits, { maximumFractionDigits: 1 }),
+                tokens: t.formatNumber(tokens),
+                date: t.formatDate(data.window.from, { dateStyle: "medium" }),
+              }
+            )}
+          </span>
         </span>
       </Link>
     </DropdownMenuItem>
+  );
+}
+
+/**
+ * What is left against what this credit month used (the usage statement's
+ * own window): the brand's orange marks what is still the user's.
+ */
+function SpendBar({ available }: { available: number }) {
+  const t = useTranslation();
+  const { data } = useUsageStatement();
+  if (!data) return null;
+  const used = Math.round(
+    data.totals.reduce((total, row) => total + row.credits, 0)
+  );
+  const share = available + used > 0 ? available / (available + used) : 1;
+  return (
+    <span className="flex flex-col gap-1 pt-1">
+      <span className="bg-muted flex h-1.5 overflow-hidden rounded-full">
+        <span
+          className="bg-brand-accent h-full rounded-full"
+          style={{ width: `${Math.round(share * 100)}%` }}
+        />
+      </span>
+      <span className="text-muted-foreground flex justify-between font-mono text-[11px] tabular-nums">
+        <span>
+          {t.formatMessage(
+            { defaultMessage: "{credits, number} left" },
+            { credits: available }
+          )}
+        </span>
+        <span>
+          {t.formatMessage(
+            { defaultMessage: "{credits, number} used" },
+            { credits: used }
+          )}
+        </span>
+      </span>
+    </span>
   );
 }
 

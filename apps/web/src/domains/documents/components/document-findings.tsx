@@ -317,12 +317,16 @@ export function DocumentFindings() {
     const text = label(finding, version);
     const anchored = finding.lineId !== null || finding.positionId !== null;
     return (
-      <li key={key} className="flex flex-col" {...rowProps(key)}>
+      <li
+        key={key}
+        className="bg-card flex flex-col gap-1 rounded-lg border p-1.5"
+        {...rowProps(key)}
+      >
         <button
           type="button"
           onClick={() => goToFinding(finding)}
           className={cn(
-            "hover:bg-muted text-warning w-full rounded px-2 py-1 text-left text-xs",
+            "hover:bg-muted text-foreground w-full rounded px-2 py-1 text-left text-xs",
             activeFinding === key && "bg-muted"
           )}
         >
@@ -377,7 +381,11 @@ export function DocumentFindings() {
     const done = !!note.lineId && sent.includes(note.lineId);
     const key = noteKey(note);
     return (
-      <li key={key} className="flex flex-col" {...rowProps(key)}>
+      <li
+        key={key}
+        className="bg-card flex flex-col gap-1 rounded-lg border p-1.5"
+        {...rowProps(key)}
+      >
         <button
           type="button"
           disabled={!note.lineId}
@@ -528,7 +536,7 @@ export function DocumentFindings() {
         <div className="mb-1 px-2">{checkButton(unbackedLineIds)}</div>
       )}
       {open && (
-        <ul className="space-y-0.5">
+        <ul className="space-y-2">
           {findings.map(findingItem)}
           {notes.map(noteItem)}
         </ul>

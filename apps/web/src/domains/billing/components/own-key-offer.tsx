@@ -53,7 +53,7 @@ export function OwnKeyOffer({
   return (
     <section className="flex flex-col gap-2">
       <div className="flex flex-wrap items-center gap-2">
-        <h2 className="font-medium">{title}</h2>
+        <h2 className="text-lg font-semibold">{title}</h2>
         <Badge variant="outline" className="gap-1">
           <BadgeCheck className="size-3.5" />
           {t.formatMessage({ defaultMessage: "Anthropic · certified" })}

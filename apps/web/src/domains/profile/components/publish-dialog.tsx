@@ -221,7 +221,7 @@ export function PublishDialog({
 
         <section className="bg-card space-y-3 rounded-lg border p-4">
           <h3 className="flex items-center gap-2 text-sm font-medium">
-            <Sparkles className="text-primary size-4" />
+            <Sparkles className="text-brand-accent size-4" />
             {t.formatMessage({ defaultMessage: "1. Validate (optional)" })}
           </h3>
           {running ? (

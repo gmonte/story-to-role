@@ -1,7 +1,7 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { CalendarSync, ExternalLink, ReceiptText } from "lucide-react";
+import { CalendarSync, Coins, ExternalLink, ReceiptText } from "lucide-react";
 import Link from "next/link";
 
 import { billingCatalog } from "@repo/api/domains/billing/billing-catalog";
@@ -24,6 +24,7 @@ import {
   DialogTrigger,
 } from "@repo/web/components/ui/dialog";
 import { toast } from "@repo/web/components/ui/sonner";
+import { cn } from "@repo/web/lib/utils";
 
 import { FinishWithCredits } from "~/domains/credits/components/finish-with-credits";
 import { useCredits } from "~/domains/credits/hooks/use-credits";
@@ -111,14 +112,17 @@ export function BillingView() {
 
   return (
     <div className="w-full overflow-y-auto">
-      <div className="mx-auto flex w-full max-w-3xl flex-col gap-5 p-6 text-sm">
-        <section className="bg-card flex flex-col gap-2 rounded-lg border p-4">
-          <div className="flex items-center justify-between gap-2">
-            <h2 className="font-medium">
+      <div className="mx-auto flex w-full max-w-3xl flex-col gap-6 p-6 text-sm">
+        <h1 className="text-[28px] leading-tight font-semibold">
+          {t.formatMessage({ defaultMessage: "Plan and credits" })}
+        </h1>
+        <section className="bg-card flex flex-col gap-2 rounded-lg border p-5">
+          <div className="flex items-center gap-2">
+            <h2 className="text-muted-foreground font-sans text-[11.5px] font-semibold tracking-[0.07em] uppercase">
               {t.formatMessage({ defaultMessage: "Your plan" })}
             </h2>
             {credits.data && (
-              <Badge variant="outline">
+              <Badge variant="secondary">
                 {
                   {
                     free: t.formatMessage({ defaultMessage: "Free" }),
@@ -134,6 +138,23 @@ export function BillingView() {
               </Badge>
             )}
           </div>
+          {credits.data && (
+            <p className="flex items-baseline gap-2">
+              <Coins className="text-brand-accent size-5 self-center" />
+              <span className="font-display text-4xl leading-none font-semibold tabular-nums">
+                {t.formatNumber(credits.data.available)}
+              </span>
+              <span className="text-base">
+                {t.formatMessage(
+                  {
+                    defaultMessage:
+                      "{credits, plural, one {credit} other {credits}}",
+                  },
+                  { credits: credits.data.available }
+                )}
+              </span>
+            </p>
+          )}
           {subscription && subscribed && (
             <p className="text-muted-foreground">
               {subscription.status === "past_due"
@@ -250,7 +271,7 @@ export function BillingView() {
 
         {!subscribed && (
           <section className="flex flex-col gap-2">
-            <h2 className="font-medium">
+            <h2 className="text-lg font-semibold">
               {t.formatMessage({ defaultMessage: "Credit subscription" })}
             </h2>
             <p className="text-muted-foreground">
@@ -265,20 +286,17 @@ export function BillingView() {
             <div className="grid gap-2 sm:grid-cols-2">
               <Offer
                 title={t.formatMessage({ defaultMessage: "Monthly" })}
-                price={t.formatMessage(
-                  { defaultMessage: "{price} a month" },
-                  { price: price("subscription_monthly") }
-                )}
+                amount={price("subscription_monthly")}
+                period={t.formatMessage({ defaultMessage: "a month" })}
                 action={t.formatMessage({ defaultMessage: "Subscribe" })}
                 disabled={busy}
                 onClick={() => buy("subscription_monthly")}
               />
               <Offer
                 title={t.formatMessage({ defaultMessage: "Annual" })}
-                price={t.formatMessage(
-                  { defaultMessage: "{price} a year" },
-                  { price: price("subscription_annual") }
-                )}
+                amount={price("subscription_annual")}
+                period={t.formatMessage({ defaultMessage: "a year" })}
+                badge={t.formatMessage({ defaultMessage: "2 months free" })}
                 action={t.formatMessage({ defaultMessage: "Subscribe" })}
                 disabled={busy}
                 onClick={() => buy("subscription_annual")}
@@ -332,7 +350,7 @@ export function BillingView() {
 
         {live?.plan === "own_key" && !live.cancelAtPeriodEnd && (
           <section className="flex flex-col gap-2">
-            <h2 className="font-medium">
+            <h2 className="text-lg font-semibold">
               {t.formatMessage({
                 defaultMessage: "Switch to the credit subscription",
               })}
@@ -398,7 +416,7 @@ export function BillingView() {
         )}
 
         <section className="flex flex-col gap-2">
-          <h2 className="font-medium">
+          <h2 className="text-lg font-semibold">
             {t.formatMessage({ defaultMessage: "Credit pack" })}
           </h2>
           <p className="text-muted-foreground">
@@ -418,7 +436,8 @@ export function BillingView() {
               { defaultMessage: "{credits, number} credits" },
               { credits: creditSettings.packCredits }
             )}
-            price={price("pack")}
+            amount={price("pack")}
+            period={t.formatMessage({ defaultMessage: "once" })}
             action={t.formatMessage({ defaultMessage: "Buy" })}
             disabled={busy}
             onClick={() => buy("pack")}
@@ -429,26 +448,49 @@ export function BillingView() {
   );
 }
 
+/**
+ * One offer: its price set large and the button under it. The recommended
+ * one wears the brand's orange (ADR 0012) and its badge.
+ */
 function Offer({
   title,
-  price,
+  amount,
+  period,
+  badge,
   action,
   disabled,
   onClick,
 }: {
   title: string;
-  price: string;
+  amount: string;
+  period: string;
+  badge?: string;
   action: string;
   disabled: boolean;
   onClick: () => void;
 }) {
   return (
-    <div className="bg-card flex items-center justify-between gap-3 rounded-lg border px-4 py-3">
-      <span className="flex flex-col">
+    <div
+      className={cn(
+        "bg-card flex flex-col gap-3 rounded-lg border p-5",
+        badge && "border-brand-accent"
+      )}
+    >
+      <span className="flex items-center justify-between gap-2">
         <span className="font-medium">{title}</span>
-        <span className="text-muted-foreground">{price}</span>
+        {badge && (
+          <span className="bg-brand-accent-soft text-brand-accent-text rounded-sm px-2 py-0.5 text-xs font-semibold">
+            {badge}
+          </span>
+        )}
       </span>
-      <Button disabled={disabled} onClick={onClick}>
+      <span className="flex items-baseline gap-1.5">
+        <span className="font-display text-3xl leading-none font-semibold tabular-nums">
+          {amount}
+        </span>
+        <span className="text-muted-foreground">{period}</span>
+      </span>
+      <Button className="w-full" disabled={disabled} onClick={onClick}>
         {action}
       </Button>
     </div>

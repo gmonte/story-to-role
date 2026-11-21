@@ -312,7 +312,7 @@ function Conversation({
                       onClick={() => agent?.changeHooks.current?.show(proposed)}
                       className="bg-primary/5 hover:bg-primary/10 flex items-start gap-2 rounded-md border px-2.5 py-1.5 text-left text-xs disabled:opacity-60"
                     >
-                      <Sparkles className="text-primary mt-0.5 size-3.5 shrink-0" />
+                      <Sparkles className="text-brand-accent mt-0.5 size-3.5 shrink-0" />
                       <span>
                         <span className="block font-medium">
                           {stale
@@ -438,7 +438,7 @@ function Introduction({
   if (preparing) {
     return (
       <li className="flex flex-col items-center gap-3 px-2 py-8 text-center">
-        <Sparkles className="text-primary size-5" />
+        <Sparkles className="text-brand-accent size-5" />
         <h2 className="font-display text-lg font-semibold tracking-tight">
           {t.formatMessage({ defaultMessage: "Your cover letter's agent" })}
         </h2>
@@ -453,7 +453,7 @@ function Introduction({
   }
   return (
     <li className="flex flex-col items-center gap-3 px-2 py-8 text-center">
-      <Sparkles className="text-primary size-5" />
+      <Sparkles className="text-brand-accent size-5" />
       <h2 className="font-display text-lg font-semibold tracking-tight">
         {kind === "resume"
           ? t.formatMessage({ defaultMessage: "Your resume's agent" })

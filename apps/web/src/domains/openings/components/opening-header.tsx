@@ -62,6 +62,8 @@ import {
 } from "../utils/opening-journey";
 import {
   bandClassName,
+  bandDotClassName,
+  bandTextClassName,
   pendingGaps,
   useExcludeCompany,
 } from "./fit-check-panel";
@@ -162,7 +164,7 @@ export function OpeningHeader({
     letter: <Mail className="size-4" />,
   };
   const switcher = journey.views.length > 1 && (
-    <nav className="-mb-px flex items-end gap-1 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+    <nav className="-mb-px flex items-end gap-6 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
       {openingViews.map((step) => {
         const enabled = journey.views.includes(step);
         const active = view === step;
@@ -175,17 +177,16 @@ export function OpeningHeader({
             aria-current={active ? "page" : undefined}
             onClick={() => setView(step)}
             className={cn(
-              "text-muted-foreground flex shrink-0 items-center gap-2 rounded-t-md border border-transparent px-4 py-2 text-sm transition-colors max-sm:min-h-11",
+              "text-muted-foreground flex shrink-0 items-center gap-2 border-b-2 border-transparent px-1 py-2.5 text-sm transition-colors max-sm:min-h-11",
               enabled && "hover:text-foreground",
               !enabled && "opacity-50",
-              active &&
-                "bg-background text-foreground border-border border-b-background font-medium"
+              active && "text-foreground border-foreground font-medium"
             )}
           >
             {stepIcons[step]}
             {stepLabels[step]}
             {hint !== "" && hint !== undefined && (
-              <span className="bg-muted text-foreground rounded-full px-2 text-xs font-medium">
+              <span className="bg-secondary text-secondary-foreground rounded-sm px-1.5 font-mono text-[11px] font-medium">
                 {hint}
               </span>
             )}
@@ -242,10 +243,18 @@ export function OpeningHeader({
                   <Badge
                     variant="outline"
                     className={cn(
-                      "cursor-default",
-                      bandClassName(opening.fitCheck.band)
+                      "cursor-default gap-1.5 border-transparent",
+                      bandClassName(opening.fitCheck.band),
+                      bandTextClassName(opening.fitCheck.band)
                     )}
                   >
+                    <span
+                      aria-hidden="true"
+                      className={cn(
+                        "size-1.5 rounded-full",
+                        bandDotClassName(opening.fitCheck.band)
+                      )}
+                    />
                     {labels.band(opening.fitCheck.band)}
                   </Badge>
                 </TooltipTrigger>

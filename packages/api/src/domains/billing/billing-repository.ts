@@ -47,11 +47,17 @@ export class BillingRepository {
       .then((rows) => rows[0] ?? null);
   }
 
+  /** The user's latest subscription, live or not; never a replaced one. */
   findSubscriptionByUserId(userId: string) {
     return this.tx
       .select()
       .from(subscriptionsTable)
-      .where(eq(subscriptionsTable.userId, userId))
+      .where(
+        and(
+          eq(subscriptionsTable.userId, userId),
+          isNull(subscriptionsTable.replacedAt)
+        )
+      )
       .orderBy(desc(subscriptionsTable.currentPeriodEnd))
       .limit(1)
       .then((rows) => rows[0] ?? null);

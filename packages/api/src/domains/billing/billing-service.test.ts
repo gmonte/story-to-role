@@ -308,8 +308,7 @@ describe("billing service", () => {
       "active",
       "paid",
       "storytorole_own_key",
-      "sub_key",
-      "year"
+      "sub_key"
     );
     const session = {
       id: "cs_key",
@@ -380,11 +379,23 @@ describe("billing service", () => {
     const summary = await new CreditsService(ctx.db).summary(ctx.user.id);
     expect(summary.plan).toBe("own_key");
     expect(await ctx.spendable()).toBe(600);
-    expect(
-      (await ctx.billing.status(ctx.user.id)).carryoverEndsAt?.getTime()
-    ).toBe(Number(annual.items.data[0]?.current_period_end) * 1000);
-    // The year paid for still grants its months.
+    const status = await ctx.billing.status(ctx.user.id);
+    expect(status.subscription?.plan).toBe("own_key");
+    expect(status.carryoverEndsAt?.getTime()).toBe(
+      Number(annual.items.data[0]?.current_period_end) * 1000
+    );
+    // The year paid for still grants its months (the own key renewed).
     const later = new Date(Date.now() + 40 * day * 1000);
+    await new BillingRepository(ctx.db).upsertSubscription({
+      userId: ctx.user.id,
+      stripeSubscriptionId: "sub_key",
+      plan: "own_key",
+      status: "active",
+      interval: "month",
+      currentPeriodStart: new Date(),
+      currentPeriodEnd: new Date(later.getTime() + 20 * day * 1000),
+      cancelAtPeriodEnd: false,
+    });
     await new CreditsService(ctx.db).summary(ctx.user.id, later);
     expect(
       await spendableTotal(ctx.db, ctx.user.id, "any", later)

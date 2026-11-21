@@ -212,7 +212,10 @@ export class CreditsService {
     return { from: new Date(now.getTime() - 30 * 24 * 3600 * 1000), to: now };
   }
 
+  /** The user's key, on the plans that use one (own-key, courtesy). */
   private async keyFunding(tx: DbClient, userId: string, now: Date) {
+    const { kind } = await currentPlan(tx, userId, now);
+    if (kind !== "own_key" && kind !== "courtesy") return null;
     const key = await new AiKeysRepository(tx).findByUserId(userId);
     if (!key) return null;
     const { start: monthStart } = billingMonth(now);

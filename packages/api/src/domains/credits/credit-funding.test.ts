@@ -211,6 +211,8 @@ describe("own keys and funding", () => {
 
     expect(await ctx.funding(asked.task.id)).toBe("credits");
     expect(await ctx.funding(unasked.task.id)).toBe("credits");
+    // The credit meter doesn't present it as paying either.
+    expect((await ctx.credits.summary(ctx.user.id)).key).toBeNull();
   });
 
   it("spends what a replaced annual plan still grants before the own key", async () => {

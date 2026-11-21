@@ -8,10 +8,11 @@ import {
   TabsTrigger,
 } from "@repo/web/components/ui/tabs";
 
+import { AdminUsers } from "./admin-users";
 import { CourtesyGrants } from "./courtesy-grants";
 import { PlatformUsageView } from "./platform-usage-view";
 
-/** The admin page: everyone's AI usage, and the courtesy grants. */
+/** The admin page: everyone's AI usage, the users and the courtesy grants. */
 export function AdminView() {
   const t = useTranslation();
   return (
@@ -20,12 +21,18 @@ export function AdminView() {
         <TabsTrigger value="usage">
           {t.formatMessage({ defaultMessage: "Usage" })}
         </TabsTrigger>
+        <TabsTrigger value="users">
+          {t.formatMessage({ defaultMessage: "Users" })}
+        </TabsTrigger>
         <TabsTrigger value="courtesy">
           {t.formatMessage({ defaultMessage: "Courtesy grants" })}
         </TabsTrigger>
       </TabsList>
       <TabsContent value="usage" className="flex min-h-0 flex-1">
         <PlatformUsageView />
+      </TabsContent>
+      <TabsContent value="users" className="flex min-h-0 flex-1">
+        <AdminUsers />
       </TabsContent>
       <TabsContent value="courtesy" className="flex min-h-0 flex-1">
         <CourtesyGrants />

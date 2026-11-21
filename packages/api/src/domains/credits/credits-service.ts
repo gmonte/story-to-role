@@ -4,6 +4,7 @@ import type { DbClient } from "@repo/api/tools/db-client";
 import { AiKeysRepository } from "@repo/api/domains/ai/ai-keys-repository";
 import { AiUsageRepository } from "@repo/api/domains/ai/ai-usage-repository";
 import { TasksRepository } from "@repo/api/domains/tasks/tasks-repository";
+import { UsersRepository } from "@repo/api/domains/users/users-repository";
 import { decodeCursor, encodeCursor } from "@repo/api/utils/db/keyset";
 
 import { decideFunding } from "./credit-funding";
@@ -17,7 +18,11 @@ import { creditCap, usdForUsage } from "./credit-pricing";
 import { creditReserve, nearReserve, resumeEstimate } from "./credit-reserve";
 import { settleTask } from "./settle-task";
 import { CreditsRepository } from "./credits-repository";
-import type { CourtesyGrant, CreditSummary } from "./schemas/credits";
+import type {
+  AdminUsers,
+  CourtesyGrant,
+  CreditSummary,
+} from "./schemas/credits";
 import type {
   PlatformUsage,
   PlatformUsageUsers,
@@ -311,6 +316,57 @@ export class CreditsService {
     const calls = await repository.callsBetween(null, window.from, window.to);
     const debitedByTask = await repository.debitedByTask(taskIdsOf(calls));
     return { window, calls, debitedByTask };
+  }
+
+  /**
+   * A page of the accounts for the admin, newest first, found by name or
+   * email, each with its plan and its key's state.
+   */
+  async adminUsers(input: {
+    search?: string;
+    cursor?: string | null;
+    limit: number;
+    now?: Date;
+  }): Promise<AdminUsers> {
+    const now = input.now ?? new Date();
+    const users = new UsersRepository(this.db);
+    const keys = new AiKeysRepository(this.db);
+    const after = decodeCursor(input.cursor);
+    const page = await users.page({
+      search: input.search,
+      cursor:
+        after && typeof after.keys[0] === "string"
+          ? { createdAt: after.keys[0], userId: after.id }
+          : null,
+      // One more than shown tells whether a next page exists.
+      limit: input.limit + 1,
+    });
+    const shown = page.slice(0, input.limit);
+    const data = await Promise.all(
+      shown.map(async (user) => {
+        const [plan, key] = await Promise.all([
+          currentPlan(this.db, user.userId, now),
+          keys.findByUserId(user.userId),
+        ]);
+        return {
+          userId: user.userId,
+          email: user.email,
+          name: user.name || null,
+          createdAt: user.createdAt,
+          plan: plan.kind,
+          keyStatus: key?.status ?? null,
+        };
+      })
+    );
+    const last = shown[shown.length - 1];
+    return {
+      data,
+      nextCursor:
+        page.length > input.limit && last
+          ? encodeCursor({ keys: [last.createdAtText], id: last.userId })
+          : null,
+      total: await users.count(input.search),
+    };
   }
 
   listCourtesyGrants(): Promise<CourtesyGrant[]> {

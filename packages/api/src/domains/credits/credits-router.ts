@@ -12,7 +12,11 @@ import {
 import { paginationParamsSchema } from "@repo/api/utils/schemas/pagination";
 
 import { CreditsService } from "./credits-service";
-import { courtesyGrantSchema, creditSummarySchema } from "./schemas/credits";
+import {
+  adminUsersSchema,
+  courtesyGrantSchema,
+  creditSummarySchema,
+} from "./schemas/credits";
 import {
   platformUsageSchema,
   platformUsageUsersSchema,
@@ -116,6 +120,23 @@ export const creditsRouter = createTRPCRouter({
     )
     .output(platformUsageUsersSchema)
     .query(({ input }) => new CreditsService(db).platformUsageUsers(input)),
+
+  adminUsers: adminProcedure
+    .meta(
+      openApiMeta(
+        "credits",
+        "GET",
+        "/admin/users",
+        "Returns a page of the accounts, newest first, with their plan and key, found by name or email (admin only)"
+      )
+    )
+    .input(
+      paginationParamsSchema.extend({
+        search: z.string().max(200).optional(),
+      })
+    )
+    .output(adminUsersSchema)
+    .query(({ input }) => new CreditsService(db).adminUsers(input)),
 
   listCourtesyGrants: adminProcedure
     .meta(

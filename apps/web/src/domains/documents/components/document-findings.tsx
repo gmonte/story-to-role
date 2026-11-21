@@ -59,7 +59,7 @@ function AddTranslation({
       <Button
         size="sm"
         variant="outline"
-        className="h-6 px-2 text-xs"
+        className="h-7 px-2.5 text-xs"
         onClick={() => setOpen(true)}
       >
         <Languages className="size-3" />
@@ -92,7 +92,7 @@ function AddTranslation({
       <Button
         type="submit"
         size="sm"
-        className="h-6 px-2 text-xs"
+        className="h-7 px-2.5 text-xs"
         disabled={action.pending || !translation.trim()}
       >
         {action.pending ? (
@@ -106,7 +106,7 @@ function AddTranslation({
         type="button"
         size="sm"
         variant="ghost"
-        className="text-muted-foreground h-6 px-2 text-xs"
+        className="text-muted-foreground h-7 px-2.5 text-xs"
         onClick={() => setOpen(false)}
       >
         {t.formatMessage({ defaultMessage: "Cancel" })}
@@ -134,7 +134,7 @@ export function ProfileActionButton({
       <Button
         size="sm"
         variant="outline"
-        className="h-6 px-2 text-xs"
+        className="h-7 px-2.5 text-xs"
         disabled={action.pending}
         onClick={action.run}
       >
@@ -174,7 +174,7 @@ function TalkButton({ onClick }: { onClick: () => void }) {
         <Button
           size="sm"
           variant="ghost"
-          className="text-muted-foreground h-6 px-2 text-xs"
+          className="text-muted-foreground h-7 px-2.5 text-xs"
           aria-label={label}
           onClick={onClick}
         >
@@ -269,7 +269,7 @@ export function DocumentFindings() {
     <Button
       size="sm"
       variant="outline"
-      className="h-6 px-2 text-xs"
+      className="h-7 px-2.5 text-xs"
       disabled={profileCheckBusy}
       title={t.formatMessage({
         defaultMessage:
@@ -319,26 +319,24 @@ export function DocumentFindings() {
     return (
       <li
         key={key}
-        className="bg-card flex flex-col gap-1 rounded-lg border p-1.5"
+        className={cn(
+          "bg-card flex flex-col gap-2 rounded-lg border p-3 text-[13px] leading-5",
+          activeFinding === key && "border-brand-accent"
+        )}
         {...rowProps(key)}
       >
         <button
           type="button"
           onClick={() => goToFinding(finding)}
-          className={cn(
-            "hover:bg-muted text-foreground w-full rounded px-2 py-1 text-left text-xs",
-            activeFinding === key && "bg-muted"
-          )}
+          className={cn("text-foreground w-full text-left hover:underline")}
         >
           {text}
         </button>
         {reasonOf(finding) && (
-          <p className="text-muted-foreground px-2 text-xs">
-            {reasonOf(finding)}
-          </p>
+          <p className="text-muted-foreground text-xs">{reasonOf(finding)}</p>
         )}
         {
-          <div className="flex flex-wrap items-center gap-1 px-2 pb-1">
+          <div className="flex flex-wrap items-center gap-1.5">
             <ProfileActionButton action={profileActionFor(finding)} />
             {finding.code === "notInProfile" &&
               finding.lineId &&
@@ -347,7 +345,7 @@ export function DocumentFindings() {
               <Button
                 size="sm"
                 variant="outline"
-                className="h-6 px-2 text-xs"
+                className="h-7 px-2.5 text-xs"
                 onClick={fix}
               >
                 <Wand2 className="size-3" />
@@ -362,7 +360,7 @@ export function DocumentFindings() {
             <Button
               size="sm"
               variant="ghost"
-              className="text-muted-foreground h-6 px-2 text-xs"
+              className="text-muted-foreground h-7 px-2.5 text-xs"
               title={t.formatMessage({
                 defaultMessage: "This finding doesn't apply: stop showing it",
               })}
@@ -383,7 +381,10 @@ export function DocumentFindings() {
     return (
       <li
         key={key}
-        className="bg-card flex flex-col gap-1 rounded-lg border p-1.5"
+        className={cn(
+          "bg-card flex flex-col gap-2 rounded-lg border p-3 text-[13px] leading-5",
+          activeFinding === key && "border-brand-accent"
+        )}
         {...rowProps(key)}
       >
         <button
@@ -391,8 +392,7 @@ export function DocumentFindings() {
           disabled={!note.lineId}
           onClick={() => goToNote(note)}
           className={cn(
-            "text-muted-foreground hover:bg-muted w-full rounded px-2 py-1 text-left text-xs",
-            activeFinding === key && "bg-muted"
+            "text-muted-foreground w-full text-left hover:underline"
           )}
         >
           {note.kind === "inconsistency"
@@ -402,12 +402,12 @@ export function DocumentFindings() {
               )
             : note.text}
         </button>
-        <div className="flex flex-wrap items-center gap-1 px-2 pb-1">
+        <div className="flex flex-wrap items-center gap-1.5">
           {note.profileSuggestion && (
             <Button
               size="sm"
               variant="outline"
-              className="h-6 px-2 text-xs"
+              className="h-7 px-2.5 text-xs"
               disabled={done || sendToProfile.isPending}
               onClick={() =>
                 note.profileSuggestion &&
@@ -428,7 +428,7 @@ export function DocumentFindings() {
           <Button
             size="sm"
             variant="ghost"
-            className="text-muted-foreground h-6 px-2 text-xs"
+            className="text-muted-foreground h-7 px-2.5 text-xs"
             onClick={() => ignoreNote(note)}
           >
             <EyeOff className="size-3" />

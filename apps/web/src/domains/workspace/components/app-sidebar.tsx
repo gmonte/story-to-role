@@ -153,7 +153,8 @@ export function AppSidebar() {
           <SidebarMenuItem>
             <ThemeSwitcher />
           </SidebarMenuItem>
-          <SidebarMenuItem>
+          {/* The account stands apart from the settings above it. */}
+          <SidebarMenuItem className="mt-3">
             <UserButton />
           </SidebarMenuItem>
         </SidebarMenu>

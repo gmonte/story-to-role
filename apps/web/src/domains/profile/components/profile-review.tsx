@@ -67,26 +67,29 @@ export function ProfileReview() {
           })}
         </p>
       )}
-      <ul className="space-y-1">
+      <ul className="space-y-2">
         {reviewFindings.map((finding, index) => (
-          <li key={`${finding.quote}-${index}`}>
+          <li
+            key={`${finding.quote}-${index}`}
+            className="bg-card flex flex-col gap-2 rounded-lg border p-3 text-[13px] leading-5"
+          >
             <button
               type="button"
               onClick={() =>
                 goToLine(finding.line, { from: finding.from, to: finding.to })
               }
-              className="hover:bg-muted w-full rounded px-2 py-1 text-left text-xs"
+              className="text-left hover:underline"
             >
-              <span className="text-primary block font-medium">
+              <span className="block font-medium">
                 {reviewKinds[finding.kind]}
               </span>
               <span className="text-muted-foreground">{finding.message}</span>
             </button>
-            <div className="flex flex-wrap items-center gap-1 px-2 pb-1">
+            <div className="flex flex-wrap items-center gap-1.5">
               <Button
                 size="sm"
                 variant="ghost"
-                className="text-muted-foreground h-6 px-2 text-xs"
+                className="text-muted-foreground h-7 px-2.5 text-xs"
                 title={t.formatMessage({ defaultMessage: "Talk about this" })}
                 aria-label={t.formatMessage({
                   defaultMessage: "Talk about this",
@@ -104,7 +107,7 @@ export function ProfileReview() {
               <Button
                 size="sm"
                 variant="ghost"
-                className="text-muted-foreground h-6 px-2 text-xs"
+                className="text-muted-foreground h-7 px-2.5 text-xs"
                 title={t.formatMessage({
                   defaultMessage: "This finding doesn't apply: stop showing it",
                 })}
@@ -122,25 +125,23 @@ export function ProfileReview() {
           <p className="text-muted-foreground text-xs font-medium">
             {t.formatMessage({ defaultMessage: "Proposed competency levels" })}
           </p>
-          <ul className="space-y-1">
+          <ul className="space-y-2">
             {proposals.map((proposal) => (
               <li
                 key={proposal.name}
-                className="bg-card rounded border p-2 text-xs"
+                className="bg-card flex flex-col gap-2 rounded-lg border p-3 text-[13px] leading-5"
               >
                 <p>
                   <span className="font-medium">{proposal.name}</span>
                   {labelSeparator}
                   {levelLabels[proposal.level]}
                 </p>
-                <p className="text-muted-foreground mt-0.5">
-                  {proposal.reason}
-                </p>
-                <div className="mt-1 flex gap-1">
+                <p className="text-muted-foreground">{proposal.reason}</p>
+                <div className="flex gap-1.5">
                   <Button
                     size="sm"
                     variant="outline"
-                    className="h-6 px-2 text-xs"
+                    className="h-7 px-2.5 text-xs"
                     onClick={() =>
                       applyCompetencyLevel(proposal.name, proposal.level)
                     }
@@ -151,7 +152,7 @@ export function ProfileReview() {
                   <Button
                     size="sm"
                     variant="ghost"
-                    className="h-6 px-2 text-xs"
+                    className="h-7 px-2.5 text-xs"
                     onClick={() =>
                       setRejected((names) => [...names, proposal.name])
                     }

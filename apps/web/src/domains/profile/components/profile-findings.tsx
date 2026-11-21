@@ -129,7 +129,7 @@ export function ProfileFindings() {
   const item = (finding: ProfileFinding, index: number) => (
     <li
       key={`${finding.code}-${finding.line}-${finding.from}-${index}`}
-      className="bg-card flex flex-col gap-1 rounded-lg border p-1.5"
+      className="bg-card flex flex-col gap-2 rounded-lg border p-3 text-[13px] leading-5"
     >
       <button
         type="button"
@@ -138,20 +138,20 @@ export function ProfileFindings() {
           goToLine(finding.line, { from: finding.from, to: finding.to })
         }
         className={cn(
-          "hover:bg-muted w-full rounded px-2 py-1 text-left text-xs",
+          "w-full text-left hover:underline",
           finding.kind === "format" ? "text-destructive" : "text-foreground"
         )}
       >
         {findingMessage(finding, structure.language)}
       </button>
       {/* The same row for every finding: edits first, then the secondary actions. */}
-      <div className="flex flex-wrap items-center gap-1 px-2 pb-1">
+      <div className="flex flex-wrap items-center gap-1.5">
         <FindingQuickActions finding={finding} />
         {finding.fixable && (
           <Button
             size="sm"
             variant="outline"
-            className="h-6 px-2 text-xs"
+            className="h-7 px-2.5 text-xs"
             onClick={() => fix(finding)}
           >
             {t.formatMessage({ defaultMessage: "Fix" })}
@@ -161,7 +161,7 @@ export function ProfileFindings() {
           <Button
             size="sm"
             variant="ghost"
-            className="text-muted-foreground h-6 px-2 text-xs"
+            className="text-muted-foreground h-7 px-2.5 text-xs"
             title={t.formatMessage({ defaultMessage: "Talk about this" })}
             aria-label={t.formatMessage({ defaultMessage: "Talk about this" })}
             onClick={() =>
@@ -183,7 +183,7 @@ export function ProfileFindings() {
           <Button
             size="sm"
             variant="ghost"
-            className="text-muted-foreground h-6 px-2 text-xs"
+            className="text-muted-foreground h-7 px-2.5 text-xs"
             title={t.formatMessage({
               defaultMessage: "This finding doesn't apply: stop showing it",
             })}

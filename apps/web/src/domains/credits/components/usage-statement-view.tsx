@@ -225,6 +225,15 @@ function useFormats() {
 function Totals({ statement }: { statement: UsageStatement }) {
   const t = useTranslation();
   const format = useFormats();
+  // What was spent, never a balance: by the user, on their key, or by
+  // StoryToRole on the user's behalf.
+  const spentBy: Record<UsagePayer, string> = {
+    credits: t.formatMessage({ defaultMessage: "Spent by you" }),
+    key: t.formatMessage({ defaultMessage: "Spent on your key" }),
+    storytorole: t.formatMessage({
+      defaultMessage: "Spent by StoryToRole on you",
+    }),
+  };
   return (
     <section className="grid gap-3 sm:grid-cols-3">
       {statement.totals.map((total) => (
@@ -233,27 +242,37 @@ function Totals({ statement }: { statement: UsageStatement }) {
           className="flex flex-col gap-1 rounded-lg border p-4"
         >
           <span className="text-muted-foreground text-xs">
-            {format.payer(total.payer)}
+            {spentBy[total.payer]}
           </span>
           <span className="text-lg font-medium">
             {t.formatMessage(
-              { defaultMessage: "{credits} credits" },
+              { defaultMessage: "{credits} credits spent" },
               { credits: format.rowCredits(total.payer, total.credits) }
             )}
           </span>
-          <span className="text-muted-foreground text-xs">
-            {t.formatMessage(
-              {
-                defaultMessage:
-                  "{operations, plural, one {# operation} other {# operations}} · {input} in · {output} out",
-              },
-              {
-                operations: total.operations,
-                input: format.tokens(total.inputTokens),
-                output: format.tokens(total.outputTokens),
-              }
-            )}
-          </span>
+          <div className="text-muted-foreground grid gap-0.5 text-xs">
+            <p>
+              {t.formatMessage(
+                {
+                  defaultMessage:
+                    "{operations, plural, =0 {No operations} one {# operation} other {# operations}}",
+                },
+                { operations: total.operations }
+              )}
+            </p>
+            <p>
+              {t.formatMessage(
+                { defaultMessage: "{tokens} input tokens" },
+                { tokens: format.tokens(total.inputTokens) }
+              )}
+            </p>
+            <p>
+              {t.formatMessage(
+                { defaultMessage: "{tokens} output tokens" },
+                { tokens: format.tokens(total.outputTokens) }
+              )}
+            </p>
+          </div>
           {total.usd !== null && (
             <span className="text-muted-foreground text-xs">
               {format.usd(total.usd)}
@@ -363,10 +382,10 @@ function Operations({ statement }: { statement: UsageStatement }) {
               {t.formatMessage({ defaultMessage: "Paid by" })}
             </TableHead>
             <TableHead className="text-right">
-              {t.formatMessage({ defaultMessage: "Input" })}
+              {t.formatMessage({ defaultMessage: "Input tokens" })}
             </TableHead>
             <TableHead className="text-right">
-              {t.formatMessage({ defaultMessage: "Output" })}
+              {t.formatMessage({ defaultMessage: "Output tokens" })}
             </TableHead>
             <TableHead className="text-right">
               {t.formatMessage({ defaultMessage: "Cache read / write" })}

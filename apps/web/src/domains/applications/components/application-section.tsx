@@ -54,7 +54,12 @@ export function GearButton({
   );
 }
 
-export type Option<Value extends string> = { value: Value; label: string };
+export type Option<Value extends string> = {
+  value: Value;
+  label: string;
+  /** Shown before the label (a status's dot). */
+  icon?: ReactNode;
+};
 
 /** A gear that opens a list of options, the way GitHub's sidebar does. */
 export function OptionsPopover<Value extends string>({
@@ -91,6 +96,7 @@ export function OptionsPopover<Value extends string>({
             <Check
               className={cn("size-3.5", option.value !== value && "invisible")}
             />
+            {option.icon}
             <span className="truncate">{option.label}</span>
           </Button>
         ))}

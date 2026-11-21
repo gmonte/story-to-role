@@ -21,8 +21,8 @@ catalogs:
     "@huggingface/transformers": 4.3.2
     "@napi-rs/canvas": 1.1.1
     "@react-pdf/renderer": 4.9.0
-    "@trigger.dev/build": 4.8.5
-    "@trigger.dev/sdk": 4.8.5
+    "@trigger.dev/build": 4.8.8
+    "@trigger.dev/sdk": 4.8.8
     # 2.1+ sends Lua scripts with an Upstash-only flag (allow-key-locking)
     # that the local Redis behind SRH rejects; stay on 2.0.x.
     "@upstash/ratelimit": 2.0.8
@@ -35,7 +35,7 @@ catalogs:
     mammoth: 1.13.0
     postgres: 3.4.8
     stripe: 23.1.0
-    trigger.dev: 4.8.5
+    trigger.dev: 4.8.8
     unpdf: 2.2.0
 
   common:
@@ -102,7 +102,7 @@ catalogs:
     "@tiptap/pm": 3.34.0
     "@tiptap/react": 3.34.0
     "@tiptap/starter-kit": 3.34.0
-    "@trigger.dev/react-hooks": 4.8.5
+    "@trigger.dev/react-hooks": 4.8.8
     "@tailwindcss/postcss": 4.2.2
     "@types/react": 19.2.14
     "@types/react-dom": 19.2.3

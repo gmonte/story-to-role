@@ -104,14 +104,15 @@ export function HeroTraceDemo() {
   const sourceLines = [
     t.formatMessage({
       defaultMessage:
-        "Moved monthly billing off a nightly batch to an event queue (Python, SQS).",
+        "I moved monthly billing off a nightly batch to an event queue (Python, SQS).",
     }),
     t.formatMessage({
       defaultMessage:
         "Closing run went from 6 hours to 40 minutes [measured: job log].",
     }),
     t.formatMessage({
-      defaultMessage: "Did not lead the team; reviewed code for two juniors.",
+      defaultMessage:
+        "I didn't lead the team; I reviewed code for two juniors.",
     }),
   ];
 

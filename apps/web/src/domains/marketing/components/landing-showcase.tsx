@@ -186,7 +186,7 @@ function ProfileScreen({ t }: { t: Translation }) {
               <span className="text-foreground mr-1">
                 {t.formatMessage({
                   defaultMessage:
-                    "Moved monthly billing off a nightly batch to an event queue (Python, SQS).",
+                    "I moved monthly billing off a nightly batch to an event queue (Python, SQS).",
                 })}
               </span>
               <span className="rounded bg-emerald-500/15 px-1 text-emerald-800 dark:text-emerald-300">
@@ -199,7 +199,7 @@ function ProfileScreen({ t }: { t: Translation }) {
             <li>
               {t.formatMessage({
                 defaultMessage:
-                  "Did not lead the team; reviewed code for two juniors.",
+                  "I didn't lead the team; I reviewed code for two juniors.",
               })}
             </li>
           </ul>
@@ -246,7 +246,7 @@ function FitScreen({ t }: { t: Translation }) {
         defaultMessage: "Event-driven architecture",
       }),
       evidence: t.formatMessage({
-        defaultMessage: "Aurora Payments: moved billing to an event queue.",
+        defaultMessage: "Aurora Payments: you moved billing to an event queue.",
       }),
     },
     {
@@ -255,7 +255,8 @@ function FitScreen({ t }: { t: Translation }) {
         defaultMessage: "Kubernetes in production",
       }),
       evidence: t.formatMessage({
-        defaultMessage: "Deployed with Docker; no Kubernetes in your profile.",
+        defaultMessage:
+          "You deployed with Docker; no Kubernetes in your profile.",
       }),
     },
     {

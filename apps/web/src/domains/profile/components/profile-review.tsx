@@ -73,7 +73,7 @@ export function ProfileReview() {
         {reviewFindings.map((finding, index) => (
           <li
             key={`${finding.quote}-${index}`}
-            className="bg-card flex flex-col gap-2 rounded-lg border p-3 text-[13px] leading-5"
+            className="bg-card flex flex-col gap-2 rounded-lg border p-3 text-[13px] leading-snug"
           >
             <button
               type="button"
@@ -105,6 +105,7 @@ export function ProfileReview() {
                 }
               >
                 <Sparkles className="text-brand-accent size-3" />
+                {t.formatMessage({ defaultMessage: "Chat" })}
               </Button>
               <Button
                 size="sm"
@@ -131,7 +132,7 @@ export function ProfileReview() {
             {proposals.map((proposal) => (
               <li
                 key={proposal.name}
-                className="bg-card flex flex-col gap-2 rounded-lg border p-3 text-[13px] leading-5"
+                className="bg-card flex flex-col gap-2 rounded-lg border p-3 text-[13px] leading-snug"
               >
                 <p>
                   <span className="font-medium">{proposal.name}</span>

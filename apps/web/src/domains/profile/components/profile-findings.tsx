@@ -129,7 +129,7 @@ export function ProfileFindings() {
   const item = (finding: ProfileFinding, index: number) => (
     <li
       key={`${finding.code}-${finding.line}-${finding.from}-${index}`}
-      className="bg-card flex flex-col gap-2 rounded-lg border p-3 text-[13px] leading-5"
+      className="bg-card flex flex-col gap-2 rounded-lg border p-3 text-[13px] leading-snug"
     >
       <button
         type="button"
@@ -177,6 +177,7 @@ export function ProfileFindings() {
             }
           >
             <Sparkles className="text-brand-accent size-3" />
+            {t.formatMessage({ defaultMessage: "Chat" })}
           </Button>
         )}
         {finding.kind === "content" && (

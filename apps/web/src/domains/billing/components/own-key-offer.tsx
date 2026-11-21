@@ -51,7 +51,7 @@ export function OwnKeyOffer({
     checkout.mutate({ product, apiKey: apiKey.trim() });
 
   return (
-    <section className="flex flex-col gap-3">
+    <section className="flex flex-col gap-2">
       <div className="flex flex-wrap items-center gap-2">
         <h2 className="font-medium">{title}</h2>
         <Badge variant="outline" className="gap-1">

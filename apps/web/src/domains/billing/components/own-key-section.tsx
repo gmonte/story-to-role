@@ -11,6 +11,7 @@ import { Button } from "@repo/web/components/ui/button";
 import { Input } from "@repo/web/components/ui/input";
 import { Label } from "@repo/web/components/ui/label";
 import { toast } from "@repo/web/components/ui/sonner";
+import { cn } from "@repo/web/lib/utils";
 
 import { useTRPC } from "~/tools/trpc/client";
 
@@ -82,7 +83,7 @@ export function OwnKeySection({ canRemove }: { canRemove: boolean }) {
   const saved = key.data;
 
   return (
-    <section className="flex flex-col gap-3">
+    <section className="flex flex-col gap-2">
       <div className="flex items-center gap-2">
         <h2 className="font-medium">
           {t.formatMessage({ defaultMessage: "Your own API key" })}
@@ -99,87 +100,93 @@ export function OwnKeySection({ canRemove }: { canRemove: boolean }) {
         })}
       </p>
 
-      {saved ? (
-        <div className="bg-card flex flex-col gap-2 rounded-lg border p-4">
-          <span className="flex items-center gap-2">
-            <KeyRound className="size-4" />
-            {t.formatMessage(
-              { defaultMessage: "Key ending in {characters}" },
-              { characters: saved.lastCharacters }
-            )}
-          </span>
-          {saved.status !== "active" && (
-            <p className="rounded-md border border-amber-500/40 bg-amber-500/10 p-2.5 text-xs">
-              {saved.status === "out_of_credit"
-                ? t.formatMessage({
-                    defaultMessage:
-                      "Your key ran out of credit, so the task that used it stopped and nothing was charged. If it renews monthly (Claude Max or Team), it works again on the renewal date; check it again then, or finish with credits.",
-                  })
-                : t.formatMessage({
-                    defaultMessage:
-                      "Anthropic refused your key, so the task that used it stopped and nothing was charged. Save a new key, or finish with credits.",
-                  })}
-            </p>
-          )}
-          <div className="flex gap-2">
+      <div className="bg-card flex flex-col gap-3 rounded-lg border p-4">
+        {saved && (
+          <>
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <span className="flex items-center gap-2 font-medium">
+                <KeyRound className="size-4" />
+                {t.formatMessage(
+                  { defaultMessage: "Key ending in {characters}" },
+                  { characters: saved.lastCharacters }
+                )}
+              </span>
+              <div className="flex gap-2">
+                {saved.status !== "active" && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    disabled={recheck.isPending}
+                    onClick={() => recheck.mutate({})}
+                  >
+                    {t.formatMessage({ defaultMessage: "Check again" })}
+                  </Button>
+                )}
+                {canRemove && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    disabled={remove.isPending}
+                    onClick={() => remove.mutate({})}
+                  >
+                    {t.formatMessage({ defaultMessage: "Remove key" })}
+                  </Button>
+                )}
+              </div>
+            </div>
             {saved.status !== "active" && (
-              <Button
-                size="sm"
-                variant="outline"
-                disabled={recheck.isPending}
-                onClick={() => recheck.mutate({})}
-              >
-                {t.formatMessage({ defaultMessage: "Check again" })}
-              </Button>
+              <p className="rounded-md border border-amber-500/40 bg-amber-500/10 p-2.5 text-xs">
+                {saved.status === "out_of_credit"
+                  ? t.formatMessage({
+                      defaultMessage:
+                        "Your key ran out of credit, so the task that used it stopped and nothing was charged. If it renews monthly (Claude Max or Team), it works again on the renewal date; check it again then, or finish with credits.",
+                    })
+                  : t.formatMessage({
+                      defaultMessage:
+                        "Anthropic refused your key, so the task that used it stopped and nothing was charged. Save a new key, or finish with credits.",
+                    })}
+              </p>
             )}
-            {canRemove && (
-              <Button
-                size="sm"
-                variant="ghost"
-                disabled={remove.isPending}
-                onClick={() => remove.mutate({})}
-              >
-                {t.formatMessage({ defaultMessage: "Remove key" })}
-              </Button>
-            )}
-          </div>
-          {!canRemove && (
-            <p className="text-muted-foreground text-xs">
-              {t.formatMessage({
-                defaultMessage:
-                  "You can replace your key at any time. To remove it, cancel the own-key subscription first (Manage payments and cancel).",
-              })}
-            </p>
+          </>
+        )}
+        <form
+          className={cn(
+            "flex flex-col gap-2 sm:flex-row sm:items-end",
+            saved && "border-t pt-3"
           )}
-        </div>
-      ) : null}
-
-      <form
-        className="flex flex-col gap-2 sm:flex-row sm:items-end"
-        onSubmit={(event) => {
-          event.preventDefault();
-          save.mutate({ apiKey });
-        }}
-      >
-        <div className="grid flex-1 gap-1.5">
-          <Label htmlFor="own-api-key">
-            {saved
-              ? t.formatMessage({ defaultMessage: "Replace with a new key" })
-              : t.formatMessage({ defaultMessage: "Anthropic API key" })}
-          </Label>
-          <Input
-            id="own-api-key"
-            type="password"
-            autoComplete="off"
-            placeholder="sk-ant-…"
-            value={apiKey}
-            onChange={(event) => setApiKey(event.target.value)}
-          />
-        </div>
-        <Button type="submit" disabled={save.isPending || apiKey.length < 20}>
-          {t.formatMessage({ defaultMessage: "Check and save" })}
-        </Button>
-      </form>
+          onSubmit={(event) => {
+            event.preventDefault();
+            save.mutate({ apiKey });
+          }}
+        >
+          <div className="grid flex-1 gap-1.5">
+            <Label htmlFor="own-api-key">
+              {saved
+                ? t.formatMessage({ defaultMessage: "Replace with a new key" })
+                : t.formatMessage({ defaultMessage: "Anthropic API key" })}
+            </Label>
+            <Input
+              id="own-api-key"
+              type="password"
+              autoComplete="off"
+              placeholder="sk-ant-…"
+              value={apiKey}
+              onChange={(event) => setApiKey(event.target.value)}
+            />
+          </div>
+          <Button type="submit" disabled={save.isPending || apiKey.length < 20}>
+            {t.formatMessage({ defaultMessage: "Check and save" })}
+          </Button>
+        </form>
+        {saved && !canRemove && (
+          <p className="text-muted-foreground text-xs">
+            {t.formatMessage({
+              defaultMessage:
+                "You can replace your key at any time. To remove it, cancel the own-key subscription first (Manage payments and cancel).",
+            })}
+          </p>
+        )}
+      </div>
     </section>
   );
 }

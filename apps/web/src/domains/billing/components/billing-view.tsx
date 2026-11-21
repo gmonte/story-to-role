@@ -111,7 +111,7 @@ export function BillingView() {
 
   return (
     <div className="w-full overflow-y-auto">
-      <div className="mx-auto flex w-full max-w-3xl flex-col gap-6 p-6 text-sm">
+      <div className="mx-auto flex w-full max-w-3xl flex-col gap-5 p-6 text-sm">
         <section className="bg-card flex flex-col gap-2 rounded-lg border p-4">
           <div className="flex items-center justify-between gap-2">
             <h2 className="font-medium">
@@ -196,44 +196,46 @@ export function BillingView() {
               )}
             </p>
           )}
-          {subscribed &&
-            !subscription.cancelAtPeriodEnd &&
-            !subscription.scheduledInterval && (
+          <div className="flex flex-wrap gap-2 pt-1">
+            {subscribed &&
+              !subscription.cancelAtPeriodEnd &&
+              !subscription.scheduledInterval && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={busy}
+                  onClick={() => changeInterval.mutate({})}
+                >
+                  <CalendarSync />
+                  {annual
+                    ? t.formatMessage({
+                        defaultMessage: "Switch to monthly billing",
+                      })
+                    : t.formatMessage({
+                        defaultMessage: "Switch to annual billing",
+                      })}
+                </Button>
+              )}
+            {status.data?.hasCustomer && (
               <Button
                 variant="outline"
-                className="self-start"
+                size="sm"
                 disabled={busy}
-                onClick={() => changeInterval.mutate({})}
+                onClick={() => portal.mutate({})}
               >
-                <CalendarSync />
-                {annual
-                  ? t.formatMessage({
-                      defaultMessage: "Switch to monthly billing",
-                    })
-                  : t.formatMessage({
-                      defaultMessage: "Switch to annual billing",
-                    })}
+                <ExternalLink />
+                {t.formatMessage({
+                  defaultMessage: "Manage payments and cancel",
+                })}
               </Button>
             )}
-          {status.data?.hasCustomer && (
-            <Button
-              variant="outline"
-              className="self-start"
-              disabled={busy}
-              onClick={() => portal.mutate({})}
-            >
-              <ExternalLink />
-              {t.formatMessage({
-                defaultMessage: "Manage payments and cancel",
-              })}
+            <Button variant="outline" size="sm" asChild>
+              <Link href="/app/billing/usage">
+                <ReceiptText />
+                {t.formatMessage({ defaultMessage: "Usage statement" })}
+              </Link>
             </Button>
-          )}
-          <Button variant="outline" className="self-start" asChild>
-            <Link href="/app/billing/usage">
-              <ReceiptText />
-              {t.formatMessage({ defaultMessage: "Usage statement" })}
-            </Link>
-          </Button>
+          </div>
         </section>
 
         <FinishWithCredits />
@@ -247,7 +249,7 @@ export function BillingView() {
         )}
 
         {!subscribed && (
-          <section className="flex flex-col gap-3">
+          <section className="flex flex-col gap-2">
             <h2 className="font-medium">
               {t.formatMessage({ defaultMessage: "Credit subscription" })}
             </h2>
@@ -260,7 +262,7 @@ export function BillingView() {
                 { credits: creditSettings.subscriptionMonthlyCredits }
               )}
             </p>
-            <div className="grid gap-3 sm:grid-cols-2">
+            <div className="grid gap-2 sm:grid-cols-2">
               <Offer
                 title={t.formatMessage({ defaultMessage: "Monthly" })}
                 price={t.formatMessage(
@@ -329,7 +331,7 @@ export function BillingView() {
         )}
 
         {live?.plan === "own_key" && !live.cancelAtPeriodEnd && (
-          <section className="flex flex-col gap-3">
+          <section className="flex flex-col gap-2">
             <h2 className="font-medium">
               {t.formatMessage({
                 defaultMessage: "Switch to the credit subscription",
@@ -395,7 +397,7 @@ export function BillingView() {
           </section>
         )}
 
-        <section className="flex flex-col gap-3">
+        <section className="flex flex-col gap-2">
           <h2 className="font-medium">
             {t.formatMessage({ defaultMessage: "Credit pack" })}
           </h2>
@@ -441,7 +443,7 @@ function Offer({
   onClick: () => void;
 }) {
   return (
-    <div className="bg-card flex items-center justify-between gap-3 rounded-lg border p-4">
+    <div className="bg-card flex items-center justify-between gap-3 rounded-lg border px-4 py-3">
       <span className="flex flex-col">
         <span className="font-medium">{title}</span>
         <span className="text-muted-foreground">{price}</span>

@@ -94,7 +94,7 @@ export async function LandingPricing({ locale }: { locale: Locale }) {
       billed: price("own_key_annual"),
       monthly: price("own_key_monthly"),
       description: t.formatMessage({
-        defaultMessage: "Your own Anthropic key pays for the AI.",
+        defaultMessage: "Your own key pays for the AI.",
       }),
       features: [
         t.formatMessage({

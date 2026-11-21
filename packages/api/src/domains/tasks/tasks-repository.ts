@@ -2,6 +2,14 @@ import { and, desc, eq, gt, inArray, like } from "drizzle-orm";
 
 import type { AiFunding } from "@repo/api/domains/ai/ai-funding";
 import type { DbClient } from "@repo/api/tools/db-client";
+import {
+  documentsTable,
+  generationsTable,
+} from "@repo/api/domains/documents/db/documents-tables";
+import type {
+  DocumentKind,
+  GenerationKind,
+} from "@repo/api/domains/documents/schemas/document";
 
 import { tasksTable } from "./db/tasks-tables";
 import type { Task, TaskProgress, TaskType } from "./schemas/task";
@@ -26,12 +34,30 @@ export class TasksRepository {
     subjectId?: string;
     funding?: AiFunding;
     reviewers?: number;
+    documentKind?: DocumentKind;
+    generationKind?: GenerationKind;
   }): Promise<Task> {
     const [task] = await this.tx
       .insert(tasksTable)
       .values(input)
       .returning(taskColumns);
     return task;
+  }
+
+  /** The kinds of a generation and of its document, to keep on its task. */
+  async generationKinds(generationId: string) {
+    const [row] = await this.tx
+      .select({
+        documentKind: documentsTable.kind,
+        generationKind: generationsTable.kind,
+      })
+      .from(generationsTable)
+      .innerJoin(
+        documentsTable,
+        eq(documentsTable.id, generationsTable.documentId)
+      )
+      .where(eq(generationsTable.id, generationId));
+    return row ?? null;
   }
 
   /** The runs still going for the user: what deleting the account stops. */

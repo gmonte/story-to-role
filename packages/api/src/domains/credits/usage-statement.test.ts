@@ -8,6 +8,10 @@ import {
   generationsTable,
 } from "@repo/api/domains/documents/db/documents-tables";
 import { DocumentsRepository } from "@repo/api/domains/documents/documents-repository";
+import type {
+  DocumentKind,
+  GenerationKind,
+} from "@repo/api/domains/documents/schemas/document";
 import type { TaskType } from "@repo/api/domains/tasks/schemas/task";
 import { TasksRepository } from "@repo/api/domains/tasks/tasks-repository";
 import { createTestUser } from "@repo/api/test/create-test-user";
@@ -84,6 +88,8 @@ async function setup() {
     calls: Array<{ model: string; inputTokens: number; outputTokens: number }>;
     debited?: number;
     subjectId?: string;
+    documentKind?: DocumentKind;
+    generationKind?: GenerationKind;
     failed?: boolean;
     createdAt?: Date;
   }) {
@@ -92,6 +98,8 @@ async function setup() {
       type: input.type,
       funding: input.funding,
       subjectId: input.subjectId,
+      documentKind: input.documentKind,
+      generationKind: input.generationKind,
     });
     if (input.funding === "credits") {
       await reserveCredits(db, {
@@ -223,6 +231,35 @@ describe("usage statement", () => {
         usd: null,
       },
     ]);
+  });
+
+  it("keeps a document operation's kind after its document is deleted", async () => {
+    const ctx = await setup();
+    const generationId = await ctx.resumeGeneration();
+    await ctx.task({
+      type: "generate_document",
+      funding: "credits",
+      subjectId: generationId,
+      documentKind: "resume",
+      generationKind: "generate",
+      calls: [sonnetCall],
+      debited: 45,
+    });
+    // Deleting the document deletes its generations; the task survives.
+    await ctx.db.delete(documentsTable);
+
+    const statement = await usage(ctx.db, ctx.user.id, {
+      ...window,
+      showsPlatformCost: false,
+      now,
+    });
+
+    expect(statement.operations).toHaveLength(1);
+    expect(statement.operations[0].operation).toMatchObject({
+      taskType: "generate_document",
+      documentKind: "resume",
+      generationKind: "generate",
+    });
   });
 
   it("shows what the user's key paid with US$ and its credit equivalent", async () => {

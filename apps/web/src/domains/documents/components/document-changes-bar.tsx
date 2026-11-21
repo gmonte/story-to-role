@@ -5,6 +5,8 @@ import { Check, Sparkles, X } from "lucide-react";
 import { useTranslation } from "@repo/intl/use-translation";
 import { Button } from "@repo/web/components/ui/button";
 
+import { decisionButton } from "~/domains/workspace/utils/decision-buttons";
+
 import { useDocumentEditor } from "./document-editor-context";
 
 /**
@@ -56,23 +58,20 @@ export function DocumentChangesBar() {
                 {t.formatMessage({ defaultMessage: "Show" })}
               </Button>
               <Button
-                size="sm"
-                variant="outline"
-                className="h-6 px-2 text-xs"
+                className={decisionButton}
                 onClick={() => acceptChanges()}
               >
-                <Check className="size-3" />
+                <Check />
                 {t.formatMessage({ defaultMessage: "Accept all" })}
               </Button>
             </>
           )}
           <Button
-            size="sm"
-            variant="ghost"
-            className="h-6 px-2 text-xs"
+            variant="outline"
+            className={decisionButton}
             onClick={() => rejectChanges()}
           >
-            <X className="size-3" />
+            <X />
             {t.formatMessage({ defaultMessage: "Reject all" })}
           </Button>
         </div>
@@ -97,11 +96,11 @@ export function DocumentChangesBar() {
                   </span>
                 </span>
                 <Button
-                  size="sm"
-                  variant="ghost"
-                  className="h-6 px-2 text-xs"
+                  variant="outline"
+                  className={decisionButton}
                   onClick={() => rejectChanges([change.id])}
                 >
+                  <X />
                   {t.formatMessage({ defaultMessage: "Reject" })}
                 </Button>
               </li>

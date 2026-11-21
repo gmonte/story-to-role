@@ -1,19 +1,32 @@
 import { buttonVariants } from "@repo/web/components/ui/button";
 import { cn } from "@repo/web/lib/utils";
 
+import {
+  acceptButtonClass,
+  checkIcon,
+  decisionButton,
+} from "~/domains/workspace/utils/decision-buttons";
+
 export type SuggestionEditorLabels = {
   edit: string;
   acceptEdited: string;
   cancel: string;
 };
 
-const small = "h-7 px-2.5 text-xs";
+const small = decisionButton;
 
-function button(label: string, className: string, onClick: () => void) {
+function button(
+  label: string,
+  className: string,
+  onClick: () => void,
+  icon?: string
+) {
   const element = document.createElement("button");
   element.type = "button";
   element.className = className;
-  element.textContent = label;
+  // A static, local SVG (decision-buttons), then the label as text.
+  if (icon) element.innerHTML = icon;
+  element.append(label);
   // The editor keeps its selection: the click isn't a place in the text.
   element.addEventListener("mousedown", (event) => event.preventDefault());
   element.addEventListener("click", onClick);
@@ -73,7 +86,7 @@ export function suggestionEditor(options: {
   const actions = document.createElement("div");
   actions.className = cn("flex flex-wrap items-center gap-2");
   actions.append(
-    button(labels.acceptEdited, cn(buttonVariants(), small), accept),
+    button(labels.acceptEdited, acceptButtonClass, accept, checkIcon),
     button(
       labels.cancel,
       cn(buttonVariants({ variant: "outline" }), small),

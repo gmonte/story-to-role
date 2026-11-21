@@ -8,6 +8,8 @@ import { useTranslation } from "@repo/intl/use-translation";
 import { extractProfile } from "@repo/api/domains/profile/truth/extract";
 import { Button } from "@repo/web/components/ui/button";
 
+import { decisionButton } from "~/domains/workspace/utils/decision-buttons";
+
 import { useProfileLabels } from "../hooks/use-profile-labels";
 import { useLatestValidation } from "../hooks/use-profile-validation";
 import { useProfileEditor } from "./profile-editor-context";
@@ -139,25 +141,22 @@ export function ProfileReview() {
                 <p className="text-muted-foreground">{proposal.reason}</p>
                 <div className="flex gap-1.5">
                   <Button
-                    size="sm"
-                    variant="outline"
-                    className="h-7 px-2.5 text-xs"
+                    className={decisionButton}
                     onClick={() =>
                       applyCompetencyLevel(proposal.name, proposal.level)
                     }
                   >
-                    <Check className="size-3" />
+                    <Check />
                     {t.formatMessage({ defaultMessage: "Accept" })}
                   </Button>
                   <Button
-                    size="sm"
-                    variant="ghost"
-                    className="h-7 px-2.5 text-xs"
+                    variant="outline"
+                    className={decisionButton}
                     onClick={() =>
                       setRejected((names) => [...names, proposal.name])
                     }
                   >
-                    <X className="size-3" />
+                    <X />
                     {t.formatMessage({ defaultMessage: "Reject" })}
                   </Button>
                 </div>

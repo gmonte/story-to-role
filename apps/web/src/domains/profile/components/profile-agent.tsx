@@ -49,6 +49,7 @@ import {
 } from "~/domains/career/hooks/use-source-upload";
 import { useCredits } from "~/domains/credits/hooks/use-credits";
 import { useTRPC } from "~/tools/trpc/client";
+import { decisionButton } from "~/domains/workspace/utils/decision-buttons";
 
 import { topmostNewSuggestion } from "../utils/topmost-new-suggestion";
 import { maxQuoteCharacters, useProfileEditor } from "./profile-editor-context";
@@ -417,15 +418,15 @@ function Conversation({
                         )}
                         <div className="flex gap-2">
                           <Button
-                            size="sm"
+                            className={decisionButton}
                             onClick={() => acceptSuggestions([waiting.id])}
                           >
                             <Check />
                             {t.formatMessage({ defaultMessage: "Accept" })}
                           </Button>
                           <Button
-                            size="sm"
                             variant="outline"
+                            className={decisionButton}
                             onClick={() => rejectSuggestions([waiting.id])}
                           >
                             <X />

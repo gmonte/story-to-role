@@ -3,7 +3,7 @@
 import { useState } from "react";
 
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { RefreshCw } from "lucide-react";
+import { Check, RefreshCw, X } from "lucide-react";
 
 import type {
   DocumentView,
@@ -26,6 +26,7 @@ import { toast } from "@repo/web/components/ui/sonner";
 import { CreditCost } from "~/domains/credits/components/credit-cost";
 import { useCredits } from "~/domains/credits/hooks/use-credits";
 import { useTRPC } from "~/tools/trpc/client";
+import { decisionButton } from "~/domains/workspace/utils/decision-buttons";
 
 import { useDocumentLabels } from "../hooks/use-document-labels";
 import { useRefreshDocuments } from "../hooks/use-opening-documents";
@@ -287,20 +288,22 @@ export function SyncProposal({
       </ul>
       <div className="flex justify-end gap-2">
         <Button
-          size="sm"
-          variant="ghost"
+          variant="outline"
+          className={decisionButton}
           disabled={busy}
           onClick={() =>
             discard.mutate({ generationId: proposal.generationId })
           }
         >
+          <X />
           {t.formatMessage({ defaultMessage: "Discard" })}
         </Button>
         <Button
-          size="sm"
+          className={decisionButton}
           disabled={busy}
           onClick={() => accept.mutate({ generationId: proposal.generationId })}
         >
+          <Check />
           {t.formatMessage({ defaultMessage: "Accept" })}
         </Button>
       </div>

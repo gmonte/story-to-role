@@ -11,7 +11,10 @@ import {
   TabsList,
   TabsTrigger,
 } from "@repo/web/components/ui/tabs";
+import { buttonVariants } from "@repo/web/components/ui/button";
 import { cn } from "@repo/web/lib/utils";
+
+import { decisionButton } from "~/domains/workspace/utils/decision-buttons";
 
 import { LandingContainer, SectionHeading } from "./section-heading";
 
@@ -215,12 +218,24 @@ function ProfileScreen({ t }: { t: Translation }) {
               })}
             </p>
             <div className="flex gap-2">
-              <span className="bg-primary text-primary-foreground inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs">
-                <Check className="size-3" />
+              <span
+                className={cn(
+                  buttonVariants(),
+                  decisionButton,
+                  "pointer-events-none"
+                )}
+              >
+                <Check />
                 {t.formatMessage({ defaultMessage: "Accept" })}
               </span>
-              <span className="inline-flex items-center gap-1 rounded-md border px-2 py-1 text-xs">
-                <X className="size-3" />
+              <span
+                className={cn(
+                  buttonVariants({ variant: "outline" }),
+                  decisionButton,
+                  "pointer-events-none"
+                )}
+              >
+                <X />
                 {t.formatMessage({ defaultMessage: "Decline" })}
               </span>
             </div>

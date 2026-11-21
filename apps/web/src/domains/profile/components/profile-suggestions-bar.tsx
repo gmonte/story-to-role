@@ -14,6 +14,8 @@ import {
 import { useTranslation } from "@repo/intl/use-translation";
 import { Button } from "@repo/web/components/ui/button";
 
+import { decisionButton } from "~/domains/workspace/utils/decision-buttons";
+
 import { useProfileEditor } from "./profile-editor-context";
 
 type Suggestion = ReturnType<typeof useProfileEditor>["suggestions"][number];
@@ -111,11 +113,11 @@ export function ProfileSuggestionsBar() {
                   {suggestion.replace || suggestion.find}
                 </span>
                 <Button
-                  size="sm"
-                  variant="ghost"
-                  className="h-6 px-2 text-xs"
+                  variant="outline"
+                  className={decisionButton}
                   onClick={() => rejectSuggestions([suggestion.id])}
                 >
+                  <X />
                   {t.formatMessage({ defaultMessage: "Reject" })}
                 </Button>
               </li>
@@ -201,21 +203,19 @@ export function ProfileSuggestionsBar() {
           <div className="flex items-center justify-center gap-1 md:justify-end">
             {located.length > 0 && (
               <Button
-                size="sm"
-                className="h-6 px-2 text-xs"
+                className={decisionButton}
                 onClick={() => acceptSuggestions()}
               >
-                <Check className="size-3" />
+                <Check />
                 {t.formatMessage({ defaultMessage: "Accept all" })}
               </Button>
             )}
             <Button
-              size="sm"
               variant="outline"
-              className="h-6 px-2 text-xs"
+              className={decisionButton}
               onClick={() => rejectSuggestions()}
             >
-              <X className="size-3" />
+              <X />
               {t.formatMessage({ defaultMessage: "Reject all" })}
             </Button>
           </div>

@@ -3,7 +3,6 @@ import {
   splitChangeLines,
 } from "@repo/api/domains/documents/changes/document-change";
 import type { DocumentChange } from "@repo/api/domains/documents/schemas/document-change";
-import { buttonVariants } from "@repo/web/components/ui/button";
 import { cn } from "@repo/web/lib/utils";
 
 import {
@@ -11,6 +10,12 @@ import {
   type SuggestionEditorLabels,
 } from "~/domains/profile/utils/suggestion-editor";
 import { lineDiff } from "~/domains/profile/utils/word-diff";
+import {
+  acceptButtonClass,
+  checkIcon,
+  rejectButtonClass,
+  xIcon,
+} from "~/domains/workspace/utils/decision-buttons";
 
 export type ChangeWidgetLabels = SuggestionEditorLabels & {
   accept: string;
@@ -41,14 +46,18 @@ const addedWordsClass = cn(
   "rounded-xs bg-fit-high-soft underline decoration-success/70 underline-offset-2"
 );
 
-// The app's Button, small, as classes: the widget is plain DOM.
-const small = "h-7 px-2.5 text-xs";
-
-function button(label: string, className: string, onClick: () => void) {
+function button(
+  label: string,
+  className: string,
+  onClick: () => void,
+  icon?: string
+) {
   const element = document.createElement("button");
   element.type = "button";
   element.className = className;
-  element.textContent = label;
+  // A static, local SVG (decision-buttons), then the label as text.
+  if (icon) element.innerHTML = icon;
+  element.append(label);
   // The editor keeps its selection: the click isn't a place in the text.
   element.addEventListener("mousedown", (event) => event.preventDefault());
   element.addEventListener("click", onClick);
@@ -130,14 +139,18 @@ export function changeWidget(
   });
   footer.append(
     reason,
-    button(labels.accept, cn(buttonVariants(), small), () =>
-      handlers.accept(change.id)
+    button(
+      labels.accept,
+      acceptButtonClass,
+      () => handlers.accept(change.id),
+      checkIcon
     ),
     editor.editButton,
     button(
       labels.reject,
-      cn(buttonVariants({ variant: "outline" }), small),
-      () => handlers.reject(change.id)
+      rejectButtonClass,
+      () => handlers.reject(change.id),
+      xIcon
     )
   );
   root.append(footer, editor.panel);
@@ -175,13 +188,17 @@ export function sectionMoveWidget(
   reason.textContent = change.reason;
   footer.append(
     reason,
-    button(labels.accept, cn(buttonVariants(), small), () =>
-      handlers.accept(change.id)
+    button(
+      labels.accept,
+      acceptButtonClass,
+      () => handlers.accept(change.id),
+      checkIcon
     ),
     button(
       labels.reject,
-      cn(buttonVariants({ variant: "outline" }), small),
-      () => handlers.reject(change.id)
+      rejectButtonClass,
+      () => handlers.reject(change.id),
+      xIcon
     )
   );
   root.append(footer);

@@ -263,6 +263,9 @@ export class CreditsService {
       calls,
       debitedByTask: await repository.debitedByTask(taskIdsOf(calls)),
       window,
+      users: await repository.usersByIds([
+        ...new Set(calls.map((call) => call.userId)),
+      ]),
     });
   }
 

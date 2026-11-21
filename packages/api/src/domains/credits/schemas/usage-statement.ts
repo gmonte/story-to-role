@@ -26,6 +26,16 @@ export const usageOperationSchema = z.object({
 });
 export type UsageOperation = z.infer<typeof usageOperationSchema>;
 
+/** The average of one kind of completed operation. */
+const usageSummaryRowSchema = z.object({
+  operation: usageOperationSchema,
+  count: z.number().int(),
+  averageCredits: z.number(),
+  averageTokens: z.number(),
+  averageUsd: z.number().nullable(),
+  totalCredits: z.number(),
+});
+
 const tokensShape = {
   inputTokens: z.number().int(),
   outputTokens: z.number().int(),
@@ -48,16 +58,7 @@ export const usageStatementSchema = z.object({
     })
   ),
   // Completed operations of each kind: failed ones stay out of averages.
-  summary: z.array(
-    z.object({
-      operation: usageOperationSchema,
-      count: z.number().int(),
-      averageCredits: z.number(),
-      averageTokens: z.number(),
-      averageUsd: z.number().nullable(),
-      totalCredits: z.number(),
-    })
-  ),
+  summary: z.array(usageSummaryRowSchema),
 });
 export type UsageStatement = z.infer<typeof usageStatementSchema>;
 
@@ -76,6 +77,21 @@ export const platformUsageSchema = usageStatementSchema.extend({
       averageCredits: z.number(),
       averageUsd: z.number(),
       totalUsd: z.number(),
+    })
+  ),
+  // Each user's spending, the biggest first, with their own averages.
+  users: z.array(
+    z.object({
+      userId: z.string(),
+      email: z.string(),
+      name: z.string().nullable(),
+      operations: z.number().int(),
+      // Debited from their credits.
+      creditsSpent: z.number(),
+      // What their key and StoryToRole paid, in credits.
+      creditEquivalent: z.number(),
+      usd: z.number(),
+      summary: z.array(usageSummaryRowSchema),
     })
   ),
 });

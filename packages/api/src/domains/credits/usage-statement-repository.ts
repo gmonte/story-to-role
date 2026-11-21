@@ -22,6 +22,7 @@ import type {
   GenerationKind,
 } from "@repo/api/domains/documents/schemas/document";
 import { tasksTable } from "@repo/api/domains/tasks/db/tasks-tables";
+import { usersTable } from "@repo/api/domains/users/db/users-tables";
 import type { DbClient } from "@repo/api/tools/db-client";
 
 import { creditEntriesTable } from "./db/credits-tables";
@@ -165,6 +166,7 @@ export class UsageStatementRepository {
     return this.tx
       .select({
         callId: aiUsageTable.id,
+        userId: aiUsageTable.userId,
         createdAt: aiUsageTable.createdAt,
         purpose: aiUsageTable.purpose,
         funding: aiUsageTable.funding,
@@ -189,6 +191,24 @@ export class UsageStatementRepository {
       )
       .where(and(userId ? eq(aiUsageTable.userId, userId) : undefined, where))
       .orderBy(aiUsageTable.createdAt);
+  }
+
+  /** The users' email and name, for the admin's statement. */
+  async usersByIds(userIds: string[]) {
+    if (userIds.length === 0) {
+      return new Map<string, { email: string; name: string | null }>();
+    }
+    const rows = await this.tx
+      .select({
+        id: usersTable.id,
+        email: usersTable.email,
+        name: usersTable.fullName,
+      })
+      .from(usersTable)
+      .where(inArray(usersTable.id, userIds));
+    return new Map(
+      rows.map((row) => [row.id, { email: row.email, name: row.name || null }])
+    );
   }
 
   /** What each task took from the user's credits: debits less refunds. */

@@ -1,9 +1,13 @@
 "use client";
 
+import { Fragment, useState } from "react";
+
 import { useQuery } from "@tanstack/react-query";
+import { ChevronDown, ChevronRight } from "lucide-react";
 
 import type { PlatformUsage } from "@repo/api/domains/credits/schemas/usage-statement";
 import { useTranslation } from "@repo/intl/use-translation";
+import { Button } from "@repo/web/components/ui/button";
 import { Skeleton } from "@repo/web/components/ui/skeleton";
 import {
   Table,
@@ -16,6 +20,7 @@ import {
 
 import { useTRPC } from "~/tools/trpc/client";
 
+import { usageOperationLabel } from "../utils/usage-operation-label";
 import {
   PeriodPicker,
   Summary,
@@ -79,6 +84,7 @@ export function PlatformUsageView() {
             <Totals statement={data} audience="everyone" />
             <Summary statement={data} />
             <ModelSummary usage={data} />
+            <UserUsage usage={data} />
           </>
         )}
       </div>
@@ -146,6 +152,149 @@ function ModelSummary({ usage }: { usage: PlatformUsage }) {
                 </TableCell>
               </TableRow>
             ))}
+          </TableBody>
+        </Table>
+      </div>
+    </section>
+  );
+}
+
+/**
+ * Each user's spending, the biggest first; a row opens into their average
+ * per kind of operation.
+ */
+function UserUsage({ usage }: { usage: PlatformUsage }) {
+  const t = useTranslation();
+  const format = useFormats();
+  const [open, setOpen] = useState<string[]>([]);
+  const toggle = (userId: string) =>
+    setOpen((current) =>
+      current.includes(userId)
+        ? current.filter((id) => id !== userId)
+        : [...current, userId]
+    );
+  return (
+    <section className="flex flex-col gap-2">
+      <h2 className="text-lg font-semibold">
+        {t.formatMessage(
+          { defaultMessage: "Credits by user ({total, number})" },
+          { total: usage.users.length }
+        )}
+      </h2>
+      <div className="bg-card overflow-hidden rounded-lg border">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead className="w-8" />
+              <TableHead>
+                {t.formatMessage({ defaultMessage: "User" })}
+              </TableHead>
+              <TableHead className="text-right">
+                {t.formatMessage({ defaultMessage: "Operations" })}
+              </TableHead>
+              <TableHead className="text-right">
+                {t.formatMessage({ defaultMessage: "Credits spent" })}
+              </TableHead>
+              <TableHead className="text-right">
+                {t.formatMessage({ defaultMessage: "Credit equivalent" })}
+              </TableHead>
+              <TableHead className="text-right">
+                {t.formatMessage({ defaultMessage: "US$" })}
+              </TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {usage.users.map((user) => {
+              const expanded = open.includes(user.userId);
+              return (
+                <Fragment key={user.userId}>
+                  <TableRow>
+                    <TableCell>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="size-6"
+                        aria-expanded={expanded}
+                        aria-label={t.formatMessage({
+                          defaultMessage: "Show average per operation",
+                        })}
+                        onClick={() => toggle(user.userId)}
+                      >
+                        {expanded ? <ChevronDown /> : <ChevronRight />}
+                      </Button>
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex flex-col">
+                        <span>{user.name ?? user.email}</span>
+                        {user.name && (
+                          <span className="text-muted-foreground text-xs">
+                            {user.email}
+                          </span>
+                        )}
+                      </div>
+                    </TableCell>
+                    <TableCell className="text-right">
+                      {format.tokens(user.operations)}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      {format.credits(user.creditsSpent)}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      {format.rowCredits("key", user.creditEquivalent)}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      {format.usd(user.usd)}
+                    </TableCell>
+                  </TableRow>
+                  {expanded &&
+                    user.summary.map((row) => (
+                      <TableRow
+                        key={JSON.stringify(row.operation)}
+                        className="bg-muted/30 text-muted-foreground text-xs"
+                      >
+                        <TableCell />
+                        <TableCell className="whitespace-normal">
+                          {t.formatMessage(
+                            {
+                              defaultMessage:
+                                "{operation} · {count, plural, =0 {none} one {# time} other {# times}}",
+                            },
+                            {
+                              operation: usageOperationLabel(t, row.operation),
+                              count: row.count,
+                            }
+                          )}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          {t.formatMessage(
+                            { defaultMessage: "{tokens} tokens on average" },
+                            { tokens: format.tokens(row.averageTokens) }
+                          )}
+                        </TableCell>
+                        <TableCell colSpan={2} className="text-right">
+                          {t.formatMessage(
+                            { defaultMessage: "{credits} credits on average" },
+                            { credits: format.credits(row.averageCredits) }
+                          )}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          {format.usd(row.averageUsd)}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  {expanded && user.summary.length === 0 && (
+                    <TableRow className="text-muted-foreground text-xs">
+                      <TableCell />
+                      <TableCell colSpan={5}>
+                        {t.formatMessage({
+                          defaultMessage: "No completed operation to average.",
+                        })}
+                      </TableCell>
+                    </TableRow>
+                  )}
+                </Fragment>
+              );
+            })}
           </TableBody>
         </Table>
       </div>

@@ -634,6 +634,21 @@ describe("usage statement", () => {
     ]);
     expect(usage.models[0].averageUsd).toBeCloseTo(0.3);
     expect(usage.models[0].totalUsd).toBeCloseTo(0.6);
+    // Each user's spending, the biggest first, with their own averages.
+    expect(
+      usage.users.map((row) => [
+        row.email,
+        row.operations,
+        row.creditsSpent,
+        row.creditEquivalent,
+      ])
+    ).toEqual([
+      ["ada@example.com", 1, 50, 0],
+      ["grace@example.com", 1, 0, 45],
+    ]);
+    expect(
+      usage.users[0].summary.map((row) => [row.count, row.averageCredits])
+    ).toEqual([[1, 50]]);
   });
 
   it("covers the current calendar month for the admin by default", async () => {

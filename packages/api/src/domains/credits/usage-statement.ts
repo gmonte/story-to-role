@@ -20,6 +20,7 @@ import type {
 
 export type UsageCall = AiUsage & {
   callId: string;
+  userId: string;
   createdAt: Date;
   purpose: string;
   funding: AiFunding;
@@ -120,6 +121,7 @@ function buildOperations(input: {
       }));
       return {
         operationId,
+        userId: first.userId,
         operation: operationOf(first),
         // Its last call: the window is about when calls were made.
         at: calls[calls.length - 1].createdAt,
@@ -153,7 +155,9 @@ export function buildUsageOperations(input: {
   debitedByTask: Map<string, number>;
   showsPlatformCost: boolean;
 }): UsageOperationRow[] {
-  return buildOperations(input).map(({ rawUsd: _rawUsd, ...row }) => row);
+  return buildOperations(input).map(
+    ({ rawUsd: _rawUsd, userId: _userId, ...row }) => row
+  );
 }
 
 /**
@@ -185,13 +189,25 @@ export function buildUsageStatement(input: {
     })
     .filter((total) => total.operations > 0);
 
-  const kinds = new Map<string, typeof operations>();
+  return {
+    window: input.window,
+    showsPlatformCost: input.showsPlatformCost,
+    totals,
+    summary: summarize(operations),
+  };
+}
+
+type Operation = ReturnType<typeof buildOperations>[number];
+
+/** The average of each kind of completed operation, costliest first. */
+function summarize(operations: Operation[]) {
+  const kinds = new Map<string, Operation[]>();
   for (const row of operations) {
     if (row.status !== "completed") continue;
     const key = JSON.stringify(row.operation);
     kinds.set(key, [...(kinds.get(key) ?? []), row]);
   }
-  const summary = [...kinds.values()]
+  return [...kinds.values()]
     .map((rows) => {
       const count = rows.length;
       const totalCredits = rows.reduce((total, row) => total + row.credits, 0);
@@ -213,13 +229,6 @@ export function buildUsageStatement(input: {
       };
     })
     .sort((a, b) => b.totalCredits - a.totalCredits);
-
-  return {
-    window: input.window,
-    showsPlatformCost: input.showsPlatformCost,
-    totals,
-    summary,
-  };
 }
 
 /** The operations whose last call falls in the window. */
@@ -244,10 +253,12 @@ export function buildPlatformUsage(input: {
   calls: UsageCall[];
   debitedByTask: Map<string, number>;
   window: { from: Date; to: Date };
+  users: Map<string, { email: string; name: string | null }>;
 }): PlatformUsage {
   const scope = { ...input, showsPlatformCost: true };
+  const operations = operationsInWindow(scope);
   const parts = new Map<string, Array<UsageOperationRow["models"][number]>>();
-  for (const operation of operationsInWindow(scope)) {
+  for (const operation of operations) {
     if (operation.status !== "completed") continue;
     for (const part of operation.models) {
       parts.set(part.model, [...(parts.get(part.model) ?? []), part]);
@@ -270,7 +281,39 @@ export function buildPlatformUsage(input: {
       };
     })
     .sort((a, b) => b.totalUsd - a.totalUsd);
-  return { ...buildUsageStatement(scope), models };
+
+  const ofUsers = new Map<string, Operation[]>();
+  for (const operation of operations) {
+    ofUsers.set(operation.userId, [
+      ...(ofUsers.get(operation.userId) ?? []),
+      operation,
+    ]);
+  }
+  const users = [...ofUsers.entries()]
+    .map(([userId, rows]) => {
+      const sum = (pick: (row: Operation) => number) =>
+        rows.reduce((total, row) => total + pick(row), 0);
+      return {
+        userId,
+        email: input.users.get(userId)?.email ?? "",
+        name: input.users.get(userId)?.name ?? null,
+        operations: rows.length,
+        creditsSpent: sum((row) => (row.payer === "credits" ? row.credits : 0)),
+        creditEquivalent: oneDecimal(
+          sum((row) => (row.payer === "credits" ? 0 : row.credits))
+        ),
+        usd: roundUsd(sum((row) => row.rawUsd)),
+        summary: summarize(rows),
+      };
+    })
+    .sort(
+      (a, b) =>
+        b.creditsSpent +
+        b.creditEquivalent -
+        (a.creditsSpent + a.creditEquivalent)
+    );
+
+  return { ...buildUsageStatement(scope), models, users };
 }
 
 function isFinished(status: TaskStatus | null) {

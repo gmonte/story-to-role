@@ -3,7 +3,7 @@ import "~/styles/globals.css";
 import { enUS, ptBR } from "@clerk/localizations";
 import { ClerkProvider } from "@clerk/nextjs";
 import type { Metadata } from "next";
-import { Geist, Geist_Mono, Space_Grotesk } from "next/font/google";
+import { IBM_Plex_Mono, IBM_Plex_Sans, Space_Grotesk } from "next/font/google";
 import { ThemeProvider } from "next-themes";
 
 import { getTranslation } from "@repo/intl/get-translation";
@@ -14,14 +14,19 @@ import { cn } from "@repo/web/lib/utils";
 import { getLocaleFromNextCookies } from "~/tools/intl/utils/get-locale-from-next-cookies";
 import { TRPCReactProvider } from "~/tools/trpc/client";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
+// ADR 0012: IBM Plex Sans for the interface and the documents, Plex Mono
+// for the profile's marks and credit figures.
+const plexSans = IBM_Plex_Sans({
+  variable: "--font-plex-sans",
   subsets: ["latin"],
+  weight: ["400", "500", "600"],
+  style: ["normal", "italic"],
 });
 
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
+const plexMono = IBM_Plex_Mono({
+  variable: "--font-plex-mono",
   subsets: ["latin"],
+  weight: ["400", "500"],
 });
 
 // The brand's display face: the lockup and the landing page's headings.
@@ -63,8 +68,8 @@ export default async function RootLayout({
       <html lang={locale} suppressHydrationWarning>
         <body
           className={cn(
-            geistSans.variable,
-            geistMono.variable,
+            plexSans.variable,
+            plexMono.variable,
             spaceGrotesk.variable,
             "bg-background font-sans antialiased"
           )}

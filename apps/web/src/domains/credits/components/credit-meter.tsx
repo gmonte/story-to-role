@@ -86,7 +86,7 @@ export function CreditMeter() {
             </span>
           )}
           {data.reserve > 0 && (
-            <span className={data.nearReserve ? "text-amber-600" : undefined}>
+            <span className={data.nearReserve ? "text-warning" : undefined}>
               {t.formatMessage(
                 {
                   defaultMessage:
@@ -99,7 +99,7 @@ export function CreditMeter() {
           {data.key && (
             <span
               className={
-                data.key.status === "active" ? undefined : "text-amber-600"
+                data.key.status === "active" ? undefined : "text-warning"
               }
             >
               {data.key.status !== "active"

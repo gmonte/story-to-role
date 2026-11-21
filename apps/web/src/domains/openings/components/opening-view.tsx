@@ -328,7 +328,7 @@ export function DocumentPage({
               })}
             </p>
             {journey.resume?.generation?.status === "failed" && (
-              <p className="rounded-lg border border-red-500/40 bg-red-500/10 p-2.5 text-xs">
+              <p className="border-destructive/40 bg-destructive/10 rounded-lg border p-2.5 text-xs">
                 {t.formatMessage({
                   defaultMessage: "The last generation failed. Try again.",
                 })}
@@ -473,14 +473,14 @@ function DescriptionBody({ opening }: { opening: OpeningDetail }) {
       )}
 
       {opening.status === "rejected" && (
-        <div className="rounded-lg border border-amber-500/40 bg-amber-500/10 p-4 text-sm">
+        <div className="border-warning-border bg-warning-soft rounded-lg border p-4 text-sm">
           <p>{labels.rejection(opening.rejectionReason)}</p>
         </div>
       )}
 
       {opening.warnings.length > 0 && (
-        <div className="flex gap-2 rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 text-sm">
-          <TriangleAlert className="mt-0.5 size-4 shrink-0 text-amber-600" />
+        <div className="border-warning-border bg-warning-soft flex gap-2 rounded-lg border p-3 text-sm">
+          <TriangleAlert className="text-warning mt-0.5 size-4 shrink-0" />
           <div className="flex flex-col gap-1">
             <p className="font-medium">
               {t.formatMessage({

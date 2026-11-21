@@ -322,7 +322,7 @@ export function DocumentFindings() {
           type="button"
           onClick={() => goToFinding(finding)}
           className={cn(
-            "hover:bg-muted w-full rounded px-2 py-1 text-left text-xs text-amber-700 dark:text-amber-400",
+            "hover:bg-muted text-warning w-full rounded px-2 py-1 text-left text-xs",
             activeFinding === key && "bg-muted"
           )}
         >

@@ -94,7 +94,7 @@ export function DocumentsPanel({
 
       {running && <GenerationProgress generation={generation} />}
       {generation?.status === "failed" && (
-        <p className="rounded-lg border border-red-500/40 bg-red-500/10 p-2.5 text-xs">
+        <p className="border-destructive/40 bg-destructive/10 rounded-lg border p-2.5 text-xs">
           {t.formatMessage({
             defaultMessage: "The last generation failed. Try again.",
           })}
@@ -324,7 +324,7 @@ export function VersionChecks({ version }: { version: VersionView }) {
       {/* Measured over the limit, a resume shows it as a finding instead. */}
       {version.pages > version.maxPages &&
         !(version.coverage && version.pdf.ready) && (
-          <p className="rounded-lg border border-amber-500/40 bg-amber-500/10 p-2.5 text-xs">
+          <p className="border-warning-border bg-warning-soft rounded-lg border p-2.5 text-xs">
             {t.formatMessage(
               {
                 defaultMessage:

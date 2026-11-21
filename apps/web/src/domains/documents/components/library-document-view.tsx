@@ -61,7 +61,7 @@ export function LibraryDocumentView({ documentId }: { documentId: string }) {
         </div>
       )}
       {generation?.status === "failed" && versions.length === 0 && (
-        <div className="m-6 flex items-center justify-between gap-3 rounded-lg border border-red-500/40 bg-red-500/10 p-2.5 text-xs">
+        <div className="border-destructive/40 bg-destructive/10 m-6 flex items-center justify-between gap-3 rounded-lg border p-2.5 text-xs">
           <span>
             {t.formatMessage({
               defaultMessage: "The last generation failed. Try again.",

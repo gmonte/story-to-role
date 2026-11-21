@@ -70,7 +70,7 @@ export function CoverLetterWorkspace({
     version.letter?.outdated && (
       <div
         key="outdated"
-        className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-amber-500/40 bg-amber-500/10 p-2.5 text-xs"
+        className="border-warning-border bg-warning-soft flex flex-wrap items-center justify-between gap-2 rounded-lg border p-2.5 text-xs"
       >
         <span>
           {t.formatMessage({
@@ -99,7 +99,7 @@ export function CoverLetterWorkspace({
     version.pages > 1 && (
       <p
         key="pages"
-        className="rounded-lg border border-amber-500/40 bg-amber-500/10 p-2.5 text-xs"
+        className="border-warning-border bg-warning-soft rounded-lg border p-2.5 text-xs"
       >
         {t.formatMessage(
           {

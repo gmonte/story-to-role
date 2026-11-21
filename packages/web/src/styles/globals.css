@@ -8,79 +8,290 @@
 
 @custom-variant dark (&:is(.dark *));
 
-:root {
-  --radius: 0.5rem;
-  /* Warm neutrals on the brand's paper (#f6f6f3) and ink (#15171c): the page
-     is paper, cards and popovers are white over it, the sidebar a step below. */
-  --background: oklch(0.973 0.004 100);
-  --foreground: oklch(0.205 0.011 268);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.205 0.011 268);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.205 0.011 268);
-  --primary: oklch(0.205 0.011 268);
-  --primary-foreground: oklch(0.985 0.002 100);
-  --secondary: oklch(0.94 0.005 100);
-  --secondary-foreground: oklch(0.205 0.011 268);
-  --muted: oklch(0.94 0.005 100);
-  --muted-foreground: oklch(0.5 0.012 265);
-  --accent: oklch(0.935 0.006 100);
-  --accent-foreground: oklch(0.205 0.011 268);
-  --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.885 0.006 100);
-  --input: oklch(0.86 0.006 100);
-  --ring: oklch(0.6 0.19 40);
-  --brand-ink: #15171c;
-  --brand-accent: #d9480f;
-  /* The documents' accent (resume spec, "Layout": dark blue). */
-  --doc-accent: #1f3a68;
-  --sidebar: oklch(0.948 0.005 100);
-  --sidebar-foreground: oklch(0.3 0.012 265);
-  --sidebar-primary: oklch(0.205 0.011 268);
-  --sidebar-primary-foreground: oklch(0.985 0.002 100);
-  --sidebar-accent: oklch(0.905 0.007 100);
-  --sidebar-accent-foreground: oklch(0.205 0.011 268);
-  --sidebar-border: oklch(0.885 0.006 100);
-  --sidebar-ring: oklch(0.6 0.19 40);
+:root,
+/* The document sheet is the PDF: whatever sits on it takes the light
+   palette in both themes (ADR 0012). Its paper comes from the sheet's own
+   frame, which keeps the theme's doc-paper. */
+.doc-sheet {
+  --radius: 0.5rem; /* 8px: cards e painéis; botões e campos usam radius-md (6px), etiquetas radius-sm (4px) */
+
+  /* Superfícies e texto (shadcn) */
+  --background: oklch(
+    0.985 0.003 95
+  ); /* Painel principal (coluna central) e corpo das páginas */
+  --foreground: oklch(
+    0.205 0.01 268
+  ); /* Texto principal: a tinta da marca (#15171c) */
+  --card: oklch(
+    0.998 0.002 95
+  ); /* Cards sobre colunas e painel; quase branco, mais claro que tudo */
+  --card-foreground: oklch(0.205 0.01 268); /* Texto em cards */
+  --popover: oklch(
+    0.998 0.002 95
+  ); /* Menus, popovers e dropdowns (com shadow-lg) */
+  --popover-foreground: oklch(0.205 0.01 268); /* Texto em menus */
+  --primary: oklch(
+    0.205 0.01 268
+  ); /* Botão principal: tinta. A ação é sua, escrita com a sua tinta */
+  --primary-foreground: oklch(
+    0.972 0.004 106
+  ); /* Texto do botão principal: papel (#f6f6f3) */
+  --secondary: oklch(
+    0.93 0.01 85
+  ); /* Botão secundário, chips neutros, abas inativas */
+  --secondary-foreground: oklch(0.205 0.01 268); /* Texto do secundário */
+  --muted: oklch(
+    0.918 0.013 85
+  ); /* Bandeja: colunas laterais (bg-muted/60) e caixas em card (bg-muted/50) */
+  --muted-foreground: oklch(
+    0.47 0.014 262
+  ); /* Texto secundário; AA sobre colunas, cards e caixas */
+  --accent: oklch(
+    0.925 0.016 78
+  ); /* Hover/seleção de itens de lista e de menu */
+  --accent-foreground: oklch(0.205 0.01 268); /* Texto em hover/seleção */
+  --destructive: oklch(0.54 0.2 27); /* Excluir, erros de validação */
+  --border: oklch(
+    0.89 0.011 85
+  ); /* Divisórias, contorno de card, separador de colunas */
+  --input: oklch(
+    0.65 0.012 85
+  ); /* Contorno de campos e selects (3:1, o campo se enxerga) */
+  --ring: oklch(
+    0.6 0.19 38
+  ); /* Foco do teclado: o laranja marca onde você está (usar ring/50) */
+
+  /* Barra lateral */
+  --sidebar: oklch(
+    0.948 0.01 85
+  ); /* Fundo da barra lateral: a mesa onde o painel repousa */
+  --sidebar-foreground: oklch(0.3 0.012 268); /* Itens da barra lateral */
+  --sidebar-primary: oklch(
+    0.205 0.01 268
+  ); /* Avatar/ícone de destaque na barra */
+  --sidebar-primary-foreground: oklch(
+    0.972 0.004 106
+  ); /* Texto sobre sidebar-primary */
+  --sidebar-accent: oklch(
+    0.905 0.016 80
+  ); /* Item ativo e hover na barra lateral */
+  --sidebar-accent-foreground: oklch(0.205 0.01 268); /* Texto do item ativo */
+  --sidebar-border: oklch(0.885 0.012 85); /* Divisórias da barra lateral */
+  --sidebar-ring: oklch(0.6 0.19 38); /* Foco na barra lateral */
+
+  /* Marca */
+  --brand-ink: oklch(
+    0.205 0.01 268
+  ); /* Tinta da marca: logotipo, linhas do ícone */
+  --brand-accent: oklch(
+    0.6 0.19 38
+  ); /* Laranja #d9480f: última linha do ícone, eyebrows, marcador do item ativo, créditos */
+  --brand-accent-text: oklch(
+    0.55 0.18 38
+  ); /* Laranja em texto pequeno (eyebrows, "299 créditos"): AA sobre papel */
+  --brand-accent-soft: oklch(
+    0.95 0.03 55
+  ); /* Fundo do selo de créditos e do plano recomendado */
+
+  /* Documento (folha de papel, igual ao PDF) */
+  --doc-paper: oklch(
+    0.998 0.001 95
+  ); /* Folha do currículo/carta: papel branco nos DOIS temas (vira PDF) */
+  --doc-foreground: oklch(0.205 0.01 268); /* Texto da folha */
+  --doc-muted: oklch(0.45 0.01 262); /* Datas, contato e metadados na folha */
+  --doc-accent: oklch(
+    0.36 0.07 255
+  ); /* Títulos de seção e nome no currículo: azul-tinta sóbrio */
+  --doc-rule: oklch(
+    0.85 0.01 255
+  ); /* Filete sob os títulos de seção na folha */
+
+  /* Aderência */
+  --fit-high: oklch(0.47 0.11 155); /* Aderência alta: texto/ponto (verde) */
+  --fit-high-soft: oklch(
+    0.95 0.04 155
+  ); /* Aderência alta: fundo de selo e da caixa de aderência */
+  --fit-mid: oklch(
+    0.5 0.11 70
+  ); /* Aderência média: texto/ponto (âmbar escuro, legível) */
+  --fit-mid-soft: oklch(0.95 0.05 80); /* Aderência média: fundo */
+  --fit-low: oklch(0.51 0.17 27); /* Aderência baixa: texto/ponto (vermelho) */
+  --fit-low-soft: oklch(0.95 0.03 25); /* Aderência baixa: fundo */
+
+  /* Status das candidaturas */
+  --status-analyzed: oklch(
+    0.48 0.025 260
+  ); /* Candidatura analisada (ardósia) */
+  --status-preparing: oklch(0.5 0.13 250); /* Em preparação (azul) */
+  --status-sent: oklch(0.48 0.09 190); /* Enviada (verde-azulado) */
+  --status-interview: oklch(0.48 0.14 320); /* Entrevista (ameixa) */
+
+  /* Marcas de origem na folha */
+  --origin-profile: oklch(
+    0.56 0.1 185
+  ); /* Linha que veio do seu perfil (verde-azulado, filete contínuo) */
+  --origin-edited: oklch(
+    0.56 0.14 250
+  ); /* Editado por você (azul, filete tracejado) */
+  --origin-instruction: oklch(
+    0.45 0.15 265
+  ); /* Instrução da candidatura (azul-índigo, contínuo) */
+  --origin-written: oklch(
+    0.62 0.15 65
+  ); /* Escrito por você (âmbar, contínuo) */
+
+  /* Avisos e confirmação */
+  --warning: oklch(0.48 0.1 70); /* Texto de aviso (âmbar escuro) */
+  --warning-soft: oklch(0.96 0.04 85); /* Fundo da faixa de aviso */
+  --warning-border: oklch(0.86 0.08 80); /* Contorno da faixa de aviso */
+  --success: oklch(0.47 0.11 155); /* Confirmações */
+
+  /* Apelidos semânticos: mesma cor, nome do contexto */
+  --req-met: var(--fit-high); /* Requisito atendido */
+  --req-met-soft: var(--fit-high-soft); /* Fundo do selo "Atendido" */
+  --req-partial: var(--fit-mid); /* Requisito parcial */
+  --req-partial-soft: var(--fit-mid-soft); /* Fundo do selo "Parcial" */
+  --req-gap: var(--fit-low); /* Lacuna */
+  --req-gap-soft: var(--fit-low-soft); /* Fundo do selo "Lacuna" */
+  --score-low: var(--fit-low); /* Nota do currículo baixa (0–4) */
+  --score-mid: var(--fit-mid); /* Nota média (5–7) */
+  --score-high: var(--fit-high); /* Nota alta (8–10) */
+
+  /* Sombras: só o que flutua acima do plano ganha sombra */
+  --elevation-panel: 0 1px 2px oklch(0.205 0.01 268 / 0.06); /* Painel principal sobre a barra lateral */
+  --elevation-sheet:
+    0 1px 2px oklch(0.205 0.01 268 / 0.06),
+    0 12px 28px -10px oklch(0.205 0.01 268 / 0.16); /* Folha do documento */
+  --elevation-pop:
+    0 10px 30px -6px oklch(0.205 0.01 268 / 0.2),
+    0 2px 6px oklch(0.205 0.01 268 / 0.06); /* Menus e popovers */
 }
 
 .dark {
-  --background: oklch(0.155 0.006 265);
-  --foreground: oklch(0.965 0.004 100);
-  --card: oklch(0.2 0.007 265);
-  --card-foreground: oklch(0.965 0.004 100);
-  --popover: oklch(0.2 0.007 265);
-  --popover-foreground: oklch(0.965 0.004 100);
-  --primary: oklch(0.965 0.004 100);
-  --primary-foreground: oklch(0.205 0.011 268);
-  --secondary: oklch(0.26 0.008 265);
-  --secondary-foreground: oklch(0.965 0.004 100);
-  --muted: oklch(0.26 0.008 265);
-  --muted-foreground: oklch(0.72 0.012 265);
-  --accent: oklch(0.27 0.008 265);
-  --accent-foreground: oklch(0.965 0.004 100);
-  --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 11%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.74 0.16 47);
-  --brand-ink: #f6f6f3;
-  --brand-accent: #ff8a4c;
-  --doc-accent: #93c5fd;
-  --sidebar: oklch(0.13 0.006 265);
-  --sidebar-foreground: oklch(0.9 0.006 265);
-  --sidebar-primary: oklch(0.74 0.16 47);
-  --sidebar-primary-foreground: oklch(0.205 0.011 268);
-  --sidebar-accent: oklch(0.23 0.008 265);
-  --sidebar-accent-foreground: oklch(0.965 0.004 100);
-  --sidebar-border: oklch(1 0 0 / 8%);
-  --sidebar-ring: oklch(0.74 0.16 47);
+  /* Superfícies e texto (shadcn) */
+  --background: oklch(
+    0.205 0.01 268
+  ); /* Painel principal: a própria tinta da marca */
+  --foreground: oklch(
+    0.945 0.005 95
+  ); /* Texto principal: papel levemente apagado */
+  --card: oklch(0.25 0.011 268); /* Cards: sobem, mais claros que o painel */
+  --card-foreground: oklch(0.945 0.005 95); /* Texto em cards */
+  --popover: oklch(0.265 0.011 268); /* Menus e popovers */
+  --popover-foreground: oklch(0.945 0.005 95); /* Texto em menus */
+  --primary: oklch(0.945 0.005 95); /* Botão principal: papel sobre tinta */
+  --primary-foreground: oklch(0.205 0.01 268); /* Texto do botão principal */
+  --secondary: oklch(0.29 0.012 268); /* Botão secundário, chips neutros */
+  --secondary-foreground: oklch(0.945 0.005 95); /* Texto do secundário */
+  --muted: oklch(
+    0.15 0.008 268
+  ); /* Bandeja rebaixada: colunas (muted/60) e caixas em card (muted/50) afundam */
+  --muted-foreground: oklch(
+    0.72 0.012 262
+  ); /* Texto secundário; AA sobre colunas e cards */
+  --accent: oklch(0.3 0.014 268); /* Hover/seleção de lista e menu */
+  --accent-foreground: oklch(0.945 0.005 95); /* Texto em hover */
+  --destructive: oklch(0.68 0.17 25); /* Excluir, erros */
+  --border: oklch(0.31 0.012 268); /* Divisórias e contornos */
+  --input: oklch(0.53 0.012 268); /* Contorno de campos (3:1) */
+  --ring: oklch(
+    0.751 0.161 47
+  ); /* Foco: laranja do escuro (#ff8a4c), usar ring/50 */
+
+  /* Barra lateral */
+  --sidebar: oklch(0.17 0.009 268); /* Barra lateral: mais funda que o painel */
+  --sidebar-foreground: oklch(0.85 0.008 95); /* Itens da barra lateral */
+  --sidebar-primary: oklch(0.945 0.005 95); /* Destaque na barra */
+  --sidebar-primary-foreground: oklch(
+    0.205 0.01 268
+  ); /* Texto sobre destaque */
+  --sidebar-accent: oklch(0.255 0.012 268); /* Item ativo e hover */
+  --sidebar-accent-foreground: oklch(0.97 0.004 95); /* Texto do item ativo */
+  --sidebar-border: oklch(0.26 0.011 268); /* Divisórias da barra */
+  --sidebar-ring: oklch(0.751 0.161 47); /* Foco na barra */
+
+  /* Marca */
+  --brand-ink: oklch(
+    0.945 0.005 95
+  ); /* No escuro, a tinta do logotipo vira papel */
+  --brand-accent: oklch(
+    0.751 0.161 47
+  ); /* Laranja #ff8a4c: ícone, eyebrows, item ativo, créditos */
+  --brand-accent-text: oklch(
+    0.751 0.161 47
+  ); /* No escuro o próprio #ff8a4c já passa AA em texto */
+  --brand-accent-soft: oklch(
+    0.3 0.05 45
+  ); /* Fundo do selo de créditos e do plano recomendado */
+
+  /* Documento (folha de papel, igual ao PDF) */
+  --doc-paper: oklch(
+    0.965 0.004 95
+  ); /* Folha: continua papel no escuro (um tom abaixo do branco para não ofuscar) */
+  --doc-foreground: oklch(
+    0.205 0.01 268
+  ); /* Texto da folha: tinta, igual ao PDF */
+  --doc-muted: oklch(0.45 0.01 262); /* Metadados na folha */
+  --doc-accent: oklch(
+    0.36 0.07 255
+  ); /* Títulos na folha: o mesmo azul-tinta, porque a folha é o PDF */
+  --doc-rule: oklch(0.84 0.01 255); /* Filete sob os títulos */
+
+  /* Aderência */
+  --fit-high: oklch(0.79 0.13 155); /* Aderência alta: texto/ponto */
+  --fit-high-soft: oklch(0.29 0.05 160); /* Aderência alta: fundo */
+  --fit-mid: oklch(0.82 0.12 80); /* Aderência média: texto/ponto */
+  --fit-mid-soft: oklch(0.3 0.05 75); /* Aderência média: fundo */
+  --fit-low: oklch(0.75 0.14 25); /* Aderência baixa: texto/ponto */
+  --fit-low-soft: oklch(0.3 0.06 25); /* Aderência baixa: fundo */
+
+  /* Status das candidaturas */
+  --status-analyzed: oklch(0.76 0.025 260); /* Analisada */
+  --status-preparing: oklch(0.76 0.11 250); /* Em preparação */
+  --status-sent: oklch(0.78 0.09 190); /* Enviada */
+  --status-interview: oklch(0.77 0.11 320); /* Entrevista */
+
+  /* Marcas de origem na folha */
+  --origin-profile: oklch(
+    0.56 0.1 185
+  ); /* Perfil (na folha, que é papel: mesmo valor do claro) */
+  --origin-edited: oklch(0.56 0.14 250); /* Editado por você (na folha) */
+  --origin-instruction: oklch(
+    0.45 0.15 265
+  ); /* Instrução da candidatura (na folha) */
+  --origin-written: oklch(0.62 0.15 65); /* Escrito por você (na folha) */
+
+  /* Avisos e confirmação */
+  --warning: oklch(0.84 0.12 80); /* Texto de aviso */
+  --warning-soft: oklch(0.28 0.045 75); /* Fundo da faixa de aviso */
+  --warning-border: oklch(0.42 0.08 75); /* Contorno da faixa de aviso */
+  --success: oklch(0.79 0.13 155); /* Confirmações */
+}
+
+.dark {
+  /* No escuro as sombras precisam de mais opacidade para existir */
+  --elevation-panel: 0 1px 2px oklch(0 0 0 / 0.4);
+  --elevation-sheet:
+    0 1px 2px oklch(0 0 0 / 0.4), 0 16px 40px -12px oklch(0 0 0 / 0.6);
+  --elevation-pop:
+    0 12px 32px -6px oklch(0 0 0 / 0.55), 0 0 0 1px oklch(1 0 0 / 0.04);
 }
 
 @theme inline {
-  --color-brand-ink: var(--brand-ink);
-  --color-brand-accent: var(--brand-accent);
-  --color-doc-accent: var(--doc-accent);
-  --font-display: var(--font-space-grotesk);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  /* Fontes carregadas pelo next/font no layout raiz */
+  --font-sans:
+    var(--font-plex-sans), ui-sans-serif, system-ui, sans-serif; /* interface e texto do perfil */
+  --font-display:
+    var(--font-space-grotesk), var(--font-plex-sans), ui-sans-serif, sans-serif; /* títulos, sempre 600 */
+  --font-mono:
+    var(--font-plex-mono), ui-monospace, monospace; /* marcas [medido] [estimado] [sem número], números de crédito */
+  --font-doc:
+    var(--font-plex-sans), Arial, sans-serif; /* folha do currículo e da carta (embutida no PDF) */
+
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-card: var(--card);
@@ -99,18 +310,56 @@
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
-  --radius-sm: calc(var(--radius) - 4px);
-  --radius-md: calc(var(--radius) - 2px);
-  --radius-lg: var(--radius);
-  --radius-xl: calc(var(--radius) + 4px);
-  --color-sidebar-ring: var(--sidebar-ring);
-  --color-sidebar-border: var(--sidebar-border);
-  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
-  --color-sidebar-accent: var(--sidebar-accent);
-  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
-  --color-sidebar-primary: var(--sidebar-primary);
-  --color-sidebar-foreground: var(--sidebar-foreground);
   --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-brand-ink: var(--brand-ink);
+  --color-brand-accent: var(--brand-accent);
+  --color-brand-accent-text: var(--brand-accent-text);
+  --color-brand-accent-soft: var(--brand-accent-soft);
+  --color-doc-paper: var(--doc-paper);
+  --color-doc-foreground: var(--doc-foreground);
+  --color-doc-muted: var(--doc-muted);
+  --color-doc-accent: var(--doc-accent);
+  --color-doc-rule: var(--doc-rule);
+  --color-fit-high: var(--fit-high);
+  --color-fit-high-soft: var(--fit-high-soft);
+  --color-fit-mid: var(--fit-mid);
+  --color-fit-mid-soft: var(--fit-mid-soft);
+  --color-fit-low: var(--fit-low);
+  --color-fit-low-soft: var(--fit-low-soft);
+  --color-status-analyzed: var(--status-analyzed);
+  --color-status-preparing: var(--status-preparing);
+  --color-status-sent: var(--status-sent);
+  --color-status-interview: var(--status-interview);
+  --color-origin-profile: var(--origin-profile);
+  --color-origin-edited: var(--origin-edited);
+  --color-origin-instruction: var(--origin-instruction);
+  --color-origin-written: var(--origin-written);
+  --color-warning: var(--warning);
+  --color-warning-soft: var(--warning-soft);
+  --color-warning-border: var(--warning-border);
+  --color-success: var(--success);
+  --color-req-met: var(--req-met);
+  --color-req-met-soft: var(--req-met-soft);
+  --color-req-partial: var(--req-partial);
+  --color-req-partial-soft: var(--req-partial-soft);
+  --color-req-gap: var(--req-gap);
+  --color-req-gap-soft: var(--req-gap-soft);
+  --color-score-low: var(--score-low);
+  --color-score-mid: var(--score-mid);
+  --color-score-high: var(--score-high);
+
+  /* Sombras: shadow-panel, shadow-sheet e shadow-pop, com valores por tema */
+  --shadow-panel: var(--elevation-panel);
+  --shadow-sheet: var(--elevation-sheet);
+  --shadow-pop: var(--elevation-pop);
+
   /* The AI at work: a light sweeping across its words. */
   --animate-shimmer: shimmer 2.2s linear infinite;
   @keyframes shimmer {
@@ -131,6 +380,12 @@
     scroll-behavior: smooth;
   }
   body {
-    @apply bg-background text-foreground;
+    @apply bg-background text-foreground font-sans antialiased;
+  }
+  h1,
+  h2,
+  h3 {
+    @apply font-display;
+    letter-spacing: -0.015em;
   }
 }

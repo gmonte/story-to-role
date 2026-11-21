@@ -34,6 +34,13 @@ type FitItem = NonNullable<OpeningDetail["fitCheck"]>["items"][number];
  * then partial, then met; within each, mandatory before desirable, then by
  * kind and name.
  */
+
+/** A requirement's verdict as a soft fill (ADR 0012: req tokens). */
+const verdictTone = {
+  met: "border-transparent bg-req-met-soft text-req-met",
+  partial: "border-transparent bg-req-partial-soft text-req-partial",
+  gap: "border-transparent bg-req-gap-soft text-req-gap",
+} as const;
 export function byFitOrder(a: FitItem, b: FitItem) {
   return (
     verdictOrder[a.verdict] - verdictOrder[b.verdict] ||
@@ -56,9 +63,9 @@ export function pendingGaps(opening: OpeningDetail) {
 /** The band's colors, on a chip or a block. */
 export function bandClassName(band: "high" | "medium" | "low") {
   return cn(
-    band === "high" && "border-emerald-500/40 bg-emerald-500/10",
-    band === "medium" && "border-amber-500/40 bg-amber-500/10",
-    band === "low" && "border-red-500/40 bg-red-500/10"
+    band === "high" && "border-fit-high/40 bg-fit-high-soft",
+    band === "medium" && "border-fit-mid/40 bg-fit-mid-soft",
+    band === "low" && "border-fit-low/40 bg-fit-low-soft"
   );
 }
 
@@ -107,13 +114,8 @@ export function FitColumn({ opening }: { opening: OpeningDetail }) {
               {(["met", "partial", "gap"] as const).map((verdict) => (
                 <Badge
                   key={verdict}
-                  variant={
-                    verdict === "gap"
-                      ? "destructive"
-                      : verdict === "met"
-                        ? "default"
-                        : "secondary"
-                  }
+                  variant="outline"
+                  className={verdictTone[verdict]}
                 >
                   {cn(
                     t.formatNumber(
@@ -126,7 +128,7 @@ export function FitColumn({ opening }: { opening: OpeningDetail }) {
               ))}
             </div>
             {blockers > 0 && (
-              <p className="text-xs font-medium text-red-600 dark:text-red-400">
+              <p className="text-destructive text-xs font-medium">
                 {t.formatMessage(
                   {
                     defaultMessage:
@@ -147,7 +149,7 @@ export function FitColumn({ opening }: { opening: OpeningDetail }) {
             )}
           </div>
           {fitCheck.preferenceConflicts.length > 0 && (
-            <div className="rounded-lg border border-red-500/40 bg-red-500/5 p-3 text-sm">
+            <div className="border-destructive/40 bg-destructive/5 rounded-lg border p-3 text-sm">
               <p className="font-medium">
                 {t.formatMessage({
                   defaultMessage: "It breaks your job preferences:",
@@ -312,15 +314,7 @@ function FitCheckItem({
       className="bg-card flex flex-col gap-1.5 rounded-lg border p-3"
     >
       <div className="flex items-center gap-1.5">
-        <Badge
-          variant={
-            item.verdict === "gap"
-              ? "destructive"
-              : item.verdict === "met"
-                ? "default"
-                : "secondary"
-          }
-        >
+        <Badge variant="outline" className={verdictTone[item.verdict]}>
           {labels.verdict(item.verdict)}
         </Badge>
         <span className="text-muted-foreground text-[11px]">

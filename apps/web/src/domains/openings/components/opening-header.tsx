@@ -41,7 +41,6 @@ import {
 } from "@repo/web/components/ui/tooltip";
 import { cn } from "@repo/web/lib/utils";
 
-import { useTrackerLabels } from "~/domains/applications/hooks/use-tracker-labels";
 import { CreditCost } from "~/domains/credits/components/credit-cost";
 import { useCredits } from "~/domains/credits/hooks/use-credits";
 import { useDownloadZip } from "~/domains/documents/components/download-zip-button";
@@ -49,6 +48,7 @@ import { useOpeningDocuments } from "~/domains/documents/hooks/use-opening-docum
 import { useTRPC } from "~/tools/trpc/client";
 import { CoverageScoreBadge } from "~/domains/documents/components/coverage-score";
 import { useSelectedVersion } from "~/domains/documents/hooks/use-selected-version";
+import { ApplicationStatusBadge } from "~/domains/applications/components/application-status-badge";
 
 import { useRefreshOpenings } from "../hooks/use-opening";
 import { isRecheck } from "./opening-view";
@@ -133,7 +133,6 @@ export function OpeningHeader({
 }) {
   const t = useTranslation();
   const labels = useOpeningLabels();
-  const trackerLabels = useTrackerLabels();
   const journey = useOpeningJourney(openingId, opening);
   const processing = opening.status === "processing";
   // The score of the resume version open on the resume page (the first one
@@ -259,9 +258,7 @@ export function OpeningHeader({
               </Tooltip>
             )}
             {opening.applicationStatus && (
-              <Badge variant="secondary">
-                {trackerLabels.status(opening.applicationStatus)}
-              </Badge>
+              <ApplicationStatusBadge status={opening.applicationStatus} />
             )}
             {opening.status === "closed" && (
               <Badge variant="outline">
@@ -289,7 +286,7 @@ export function OpeningHeader({
                 <TooltipTrigger asChild>
                   <Badge
                     variant="outline"
-                    className="cursor-default border-amber-500/40 bg-amber-500/10"
+                    className="border-warning-border bg-warning-soft cursor-default"
                   >
                     <TriangleAlert className="size-3" />
                     {t.formatMessage(

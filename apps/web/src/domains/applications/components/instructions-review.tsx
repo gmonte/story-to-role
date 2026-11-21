@@ -88,7 +88,7 @@ export function InstructionsReview({
       ) : (
         <>
           {data.failed && (
-            <p className="text-xs text-red-600">
+            <p className="text-destructive text-xs">
               {t.formatMessage({
                 defaultMessage:
                   "Your last instructions could not be split. Try again.",
@@ -205,7 +205,7 @@ export function ConfirmedInstructions({
       {overrides.map((row) => (
         <li
           key={row.id}
-          className="flex items-start justify-between gap-2 rounded-md border border-sky-500/40 bg-sky-500/10 p-2 text-xs"
+          className="border-origin-edited/40 bg-origin-edited/10 flex items-start justify-between gap-2 rounded-md border p-2 text-xs"
         >
           <span>{labels.override(row)}</span>
           <Button
@@ -300,7 +300,7 @@ function DraftReview({
       {overrides.map((row) => (
         <label
           key={row.id}
-          className="flex items-start gap-2 rounded-md border border-sky-500/40 bg-sky-500/10 p-2 text-xs"
+          className="border-origin-edited/40 bg-origin-edited/10 flex items-start gap-2 rounded-md border p-2 text-xs"
         >
           <Checkbox
             className="mt-0.5"

@@ -161,7 +161,7 @@ export function HeroTraceDemo() {
             className="bg-card"
           />
         </div>
-        <div className="flex flex-col gap-2 px-4 py-4">
+        <div className="doc-sheet bg-doc-paper text-doc-foreground font-doc flex flex-col gap-2 px-4 py-4">
           <div className="flex items-center justify-between gap-2">
             <span className="text-doc-accent text-xs font-semibold tracking-wider uppercase">
               {t.formatMessage({ defaultMessage: "Resume · Experience" })}
@@ -195,7 +195,7 @@ export function HeroTraceDemo() {
               })}
             </Badge>
             <Badge variant="outline" className="gap-1">
-              <CircleCheck className="text-emerald-600 dark:text-emerald-400" />
+              <CircleCheck className="text-success" />
               {t.formatMessage({ defaultMessage: "Nothing added" })}
             </Badge>
           </div>

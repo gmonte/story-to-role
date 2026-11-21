@@ -366,7 +366,7 @@ export function AgentComposer({
   return (
     <form onSubmit={onSubmit} className="border-t p-3">
       {nearReserve && (
-        <p className="mb-2 text-xs text-amber-600">
+        <p className="text-warning mb-2 text-xs">
           {t.formatMessage({
             defaultMessage:
               "Your credits are close to the reserve kept for your resume.",

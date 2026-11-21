@@ -52,7 +52,7 @@ export function OutdatedNotice({
     return (
       <div
         key={outdated.versionId}
-        className="flex items-center justify-between gap-2 rounded-lg border border-amber-500/40 bg-amber-500/10 p-2.5 text-xs"
+        className="border-warning-border bg-warning-soft flex items-center justify-between gap-2 rounded-lg border p-2.5 text-xs"
       >
         <span>
           {outdated.baseMissing
@@ -185,7 +185,7 @@ function SyncDialog({
                 </span>
               </label>
               {change.conflict && (
-                <p className="rounded bg-amber-500/10 p-1.5">
+                <p className="bg-warning-soft rounded p-1.5">
                   {t.formatMessage(
                     {
                       defaultMessage:
@@ -263,7 +263,7 @@ export function SyncProposal({
   const busy = accept.isPending || discard.isPending;
 
   return (
-    <div className="bg-card flex flex-col gap-2 rounded-lg border border-sky-500/40 p-2.5 text-xs">
+    <div className="bg-card border-origin-edited/40 flex flex-col gap-2 rounded-lg border p-2.5 text-xs">
       <p className="text-sm font-medium">
         {document.kind === "cover_letter"
           ? t.formatMessage({

@@ -123,7 +123,7 @@ export function FindingHoverCard({
       role="tooltip"
       // Kept inside the viewport: capped to the room it has, scrolling,
       // above the text when there is more room there.
-      className="bg-popover text-popover-foreground fixed z-50 max-w-xs space-y-2 overflow-y-auto rounded-md border p-2.5 text-xs shadow-md"
+      className="bg-popover text-popover-foreground shadow-pop fixed z-50 max-w-xs space-y-2 overflow-y-auto rounded-md border p-2.5 text-xs"
       style={floatingCardStyle(card.anchor, 320)}
       // Pressing inside never moves the editor's selection or focus.
       onMouseDown={(event) => event.preventDefault()}

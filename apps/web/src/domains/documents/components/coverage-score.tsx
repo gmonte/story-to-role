@@ -32,10 +32,11 @@ import {
   StaleReviewNotice,
 } from "./review-again";
 
-const badgeVariant = {
-  good: "default",
-  middling: "secondary",
-  low: "destructive",
+/** The score's band as a soft fill (ADR 0012: score tokens). */
+const scoreTone = {
+  good: "border-transparent bg-fit-high-soft text-score-high",
+  middling: "border-transparent bg-fit-mid-soft text-score-mid",
+  low: "border-transparent bg-fit-low-soft text-score-low",
 } as const;
 
 type Review = NonNullable<VersionView["review"]>;
@@ -51,10 +52,10 @@ function useScoreLabel() {
 }
 
 /** The band in a word: Strong, Fair or Low. */
-function BandBadge({ band }: { band: keyof typeof badgeVariant }) {
+function BandBadge({ band }: { band: keyof typeof scoreTone }) {
   const t = useTranslation();
   return (
-    <Badge variant={badgeVariant[band]}>
+    <Badge variant="outline" className={scoreTone[band]}>
       {t.formatMessage(
         {
           defaultMessage:
@@ -545,7 +546,9 @@ export function CoverageScoreBadge({
           variant="ghost"
           className={cn("h-7 gap-1.5 px-2", inline && "h-auto p-0")}
         >
-          <Badge variant={badgeVariant[band]}>{label(review)}</Badge>
+          <Badge variant="outline" className={scoreTone[band]}>
+            {label(review)}
+          </Badge>
           {review.inconsistencies > 0 && (
             <span
               role="img"
@@ -565,7 +568,7 @@ export function CoverageScoreBadge({
               aria-label={t.formatMessage({
                 defaultMessage: "Edited after the review",
               })}
-              className="size-2 rounded-full bg-amber-500"
+              className="bg-warning size-2 rounded-full"
             />
           )}
         </Button>

@@ -37,6 +37,7 @@ import {
   type SentFilter,
   type SortKey,
 } from "../utils/application-filters";
+import { ApplicationStatusBadge } from "./application-status-badge";
 
 /** The short name of each application type. */
 function useTypeNames() {
@@ -294,7 +295,7 @@ function ApplicationListRow({
               {t.formatMessage({ defaultMessage: "Elsewhere" })}
             </Badge>
           )}
-          <Badge variant="secondary">{labels.status(application.status)}</Badge>
+          <ApplicationStatusBadge status={application.status} />
         </span>
       </Link>
     </li>

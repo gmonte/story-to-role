@@ -38,7 +38,7 @@ export const removedWordsClass = cn(
 
 // As in the profile: tinted and underlined, so the new words read apart.
 const addedWordsClass = cn(
-  "rounded-xs bg-emerald-500/25 underline decoration-emerald-500/70 underline-offset-2 dark:bg-emerald-500/30"
+  "rounded-xs bg-fit-high-soft underline decoration-success/70 underline-offset-2"
 );
 
 // The app's Button, small, as classes: the widget is plain DOM.
@@ -71,7 +71,7 @@ export function changeWidget(
 ) {
   const root = document.createElement("div");
   root.className = cn(
-    "my-1.5 rounded-lg border border-emerald-500/40 bg-emerald-500/10 px-3 py-2 text-sm"
+    "my-1.5 rounded-lg border border-success/40 bg-fit-high-soft px-3 py-2 text-sm"
   );
   root.setAttribute("data-document-change-id", change.id);
   root.contentEditable = "false";
@@ -83,9 +83,7 @@ export function changeWidget(
     const line = document.createElement("div");
     line.className = cn(
       change.part === skillsPart ? "" : "relative pl-4",
-      diff.fallback
-        ? "text-emerald-800 dark:text-emerald-200"
-        : "text-foreground"
+      diff.fallback ? "text-success" : "text-foreground"
     );
     if (change.part !== skillsPart) {
       const marker = document.createElement("span");
@@ -161,7 +159,7 @@ export function sectionMoveWidget(
 ) {
   const root = document.createElement("div");
   root.className = cn(
-    "my-1.5 rounded-lg border border-emerald-500/40 bg-emerald-500/10 px-3 py-2 text-sm"
+    "my-1.5 rounded-lg border border-success/40 bg-fit-high-soft px-3 py-2 text-sm"
   );
   root.setAttribute("data-document-change-id", change.id);
   root.contentEditable = "false";

@@ -189,7 +189,7 @@ function ProfileScreen({ t }: { t: Translation }) {
                     "I moved monthly billing off a nightly batch to an event queue (Python, SQS).",
                 })}
               </span>
-              <span className="rounded bg-emerald-500/15 px-1 text-emerald-800 dark:text-emerald-300">
+              <span className="bg-req-met-soft text-req-met rounded px-1">
                 {t.formatMessage({
                   defaultMessage:
                     "Closing run went from 6 hours to 40 minutes [measured: job log].",
@@ -273,9 +273,9 @@ function FitScreen({ t }: { t: Translation }) {
     gap: t.formatMessage({ defaultMessage: "Gap" }),
   };
   const tone = {
-    met: "bg-emerald-500/15 text-emerald-800 dark:text-emerald-300",
-    partial: "bg-amber-500/15 text-amber-800 dark:text-amber-300",
-    gap: "bg-red-500/15 text-red-800 dark:text-red-300",
+    met: "bg-req-met-soft text-req-met",
+    partial: "bg-req-partial-soft text-req-partial",
+    gap: "bg-req-gap-soft text-req-gap",
   };
 
   return (
@@ -286,7 +286,7 @@ function FitScreen({ t }: { t: Translation }) {
         })}
       />
       <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-hidden p-4 sm:p-5">
-        <div className="flex flex-wrap items-center gap-2 rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-3">
+        <div className="border-fit-high/40 bg-fit-high-soft flex flex-wrap items-center gap-2 rounded-lg border p-3">
           <span className="font-medium">
             {t.formatMessage({ defaultMessage: "High fit" })}
           </span>
@@ -340,7 +340,7 @@ function DocumentScreen({ t }: { t: Translation }) {
         </Badge>
       </ScreenBar>
       <div className="bg-muted/60 flex min-h-0 flex-1 justify-center overflow-hidden p-4 sm:p-6">
-        <div className="bg-card w-full max-w-xl rounded-sm border p-6 text-sm shadow-md">
+        <div className="doc-sheet bg-doc-paper text-doc-foreground font-doc shadow-sheet w-full max-w-xl rounded-xs p-6 text-sm">
           <p className="text-doc-accent text-xl font-semibold">
             {EXAMPLE_NAME}
           </p>
@@ -350,7 +350,7 @@ function DocumentScreen({ t }: { t: Translation }) {
                 "Backend Engineer · Python, FastAPI, PostgreSQL · Belo Horizonte, Brazil",
             })}
           </p>
-          <p className="border-doc-accent/40 text-doc-accent mb-1 border-b text-xs font-semibold tracking-wider uppercase">
+          <p className="border-doc-rule text-doc-accent mb-1 border-b text-xs font-semibold tracking-wider uppercase">
             {t.formatMessage({ defaultMessage: "Experience" })}
           </p>
           <p className="mt-2 font-medium">
@@ -360,19 +360,19 @@ function DocumentScreen({ t }: { t: Translation }) {
             })}
           </p>
           <ul className="mt-1 flex list-disc flex-col gap-1 pl-5">
-            <li className="border-l-2 border-emerald-500 pl-2">
+            <li className="border-l-origin-profile border-l-2 pl-2">
               {t.formatMessage({
                 defaultMessage:
                   "Moved monthly billing from a nightly batch to an event-driven queue in Python, cutting the closing run from 6 hours to 40 minutes.",
               })}
             </li>
-            <li className="border-l-2 border-emerald-500 pl-2">
+            <li className="border-l-origin-profile border-l-2 pl-2">
               {t.formatMessage({
                 defaultMessage:
                   "Built REST APIs in FastAPI for recurring billing on a B2B payments platform.",
               })}
             </li>
-            <li className="border-l-2 border-sky-500 pl-2">
+            <li className="border-l-origin-edited border-l-2 border-dashed pl-2">
               {t.formatMessage({
                 defaultMessage:
                   "Reviewed code and mentored two junior developers.",
@@ -381,11 +381,11 @@ function DocumentScreen({ t }: { t: Translation }) {
           </ul>
           <div className="text-muted-foreground mt-4 flex flex-wrap gap-3 text-xs">
             <span className="flex items-center gap-1">
-              <span className="size-2 rounded-full bg-emerald-500" />
+              <span className="bg-origin-profile size-2 rounded-full" />
               {t.formatMessage({ defaultMessage: "From your profile" })}
             </span>
             <span className="flex items-center gap-1">
-              <span className="size-2 rounded-full bg-sky-500" />
+              <span className="bg-origin-edited size-2 rounded-full" />
               {t.formatMessage({ defaultMessage: "Edited by you" })}
             </span>
           </div>
@@ -399,22 +399,22 @@ function ApplicationsScreen({ t }: { t: Translation }) {
   const columns = [
     {
       title: t.formatMessage({ defaultMessage: "Analyzed" }),
-      dot: "bg-emerald-500",
+      dot: "bg-status-analyzed",
       cards: ["Nimbus · Senior Backend", "Orbita · Platform Engineer"],
     },
     {
       title: t.formatMessage({ defaultMessage: "Preparing" }),
-      dot: "bg-amber-500",
+      dot: "bg-status-preparing",
       cards: ["Lumen Bank · Backend Developer"],
     },
     {
       title: t.formatMessage({ defaultMessage: "Sent" }),
-      dot: "bg-sky-500",
+      dot: "bg-status-sent",
       cards: ["Vela Health · Python Engineer", "Kora · API Engineer"],
     },
     {
       title: t.formatMessage({ defaultMessage: "Interview" }),
-      dot: "bg-violet-500",
+      dot: "bg-status-interview",
       cards: ["Aster Pay · Senior Backend"],
     },
   ];

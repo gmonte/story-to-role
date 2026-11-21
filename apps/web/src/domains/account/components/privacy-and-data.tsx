@@ -52,7 +52,7 @@ export function PrivacyAndData() {
           </Button>
         </section>
 
-        <section className="bg-card flex flex-col gap-2 rounded-lg border border-red-500/40 p-4">
+        <section className="bg-card border-destructive/40 flex flex-col gap-2 rounded-lg border p-4">
           <h2 className="font-medium">
             {t.formatMessage({ defaultMessage: "Delete your account" })}
           </h2>
@@ -111,7 +111,7 @@ function DeleteAccountDialog() {
           </DialogDescription>
         </DialogHeader>
         {credits > 0 && (
-          <p className="rounded-md border border-amber-500/40 bg-amber-500/10 p-2.5 text-sm">
+          <p className="border-warning-border bg-warning-soft rounded-md border p-2.5 text-sm">
             {t.formatMessage(
               {
                 defaultMessage:

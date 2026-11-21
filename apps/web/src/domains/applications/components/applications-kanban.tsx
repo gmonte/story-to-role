@@ -38,6 +38,7 @@ import { planStatusMove } from "../utils/status-move";
 import { ApplicationHint } from "./application-hint";
 import { MarkAppliedDialog } from "./application-tracker";
 import { WithdrawDialog } from "./withdraw-dialog";
+import { ApplicationStatusDot } from "./application-status-badge";
 
 /**
  * The kanban view: a column per status in tracker order. Dragging a card to
@@ -90,7 +91,10 @@ export function ApplicationsKanban({
               )}
             >
               <h2 className="flex items-center justify-between px-1 text-xs font-medium">
-                {labels.status(status)}
+                <span className="flex items-center gap-1.5">
+                  <ApplicationStatusDot status={status} />
+                  {labels.status(status)}
+                </span>
                 <span className="text-muted-foreground">
                   {t.formatNumber(cards.length)}
                 </span>

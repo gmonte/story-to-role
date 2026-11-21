@@ -56,7 +56,7 @@ export function ProfileReview() {
           { count: reviewFindings.length }
         )}
         {reviewFindings.length > 0 && (
-          <CircleAlert className="size-3.5 text-amber-600" />
+          <CircleAlert className="text-warning size-3.5" />
         )}
       </p>
       {reviewFindings.length === 0 && (

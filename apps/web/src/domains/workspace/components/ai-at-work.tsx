@@ -70,7 +70,7 @@ export function AiAtWork({
                 )}
               >
                 {done ? (
-                  <Check className="size-3.5 text-emerald-600 dark:text-emerald-400" />
+                  <Check className="text-success size-3.5" />
                 ) : active ? (
                   <Sparkles className="text-primary size-3.5 motion-safe:animate-spin motion-safe:[animation-duration:3s]" />
                 ) : (

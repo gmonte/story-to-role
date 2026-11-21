@@ -24,9 +24,9 @@ import { useTRPC } from "~/tools/trpc/client";
  */
 
 const bandDot = {
-  high: "bg-emerald-500",
-  medium: "bg-amber-500",
-  low: "bg-destructive",
+  high: "bg-fit-high",
+  medium: "bg-fit-mid",
+  low: "bg-fit-low",
 } as const;
 
 export function OpeningsByStatus() {

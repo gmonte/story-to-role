@@ -428,7 +428,7 @@ export function ProfileDocument() {
       {selection && (
         <button
           type="button"
-          className="bg-popover text-popover-foreground hover:bg-accent absolute z-20 flex items-center gap-1.5 rounded-md border px-2 py-1 text-xs font-medium shadow-md"
+          className="bg-popover text-popover-foreground hover:bg-accent shadow-pop absolute z-20 flex items-center gap-1.5 rounded-md border px-2 py-1 text-xs font-medium"
           style={{ left: selection.left, top: selection.top }}
           // The selection stays while the button is pressed.
           onMouseDown={(event) => event.preventDefault()}
@@ -488,7 +488,7 @@ export function ProfileDocument() {
       />
       {slash && slashOptions.length > 0 && (
         <div
-          className="bg-popover text-popover-foreground absolute z-20 w-64 overflow-hidden rounded-md border p-1 shadow-md"
+          className="bg-popover text-popover-foreground shadow-pop absolute z-20 w-64 overflow-hidden rounded-md border p-1"
           style={{ left: slash.left, top: slash.top }}
           role="listbox"
         >

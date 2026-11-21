@@ -54,7 +54,7 @@ export function CoverageReviewBlock({ version }: { version: VersionView }) {
       {findings.length > 0 ? (
         <div className="bg-muted/50 flex flex-col gap-1.5 rounded-lg border p-2.5">
           <p className="flex items-center gap-1.5 font-medium">
-            <AlertTriangle className="size-3.5 shrink-0 text-amber-600" />
+            <AlertTriangle className="text-warning size-3.5 shrink-0" />
             {t.formatMessage({
               defaultMessage:
                 "Worth a look before you send it; you can still download it",
@@ -623,7 +623,7 @@ function ReviewSection({
         <ChevronRight
           className={cn("size-3.5 transition-transform", open && "rotate-90")}
         />
-        <span className={cn("font-medium", attention && "text-amber-600")}>
+        <span className={cn("font-medium", attention && "text-warning")}>
           {title}
         </span>
         {count !== undefined && (

@@ -275,7 +275,7 @@ export function PublishDialog({
                 </p>
               )}
               {credits.data?.nearReserve && (
-                <p className="text-xs text-amber-600">
+                <p className="text-warning text-xs">
                   {t.formatMessage({
                     defaultMessage:
                       "Your credits are close to the reserve kept for your resume.",
@@ -324,7 +324,7 @@ export function PublishDialog({
           {!blocked && pending.length > 0 && (
             <div className="bg-muted/50 space-y-1.5 rounded-md border p-3 text-sm">
               <p className="flex items-center gap-2 font-medium">
-                <CircleAlert className="size-4 text-amber-600" />
+                <CircleAlert className="text-warning size-4" />
                 {t.formatMessage({
                   defaultMessage: "Still open in your profile:",
                 })}

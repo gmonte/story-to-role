@@ -286,7 +286,7 @@ export function PdfPreview({ version }: { version: VersionView }) {
           })}
           onConfirm={() => setAcknowledged(true)}
         />
-        <div className="flex flex-col gap-2 rounded-lg border border-amber-500/40 bg-amber-500/10 p-2.5 text-xs">
+        <div className="border-warning-border bg-warning-soft flex flex-col gap-2 rounded-lg border p-2.5 text-xs">
           <p>
             {t.formatMessage({
               defaultMessage:

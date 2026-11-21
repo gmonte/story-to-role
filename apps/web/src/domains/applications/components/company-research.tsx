@@ -114,7 +114,7 @@ export function CompanyResearch({
         />
       )}
       {data.status === "failed" && (
-        <p className="text-xs text-red-600">
+        <p className="text-destructive text-xs">
           {t.formatMessage({
             defaultMessage: "The research didn't finish. Try again.",
           })}

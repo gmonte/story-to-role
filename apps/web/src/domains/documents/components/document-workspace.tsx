@@ -173,7 +173,7 @@ function NewerProfileNotice() {
   const newer = version.profile.newer;
   if (!newer) return null;
   return (
-    <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-amber-500/40 bg-amber-500/10 p-2.5 text-xs">
+    <div className="border-warning-border bg-warning-soft flex flex-wrap items-center justify-between gap-2 rounded-lg border p-2.5 text-xs">
       <span>
         {t.formatMessage(
           {
@@ -252,16 +252,16 @@ function DocumentToolbar({
             </Tabs>
           )}
           <div className="text-muted-foreground flex flex-wrap gap-3 text-xs">
-            <Legend className="border-l-emerald-500">
+            <Legend className="border-l-origin-profile">
               {t.formatMessage({ defaultMessage: "Your profile" })}
             </Legend>
-            <Legend className="border-dashed border-l-emerald-500">
+            <Legend className="border-l-origin-edited border-dashed">
               {t.formatMessage({ defaultMessage: "Edited by you" })}
             </Legend>
-            <Legend className="border-l-sky-500">
+            <Legend className="border-l-origin-instruction">
               {t.formatMessage({ defaultMessage: "Application instruction" })}
             </Legend>
-            <Legend className="border-l-amber-500">
+            <Legend className="border-l-origin-written">
               {t.formatMessage({ defaultMessage: "Written by you" })}
             </Legend>
           </div>

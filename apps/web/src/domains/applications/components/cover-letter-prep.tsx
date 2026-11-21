@@ -185,7 +185,7 @@ function InterviewDone({
       <section className="bg-card flex flex-col gap-3 rounded-lg border p-5">
         <div className="flex flex-col gap-1">
           <h2 className="flex items-center gap-2 font-medium">
-            <CheckCircle2 className="size-4 text-emerald-600" />
+            <CheckCircle2 className="text-success size-4" />
             {t.formatMessage({ defaultMessage: "Your interview is done" })}
           </h2>
           <p className="text-muted-foreground text-sm">
@@ -322,7 +322,7 @@ function WriteLetter({
   return (
     <section className="flex flex-col items-start gap-2">
       {failed && (
-        <p className="text-xs text-red-600">
+        <p className="text-destructive text-xs">
           {t.formatMessage({
             defaultMessage: "The last letter failed. Try again.",
           })}
@@ -361,7 +361,7 @@ function MotivationStart({
   return (
     <section className="flex flex-col gap-3">
       {failed && (
-        <p className="text-xs text-red-600">
+        <p className="text-destructive text-xs">
           {t.formatMessage({
             defaultMessage:
               "The interview stopped on an error. Start it again.",

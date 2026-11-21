@@ -563,9 +563,7 @@ function Offer({
           {period}
         </span>
       </span>
-      {note && (
-        <span className="text-muted-foreground -mt-1.5 text-xs">{note}</span>
-      )}
+      {note && <span className="-mt-1.5 text-sm font-medium">{note}</span>}
       <Button className="w-full" disabled={disabled} onClick={onClick}>
         {action}
       </Button>

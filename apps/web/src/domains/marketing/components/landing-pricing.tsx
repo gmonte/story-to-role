@@ -78,14 +78,8 @@ export async function LandingPricing({ locale }: { locale: Locale }) {
       name: t.formatMessage({ defaultMessage: "Credit subscription" }),
       price: annualMonth("subscription_annual"),
       period: t.formatMessage({ defaultMessage: "a month" }),
-      billed: t.formatMessage(
-        { defaultMessage: "Annual plan, billed {price} a year" },
-        { price: price("subscription_annual") }
-      ),
-      monthly: t.formatMessage(
-        { defaultMessage: "Monthly plan: {price} a month" },
-        { price: price("subscription_monthly") }
-      ),
+      billed: price("subscription_annual"),
+      monthly: price("subscription_monthly"),
       description: t.formatMessage({ defaultMessage: "For an active search." }),
       features: [
         t.formatMessage(
@@ -104,14 +98,8 @@ export async function LandingPricing({ locale }: { locale: Locale }) {
       name: t.formatMessage({ defaultMessage: "Own-key subscription" }),
       price: annualMonth("own_key_annual"),
       period: t.formatMessage({ defaultMessage: "a month" }),
-      billed: t.formatMessage(
-        { defaultMessage: "Annual plan, billed {price} a year" },
-        { price: price("own_key_annual") }
-      ),
-      monthly: t.formatMessage(
-        { defaultMessage: "Monthly plan: {price} a month" },
-        { price: price("own_key_monthly") }
-      ),
+      billed: price("own_key_annual"),
+      monthly: price("own_key_monthly"),
       description: t.formatMessage({
         defaultMessage: "Your own Anthropic key pays for the AI.",
       }),
@@ -189,6 +177,11 @@ export async function LandingPricing({ locale }: { locale: Locale }) {
                     </Badge>
                   )}
                 </div>
+                {plan.billed && plan.monthly && (
+                  <span className="text-brand-accent-text text-xs font-semibold tracking-wide uppercase">
+                    {t.formatMessage({ defaultMessage: "Annual plan" })}
+                  </span>
+                )}
                 <p className="flex items-baseline gap-1.5">
                   <span className="font-display text-4xl font-semibold tracking-tight">
                     {plan.price}
@@ -199,15 +192,31 @@ export async function LandingPricing({ locale }: { locale: Locale }) {
                     </span>
                   )}
                 </p>
-                {"billed" in plan && (
-                  <div className="flex flex-col gap-1.5">
-                    <span className="text-muted-foreground text-xs">
-                      {plan.billed}
-                    </span>
+                {plan.billed && plan.monthly && (
+                  <div className="flex flex-col gap-3">
+                    <div className="flex flex-col gap-1">
+                      <span className="text-sm font-medium">
+                        {t.formatMessage(
+                          { defaultMessage: "Billed {price} a year" },
+                          { price: plan.billed }
+                        )}
+                      </span>
+                      <span className="bg-brand-accent-soft text-brand-accent-text w-fit rounded-sm px-2 py-0.5 text-xs font-semibold">
+                        {t.formatMessage({ defaultMessage: "2 months free" })}
+                      </span>
+                    </div>
                     {/* The monthly plan, in plain sight beside the annual. */}
-                    <span className="bg-muted rounded-md px-2.5 py-1.5 text-sm">
-                      {plan.monthly}
-                    </span>
+                    <div className="flex items-baseline justify-between gap-2 border-t pt-3 text-sm">
+                      <span className="text-muted-foreground">
+                        {t.formatMessage({ defaultMessage: "Monthly plan" })}
+                      </span>
+                      <span className="font-medium whitespace-nowrap">
+                        {t.formatMessage(
+                          { defaultMessage: "{price} a month" },
+                          { price: plan.monthly }
+                        )}
+                      </span>
+                    </div>
                   </div>
                 )}
                 <CardDescription className="text-pretty">

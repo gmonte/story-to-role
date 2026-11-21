@@ -5,6 +5,7 @@ import { useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { BadgeCheck } from "lucide-react";
 
+import { billingCatalog } from "@repo/api/domains/billing/billing-catalog";
 import type {
   CheckoutProduct,
   Currency,
@@ -87,25 +88,46 @@ export function OwnKeyOffer({
         </div>
         <div className="flex flex-col gap-2 sm:flex-row">
           <Button
-            className="flex-1"
-            disabled={!ready}
-            onClick={() => subscribe("own_key_monthly")}
-          >
-            {t.formatMessage(
-              { defaultMessage: "{price} a month" },
-              { price: price("own_key_monthly") }
-            )}
-          </Button>
-          <Button
-            className="flex-1"
-            variant="outline"
+            className="h-auto flex-1 flex-col gap-0.5 py-2"
             disabled={!ready}
             onClick={() => subscribe("own_key_annual")}
           >
-            {t.formatMessage(
-              { defaultMessage: "{price} a year" },
-              { price: price("own_key_annual") }
-            )}
+            <span className="font-semibold whitespace-nowrap">
+              {t.formatMessage(
+                { defaultMessage: "{price} a month" },
+                {
+                  price: t.formatNumber(
+                    billingCatalog.prices.own_key_annual[currency] / 1200,
+                    { style: "currency", currency: currency.toUpperCase() }
+                  ),
+                }
+              )}
+            </span>
+            <span className="text-xs font-normal">
+              {[
+                t.formatMessage(
+                  { defaultMessage: "Annual plan, billed {price} a year" },
+                  { price: price("own_key_annual") }
+                ),
+                t.formatMessage({ defaultMessage: "2 months free" }),
+              ].join(" · ")}
+            </span>
+          </Button>
+          <Button
+            className="h-auto flex-1 flex-col gap-0.5 py-2"
+            variant="outline"
+            disabled={!ready}
+            onClick={() => subscribe("own_key_monthly")}
+          >
+            <span className="font-semibold whitespace-nowrap">
+              {t.formatMessage(
+                { defaultMessage: "{price} a month" },
+                { price: price("own_key_monthly") }
+              )}
+            </span>
+            <span className="text-xs font-normal">
+              {t.formatMessage({ defaultMessage: "Monthly plan" })}
+            </span>
           </Button>
         </div>
       </div>

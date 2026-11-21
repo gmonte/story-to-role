@@ -43,7 +43,7 @@ export function UserButton() {
         elements: {
           rootBox: "flex-1 w-full!",
           userButtonTrigger:
-            "w-full! rounded-md! px-2! py-2! hover:bg-sidebar-accent! group-data-[collapsible=icon]:p-0! group-data-[collapsible=icon]:size-8!",
+            "w-full! rounded-md! px-2! py-2! hover:bg-sidebar-accent! group-data-[collapsible=icon]:px-0! group-data-[collapsible=icon]:w-8!",
           userButtonBox: "flex! flex-row-reverse! justify-end! gap-3! w-full!",
           userButtonAvatarBox: "size-8!",
           userButtonOuterIdentifier:

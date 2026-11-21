@@ -56,7 +56,10 @@ export function LanguageSwitcher({
             <Languages />
           </Button>
         ) : (
-          <SidebarMenuButton disabled={isPending}>
+          <SidebarMenuButton
+            disabled={isPending}
+            tooltip={t.formatMessage({ defaultMessage: "Interface language" })}
+          >
             <Languages />
             <span>{intlConfig.locales[t.locale].translatedName}</span>
           </SidebarMenuButton>

@@ -1,6 +1,12 @@
 "use client";
 
-import { ArrowRight, Coins, Package, ReceiptText } from "lucide-react";
+import {
+  ChevronRight,
+  Coins,
+  Package,
+  ReceiptText,
+  Unlock,
+} from "lucide-react";
 import Link from "next/link";
 
 import {
@@ -17,6 +23,7 @@ import {
   DropdownMenuTrigger,
 } from "@repo/web/components/ui/dropdown-menu";
 import { SidebarMenuButton } from "@repo/web/components/ui/sidebar";
+import { Skeleton } from "@repo/web/components/ui/skeleton";
 
 import { useCredits } from "../hooks/use-credits";
 import { useUsageStatement } from "../hooks/use-usage-statement";
@@ -28,6 +35,8 @@ import { useUsageStatement } from "../hooks/use-usage-statement";
 export function CreditMeter() {
   const t = useTranslation();
   const { data } = useCredits();
+  // The statement loads with the button, not when the menu opens.
+  useUsageStatement();
   if (!data) return null;
 
   // Fit-check-only credits buy no resume nor letter.
@@ -60,142 +69,152 @@ export function CreditMeter() {
         </SidebarMenuButton>
       </DropdownMenuTrigger>
       <DropdownMenuContent side="top" align="start" className="w-80">
-        <DropdownMenuLabel className="flex flex-col gap-1.5 px-2 py-2 font-normal">
-          <span className="flex items-baseline gap-2">
-            <span className="font-display text-3xl leading-none font-semibold tabular-nums">
-              {t.formatNumber(data.available)}
-            </span>
-            {t.formatMessage(
-              {
-                defaultMessage:
-                  "{credits, plural, one {credit available} other {credits available}}",
-              },
-              { credits: data.available }
-            )}
-          </span>
-          <span className="text-muted-foreground text-xs">
-            {t.formatMessage(
-              {
-                defaultMessage:
-                  "Enough for about {resumes, plural, one {# resume} other {# resumes}} or {letters, plural, one {# cover letter} other {# cover letters}}.",
-              },
-              {
-                resumes: Math.floor(
-                  general / Math.max(1, data.estimates.resume)
-                ),
-                letters: Math.floor(
-                  general / Math.max(1, data.estimates.coverLetter)
-                ),
-              }
-            )}
-          </span>
-          <SpendBar available={data.available} />
-        </DropdownMenuLabel>
-        <DropdownMenuSeparator />
-        <div className="flex flex-col gap-1 px-2 py-1.5 text-xs">
-          {data.lots.map((lot, index) => (
-            <span key={index} className="flex items-center gap-2">
-              <Package className="text-muted-foreground size-3.5 shrink-0" />
-              <LotLine lot={lot} />
-            </span>
-          ))}
-          {data.reserved > 0 && (
-            <span className="text-muted-foreground">
+        {/* What you have (read-only, on a tinted panel), then what you can
+            do (rows with an icon and an arrow). */}
+        <div className="bg-muted/60 -mx-1 -mt-1 mb-1 rounded-t-md border-b px-1 pt-1 pb-1">
+          <DropdownMenuLabel className="flex flex-col gap-1.5 px-2 py-2 font-normal">
+            <span className="flex items-baseline gap-2">
+              <span className="font-display text-3xl leading-none font-semibold tabular-nums">
+                {t.formatNumber(data.available)}
+              </span>
               {t.formatMessage(
                 {
                   defaultMessage:
-                    "{credits, number} held by running tasks until they finish",
+                    "{credits, plural, one {credit available} other {credits available}}",
                 },
-                { credits: data.reserved }
+                { credits: data.available }
               )}
             </span>
-          )}
-          {data.reserve > 0 && (
-            <span className={data.nearReserve ? "text-warning" : undefined}>
+            <span className="text-muted-foreground text-xs">
               {t.formatMessage(
                 {
                   defaultMessage:
-                    "{credits, number} kept for your resume: the interview won’t use them.",
+                    "Enough for about {resumes, plural, one {# resume} other {# resumes}} or {letters, plural, one {# cover letter} other {# cover letters}}.",
                 },
-                { credits: data.reserve }
+                {
+                  resumes: Math.floor(
+                    general / Math.max(1, data.estimates.resume)
+                  ),
+                  letters: Math.floor(
+                    general / Math.max(1, data.estimates.coverLetter)
+                  ),
+                }
               )}
             </span>
-          )}
-          {data.key && (
-            <span
-              className={
-                data.key.status === "active" ? undefined : "text-warning"
-              }
-            >
-              {data.key.status !== "active"
-                ? t.formatMessage({
+            <SpendBar available={data.available} />
+          </DropdownMenuLabel>
+          <DropdownMenuSeparator className="bg-border/70" />
+          <div className="flex flex-col gap-1 px-2 py-1.5 text-xs">
+            {data.lots.map((lot, index) => (
+              <span key={index} className="flex items-center gap-2">
+                <Package className="text-muted-foreground size-3.5 shrink-0" />
+                <LotLine lot={lot} />
+              </span>
+            ))}
+            {data.reserved > 0 && (
+              <span className="text-muted-foreground">
+                {t.formatMessage(
+                  {
                     defaultMessage:
-                      "Your own key stopped working: see Plan and credits.",
-                  })
-                : data.key.paysNext
+                      "{credits, number} held by running tasks until they finish",
+                  },
+                  { credits: data.reserved }
+                )}
+              </span>
+            )}
+            {data.reserve > 0 && (
+              <span className={data.nearReserve ? "text-warning" : undefined}>
+                {t.formatMessage(
+                  {
+                    defaultMessage:
+                      "{credits, number} kept for your resume: the interview won’t use them.",
+                  },
+                  { credits: data.reserve }
+                )}
+              </span>
+            )}
+            {data.key && (
+              <span
+                className={
+                  data.key.status === "active" ? undefined : "text-warning"
+                }
+              >
+                {data.key.status !== "active"
+                  ? t.formatMessage({
+                      defaultMessage:
+                        "Your own key stopped working: see Plan and credits.",
+                    })
+                  : data.key.paysNext
+                    ? t.formatMessage(
+                        {
+                          defaultMessage:
+                            "Your own key pays for AI now: about {amount} this month (an estimate). Credits stay as a reserve.",
+                        },
+                        {
+                          amount: t.formatNumber(data.key.spentThisMonthUsd, {
+                            style: "currency",
+                            currency: "USD",
+                          }),
+                        }
+                      )
+                    : t.formatMessage(
+                        {
+                          defaultMessage:
+                            "Your own key takes over when this month’s plan credits run out (about {amount} spent on it this month).",
+                        },
+                        {
+                          amount: t.formatNumber(data.key.spentThisMonthUsd, {
+                            style: "currency",
+                            currency: "USD",
+                          }),
+                        }
+                      )}
+              </span>
+            )}
+            {data.courtesy && (
+              <span className="text-muted-foreground">
+                {data.courtesy.endsAt
                   ? t.formatMessage(
                       {
                         defaultMessage:
-                          "Your own key pays for AI now: about {amount} this month (an estimate). Credits stay as a reserve.",
+                          "Courtesy plan: {credits, number} credits a month, until {date}",
                       },
                       {
-                        amount: t.formatNumber(data.key.spentThisMonthUsd, {
-                          style: "currency",
-                          currency: "USD",
+                        credits: data.courtesy.monthlyCredits,
+                        date: t.formatDate(data.courtesy.endsAt, {
+                          dateStyle: "medium",
                         }),
                       }
                     )
                   : t.formatMessage(
                       {
                         defaultMessage:
-                          "Your own key takes over when this month’s plan credits run out (about {amount} spent on it this month).",
+                          "Courtesy plan: {credits, number} credits a month",
                       },
-                      {
-                        amount: t.formatNumber(data.key.spentThisMonthUsd, {
-                          style: "currency",
-                          currency: "USD",
-                        }),
-                      }
+                      { credits: data.courtesy.monthlyCredits }
                     )}
-            </span>
-          )}
-          {data.courtesy && (
-            <span className="text-muted-foreground">
-              {data.courtesy.endsAt
-                ? t.formatMessage(
-                    {
-                      defaultMessage:
-                        "Courtesy plan: {credits, number} credits a month, until {date}",
-                    },
-                    {
-                      credits: data.courtesy.monthlyCredits,
-                      date: t.formatDate(data.courtesy.endsAt, {
-                        dateStyle: "medium",
-                      }),
-                    }
-                  )
-                : t.formatMessage(
-                    {
-                      defaultMessage:
-                        "Courtesy plan: {credits, number} credits a month",
-                    },
-                    { credits: data.courtesy.monthlyCredits }
-                  )}
-            </span>
-          )}
+              </span>
+            )}
+          </div>
         </div>
-        <DropdownMenuSeparator />
         <UsageLine />
         {data.storedLocked > 0 && (
           <DropdownMenuItem asChild>
-            <Link href="/app/billing#finish-with-credits">
-              {t.formatMessage(
-                {
-                  defaultMessage:
-                    "Finish with credits: {credits, number} stored credits wait for your OK",
-                },
-                { credits: data.storedLocked }
-              )}
+            <Link
+              href="/app/billing#finish-with-credits"
+              className="items-start"
+            >
+              <Unlock className="mt-0.5" />
+              <span className="min-w-0 flex-1">
+                {t.formatMessage(
+                  {
+                    defaultMessage:
+                      "Finish with credits: {credits, number} stored credits wait for your OK",
+                  },
+                  { credits: data.storedLocked }
+                )}
+              </span>
+              <ChevronRight className="text-muted-foreground mt-0.5" />
             </Link>
           </DropdownMenuItem>
         )}
@@ -207,7 +226,7 @@ export function CreditMeter() {
                   defaultMessage: "Subscribe or buy credits",
                 })
               : t.formatMessage({ defaultMessage: "Plan and credits" })}
-            <ArrowRight className="ml-auto" />
+            <ChevronRight className="text-muted-foreground ml-auto" />
           </Link>
         </DropdownMenuItem>
       </DropdownMenuContent>
@@ -223,7 +242,19 @@ export function CreditMeter() {
 function UsageLine() {
   const t = useTranslation();
   const { data } = useUsageStatement();
-  if (!data) return null;
+  // Its own size while it loads, so the menu doesn't grow when it arrives.
+  if (!data) {
+    return (
+      <div className="flex items-start gap-2 px-2 py-1.5">
+        <Skeleton className="mt-0.5 size-4 shrink-0" />
+        <div className="flex min-w-0 flex-1 flex-col gap-1.5 py-0.5">
+          <Skeleton className="h-4 w-28" />
+          <Skeleton className="h-3 w-full" />
+          <Skeleton className="h-3 w-1/3" />
+        </div>
+      </div>
+    );
+  }
   const credits = data.totals.reduce((total, row) => total + row.credits, 0);
   const tokens = data.totals.reduce(
     (total, row) => total + row.inputTokens + row.outputTokens,
@@ -233,7 +264,7 @@ function UsageLine() {
     <DropdownMenuItem asChild>
       <Link href="/app/billing/usage" className="items-start">
         <ReceiptText className="mt-0.5" />
-        <span className="flex flex-col">
+        <span className="flex min-w-0 flex-1 flex-col">
           <span className="font-medium">
             {t.formatMessage({ defaultMessage: "Usage statement" })}
           </span>
@@ -251,6 +282,7 @@ function UsageLine() {
             )}
           </span>
         </span>
+        <ChevronRight className="text-muted-foreground mt-0.5" />
       </Link>
     </DropdownMenuItem>
   );
@@ -263,7 +295,17 @@ function UsageLine() {
 function SpendBar({ available }: { available: number }) {
   const t = useTranslation();
   const { data } = useUsageStatement();
-  if (!data) return null;
+  if (!data) {
+    return (
+      <span className="flex flex-col gap-1 pt-1">
+        <Skeleton className="h-1.5 w-full rounded-full" />
+        <span className="flex justify-between py-0.5">
+          <Skeleton className="h-3 w-20" />
+          <Skeleton className="h-3 w-16" />
+        </span>
+      </span>
+    );
+  }
   const used = Math.round(
     data.totals.reduce((total, row) => total + row.credits, 0)
   );

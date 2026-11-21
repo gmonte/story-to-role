@@ -451,6 +451,25 @@ describe("usage statement", () => {
         averageTokens: 115_000,
         averageUsd: 0.16,
         totalCredits: 48,
+        // Each model's share of the average, adding up to it.
+        models: [
+          {
+            model: "claude-sonnet-5-5",
+            operations: 1,
+            averageInputTokens: 50_000,
+            averageOutputTokens: 5_000,
+            averageCredits: 22.5,
+            averageUsd: 0.15,
+          },
+          {
+            model: "claude-haiku-5-5",
+            operations: 1,
+            averageInputTokens: 50_000,
+            averageOutputTokens: 10_000,
+            averageCredits: 1.5,
+            averageUsd: 0.01,
+          },
+        ],
       },
     ]);
   });

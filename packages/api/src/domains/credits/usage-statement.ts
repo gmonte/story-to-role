@@ -227,9 +227,44 @@ function summarize(operations: Operation[]) {
           ? roundUsd(rows.reduce((total, row) => total + row.rawUsd, 0) / count)
           : null,
         totalCredits,
+        models: modelShares(rows),
       };
     })
     .sort((a, b) => b.totalCredits - a.totalCredits);
+}
+
+/**
+ * Each model's share of a kind's averages: its parts summed over the
+ * kind's operations and divided by all of them, so the shares add up to
+ * the averages. US$ shows only when every operation of the kind shows it.
+ */
+function modelShares(rows: Operation[]) {
+  const count = rows.length;
+  const showsUsd = rows.every((row) => row.usd !== null);
+  const parts = new Map<string, Array<Operation["models"][number]>>();
+  for (const row of rows) {
+    for (const part of row.models) {
+      parts.set(part.model, [...(parts.get(part.model) ?? []), part]);
+    }
+  }
+  return [...parts.entries()]
+    .map(([model, ofModel]) => {
+      const sum = (pick: (part: (typeof ofModel)[number]) => number) =>
+        ofModel.reduce((total, part) => total + pick(part), 0);
+      return {
+        model,
+        operations: ofModel.length,
+        averageInputTokens: Math.round(sum((part) => part.inputTokens) / count),
+        averageOutputTokens: Math.round(
+          sum((part) => part.outputTokens) / count
+        ),
+        averageCredits: oneDecimal(sum((part) => part.credits) / count),
+        averageUsd: showsUsd
+          ? roundUsd(sum((part) => part.usd ?? 0) / count)
+          : null,
+      };
+    })
+    .sort((a, b) => b.averageCredits - a.averageCredits);
 }
 
 /** The operations whose last call falls in the window. */

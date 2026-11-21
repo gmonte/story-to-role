@@ -333,6 +333,13 @@ export function Summary({ statement }: { statement: UsageStatement }) {
   const t = useTranslation();
   const format = useFormats();
   const showsUsd = statement.summary.some((row) => row.averageUsd !== null);
+  const [open, setOpen] = useState<string[]>([]);
+  const toggle = (key: string) =>
+    setOpen((current) =>
+      current.includes(key)
+        ? current.filter((item) => item !== key)
+        : [...current, key]
+    );
   return (
     <section className="flex flex-col gap-2">
       <h2 className="text-lg font-semibold">
@@ -342,6 +349,7 @@ export function Summary({ statement }: { statement: UsageStatement }) {
         <Table>
           <TableHeader>
             <TableRow>
+              <TableHead className="w-8" />
               <TableHead>
                 {t.formatMessage({ defaultMessage: "Operation" })}
               </TableHead>
@@ -365,28 +373,80 @@ export function Summary({ statement }: { statement: UsageStatement }) {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {statement.summary.map((row) => (
-              <TableRow key={JSON.stringify(row.operation)}>
-                <TableCell>{usageOperationLabel(t, row.operation)}</TableCell>
-                <TableCell className="text-right">
-                  {format.tokens(row.count)}
-                </TableCell>
-                <TableCell className="text-right">
-                  {format.credits(row.averageCredits)}
-                </TableCell>
-                <TableCell className="text-right">
-                  {format.tokens(row.averageTokens)}
-                </TableCell>
-                {showsUsd && (
-                  <TableCell className="text-right">
-                    {format.usd(row.averageUsd)}
-                  </TableCell>
-                )}
-                <TableCell className="text-right">
-                  {format.credits(row.totalCredits)}
-                </TableCell>
-              </TableRow>
-            ))}
+            {statement.summary.map((row) => {
+              const key = JSON.stringify(row.operation);
+              const expanded = open.includes(key);
+              return (
+                <Fragment key={key}>
+                  <TableRow>
+                    <TableCell>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="size-6"
+                        aria-expanded={expanded}
+                        aria-label={t.formatMessage({
+                          defaultMessage: "Show by model",
+                        })}
+                        onClick={() => toggle(key)}
+                      >
+                        {expanded ? <ChevronDown /> : <ChevronRight />}
+                      </Button>
+                    </TableCell>
+                    <TableCell>
+                      {usageOperationLabel(t, row.operation)}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      {format.tokens(row.count)}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      {format.credits(row.averageCredits)}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      {format.tokens(row.averageTokens)}
+                    </TableCell>
+                    {showsUsd && (
+                      <TableCell className="text-right">
+                        {format.usd(row.averageUsd)}
+                      </TableCell>
+                    )}
+                    <TableCell className="text-right">
+                      {format.credits(row.totalCredits)}
+                    </TableCell>
+                  </TableRow>
+                  {/* Each model's share of the averages, adding up to them. */}
+                  {expanded &&
+                    row.models.map((model) => (
+                      <TableRow
+                        key={model.model}
+                        className="bg-muted/30 text-muted-foreground text-xs"
+                      >
+                        <TableCell />
+                        <TableCell className="font-mono">
+                          {model.model}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          {format.tokens(model.operations)}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          {format.credits(model.averageCredits)}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          {format.tokens(
+                            model.averageInputTokens + model.averageOutputTokens
+                          )}
+                        </TableCell>
+                        {showsUsd && (
+                          <TableCell className="text-right">
+                            {format.usd(model.averageUsd)}
+                          </TableCell>
+                        )}
+                        <TableCell />
+                      </TableRow>
+                    ))}
+                </Fragment>
+              );
+            })}
           </TableBody>
         </Table>
       </div>

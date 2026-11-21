@@ -34,6 +34,19 @@ const usageSummaryRowSchema = z.object({
   averageTokens: z.number(),
   averageUsd: z.number().nullable(),
   totalCredits: z.number(),
+  // Each model's share of the averages (over every operation of the kind,
+  // so the shares add up to them), the costliest first.
+  models: z.array(
+    z.object({
+      model: z.string(),
+      // Operations of the kind that called it.
+      operations: z.number().int(),
+      averageInputTokens: z.number(),
+      averageOutputTokens: z.number(),
+      averageCredits: z.number(),
+      averageUsd: z.number().nullable(),
+    })
+  ),
 });
 
 const tokensShape = {

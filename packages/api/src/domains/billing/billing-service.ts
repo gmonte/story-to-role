@@ -10,6 +10,7 @@ import {
   packOrigin,
   revokeLots,
 } from "@repo/api/domains/credits/credit-ledger";
+import { AiKeysService } from "@repo/api/domains/ai/ai-keys-service";
 import { currentPlan } from "@repo/api/domains/credits/credit-plan";
 import { creditSettings } from "@repo/api/domains/credits/credit-pricing";
 import { UsersRepository } from "@repo/api/domains/users/users-repository";
@@ -43,10 +44,15 @@ export type StripeGateway = Pick<
 const idOf = (value: string | { id: string } | null | undefined) =>
   typeof value === "string" ? value : (value?.id ?? null);
 
-/** The service period an invoice paid for (its subscription line's). */
+/**
+ * The service period an invoice paid for: its subscription line's, never
+ * a proration's (a switch's invoice credits the old plan's unused time).
+ */
 function paidPeriod(invoice: Stripe.Invoice) {
   const line = invoice.lines.data.find(
-    (row) => row.parent?.type === "subscription_item_details"
+    (row) =>
+      row.parent?.type === "subscription_item_details" &&
+      !row.parent.subscription_item_details?.proration
   );
   const period = line?.period ?? invoice.lines.data[0]?.period;
   return period
@@ -67,7 +73,9 @@ function paidPeriod(invoice: Stripe.Invoice) {
 export class BillingService {
   constructor(
     private readonly db: DbClient,
-    private readonly stripe: StripeGateway = getStripe()
+    private readonly stripe: StripeGateway = getStripe(),
+    // The key check the own-key Checkout runs first (tests replace it).
+    private readonly keys: Pick<AiKeysService, "store"> = new AiKeysService(db)
   ) {}
 
   async status(userId: string): Promise<BillingStatus> {
@@ -81,43 +89,57 @@ export class BillingService {
         currentPeriodEnd: subscription.currentPeriodEnd,
         cancelAtPeriodEnd: subscription.cancelAtPeriodEnd,
       },
+      carryoverEndsAt:
+        (await repository.findCarryover(userId, new Date()))?.paidPeriodEnd ??
+        null,
       hasCustomer: !!(await repository.findCustomerByUserId(userId)),
     };
   }
 
-  /** A Stripe Checkout page for the subscription or a pack. */
+  /**
+   * A Stripe Checkout page for a subscription or a pack. The own-key
+   * subscription opens only with a key the provider accepts, saved first;
+   * from the credit subscription it is the switch (billing spec, "Switching
+   * plans"), which cancels the old one once the new one is paid.
+   */
   async startCheckout(input: {
     userId: string;
     product: CheckoutProduct;
+    apiKey?: string;
     baseUrl: string;
   }) {
     const price = billingCatalog.prices[input.product];
-    const subscribing = price.product === "subscription";
+    const subscribing = price.product !== "pack";
+    const ownKey = price.product === "own_key";
+    let replaces: string | null = null;
     if (subscribing) {
-      const current = await new BillingRepository(
-        this.db
-      ).findSubscriptionByUserId(input.userId);
-      if (current && isLiveSubscription(current.status)) {
-        // One subscription: changes go through the Customer Portal.
+      const current = await new BillingRepository(this.db).findLiveSubscription(
+        input.userId,
+        new Date()
+      );
+      if (current && ownKey && current.plan === "credits") {
+        replaces = current.stripeSubscriptionId;
+      } else if (current) {
+        // One subscription: other changes have their own paths.
         throw new TRPCError({ code: "CONFLICT" });
       }
     }
-    const [stripePrice] = (
-      await this.stripe.prices.list({
-        lookup_keys: [price.lookupKey],
-        active: true,
-      })
-    ).data;
-    if (!stripePrice) {
-      throw new Error(`Price ${price.lookupKey} is missing: run stripe:setup`);
+    if (ownKey) {
+      if (!input.apiKey) throw new TRPCError({ code: "BAD_REQUEST" });
+      await this.keys.store({ userId: input.userId, apiKey: input.apiKey });
     }
+    const stripePrice = await this.priceId(input.product);
     const customer = await this.customerFor(input.userId);
-    const metadata = { userId: input.userId, product: input.product };
+    const metadata = {
+      userId: input.userId,
+      product: input.product,
+      ...(replaces ? { replaces } : {}),
+    };
     const session = await this.stripe.checkout.sessions.create({
       mode: subscribing ? "subscription" : "payment",
       customer,
       client_reference_id: input.userId,
-      line_items: [{ price: stripePrice.id, quantity: 1 }],
+      line_items: [{ price: stripePrice, quantity: 1 }],
       metadata,
       ...(subscribing
         ? { subscription_data: { metadata } }
@@ -152,7 +174,97 @@ export class BillingService {
     };
   }
 
-  /** The Customer Portal: card, invoices, monthly or annual, cancelling. */
+  /**
+   * Billing spec, "Switching plans": an own-key subscriber moves to the
+   * credit subscription at once, the period restarting now and the unused
+   * own-key time credited on the invoice. If the payment doesn't go
+   * through, Stripe keeps the subscription as it was.
+   */
+  async switchToCredits(input: { userId: string }) {
+    const current = await new BillingRepository(this.db).findLiveSubscription(
+      input.userId,
+      new Date()
+    );
+    if (current?.plan !== "own_key") {
+      throw new TRPCError({ code: "PRECONDITION_FAILED" });
+    }
+    const item = await this.itemOf(current.stripeSubscriptionId);
+    const price = await this.priceId(
+      current.interval === "year"
+        ? "subscription_annual"
+        : "subscription_monthly"
+    );
+    const params: Stripe.SubscriptionUpdateParams = {
+      items: [{ id: item.id, price }],
+      billing_cycle_anchor: { type: "now" },
+      proration_behavior: "always_invoice",
+      payment_behavior: "pending_if_incomplete",
+    };
+    const updated = await this.stripe.subscriptions.update(
+      current.stripeSubscriptionId,
+      params
+    );
+    await this.syncSubscription(current.stripeSubscriptionId, input.userId);
+    return { applied: !updated.pending_update };
+  }
+
+  /**
+   * Monthly ↔ annual within the same subscription, confirmed in the
+   * Customer Portal on its interval-change configuration: a longer
+   * interval applies at once, a shorter one at the period's end.
+   */
+  async changeInterval(input: { userId: string; baseUrl: string }) {
+    const repository = new BillingRepository(this.db);
+    const current = await repository.findLiveSubscription(
+      input.userId,
+      new Date()
+    );
+    const customer = await repository.findCustomerByUserId(input.userId);
+    if (!current || !customer) {
+      throw new TRPCError({ code: "PRECONDITION_FAILED" });
+    }
+    const item = await this.itemOf(current.stripeSubscriptionId);
+    const target: CheckoutProduct =
+      current.plan === "own_key"
+        ? current.interval === "year"
+          ? "own_key_monthly"
+          : "own_key_annual"
+        : current.interval === "year"
+          ? "subscription_monthly"
+          : "subscription_annual";
+    const configuration = (
+      await this.stripe.billingPortal.configurations.list({ limit: 100 })
+    ).data.find(
+      (row) =>
+        row.active &&
+        row.metadata?.purpose === billingCatalog.intervalChangePortal
+    );
+    if (!configuration) {
+      throw new Error(
+        "The interval-change portal is missing: run stripe:setup"
+      );
+    }
+    const returnUrl = `${input.baseUrl}/app/billing`;
+    const session = await this.stripe.billingPortal.sessions.create({
+      customer: customer.stripeCustomerId,
+      configuration: configuration.id,
+      return_url: returnUrl,
+      flow_data: {
+        type: "subscription_update_confirm",
+        subscription_update_confirm: {
+          subscription: current.stripeSubscriptionId,
+          items: [{ id: item.id, price: await this.priceId(target) }],
+        },
+        after_completion: {
+          type: "redirect",
+          redirect: { return_url: returnUrl },
+        },
+      },
+    });
+    return { url: session.url };
+  }
+
+  /** The Customer Portal: card, invoices, cancelling. */
   async portal(input: { userId: string; baseUrl: string }) {
     const customer = await new BillingRepository(this.db).findCustomerByUserId(
       input.userId
@@ -234,6 +346,11 @@ export class BillingService {
           })
           .autoPagingToArray({ limit: 1000 });
         for (const session of sessions) {
+          // A switch to the own-key plan whose return and webhook were lost.
+          const replaces = session.metadata?.replaces;
+          if (replaces && session.payment_status === "paid") {
+            await this.endReplaced(replaces, customer.userId);
+          }
           if (session.mode !== "payment") continue;
           await this.applyCheckout(session, customer.userId);
           const charge = (session.payment_intent as Stripe.PaymentIntent | null)
@@ -285,6 +402,27 @@ export class BillingService {
     await this.stripe.customers.del(customer.stripeCustomerId);
   }
 
+  /** The Stripe price of a catalog offer, by its lookup key. */
+  private async priceId(product: CheckoutProduct) {
+    const { lookupKey } = billingCatalog.prices[product];
+    const [price] = (
+      await this.stripe.prices.list({ lookup_keys: [lookupKey], active: true })
+    ).data;
+    if (!price)
+      throw new Error(`Price ${lookupKey} is missing: run stripe:setup`);
+    return price.id;
+  }
+
+  /** A subscription's one item, as Stripe has it now. */
+  private async itemOf(stripeSubscriptionId: string) {
+    const [item] = (
+      await this.stripe.subscriptions.retrieve(stripeSubscriptionId)
+    ).items.data;
+    if (!item)
+      throw new Error(`Subscription ${stripeSubscriptionId} has no item`);
+    return item;
+  }
+
   private async customerFor(userId: string) {
     const repository = new BillingRepository(this.db);
     const existing = await repository.findCustomerByUserId(userId);
@@ -325,6 +463,10 @@ export class BillingService {
     if (session.mode === "subscription") {
       const subscriptionId = idOf(session.subscription);
       if (subscriptionId) await this.syncSubscription(subscriptionId, userId);
+      const replaces = session.metadata?.replaces;
+      if (replaces && session.payment_status === "paid") {
+        await this.endReplaced(replaces, userId);
+      }
       return;
     }
     // A pack: granted once paid (Pix completes asynchronously).
@@ -398,6 +540,28 @@ export class BillingService {
         await new AiKeysRepository(tx).delete(userId);
       }
     });
+  }
+
+  /**
+   * The credit subscription the own-key one replaced ends now, refunding
+   * nothing (billing spec, "Switching plans"); its paid period keeps
+   * granting credits. Done once: the return from Checkout, the webhook and
+   * reconciliation may all get here.
+   */
+  private async endReplaced(stripeSubscriptionId: string, userId: string) {
+    const repository = new BillingRepository(this.db);
+    const old =
+      await repository.findSubscriptionByStripeId(stripeSubscriptionId);
+    if (old?.userId !== userId || old.replacedAt) return;
+    const current =
+      await this.stripe.subscriptions.retrieve(stripeSubscriptionId);
+    if (isLiveSubscription(current.status as SubscriptionStatus)) {
+      await this.stripe.subscriptions.cancel(stripeSubscriptionId, {
+        prorate: false,
+        invoice_now: false,
+      });
+    }
+    await repository.markReplaced(stripeSubscriptionId, new Date());
   }
 
   /**

@@ -51,6 +51,9 @@ export const billingStatusSchema = z.object({
       cancelAtPeriodEnd: z.boolean(),
     })
     .nullable(),
+  // After a switch to the own-key subscription: until when the replaced
+  // credit subscription's paid period keeps granting credits.
+  carryoverEndsAt: z.date().nullable(),
   hasCustomer: z.boolean(),
 });
 export type BillingStatus = z.infer<typeof billingStatusSchema>;

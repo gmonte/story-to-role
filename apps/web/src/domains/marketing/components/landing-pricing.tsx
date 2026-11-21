@@ -21,7 +21,8 @@ import { cn } from "@repo/web/lib/utils";
 import { LandingContainer, SectionHeading } from "./section-heading";
 
 /**
- * The offer (billing spec): Free, the subscription and credit packs, priced
+ * The offer (billing spec): Free, the credit and own-key subscriptions and
+ * credit packs, priced
  * from the same catalog as Stripe, in reais for the Brazilian interface and
  * in dollars otherwise, as the billing page shows them.
  */
@@ -67,7 +68,7 @@ export async function LandingPricing({ locale }: { locale: Locale }) {
       featured: false,
     },
     {
-      name: t.formatMessage({ defaultMessage: "Subscription" }),
+      name: t.formatMessage({ defaultMessage: "Credit subscription" }),
       price: price("subscription_monthly"),
       period: t.formatMessage({ defaultMessage: "a month" }),
       description: t.formatMessage(
@@ -84,11 +85,38 @@ export async function LandingPricing({ locale }: { locale: Locale }) {
         t.formatMessage({
           defaultMessage: "The full career interview, fit checks and documents",
         }),
-        t.formatMessage({ defaultMessage: "Use your own Anthropic key" }),
         t.formatMessage({ defaultMessage: "Cancel anytime" }),
       ],
       action: t.formatMessage({ defaultMessage: "Subscribe" }),
       featured: true,
+    },
+    {
+      name: t.formatMessage({ defaultMessage: "Own-key subscription" }),
+      price: price("own_key_monthly"),
+      period: t.formatMessage({ defaultMessage: "a month" }),
+      description: t.formatMessage(
+        {
+          defaultMessage:
+            "Your own Anthropic key pays for the AI. Or {price} a year.",
+        },
+        { price: price("own_key_annual") }
+      ),
+      features: [
+        t.formatMessage({
+          defaultMessage: "Every AI call paid by your key, not credits",
+        }),
+        t.formatMessage({
+          defaultMessage:
+            "A Claude Max or Team key uses that plan’s monthly API credits",
+        }),
+        t.formatMessage(
+          { defaultMessage: "{credits} credits a month for fit checks" },
+          { credits: number(creditSettings.monthlyFreeCredits) }
+        ),
+        t.formatMessage({ defaultMessage: "Cancel anytime" }),
+      ],
+      action: t.formatMessage({ defaultMessage: "Subscribe" }),
+      featured: false,
     },
     {
       name: t.formatMessage({ defaultMessage: "Credit pack" }),
@@ -126,13 +154,13 @@ export async function LandingPricing({ locale }: { locale: Locale }) {
               "Every AI action spends credits, and each shows its estimate before you confirm.",
           })}
         />
-        <div className="grid gap-4 lg:grid-cols-3">
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
           {plans.map((plan) => (
             <Card
               key={plan.name}
               className={cn(
                 "relative",
-                plan.featured && "border-primary shadow-lg lg:-my-2 lg:py-8"
+                plan.featured && "border-primary shadow-lg xl:-my-2 xl:py-8"
               )}
             >
               <CardHeader className="gap-3">
@@ -184,7 +212,7 @@ export async function LandingPricing({ locale }: { locale: Locale }) {
           <KeyRound className="size-4 shrink-0" />
           {t.formatMessage({
             defaultMessage:
-              "Have a Claude Max or Team plan? On the subscription, your own Anthropic key pays for the AI instead of credits.",
+              "Have a Claude Max or Team plan? With the own-key subscription, your Anthropic key pays for the AI instead of credits.",
           })}
         </p>
       </LandingContainer>

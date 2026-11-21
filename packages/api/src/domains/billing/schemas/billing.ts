@@ -27,10 +27,16 @@ export const isLiveSubscription = (status: SubscriptionStatus) =>
   status === "past_due" ||
   status === "unpaid";
 
-/** What a checkout buys: the subscription, monthly or annual, or a pack. */
+/** The two subscriptions (billing spec, "Subscription"). */
+export const subscriptionPlanSchema = z.enum(["credits", "own_key"]);
+export type SubscriptionPlan = z.infer<typeof subscriptionPlanSchema>;
+
+/** What a checkout buys: a subscription, monthly or annual, or a pack. */
 export const checkoutProductSchema = z.enum([
   "subscription_monthly",
   "subscription_annual",
+  "own_key_monthly",
+  "own_key_annual",
   "pack",
 ]);
 export type CheckoutProduct = z.infer<typeof checkoutProductSchema>;
@@ -38,12 +44,18 @@ export type CheckoutProduct = z.infer<typeof checkoutProductSchema>;
 export const billingStatusSchema = z.object({
   subscription: z
     .object({
+      plan: subscriptionPlanSchema,
       status: subscriptionStatusSchema,
       interval: billingIntervalSchema,
       currentPeriodEnd: z.date(),
       cancelAtPeriodEnd: z.boolean(),
+      // Monthly from the period's end, when a switch is scheduled.
+      scheduledInterval: billingIntervalSchema.nullable(),
     })
     .nullable(),
+  // After a switch to the own-key subscription: until when the replaced
+  // credit subscription's paid period keeps granting credits.
+  carryoverEndsAt: z.date().nullable(),
   hasCustomer: z.boolean(),
 });
 export type BillingStatus = z.infer<typeof billingStatusSchema>;

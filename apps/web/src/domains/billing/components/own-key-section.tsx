@@ -15,11 +15,13 @@ import { toast } from "@repo/web/components/ui/sonner";
 import { useTRPC } from "~/tools/trpc/client";
 
 /**
- * The user's own key (billing spec, "Plans and AI funding": a funding
- * mode of the paid plan). Saved only once a minimal call proves it works;
- * never shown again but for its last characters.
+ * The user's own key on the own-key subscription or the courtesy plan
+ * (billing spec, "Plans and AI funding"). Saved only once a minimal call
+ * proves it works; never shown again but for its last characters. It can
+ * be replaced at any time, and removed once the own-key subscription is
+ * cancelled.
  */
-export function OwnKeySection({ paidPlan }: { paidPlan: boolean }) {
+export function OwnKeySection({ canRemove }: { canRemove: boolean }) {
   const t = useTranslation();
   const trpc = useTRPC();
   const queryClient = useQueryClient();
@@ -93,18 +95,11 @@ export function OwnKeySection({ paidPlan }: { paidPlan: boolean }) {
       <p className="text-muted-foreground">
         {t.formatMessage({
           defaultMessage:
-            "With your own Anthropic key, your AI calls are paid by it instead of credits. A key from a Console organization linked to Claude Max or Team uses that plan’s monthly API credits. StoryToRole picks the model for each step.",
+            "Your AI calls are paid by your own Anthropic key. A key from a Console organization linked to Claude Max or Team uses that plan’s monthly API credits. StoryToRole picks the model for each step.",
         })}
       </p>
 
-      {!paidPlan ? (
-        <p className="rounded-lg border border-dashed p-3">
-          {t.formatMessage({
-            defaultMessage:
-              "Your own key comes with the paid plan: the subscription or a courtesy plan.",
-          })}
-        </p>
-      ) : saved ? (
+      {saved ? (
         <div className="flex flex-col gap-2 rounded-lg border p-4">
           <span className="flex items-center gap-2">
             <KeyRound className="size-4" />
@@ -137,46 +132,54 @@ export function OwnKeySection({ paidPlan }: { paidPlan: boolean }) {
                 {t.formatMessage({ defaultMessage: "Check again" })}
               </Button>
             )}
-            <Button
-              size="sm"
-              variant="ghost"
-              disabled={remove.isPending}
-              onClick={() => remove.mutate({})}
-            >
-              {t.formatMessage({ defaultMessage: "Remove key" })}
-            </Button>
+            {canRemove && (
+              <Button
+                size="sm"
+                variant="ghost"
+                disabled={remove.isPending}
+                onClick={() => remove.mutate({})}
+              >
+                {t.formatMessage({ defaultMessage: "Remove key" })}
+              </Button>
+            )}
           </div>
+          {!canRemove && (
+            <p className="text-muted-foreground text-xs">
+              {t.formatMessage({
+                defaultMessage:
+                  "You can replace your key at any time. To remove it, cancel the own-key subscription first (Manage payments and cancel).",
+              })}
+            </p>
+          )}
         </div>
       ) : null}
 
-      {paidPlan && (
-        <form
-          className="flex flex-col gap-2 sm:flex-row sm:items-end"
-          onSubmit={(event) => {
-            event.preventDefault();
-            save.mutate({ apiKey });
-          }}
-        >
-          <div className="grid flex-1 gap-1.5">
-            <Label htmlFor="own-api-key">
-              {saved
-                ? t.formatMessage({ defaultMessage: "Replace with a new key" })
-                : t.formatMessage({ defaultMessage: "Anthropic API key" })}
-            </Label>
-            <Input
-              id="own-api-key"
-              type="password"
-              autoComplete="off"
-              placeholder="sk-ant-…"
-              value={apiKey}
-              onChange={(event) => setApiKey(event.target.value)}
-            />
-          </div>
-          <Button type="submit" disabled={save.isPending || apiKey.length < 20}>
-            {t.formatMessage({ defaultMessage: "Check and save" })}
-          </Button>
-        </form>
-      )}
+      <form
+        className="flex flex-col gap-2 sm:flex-row sm:items-end"
+        onSubmit={(event) => {
+          event.preventDefault();
+          save.mutate({ apiKey });
+        }}
+      >
+        <div className="grid flex-1 gap-1.5">
+          <Label htmlFor="own-api-key">
+            {saved
+              ? t.formatMessage({ defaultMessage: "Replace with a new key" })
+              : t.formatMessage({ defaultMessage: "Anthropic API key" })}
+          </Label>
+          <Input
+            id="own-api-key"
+            type="password"
+            autoComplete="off"
+            placeholder="sk-ant-…"
+            value={apiKey}
+            onChange={(event) => setApiKey(event.target.value)}
+          />
+        </div>
+        <Button type="submit" disabled={save.isPending || apiKey.length < 20}>
+          {t.formatMessage({ defaultMessage: "Check and save" })}
+        </Button>
+      </form>
     </section>
   );
 }

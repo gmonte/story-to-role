@@ -1,6 +1,9 @@
 import { TRPCError } from "@trpc/server";
 
-import { currentPlan } from "@repo/api/domains/credits/credit-plan";
+import {
+  currentPlan,
+  planUsesKey,
+} from "@repo/api/domains/credits/credit-plan";
 import { getUserCipher } from "@repo/api/domains/encryption/user-cipher";
 import type { DbClient } from "@repo/api/tools/db-client";
 
@@ -15,10 +18,11 @@ import type { AiKeyStatus, AiKeyView } from "./schemas/ai-keys";
 type PackageFactory = (input: { apiKey: string }) => ProviderPackage;
 
 /**
- * The user's own provider key (guided interview spec, "AI providers";
- * billing spec: key funding is for the paid plan). Saved only once a
- * minimal call proves it works, never shown again but for its last
- * characters, decrypted in memory only for a call, deleted on removal.
+ * The user's own provider key (ai-platform spec, "Bring your own key";
+ * billing spec: it belongs to the own-key subscription and the courtesy
+ * plan). Saved only once a minimal call proves it works, never shown
+ * again but for its last characters, decrypted in memory only for a call,
+ * deleted on removal.
  */
 export class AiKeysService {
   constructor(
@@ -40,12 +44,20 @@ export class AiKeysService {
   }
 
   async save(input: { userId: string; apiKey: string }) {
-    const apiKey = input.apiKey.trim();
-    if (
-      (await currentPlan(this.db, input.userId, new Date())).kind === "free"
-    ) {
+    const { kind } = await currentPlan(this.db, input.userId, new Date());
+    if (!planUsesKey(kind)) {
       throw new TRPCError({ code: "PRECONDITION_FAILED" });
     }
+    return this.store(input);
+  }
+
+  /**
+   * Checks and keeps a key whatever the plan: `save` on a plan that uses
+   * one, or the own-key subscription's Checkout, which needs a working key
+   * before it opens.
+   */
+  async store(input: { userId: string; apiKey: string }) {
+    const apiKey = input.apiKey.trim();
     // A refused key isn't saved; one without credit is (a Claude Max or
     // Team key waiting for its monthly credits), marked as such.
     const status = await this.check(apiKey);
@@ -72,7 +84,15 @@ export class AiKeysService {
     return { status };
   }
 
+  /**
+   * Billing spec: an own-key subscriber removes the key only once the
+   * subscription is cancelled; replacing it is always allowed.
+   */
   async remove(userId: string) {
+    const { subscription } = await currentPlan(this.db, userId, new Date());
+    if (subscription?.plan === "own_key" && !subscription.cancelAtPeriodEnd) {
+      throw new TRPCError({ code: "PRECONDITION_FAILED" });
+    }
     await new AiKeysRepository(this.db).delete(userId);
   }
 

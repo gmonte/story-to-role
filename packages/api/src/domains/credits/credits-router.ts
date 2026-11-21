@@ -15,6 +15,7 @@ import { CreditsService } from "./credits-service";
 import { courtesyGrantSchema, creditSummarySchema } from "./schemas/credits";
 import {
   platformUsageSchema,
+  platformUsageUsersSchema,
   usageOperationsSchema,
   usageStatementSchema,
 } from "./schemas/usage-statement";
@@ -96,6 +97,25 @@ export const creditsRouter = createTRPCRouter({
     )
     .output(platformUsageSchema)
     .query(({ input }) => new CreditsService(db).platformUsage(input)),
+
+  platformUsageUsers: adminProcedure
+    .meta(
+      openApiMeta(
+        "credits",
+        "GET",
+        "/admin/usage/users",
+        "Returns a page of every user's spending in a window, the biggest first, filtered by name or email (admin only)"
+      )
+    )
+    .input(
+      paginationParamsSchema.extend({
+        from: z.coerce.date().optional(),
+        to: z.coerce.date().optional(),
+        search: z.string().max(200).optional(),
+      })
+    )
+    .output(platformUsageUsersSchema)
+    .query(({ input }) => new CreditsService(db).platformUsageUsers(input)),
 
   listCourtesyGrants: adminProcedure
     .meta(

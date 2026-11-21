@@ -635,8 +635,14 @@ describe("usage statement", () => {
     expect(usage.models[0].averageUsd).toBeCloseTo(0.3);
     expect(usage.models[0].totalUsd).toBeCloseTo(0.6);
     // Each user's spending, the biggest first, with their own averages.
+    const users = await new CreditsService(ctx.db).platformUsageUsers({
+      ...window,
+      now,
+      limit: 20,
+    });
+    expect(users.total).toBe(2);
     expect(
-      usage.users.map((row) => [
+      users.data.map((row) => [
         row.email,
         row.operations,
         row.creditsSpent,
@@ -647,7 +653,7 @@ describe("usage statement", () => {
       ["grace@example.com", 1, 0, 45],
     ]);
     expect(
-      usage.users[0].summary.map((row) => [row.count, row.averageCredits])
+      users.data[0].summary.map((row) => [row.count, row.averageCredits])
     ).toEqual([[1, 50]]);
   });
 
@@ -657,5 +663,56 @@ describe("usage statement", () => {
       await getTestDatabase()
     ).platformUsage({ now });
     expect(usage.window).toEqual(window);
+  });
+
+  it("pages the admin's users and filters them by name or email", async () => {
+    const ctx = await setup();
+    const usage = new AiUsageRepository(ctx.db);
+    for (const email of ["grace@example.com", "linus@example.com"]) {
+      const user = await createTestUser(email);
+      await usage.record({
+        userId: user.id,
+        provider: "anthropic",
+        role: "writing",
+        funding: "credits",
+        purpose: "gap_answer_sentence",
+        createdAt: at("2026-11-12T09:00:00Z"),
+        ...haikuCall,
+      });
+    }
+    await ctx.call({
+      funding: "credits",
+      purpose: "gap_answer_sentence",
+      createdAt: at("2026-11-12T09:00:00Z"),
+      ...sonnetCall,
+    });
+    const credits = new CreditsService(ctx.db);
+
+    const first = await credits.platformUsageUsers({
+      ...window,
+      now,
+      limit: 2,
+    });
+    expect(first.total).toBe(3);
+    expect(first.data.map((row) => row.email)).toEqual([
+      "ada@example.com",
+      "grace@example.com",
+    ]);
+    const second = await credits.platformUsageUsers({
+      ...window,
+      now,
+      limit: 2,
+      cursor: first.nextCursor,
+    });
+    expect(second.data.map((row) => row.email)).toEqual(["linus@example.com"]);
+    expect(second.nextCursor).toBeNull();
+
+    const found = await credits.platformUsageUsers({
+      ...window,
+      now,
+      limit: 20,
+      search: "  LINUS ",
+    });
+    expect(found.data.map((row) => row.email)).toEqual(["linus@example.com"]);
   });
 });

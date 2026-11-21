@@ -1,13 +1,15 @@
 "use client";
 
-import { Fragment, useState } from "react";
+import { Fragment, useEffect, useState } from "react";
 
 import { useQuery } from "@tanstack/react-query";
-import { ChevronDown, ChevronRight } from "lucide-react";
+import { ChevronDown, ChevronRight, Search } from "lucide-react";
 
 import type { PlatformUsage } from "@repo/api/domains/credits/schemas/usage-statement";
 import { useTranslation } from "@repo/intl/use-translation";
+import { InfiniteScroll } from "@repo/web/components/pagination/infinite-scroll";
 import { Button } from "@repo/web/components/ui/button";
+import { Input } from "@repo/web/components/ui/input";
 import { Skeleton } from "@repo/web/components/ui/skeleton";
 import {
   Table,
@@ -20,6 +22,7 @@ import {
 
 import { useTRPC } from "~/tools/trpc/client";
 
+import { usePlatformUsageUsers } from "../hooks/use-platform-usage-users";
 import { usageOperationLabel } from "../utils/usage-operation-label";
 import {
   PeriodPicker,
@@ -84,7 +87,7 @@ export function PlatformUsageView() {
             <Totals statement={data} audience="everyone" />
             <Summary statement={data} />
             <ModelSummary usage={data} />
-            <UserUsage usage={data} />
+            <UserUsage period={period} />
           </>
         )}
       </div>
@@ -160,12 +163,21 @@ function ModelSummary({ usage }: { usage: PlatformUsage }) {
 }
 
 /**
- * Each user's spending, the biggest first; a row opens into their average
- * per kind of operation.
+ * Each user's spending, the biggest first, searched by name or email and
+ * loaded as the list scrolls; a row opens into their average per kind of
+ * operation.
  */
-function UserUsage({ usage }: { usage: PlatformUsage }) {
+function UserUsage({ period }: { period: { from?: Date; to?: Date } }) {
   const t = useTranslation();
   const format = useFormats();
+  const [query, setQuery] = useState("");
+  const [search, setSearch] = useState("");
+  // Searches once typing pauses, not on every key.
+  useEffect(() => {
+    const timer = setTimeout(() => setSearch(query.trim()), 300);
+    return () => clearTimeout(timer);
+  }, [query]);
+  const users = usePlatformUsageUsers({ ...period, search });
   const [open, setOpen] = useState<string[]>([]);
   const toggle = (userId: string) =>
     setOpen((current) =>
@@ -175,12 +187,31 @@ function UserUsage({ usage }: { usage: PlatformUsage }) {
     );
   return (
     <section className="flex flex-col gap-2">
-      <h2 className="text-lg font-semibold">
-        {t.formatMessage(
-          { defaultMessage: "Credits by user ({total, number})" },
-          { total: usage.users.length }
-        )}
-      </h2>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h2 className="text-lg font-semibold">
+          {users.total === undefined
+            ? t.formatMessage({ defaultMessage: "Credits by user" })
+            : t.formatMessage(
+                { defaultMessage: "Credits by user ({total, number})" },
+                { total: users.total }
+              )}
+        </h2>
+        <div className="relative w-full sm:w-72">
+          <Search className="text-muted-foreground pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2" />
+          <Input
+            type="search"
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder={t.formatMessage({
+              defaultMessage: "Search by name or email",
+            })}
+            aria-label={t.formatMessage({
+              defaultMessage: "Search by name or email",
+            })}
+            className="pl-8"
+          />
+        </div>
+      </div>
       <div className="bg-card overflow-hidden rounded-lg border">
         <Table>
           <TableHeader>
@@ -204,7 +235,7 @@ function UserUsage({ usage }: { usage: PlatformUsage }) {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {usage.users.map((user) => {
+            {users.rows.map((user) => {
               const expanded = open.includes(user.userId);
               return (
                 <Fragment key={user.userId}>
@@ -298,6 +329,17 @@ function UserUsage({ usage }: { usage: PlatformUsage }) {
           </TableBody>
         </Table>
       </div>
+      {users.isLoading && <Skeleton className="h-24 w-full" />}
+      {!users.isLoading && users.rows.length === 0 && (
+        <p className="text-muted-foreground">
+          {t.formatMessage({ defaultMessage: "No user found." })}
+        </p>
+      )}
+      <InfiniteScroll
+        hasMore={users.hasMore}
+        loadingMore={users.loadingMore}
+        onLoadMore={users.fetchNextPage}
+      />
     </section>
   );
 }

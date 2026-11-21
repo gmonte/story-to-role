@@ -20,11 +20,13 @@ import { CreditsRepository } from "./credits-repository";
 import type { CourtesyGrant, CreditSummary } from "./schemas/credits";
 import type {
   PlatformUsage,
+  PlatformUsageUsers,
   UsageOperations,
   UsageStatement,
 } from "./schemas/usage-statement";
 import {
   buildPlatformUsage,
+  buildPlatformUsers,
   buildUsageOperations,
   buildUsageStatement,
 } from "./usage-statement";
@@ -251,6 +253,54 @@ export class CreditsService {
     to?: Date;
     now?: Date;
   }): Promise<PlatformUsage> {
+    const { window, calls, debitedByTask } = await this.platformCalls(input);
+    return buildPlatformUsage({ calls, debitedByTask, window });
+  }
+
+  /**
+   * A page of the admin's statement by user, the biggest spender first,
+   * filtered by name or email. Spending is only known once each user's
+   * operations are priced, so the cursor is an offset into that order.
+   */
+  async platformUsageUsers(input: {
+    from?: Date;
+    to?: Date;
+    now?: Date;
+    search?: string;
+    cursor?: string | null;
+    limit: number;
+  }): Promise<PlatformUsageUsers> {
+    const { window, calls, debitedByTask } = await this.platformCalls(input);
+    const repository = new UsageStatementRepository(this.db);
+    const users = buildPlatformUsers({
+      calls,
+      debitedByTask,
+      window,
+      users: await repository.usersByIds([
+        ...new Set(calls.map((call) => call.userId)),
+      ]),
+    });
+    const search = input.search?.trim().toLowerCase();
+    const found = search
+      ? users.filter(
+          (user) =>
+            user.email.toLowerCase().includes(search) ||
+            !!user.name?.toLowerCase().includes(search)
+        )
+      : users;
+    const offsetKey = decodeCursor(input.cursor)?.keys[0];
+    const offset = typeof offsetKey === "number" ? offsetKey : 0;
+    const next = offset + input.limit;
+    return {
+      data: found.slice(offset, next),
+      nextCursor:
+        next < found.length ? encodeCursor({ keys: [next], id: "" }) : null,
+      total: found.length,
+    };
+  }
+
+  /** Every user's calls in the admin's window: the calendar month by default. */
+  private async platformCalls(input: { from?: Date; to?: Date; now?: Date }) {
     const month = billingMonth(input.now ?? new Date());
     const window = {
       from: input.from ?? month.start,
@@ -259,14 +309,8 @@ export class CreditsService {
     if (window.from >= window.to) throw new TRPCError({ code: "BAD_REQUEST" });
     const repository = new UsageStatementRepository(this.db);
     const calls = await repository.callsBetween(null, window.from, window.to);
-    return buildPlatformUsage({
-      calls,
-      debitedByTask: await repository.debitedByTask(taskIdsOf(calls)),
-      window,
-      users: await repository.usersByIds([
-        ...new Set(calls.map((call) => call.userId)),
-      ]),
-    });
+    const debitedByTask = await repository.debitedByTask(taskIdsOf(calls));
+    return { window, calls, debitedByTask };
   }
 
   listCourtesyGrants(): Promise<CourtesyGrant[]> {

@@ -12,6 +12,7 @@ import type {
 import { creditsForUsage, usdForUsage } from "./credit-pricing";
 import type {
   PlatformUsage,
+  PlatformUsageUser,
   UsageOperation,
   UsageOperationRow,
   UsagePayer,
@@ -253,12 +254,10 @@ export function buildPlatformUsage(input: {
   calls: UsageCall[];
   debitedByTask: Map<string, number>;
   window: { from: Date; to: Date };
-  users: Map<string, { email: string; name: string | null }>;
 }): PlatformUsage {
   const scope = { ...input, showsPlatformCost: true };
-  const operations = operationsInWindow(scope);
   const parts = new Map<string, Array<UsageOperationRow["models"][number]>>();
-  for (const operation of operations) {
+  for (const operation of operationsInWindow(scope)) {
     if (operation.status !== "completed") continue;
     for (const part of operation.models) {
       parts.set(part.model, [...(parts.get(part.model) ?? []), part]);
@@ -281,15 +280,30 @@ export function buildPlatformUsage(input: {
       };
     })
     .sort((a, b) => b.totalUsd - a.totalUsd);
+  return { ...buildUsageStatement(scope), models };
+}
 
+/**
+ * Each user's spending in the window (the admin's statement), the biggest
+ * first, with their own average per kind of operation.
+ */
+export function buildPlatformUsers(input: {
+  calls: UsageCall[];
+  debitedByTask: Map<string, number>;
+  window: { from: Date; to: Date };
+  users: Map<string, { email: string; name: string | null }>;
+}): PlatformUsageUser[] {
   const ofUsers = new Map<string, Operation[]>();
-  for (const operation of operations) {
+  for (const operation of operationsInWindow({
+    ...input,
+    showsPlatformCost: true,
+  })) {
     ofUsers.set(operation.userId, [
       ...(ofUsers.get(operation.userId) ?? []),
       operation,
     ]);
   }
-  const users = [...ofUsers.entries()]
+  return [...ofUsers.entries()]
     .map(([userId, rows]) => {
       const sum = (pick: (row: Operation) => number) =>
         rows.reduce((total, row) => total + pick(row), 0);
@@ -309,11 +323,10 @@ export function buildPlatformUsage(input: {
     .sort(
       (a, b) =>
         b.creditsSpent +
-        b.creditEquivalent -
-        (a.creditsSpent + a.creditEquivalent)
+          b.creditEquivalent -
+          (a.creditsSpent + a.creditEquivalent) ||
+        a.email.localeCompare(b.email)
     );
-
-  return { ...buildUsageStatement(scope), models, users };
 }
 
 function isFinished(status: TaskStatus | null) {

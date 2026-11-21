@@ -79,23 +79,28 @@ export const platformUsageSchema = usageStatementSchema.extend({
       totalUsd: z.number(),
     })
   ),
-  // Each user's spending, the biggest first, with their own averages.
-  users: z.array(
-    z.object({
-      userId: z.string(),
-      email: z.string(),
-      name: z.string().nullable(),
-      operations: z.number().int(),
-      // Debited from their credits.
-      creditsSpent: z.number(),
-      // What their key and StoryToRole paid, in credits.
-      creditEquivalent: z.number(),
-      usd: z.number(),
-      summary: z.array(usageSummaryRowSchema),
-    })
-  ),
 });
 export type PlatformUsage = z.infer<typeof platformUsageSchema>;
+
+/** One user's spending on the admin's statement, with their own averages. */
+export const platformUsageUserSchema = z.object({
+  userId: z.string(),
+  email: z.string(),
+  name: z.string().nullable(),
+  operations: z.number().int(),
+  // Debited from their credits.
+  creditsSpent: z.number(),
+  // What their key and StoryToRole paid, in credits.
+  creditEquivalent: z.number(),
+  usd: z.number(),
+  summary: z.array(usageSummaryRowSchema),
+});
+export type PlatformUsageUser = z.infer<typeof platformUsageUserSchema>;
+
+export const platformUsageUsersSchema = createPaginationOutputSchema({
+  dataSchema: platformUsageUserSchema,
+});
+export type PlatformUsageUsers = z.infer<typeof platformUsageUsersSchema>;
 
 /** One operation of the usage statement, with its calls split by model. */
 export const usageOperationRowSchema = z.object({

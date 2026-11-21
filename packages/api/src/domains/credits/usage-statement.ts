@@ -12,6 +12,7 @@ import type {
 import { creditsForUsage, usdForUsage } from "./credit-pricing";
 import type {
   UsageOperation,
+  UsageOperationRow,
   UsagePayer,
   UsageStatement,
 } from "./schemas/usage-statement";
@@ -69,21 +70,21 @@ function shareInTenths(total: number, weights: number[]) {
 const roundUsd = (value: number) => Math.round(value * 10_000) / 10_000;
 
 /**
- * The usage statement (billing spec, "Usage statement"): one operation per
- * finished task, and one per call made outside any task. An operation is
- * paid by the user's key when its calls were; else by the user's credits
- * when it debited any, its credits being what it debited; else by
- * StoryToRole, without charging them. What did not come out of the
- * user's credits shows its credit equivalent. Unless the deployment shows
- * the platform's cost, StoryToRole's operations are left out and US$ is
- * shown only for the user's key, since it would reveal the margin.
+ * The operations of the usage statement (billing spec, "Usage statement"):
+ * one per finished task, and one per call made outside any task, newest
+ * first. An operation is paid by the user's key when its calls were; else
+ * by the user's credits when it debited any, its credits being what it
+ * debited; else by StoryToRole, without charging them. What did not come
+ * out of the user's credits shows its credit equivalent. Unless the
+ * deployment shows the platform's cost, StoryToRole's operations are left
+ * out and US$ is shown only for the user's key, since it would reveal the
+ * margin.
  */
-export function buildUsageStatement(input: {
+function buildOperations(input: {
   calls: UsageCall[];
   debitedByTask: Map<string, number>;
-  window: { from: Date; to: Date };
   showsPlatformCost: boolean;
-}): UsageStatement {
+}) {
   const groups = new Map<string, UsageCall[]>();
   for (const call of input.calls) {
     // Running tasks are listed once they finish and settle.
@@ -92,7 +93,7 @@ export function buildUsageStatement(input: {
     groups.set(key, [...(groups.get(key) ?? []), call]);
   }
 
-  const operations = [...groups.entries()]
+  return [...groups.entries()]
     .map(([operationId, calls]) => {
       const first = calls[0];
       const payer = payerOf(calls, input.debitedByTask.get(operationId));
@@ -102,9 +103,10 @@ export function buildUsageStatement(input: {
           : creditsForUsage(calls);
       const usd = usdForUsage(calls);
       const showsUsd = input.showsPlatformCost || payer === "key";
-      const ofModels = [...new Set(calls.map((call) => call.model))].map(
-        (model) => calls.filter((call) => call.model === model)
-      );
+      // The costliest model first.
+      const ofModels = [...new Set(calls.map((call) => call.model))]
+        .map((model) => calls.filter((call) => call.model === model))
+        .sort((a, b) => usdForUsage(b) - usdForUsage(a));
       const shares = shareInTenths(
         credits,
         ofModels.map((ofModel) => usdForUsage(ofModel))
@@ -135,11 +137,38 @@ export function buildUsageStatement(input: {
     })
     .filter(
       (operation) =>
-        operation.at >= input.window.from &&
-        operation.at < input.window.to &&
-        (input.showsPlatformCost || operation.payer !== "storytorole")
+        input.showsPlatformCost || operation.payer !== "storytorole"
     )
-    .sort((a, b) => b.at.getTime() - a.at.getTime());
+    .sort(
+      (a, b) =>
+        b.at.getTime() - a.at.getTime() ||
+        b.operationId.localeCompare(a.operationId)
+    );
+}
+
+/** A page of operations, from every call of the operations on it. */
+export function buildUsageOperations(input: {
+  calls: UsageCall[];
+  debitedByTask: Map<string, number>;
+  showsPlatformCost: boolean;
+}): UsageOperationRow[] {
+  return buildOperations(input).map(({ rawUsd: _rawUsd, ...row }) => row);
+}
+
+/**
+ * The usage statement's totals by payer and averages per kind of
+ * operation, over the operations whose last call falls in the window.
+ */
+export function buildUsageStatement(input: {
+  calls: UsageCall[];
+  debitedByTask: Map<string, number>;
+  window: { from: Date; to: Date };
+  showsPlatformCost: boolean;
+}): UsageStatement {
+  const operations = buildOperations(input).filter(
+    (operation) =>
+      operation.at >= input.window.from && operation.at < input.window.to
+  );
 
   const payers: UsagePayer[] = ["credits", "key", "storytorole"];
   const totals = payers
@@ -192,7 +221,6 @@ export function buildUsageStatement(input: {
     showsPlatformCost: input.showsPlatformCost,
     totals,
     summary,
-    operations: operations.map(({ rawUsd: _rawUsd, ...row }) => row),
   };
 }
 

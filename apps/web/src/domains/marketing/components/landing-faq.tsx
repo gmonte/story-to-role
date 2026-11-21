@@ -1,3 +1,4 @@
+import { billingCatalog } from "@repo/api/domains/billing/billing-catalog";
 import { creditSettings } from "@repo/api/domains/credits/credit-pricing";
 import { getTranslation } from "@repo/intl/get-translation";
 import type { Locale } from "@repo/intl/intl-config";
@@ -14,6 +15,11 @@ import { LandingContainer, SectionHeading } from "./section-heading";
 export async function LandingFaq({ locale }: { locale: Locale }) {
   const t = await getTranslation(locale);
   const welcome = t.formatNumber(creditSettings.welcomeCredits);
+  const currency = locale === "pt-BR" ? "brl" : "usd";
+  const ownKeyPrice = t.formatNumber(
+    billingCatalog.prices.own_key_monthly[currency] / 100,
+    { style: "currency", currency: currency.toUpperCase() }
+  );
   const questions = [
     {
       question: t.formatMessage({ defaultMessage: "Is it free to try?" }),
@@ -63,10 +69,13 @@ export async function LandingFaq({ locale }: { locale: Locale }) {
       question: t.formatMessage({
         defaultMessage: "Can I use my own AI key?",
       }),
-      answer: t.formatMessage({
-        defaultMessage:
-          "Yes, on the subscription. With your Anthropic key, AI calls are paid by it instead of credits; a key from a Claude Max or Team organization uses that plan's monthly API credits.",
-      }),
+      answer: t.formatMessage(
+        {
+          defaultMessage:
+            "Yes, with the own-key subscription, for {price} a month: your Anthropic key pays for the AI instead of credits, and a key from a Claude Max or Team organization uses that plan's monthly API credits. If your key stops working, credit packs finish the job.",
+        },
+        { price: ownKeyPrice }
+      ),
     },
     {
       question: t.formatMessage({

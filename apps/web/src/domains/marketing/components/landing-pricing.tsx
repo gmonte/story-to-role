@@ -70,7 +70,7 @@ export async function LandingPricing({ locale }: { locale: Locale }) {
     {
       name: t.formatMessage({ defaultMessage: "Credit subscription" }),
       price: annualMonth("subscription_annual"),
-      period: t.formatMessage({ defaultMessage: "a month" }),
+      period: t.formatMessage({ defaultMessage: "/mo" }),
       billed: price("subscription_annual"),
       monthly: price("subscription_monthly"),
       description: t.formatMessage({ defaultMessage: "For an active search." }),
@@ -90,7 +90,7 @@ export async function LandingPricing({ locale }: { locale: Locale }) {
     {
       name: t.formatMessage({ defaultMessage: "Own-key subscription" }),
       price: annualMonth("own_key_annual"),
-      period: t.formatMessage({ defaultMessage: "a month" }),
+      period: t.formatMessage({ defaultMessage: "/mo" }),
       billed: price("own_key_annual"),
       monthly: price("own_key_monthly"),
       description: t.formatMessage({
@@ -162,7 +162,7 @@ export async function LandingPricing({ locale }: { locale: Locale }) {
               <Card
                 key={plan.name}
                 className={cn(
-                  "relative row-span-8 grid grid-rows-subgrid gap-0 px-6",
+                  "relative row-span-8 grid grid-cols-[minmax(0,1fr)] grid-rows-subgrid gap-0 px-6",
                   plan.featured && "border-primary shadow-lg xl:-my-2 xl:py-8"
                 )}
               >
@@ -181,7 +181,7 @@ export async function LandingPricing({ locale }: { locale: Locale }) {
                     </span>
                   )}
                 </div>
-                <p className="flex items-baseline gap-1.5 self-end">
+                <p className="flex flex-wrap items-baseline gap-x-1.5 self-end">
                   <span className="font-display text-4xl font-semibold tracking-tight">
                     {plan.price}
                   </span>
@@ -213,7 +213,7 @@ export async function LandingPricing({ locale }: { locale: Locale }) {
                     <div>
                       {/* The monthly plan, in plain sight beside the annual. */}
                       {annual && (
-                        <div className="mt-3 flex items-baseline justify-between gap-2 border-t pt-3 text-sm">
+                        <div className="mt-3 flex flex-wrap items-baseline justify-between gap-x-2 border-t pt-3 text-sm">
                           <span className="text-muted-foreground">
                             {t.formatMessage({
                               defaultMessage: "Monthly plan",
@@ -221,7 +221,7 @@ export async function LandingPricing({ locale }: { locale: Locale }) {
                           </span>
                           <span className="font-medium whitespace-nowrap">
                             {t.formatMessage(
-                              { defaultMessage: "{price} a month" },
+                              { defaultMessage: "{price}/mo" },
                               { price: plan.monthly }
                             )}
                           </span>

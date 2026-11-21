@@ -18,7 +18,8 @@ const maxWidth = 640;
  * A side column the user widens or narrows by dragging its inner edge
  * (the index of My career and the documents on the left, an agent on the
  * right), remembered per viewer under `storageKey`: read from storage on
- * the client, so the server renders the default and both agree.
+ * the client, so the server renders the default and both agree. Tinted, as
+ * every side column is, so the main column stands out.
  */
 export function ResizableAside({
   storageKey,
@@ -81,7 +82,7 @@ export function ResizableAside({
   const aside = (
     <aside
       className={cn(
-        "hidden shrink-0 overflow-y-auto",
+        "bg-muted/60 hidden shrink-0 overflow-y-auto",
         from === "md" ? "md:block" : "lg:block",
         className
       )}

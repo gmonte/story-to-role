@@ -113,9 +113,9 @@ export function WorkspaceBody({
     <div ref={container} className="flex min-h-0 flex-1">
       {/* The main column keeps room to work: the columns beside it give way
           (down to their minimum) when the screen is too narrow for all. */}
-      <main className="flex min-w-0 flex-1 flex-col lg:min-w-[40rem]">
+      <div className="flex min-w-0 flex-1 flex-col lg:min-w-[40rem]">
         {chat}
-      </main>
+      </div>
       {panel && (
         <Divider onPointerDown={(event) => startDrag(event, "panel")} />
       )}
@@ -126,8 +126,8 @@ export function WorkspaceBody({
           style={{ width: panelWidth, minWidth: minPanel }}
           className={
             flushPanel
-              ? "bg-muted/30 hidden max-w-[50vw] overflow-hidden empty:hidden lg:block"
-              : "bg-muted/30 hidden max-w-[50vw] overflow-y-auto p-4 empty:hidden lg:block"
+              ? "bg-muted/60 hidden max-w-[50vw] overflow-hidden empty:hidden lg:block"
+              : "bg-muted/60 hidden max-w-[50vw] overflow-y-auto p-4 empty:hidden lg:block"
           }
         >
           {panel}

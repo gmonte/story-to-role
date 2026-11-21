@@ -3,7 +3,7 @@ import { cn } from "@repo/web/lib/utils";
 /**
  * The StoryToRole mark: four lines whose ends trace an S, the last one in the
  * accent color ending in a dot. `oneColor` paints the accent line in ink too,
- * as the lockup does.
+ * for a background where the accent would not show.
  */
 export function BrandMark({
   className,

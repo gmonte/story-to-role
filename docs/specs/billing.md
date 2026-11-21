@@ -42,7 +42,7 @@ As SaaS products usually do (GitHub, Slack, Notion), a switch to a dearer plan a
 | Monthly → annual, same subscription | At once | The unused month is credited | The year starts now |
 | Annual → monthly, same subscription | At the end of the paid year | None | Nothing changes until then |
 
-Restarting the period on a switch to the credit subscription keeps a switch near the end of a month from buying 600 credits for a few days' difference. Plan switches go through the app, never the Customer Portal, so a key is always checked first.
+A key saved for an own-key Checkout that expires unpaid is deleted (the `checkout.session.expired` event, with reconciliation as the backstop). The plan page shows a scheduled switch to monthly with its date. Restarting the period on a switch to the credit subscription keeps a switch near the end of a month from buying 600 credits for a few days' difference. Plan switches go through the app, never the Customer Portal, so a key is always checked first.
 
 ## Credit expiry
 
@@ -118,9 +118,9 @@ Stripe directly, through an account opened in Brazil under the owner's CNPJ; Cle
 - A periodic Trigger.dev job reconciles renewals, cancellations and refunds from Stripe, looking only at the Stripe customers that exist in that environment's database; the sandbox is shared by all previews, but each sees only its own customers.
 - The same retrieval and reconciliation also cover a webhook lost in production.
 
-Webhook destinations use the account scope (no Stripe Connect), snapshot payloads and API version `2026-10-28.endive`, which the Stripe SDK pins too so event and request shapes match. Subscribed events: `checkout.session.completed`, `checkout.session.async_payment_succeeded`, `checkout.session.async_payment_failed` (Pix completes asynchronously), `invoice.paid`, `invoice.payment_failed`, `customer.subscription.updated`, `customer.subscription.deleted`, `charge.refunded`. The sandbox destination for staging points to `https://stg-storytorole.vercel.app/api/webhooks/stripe`; its signing secret belongs in staging's `STRIPE_WEBHOOK_SECRET`, distinct from the local one printed by `stripe listen`.
+Webhook destinations use the account scope (no Stripe Connect), snapshot payloads and API version `2026-10-28.endive`, which the Stripe SDK pins too so event and request shapes match. Subscribed events: `checkout.session.completed`, `checkout.session.async_payment_succeeded`, `checkout.session.async_payment_failed` (Pix completes asynchronously), `checkout.session.expired` (an own-key Checkout nobody paid: the key saved for it is deleted), `invoice.paid`, `invoice.payment_failed`, `customer.subscription.updated`, `customer.subscription.deleted`, `charge.refunded`. The sandbox destination for staging points to `https://stg-storytorole.vercel.app/api/webhooks/stripe`; its signing secret belongs in staging's `STRIPE_WEBHOOK_SECRET`, distinct from the local one printed by `stripe listen`.
 
-Locally, `stripe listen` does not use the dashboard destination's event list: by default it forwards every event of the sandbox account. A `pnpm stripe:listen` script passes the same eight events with `--events`. The webhook route answers 200 to any event it does not handle, and ignores Stripe customers that do not exist in its environment's database, since all non-production environments share one sandbox and receive each other's events.
+Locally, `stripe listen` does not use the dashboard destination's event list: by default it forwards every event of the sandbox account. A `pnpm stripe:listen` script passes the same nine events with `--events`. The webhook route answers 200 to any event it does not handle, and ignores Stripe customers that do not exist in its environment's database, since all non-production environments share one sandbox and receive each other's events.
 
 Stripe Brazil standard fees (stripe.com/br/pricing, read 2026-11-14):
 

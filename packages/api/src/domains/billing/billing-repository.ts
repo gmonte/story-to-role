@@ -143,6 +143,7 @@ export class BillingRepository {
           currentPeriodStart: row.currentPeriodStart,
           currentPeriodEnd: row.currentPeriodEnd,
           cancelAtPeriodEnd: row.cancelAtPeriodEnd,
+          scheduledInterval: row.scheduledInterval ?? null,
         },
       });
   }

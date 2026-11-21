@@ -84,6 +84,7 @@ function fakeStripe(state: {
   invoiceOfPayment?: string;
   // What a subscription becomes once updated.
   updated?: Stripe.Subscription;
+  schedule?: Stripe.SubscriptionSchedule;
 }) {
   return {
     subscriptions: {
@@ -138,6 +139,9 @@ function fakeStripe(state: {
       },
     },
     customers: { del: vi.fn(async () => ({ deleted: true })) },
+    subscriptionSchedules: {
+      retrieve: vi.fn(async () => state.schedule),
+    },
     invoicePayments: {
       list: vi.fn(async () =>
         list(
@@ -551,6 +555,90 @@ describe("billing service", () => {
     );
 
     expect(await keys.findByUserId(ctx.user.id)).not.toBeNull();
+  });
+
+  it("deletes the key of an own-key Checkout that expired unpaid", async () => {
+    const expired = {
+      id: "cs_key",
+      mode: "subscription",
+      status: "expired",
+      payment_status: "unpaid",
+      customer: "cus_ada",
+      metadata: { userId: "", product: "own_key_monthly" },
+    } as unknown as Stripe.Checkout.Session;
+    const ctx = await setup({ sessions: [expired] });
+    const keys = new AiKeysRepository(ctx.db);
+    const keep = () =>
+      keys.upsert({
+        userId: ctx.user.id,
+        encryptedKey: "encrypted",
+        lastCharacters: "WXYZ",
+        status: "active",
+        now: new Date(),
+      });
+
+    await keep();
+    expect(
+      await ctx.billing.handleEvent(event("checkout.session.expired", expired))
+    ).toEqual({ handled: true });
+    expect(await keys.findByUserId(ctx.user.id)).toBeNull();
+
+    // Reconciliation catches a lost event the same way.
+    await keep();
+    await ctx.billing.reconcile();
+    expect(await keys.findByUserId(ctx.user.id)).toBeNull();
+
+    // A courtesy grant still uses the key.
+    const owner = await createTestUser("owner@example.com", { credits: 0 });
+    await new CreditsService(ctx.db).grantCourtesy({
+      adminUserId: owner.id,
+      email: "ada@example.com",
+      monthlyCredits: 0,
+      endsAt: null,
+    });
+    await keep();
+    await ctx.billing.handleEvent(event("checkout.session.expired", expired));
+    expect(await keys.findByUserId(ctx.user.id)).not.toBeNull();
+  });
+
+  it("shows an annual plan's scheduled switch to monthly", async () => {
+    const annual = subscription(
+      "active",
+      "paid",
+      "storytorole_subscription",
+      "sub_1",
+      "year"
+    );
+    const periodEnd = annual.items.data[0]?.current_period_end ?? 0;
+    const ctx = await setup({
+      subscription: { ...annual, schedule: "sub_sched_1" },
+      schedule: {
+        id: "sub_sched_1",
+        phases: [
+          {
+            start_date: nowSeconds - 2 * day,
+            end_date: periodEnd,
+            items: [{ price: { recurring: { interval: "year" } } }],
+          },
+          {
+            start_date: periodEnd,
+            end_date: periodEnd + 30 * day,
+            items: [{ price: { recurring: { interval: "month" } } }],
+          },
+        ],
+      } as unknown as Stripe.SubscriptionSchedule,
+    });
+
+    await ctx.billing.handleEvent(
+      event("customer.subscription.updated", {
+        id: "sub_1",
+        customer: "cus_ada",
+      })
+    );
+
+    expect(
+      (await ctx.billing.status(ctx.user.id)).subscription?.scheduledInterval
+    ).toBe("month");
   });
 
   it("grants nothing until the invoice is paid, yet keeps the paid plan", async () => {

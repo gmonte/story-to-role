@@ -161,15 +161,23 @@ export function BillingView() {
                       },
                       { date: date(subscription.currentPeriodEnd) }
                     )
-                : annual
+                : subscription.scheduledInterval === "month"
                   ? t.formatMessage(
-                      { defaultMessage: "Billed yearly. Renews on {date}." },
+                      {
+                        defaultMessage:
+                          "Billed yearly until {date}, then monthly from that day.",
+                      },
                       { date: date(subscription.currentPeriodEnd) }
                     )
-                  : t.formatMessage(
-                      { defaultMessage: "Billed monthly. Renews on {date}." },
-                      { date: date(subscription.currentPeriodEnd) }
-                    )}
+                  : annual
+                    ? t.formatMessage(
+                        { defaultMessage: "Billed yearly. Renews on {date}." },
+                        { date: date(subscription.currentPeriodEnd) }
+                      )
+                    : t.formatMessage(
+                        { defaultMessage: "Billed monthly. Renews on {date}." },
+                        { date: date(subscription.currentPeriodEnd) }
+                      )}
           </p>
         )}
         {plan === "own_key" && carryoverEndsAt && (
@@ -183,19 +191,25 @@ export function BillingView() {
             )}
           </p>
         )}
-        {subscribed && !subscription.cancelAtPeriodEnd && (
-          <Button
-            variant="outline"
-            className="self-start"
-            disabled={busy}
-            onClick={() => changeInterval.mutate({})}
-          >
-            <CalendarSync />
-            {annual
-              ? t.formatMessage({ defaultMessage: "Switch to monthly billing" })
-              : t.formatMessage({ defaultMessage: "Switch to annual billing" })}
-          </Button>
-        )}
+        {subscribed &&
+          !subscription.cancelAtPeriodEnd &&
+          !subscription.scheduledInterval && (
+            <Button
+              variant="outline"
+              className="self-start"
+              disabled={busy}
+              onClick={() => changeInterval.mutate({})}
+            >
+              <CalendarSync />
+              {annual
+                ? t.formatMessage({
+                    defaultMessage: "Switch to monthly billing",
+                  })
+                : t.formatMessage({
+                    defaultMessage: "Switch to annual billing",
+                  })}
+            </Button>
+          )}
         {status.data?.hasCustomer && (
           <Button
             variant="outline"

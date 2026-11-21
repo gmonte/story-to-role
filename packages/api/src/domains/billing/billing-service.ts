@@ -24,6 +24,8 @@ import { logger } from "@repo/common/tools/logger";
 import { billingCatalog, offerFor, planOfProduct } from "./billing-catalog";
 import { BillingRepository } from "./billing-repository";
 import {
+  type BillingInterval,
+  billingIntervalSchema,
   type BillingStatus,
   type CheckoutProduct,
   checkoutProductSchema,
@@ -42,6 +44,7 @@ export type StripeGateway = Pick<
   | "subscriptions"
   | "prices"
   | "invoicePayments"
+  | "subscriptionSchedules"
 >;
 
 const idOf = (value: string | { id: string } | null | undefined) =>
@@ -91,6 +94,7 @@ export class BillingService {
         interval: subscription.interval,
         currentPeriodEnd: subscription.currentPeriodEnd,
         cancelAtPeriodEnd: subscription.cancelAtPeriodEnd,
+        scheduledInterval: subscription.scheduledInterval,
       },
       carryoverEndsAt:
         (await repository.findCarryover(userId, new Date()))?.paidPeriodEnd ??
@@ -311,6 +315,9 @@ export class BillingService {
       case "charge.refunded":
         await this.applyRefund(event.data.object, customer.userId);
         break;
+      case "checkout.session.expired":
+        await this.releaseAbandonedKey(event.data.object, customer.userId);
+        break;
       default:
         // checkout.session.async_payment_failed: nothing was granted.
         return { handled: false };
@@ -353,6 +360,18 @@ export class BillingService {
               originPrefix: packOrigin(session.id),
             });
           }
+        }
+        // Checkouts that expired lately (a lost expiry event): a key saved
+        // for an own-key Checkout nobody paid goes.
+        const expired = await this.stripe.checkout.sessions
+          .list({
+            customer: customer.stripeCustomerId,
+            status: "expired",
+            created: { gte: Math.floor(Date.now() / 1000) - 3 * 24 * 3600 },
+          })
+          .autoPagingToArray({ limit: 100 });
+        for (const session of expired) {
+          await this.releaseAbandonedKey(session, customer.userId);
         }
       } catch (error) {
         logger.error(logTags, "Reconciliation failed for a customer", {
@@ -496,6 +515,13 @@ export class BillingService {
     const period = invoice?.status === "paid" ? paidPeriod(invoice) : null;
     const plan = planOfProduct(idOf(item.price.product));
     const status = subscription.status as SubscriptionStatus;
+    const interval =
+      item.price.recurring?.interval === "year" ? "year" : "month";
+    const scheduledInterval = await this.scheduledInterval(
+      subscription,
+      interval,
+      item.current_period_end
+    );
     await this.db.transaction(async (tx) => {
       const repository = new BillingRepository(tx);
       const before = await repository.findSubscriptionByStripeId(
@@ -506,10 +532,11 @@ export class BillingService {
         stripeSubscriptionId: subscription.id,
         plan,
         status,
-        interval: item.price.recurring?.interval === "year" ? "year" : "month",
+        interval,
         currentPeriodStart: new Date(item.current_period_start * 1000),
         currentPeriodEnd: new Date(item.current_period_end * 1000),
         cancelAtPeriodEnd: subscription.cancel_at_period_end,
+        scheduledInterval,
       });
       if (invoice?.id && period) {
         await repository.recordPaidInvoice({
@@ -531,6 +558,49 @@ export class BillingService {
       if (leftOwnKey && !planUsesKey(kind)) {
         await new AiKeysRepository(tx).delete(userId);
       }
+    });
+  }
+
+  /**
+   * The interval a subscription schedule switches to at the period's end
+   * (the portal schedules a shorter interval there), if it differs.
+   */
+  private async scheduledInterval(
+    subscription: Stripe.Subscription,
+    interval: BillingInterval,
+    periodEnd: number
+  ): Promise<BillingInterval | null> {
+    const scheduleId = idOf(subscription.schedule);
+    if (!scheduleId) return null;
+    const schedule = await this.stripe.subscriptionSchedules.retrieve(
+      scheduleId,
+      { expand: ["phases.items.price"] }
+    );
+    const next = schedule.phases.find((phase) => phase.start_date >= periodEnd);
+    const price = next?.items[0]?.price;
+    const nextInterval =
+      typeof price === "object" && price && "recurring" in price
+        ? price.recurring?.interval
+        : null;
+    const parsed = billingIntervalSchema.safeParse(nextInterval);
+    return parsed.success && parsed.data !== interval ? parsed.data : null;
+  }
+
+  /**
+   * An own-key Checkout that expired unpaid (billing spec, "Plans and AI
+   * funding"): the key saved for it goes, unless the user's plan uses one
+   * (another Checkout paid since, or a courtesy grant).
+   */
+  private async releaseAbandonedKey(
+    session: Stripe.Checkout.Session,
+    userId: string
+  ) {
+    const product = checkoutProductSchema.safeParse(session.metadata?.product);
+    if (!product.success || session.payment_status === "paid") return;
+    if (billingCatalog.prices[product.data].product !== "own_key") return;
+    await this.db.transaction(async (tx) => {
+      const { kind } = await currentPlan(tx, userId, new Date());
+      if (!planUsesKey(kind)) await new AiKeysRepository(tx).delete(userId);
     });
   }
 

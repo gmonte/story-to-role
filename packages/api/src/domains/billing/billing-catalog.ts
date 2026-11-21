@@ -110,4 +110,5 @@ export const stripeEvents = [
   "customer.subscription.updated",
   "customer.subscription.deleted",
   "charge.refunded",
+  "checkout.session.expired",
 ] as const;

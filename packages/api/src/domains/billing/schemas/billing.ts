@@ -49,6 +49,8 @@ export const billingStatusSchema = z.object({
       interval: billingIntervalSchema,
       currentPeriodEnd: z.date(),
       cancelAtPeriodEnd: z.boolean(),
+      // Monthly from the period's end, when a switch is scheduled.
+      scheduledInterval: billingIntervalSchema.nullable(),
     })
     .nullable(),
   // After a switch to the own-key subscription: until when the replaced

@@ -61,6 +61,9 @@ export const subscriptionsTable = createTable(
     currentPeriodStart: d.timestamp({ withTimezone: true }).notNull(),
     currentPeriodEnd: d.timestamp({ withTimezone: true }).notNull(),
     cancelAtPeriodEnd: d.boolean().notNull().default(false),
+    // The interval it switches to at the period's end, when a shorter one
+    // was scheduled (billing spec, "Switching plans").
+    scheduledInterval: d.text().$type<BillingInterval>(),
     // The last paid invoice and the service period it paid for: monthly
     // credits are granted from it, never before payment (billing spec:
     // "each paid invoice … grants that month's credits").

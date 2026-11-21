@@ -25,7 +25,7 @@ import {
 import { cn } from "@repo/web/lib/utils";
 
 import { useProfileLabels } from "../hooks/use-profile-labels";
-import { blockPositions, isLockedNode } from "../utils/editor-doc";
+import { blockPositions, isFixedBlock } from "../utils/editor-doc";
 import { EntryDialog } from "./entry-dialog";
 import { FindingHoverCard } from "./finding-hover-card";
 import { LinkHoverCard } from "./link-hover-card";
@@ -82,8 +82,8 @@ function dropIndex(editor: Editor, clientY: number) {
 function moveBlock(editor: Editor, from: number, to: number) {
   if (to === from || to === from + 1) return;
   const node = editor.state.doc.child(from);
-  // The title and the template's sections stay where they are.
-  if (isLockedNode(node)) return;
+  // The title, the opening note and the template's sections stay put.
+  if (isFixedBlock(editor.state.doc, from)) return;
   const start = nodeStart(editor, from);
   const tr = editor.state.tr.delete(start, start + node.nodeSize);
   const target = nodeStart(editor, to) - (to > from ? node.nodeSize : 0);
@@ -288,12 +288,10 @@ export function ProfileDocument() {
     return () => dom.removeEventListener("keydown", keys, true);
   }, [editor, slash, slashIndex, slashOptions, chooseSlash]);
 
-  // The title and the template's sections have no handle: they don't move.
+  // The title, the opening note and the template's sections have no
+  // handle: they don't move.
   const lockedHovered =
-    !!editor &&
-    !!hovered &&
-    hovered.index < editor.state.doc.childCount &&
-    isLockedNode(editor.state.doc.child(hovered.index));
+    !!editor && !!hovered && isFixedBlock(editor.state.doc, hovered.index);
 
   function track(event: React.MouseEvent) {
     if (!editor || drag || blockMenu !== null || addMenuOpen) return;

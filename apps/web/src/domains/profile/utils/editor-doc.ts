@@ -155,6 +155,19 @@ export function introNoteOffsets(doc: ProseMirrorNode) {
   return offsets;
 }
 
+/**
+ * Whether the top-level block at `index` is fixed: the title, a template
+ * section's heading or a line of the opening note. It has no drag handle
+ * and doesn't move.
+ */
+export function isFixedBlock(doc: ProseMirrorNode, index: number) {
+  if (index >= doc.childCount) return false;
+  if (isLockedNode(doc.child(index))) return true;
+  let offset = 0;
+  for (let i = 0; i < index; i++) offset += doc.child(i).nodeSize;
+  return introNoteOffsets(doc).includes(offset);
+}
+
 /** The opening note's lines, to tell whether a change touched them. */
 export function introNote(doc: ProseMirrorNode) {
   return introNoteOffsets(doc).map((offset) => doc.nodeAt(offset)?.textContent);

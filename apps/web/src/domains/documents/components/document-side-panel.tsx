@@ -108,18 +108,18 @@ export function DocumentSidePanel({
       onValueChange={setTab}
       className={cn("gap-3", tab === "agent" && "h-full min-h-0 flex-col")}
     >
-      <TabsList className="w-full">
+      <TabsList>
         {agent && (
-          <TabsTrigger value="agent" className="flex-1">
+          <TabsTrigger value="agent">
             {t.formatMessage({ defaultMessage: "Agent" })}
           </TabsTrigger>
         )}
         {preview && (
-          <TabsTrigger value="preview" className="flex-1">
+          <TabsTrigger value="preview">
             {t.formatMessage({ defaultMessage: "Preview" })}
           </TabsTrigger>
         )}
-        <TabsTrigger value="versions" className="flex-1">
+        <TabsTrigger value="versions">
           {t.formatMessage({ defaultMessage: "Versions" })}
         </TabsTrigger>
       </TabsList>
@@ -128,7 +128,7 @@ export function DocumentSidePanel({
         <TabsContent
           value="agent"
           forceMount
-          className="bg-card -mx-4 flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border data-[state=inactive]:hidden"
+          className="flex min-h-0 flex-1 flex-col overflow-hidden data-[state=inactive]:hidden"
         >
           {agent}
         </TabsContent>

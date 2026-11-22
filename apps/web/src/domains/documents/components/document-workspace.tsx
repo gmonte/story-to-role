@@ -181,16 +181,25 @@ function NewerProfileNotice() {
     <div className="border-warning-border bg-warning-soft flex items-center gap-3 rounded-lg border p-3 text-xs">
       <TriangleAlert className="text-warning size-4 shrink-0" />
       <span className="min-w-0 flex-1">
-        {t.formatMessage(
-          {
-            defaultMessage:
-              "Profile version {number} is newer than this document's{current, select, none {} other { (version {current})}}.",
-          },
-          {
-            number: newer.number,
-            current: version.profile.versionNumber ?? "none",
-          }
-        )}
+        {version.profile.versionNumber === null ||
+        version.profile.versionNumber === undefined
+          ? t.formatMessage(
+              {
+                defaultMessage:
+                  "Profile version {number} is newer than this document's.",
+              },
+              { number: newer.number }
+            )
+          : t.formatMessage(
+              {
+                defaultMessage:
+                  "Profile version {number} is newer than this document's (version {current}).",
+              },
+              {
+                number: newer.number,
+                current: version.profile.versionNumber,
+              }
+            )}
         <Link href="/app/career" className="ml-1 underline underline-offset-2">
           {t.formatMessage({ defaultMessage: "Open My career" })}
         </Link>

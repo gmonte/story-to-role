@@ -26,7 +26,7 @@ import { useTRPC } from "~/tools/trpc/client";
 
 import { focusDocumentLine } from "../utils/focus-line";
 import { findPassage, type PassageTarget } from "../utils/passages";
-import { oldestWithBullets } from "../utils/version-checks";
+import { oldestWithBullets, pageLimitText } from "../utils/version-checks";
 import { useDocumentAgent } from "./document-agent-context";
 import { ProfilePassage } from "./line-trace";
 import { StaleReviewNotice } from "./review-again";
@@ -134,6 +134,39 @@ export function useFindingLabel() {
     findingText(t, finding, version);
 }
 
+/** The profile field a finding calls untranslated, in a word. */
+function untranslatedFieldLabel(
+  t: ReturnType<typeof useTranslation>,
+  field: string
+) {
+  switch (field) {
+    case "employer":
+      return t.formatMessage({ defaultMessage: "employer" });
+    case "title":
+      return t.formatMessage({ defaultMessage: "title" });
+    case "city":
+      return t.formatMessage({ defaultMessage: "city" });
+    case "credential":
+      return t.formatMessage({ defaultMessage: "credential" });
+    case "institution":
+      return t.formatMessage({ defaultMessage: "institution" });
+    default:
+      return t.formatMessage({ defaultMessage: "level" });
+  }
+}
+
+/** How old the position behind a finding is, as a noun phrase. */
+function positionAgeLabel(t: ReturnType<typeof useTranslation>, age: string) {
+  switch (age) {
+    case "recent":
+      return t.formatMessage({ defaultMessage: "a recent position" });
+    case "older":
+      return t.formatMessage({ defaultMessage: "an older position" });
+    default:
+      return t.formatMessage({ defaultMessage: "a very old position" });
+  }
+}
+
 function findingText(
   t: ReturnType<typeof useTranslation>,
   finding: Finding,
@@ -178,9 +211,9 @@ function findingText(
       return t.formatMessage(
         {
           defaultMessage:
-            "Not translated: “{text}” ({field, select, employer {employer} title {title} city {city} credential {credential} institution {institution} other {level}}) is still in your profile's language. Edit it here, or add a translation to your profile so every document in this language uses it.",
+            "Not translated: “{text}” ({field}) is still in your profile's language. Edit it here, or add a translation to your profile so every document in this language uses it.",
         },
-        { text, field: str("field") }
+        { text, field: untranslatedFieldLabel(t, str("field")) }
       );
     case "neverClaim":
       return t.formatMessage(
@@ -232,13 +265,19 @@ function findingText(
       return t.formatMessage(
         {
           defaultMessage:
-            "{text}: {count, plural, =0 {no bullets} one {# bullet} other {# bullets}}, over the {limit} your settings allow for {age, select, recent {a recent} older {an older} other {a very old}} position.",
+            "{text}: {count}, over the {limit} your settings allow for {age}.",
         },
         {
           text,
-          count: Number(params.count ?? 0),
+          count: t.formatMessage(
+            {
+              defaultMessage:
+                "{count, plural, =0 {no bullets} one {# bullet} other {# bullets}}",
+            },
+            { count: Number(params.count ?? 0) }
+          ),
           limit: Number(params.limit ?? 0),
-          age: str("age"),
+          age: positionAgeLabel(t, str("age")),
         }
       );
     case "paragraphs":
@@ -253,18 +292,12 @@ function findingText(
         }
       );
     case "pages":
-      return t.formatMessage(
-        {
-          defaultMessage:
-            "{measured, select, yes {{pages} pages in the PDF} other {About {pages} pages}}: over the page limit this document was written with ({limit}). {position, select, none {Turn off an optional section.} other {Trim the bullets of {position}, your oldest position, or turn off an optional section.}}",
-        },
-        {
-          pages: t.formatNumber(Number(params.pages ?? version.pages)),
-          limit: Number(params.maxPages ?? version.maxPages),
-          measured: version.pdf.ready ? "yes" : "no",
-          position: oldestWithBullets(version) ?? "none",
-        }
-      );
+      return pageLimitText(t, {
+        pages: t.formatNumber(Number(params.pages ?? version.pages)),
+        limit: Number(params.maxPages ?? version.maxPages),
+        measured: version.pdf.ready,
+        position: oldestWithBullets(version),
+      });
     case "bulletShape": {
       const problems = str("problems").split(",");
       const reasons = [
@@ -419,13 +452,25 @@ function ReviewSections({
         <p>
           {t.formatMessage(
             {
-              defaultMessage:
-                "{version, select, none {Your profile} other {Profile version {version}}} · {purpose} · {instructions, plural, =0 {no instructions} one {# instruction} other {# instructions}}",
+              defaultMessage: "{profile} · {purpose} · {instructions}",
             },
             {
-              version: sources.profileVersionNumber ?? "none",
+              profile:
+                sources.profileVersionNumber === null ||
+                sources.profileVersionNumber === undefined
+                  ? t.formatMessage({ defaultMessage: "Your profile" })
+                  : t.formatMessage(
+                      { defaultMessage: "Profile version {version}" },
+                      { version: sources.profileVersionNumber }
+                    ),
               purpose,
-              instructions: sources.instructions,
+              instructions: t.formatMessage(
+                {
+                  defaultMessage:
+                    "{instructions, plural, =0 {no instructions} one {# instruction} other {# instructions}}",
+                },
+                { instructions: sources.instructions }
+              ),
             }
           )}
         </p>

@@ -996,16 +996,22 @@ export function DocumentEditorProvider({
             (block) => block.type === "sectionTitle" && block.kind === kind
           );
         const anchor = titleOf(move.anchor);
-        const summary = t.formatMessage(
-          {
-            defaultMessage:
-              "{placement, select, above {Suggested: move this section above {anchor}} other {Suggested: move this section below {anchor}}}",
-          },
-          {
-            placement: move.placement,
-            anchor: anchor && "text" in anchor ? anchor.text : move.anchor,
-          }
-        );
+        const anchorText =
+          anchor && "text" in anchor ? anchor.text : move.anchor;
+        const summary =
+          move.placement === "above"
+            ? t.formatMessage(
+                {
+                  defaultMessage: "Suggested: move this section above {anchor}",
+                },
+                { anchor: anchorText }
+              )
+            : t.formatMessage(
+                {
+                  defaultMessage: "Suggested: move this section below {anchor}",
+                },
+                { anchor: anchorText }
+              );
         specs.push({
           kind: "widget",
           at: positions[range.start],

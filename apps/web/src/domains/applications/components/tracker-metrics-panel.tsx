@@ -93,12 +93,23 @@ function MetricsBody({ metrics }: { metrics: TrackerMetrics }) {
   const rate = (group: { sent: number; responded: number }) =>
     t.formatMessage(
       {
-        defaultMessage:
-          "{sent, plural, =0 {none sent} one {# sent} other {# sent}} · {responded, plural, =0 {no replies} one {# reply} other {# replies}} ({rate})",
+        defaultMessage: "{sent} · {responded} ({rate})",
       },
       {
-        responded: group.responded,
-        sent: group.sent,
+        responded: t.formatMessage(
+          {
+            defaultMessage:
+              "{responded, plural, =0 {no replies} one {# reply} other {# replies}}",
+          },
+          { responded: group.responded }
+        ),
+        sent: t.formatMessage(
+          {
+            defaultMessage:
+              "{sent, plural, =0 {none sent} one {# sent} other {# sent}}",
+          },
+          { sent: group.sent }
+        ),
         rate: t.formatNumber(group.responded / group.sent, {
           style: "percent",
         }),
@@ -154,16 +165,15 @@ function MetricsBody({ metrics }: { metrics: TrackerMetrics }) {
           t.formatMessage({
             defaultMessage: "High-fit openings that reached an interview",
           }),
-          t.formatMessage(
-            {
-              defaultMessage:
-                "{total, plural, =0 {None applied} other {{interviews, number} of {total, number}}}",
-            },
-            {
-              total: metrics.highFit.total,
-              interviews: metrics.highFit.interviews,
-            }
-          )
+          metrics.highFit.total === 0
+            ? t.formatMessage({ defaultMessage: "None applied" })
+            : t.formatMessage(
+                { defaultMessage: "{interviews, number} of {total, number}" },
+                {
+                  total: metrics.highFit.total,
+                  interviews: metrics.highFit.interviews,
+                }
+              )
         )}
       </div>
 

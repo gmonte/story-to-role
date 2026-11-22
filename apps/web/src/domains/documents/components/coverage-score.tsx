@@ -56,13 +56,11 @@ function BandBadge({ band }: { band: keyof typeof scoreTone }) {
   const t = useTranslation();
   return (
     <Badge variant="outline" className={scoreTone[band]}>
-      {t.formatMessage(
-        {
-          defaultMessage:
-            "{band, select, good {Strong} middling {Fair} other {Low}}",
-        },
-        { band }
-      )}
+      {band === "good"
+        ? t.formatMessage({ defaultMessage: "Strong" })
+        : band === "middling"
+          ? t.formatMessage({ defaultMessage: "Fair" })
+          : t.formatMessage({ defaultMessage: "Low" })}
     </Badge>
   );
 }
@@ -135,13 +133,15 @@ function CoverageScoreBody({
       {showExplanation && (
         <div className="text-muted-foreground flex flex-col gap-1.5">
           <p>
-            {t.formatMessage(
-              {
-                defaultMessage:
-                  "The score StoryToRole’s reviewers gave this resume for the {purpose, select, focus {focus} other {opening}}.",
-              },
-              { purpose }
-            )}
+            {purpose === "focus"
+              ? t.formatMessage({
+                  defaultMessage:
+                    "The score StoryToRole’s reviewers gave this resume for the focus.",
+                })
+              : t.formatMessage({
+                  defaultMessage:
+                    "The score StoryToRole’s reviewers gave this resume for the opening.",
+                })}
           </p>
           <p>
             {review.ofEdit && review.rounds.length > 1

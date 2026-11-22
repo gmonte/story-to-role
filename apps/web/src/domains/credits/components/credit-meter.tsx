@@ -96,15 +96,30 @@ export function CreditMeter() {
             <span className="text-muted-foreground text-xs">
               {t.formatMessage(
                 {
-                  defaultMessage:
-                    "Enough for about {resumes, plural, one {# resume} other {# resumes}} or {letters, plural, one {# cover letter} other {# cover letters}}.",
+                  defaultMessage: "Enough for about {resumes} or {letters}.",
                 },
                 {
-                  resumes: Math.floor(
-                    general / Math.max(1, data.estimates.resume)
+                  resumes: t.formatMessage(
+                    {
+                      defaultMessage:
+                        "{resumes, plural, one {# resume} other {# resumes}}",
+                    },
+                    {
+                      resumes: Math.floor(
+                        general / Math.max(1, data.estimates.resume)
+                      ),
+                    }
                   ),
-                  letters: Math.floor(
-                    general / Math.max(1, data.estimates.coverLetter)
+                  letters: t.formatMessage(
+                    {
+                      defaultMessage:
+                        "{letters, plural, one {# cover letter} other {# cover letters}}",
+                    },
+                    {
+                      letters: Math.floor(
+                        general / Math.max(1, data.estimates.coverLetter)
+                      ),
+                    }
                   ),
                 }
               )}

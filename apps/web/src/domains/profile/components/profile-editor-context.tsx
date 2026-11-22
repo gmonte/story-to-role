@@ -796,43 +796,45 @@ export function ProfileEditorProvider({
 
   // An undo or a redo across an accepted suggestion: it waits again in the
   // text and the chat, or is accepted again.
-  textChanged.current = (doc) => {
-    if (!accepted.current.length) return;
-    const text = serializeBlocks(docToBlocks(doc));
-    for (const entry of accepted.current) {
-      const ids = entry.suggestions.map((s) => s.id);
-      if (!entry.waiting && text === entry.before) {
-        entry.waiting = true;
-        setAnswered(
-          (current) => new Set([...current].filter((id) => !ids.includes(id)))
-        );
-        queryClient.setQueryData(
-          trpc.profile.suggestions.queryKey({}),
-          (current: ProfileSuggestion[] | undefined) =>
-            [
-              ...(current ?? []).filter((s) => !ids.includes(s.id)),
-              ...entry.suggestions,
-            ].sort((a, b) => +new Date(a.createdAt) - +new Date(b.createdAt))
-        );
-        entry.recording = entry.recording.then(
-          () =>
-            new Promise((settle) =>
-              reopenSuggestions(
-                { profileSuggestionIds: ids },
-                {
-                  onError: () => void refreshSuggestions(),
-                  onSettled: settle,
-                }
+  useLayoutEffect(() => {
+    textChanged.current = (doc) => {
+      if (!accepted.current.length) return;
+      const text = serializeBlocks(docToBlocks(doc));
+      for (const entry of accepted.current) {
+        const ids = entry.suggestions.map((s) => s.id);
+        if (!entry.waiting && text === entry.before) {
+          entry.waiting = true;
+          setAnswered(
+            (current) => new Set([...current].filter((id) => !ids.includes(id)))
+          );
+          queryClient.setQueryData(
+            trpc.profile.suggestions.queryKey({}),
+            (current: ProfileSuggestion[] | undefined) =>
+              [
+                ...(current ?? []).filter((s) => !ids.includes(s.id)),
+                ...entry.suggestions,
+              ].sort((a, b) => +new Date(a.createdAt) - +new Date(b.createdAt))
+          );
+          entry.recording = entry.recording.then(
+            () =>
+              new Promise((settle) =>
+                reopenSuggestions(
+                  { profileSuggestionIds: ids },
+                  {
+                    onError: () => void refreshSuggestions(),
+                    onSettled: settle,
+                  }
+                )
               )
-            )
-        );
-      } else if (entry.waiting && text === entry.after) {
-        entry.waiting = false;
-        forgetSuggestions(ids);
-        entry.recording = entry.recording.then(() => recordAccepted(ids));
+          );
+        } else if (entry.waiting && text === entry.after) {
+          entry.waiting = false;
+          forgetSuggestions(ids);
+          entry.recording = entry.recording.then(() => recordAccepted(ids));
+        }
       }
-    }
-  };
+    };
+  });
 
   const rejectSuggestions = (profileSuggestionIds?: string[]) => {
     const ids = profileSuggestionIds ?? suggestions.map((s) => s.id);

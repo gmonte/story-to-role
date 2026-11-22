@@ -1,4 +1,15 @@
-import { and, asc, desc, eq, inArray, lt, notExists, sql } from "drizzle-orm";
+import {
+  and,
+  asc,
+  desc,
+  eq,
+  inArray,
+  isNull,
+  lt,
+  notExists,
+  or,
+  sql,
+} from "drizzle-orm";
 
 import { applicationsTable } from "@repo/api/domains/applications/db/applications-tables";
 import { tasksTable } from "@repo/api/domains/tasks/db/tasks-tables";
@@ -126,9 +137,14 @@ export class OpeningsRepository {
       .where(
         and(
           eq(openingsTable.status, "processing"),
-          lt(
-            sql`coalesce(${openingsTable.updatedAt}, ${openingsTable.createdAt})`,
-            before
+          // Compared column by column: a bare SQL expression leaves the
+          // date unmapped, which the Postgres driver refuses.
+          or(
+            lt(openingsTable.updatedAt, before),
+            and(
+              isNull(openingsTable.updatedAt),
+              lt(openingsTable.createdAt, before)
+            )
           ),
           notExists(
             this.tx

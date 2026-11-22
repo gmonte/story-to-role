@@ -1,4 +1,4 @@
-import { and, desc, eq, gt, inArray, like } from "drizzle-orm";
+import { and, desc, eq, gt, inArray, like, lt } from "drizzle-orm";
 
 import type { AiFunding } from "@repo/api/domains/ai/ai-funding";
 import type { DbClient } from "@repo/api/tools/db-client";
@@ -99,10 +99,32 @@ export class TasksRepository {
         subjectId: tasksTable.subjectId,
         funding: tasksTable.funding,
         reviewers: tasksTable.reviewers,
+        errorMessage: tasksTable.errorMessage,
       })
       .from(tasksTable)
       .where(eq(tasksTable.id, taskId));
     return row;
+  }
+
+  /** Tasks created before `before` that never finished, for the sweep. */
+  async listUnfinished(before: Date) {
+    return this.tx
+      .select({
+        id: tasksTable.id,
+        userId: tasksTable.userId,
+        type: tasksTable.type,
+        status: tasksTable.status,
+        funding: tasksTable.funding,
+        createdAt: tasksTable.createdAt,
+        startedAt: tasksTable.startedAt,
+      })
+      .from(tasksTable)
+      .where(
+        and(
+          inArray(tasksTable.status, ["pending", "processing"]),
+          lt(tasksTable.createdAt, before)
+        )
+      );
   }
 
   async setRunId(input: { taskId: string; runId: string }) {

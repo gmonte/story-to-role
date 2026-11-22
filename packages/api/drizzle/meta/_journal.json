@@ -218,6 +218,13 @@
       "when": 1795285603016,
       "tag": "0030_add_task_document_kind",
       "breakpoints": true
+    },
+    {
+      "idx": 31,
+      "version": "7",
+      "when": 1795361159653,
+      "tag": "0031_add_opening_check_failed_at",
+      "breakpoints": true
     }
   ]
 }

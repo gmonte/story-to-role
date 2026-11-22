@@ -38,6 +38,9 @@ export async function runTask(
   if (owner?.type !== type) {
     throw new Error(`Task ${taskId} is not a ${String(type)} task`);
   }
+  // The sweep already failed it (its run started too late): nothing waits
+  // on it any more.
+  if (owner.errorMessage === stalledMessage) return;
 
   await repository.markProcessing(taskId);
 
@@ -72,6 +75,15 @@ export async function runTask(
     charge: outcome?.charge,
   });
 }
+
+/** A task whose run died or never started, failed by the sweep. */
+export class TaskStalledError extends Error {
+  constructor() {
+    super(stalledMessage);
+  }
+}
+
+const stalledMessage = "The task stalled";
 
 /**
  * Ends a task: marks it completed or failed and settles its credits. A
@@ -109,7 +121,11 @@ export async function finishTask(input: {
   }
   await repository.markFailed({
     taskId,
-    errorMessage: keyFailure ? `key_${keyFailure}` : "The task failed",
+    errorMessage: keyFailure
+      ? `key_${keyFailure}`
+      : input.error instanceof TaskStalledError
+        ? stalledMessage
+        : "The task failed",
   });
   // A failed task releases its reservation (billing spec).
   await settleTask(db, { userId, taskId, succeeded: false });

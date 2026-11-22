@@ -220,6 +220,7 @@ async function setup({ publish = true }: { publish?: boolean } = {}) {
     db,
     user,
     cipher,
+    tasks,
     openings,
     rewrite,
     profiles,
@@ -756,7 +757,8 @@ describe("openings and fit check", () => {
 
     await ctx.publishDocument(profile.replace("Go in production.", "Go."));
     await ctx.openings.reanalyze({ userId: ctx.user.id, openingId });
-    // A check that fails leaves the opening as it was, to run again.
+    // A check that fails leaves the opening as it was, to run again, and
+    // says the new check didn't finish.
     await expect(
       ctx.analyze(openingId, {
         object: () => {
@@ -766,11 +768,13 @@ describe("openings and fit check", () => {
     ).rejects.toThrow("provider down");
     expect(await ctx.detail(openingId)).toMatchObject({
       status: "analyzed",
+      checkFailed: true,
       fitCheck: { outdated: true },
     });
 
     await ctx.openings.reanalyze({ userId: ctx.user.id, openingId });
     await ctx.analyze(openingId, fitScript(allMet));
+    expect((await ctx.detail(openingId)).checkFailed).toBe(false);
     const after = (await ctx.detail(openingId)).fitCheck!;
     expect(after.outdated).toBe(false);
     expect(after.items.find((item) => item.term === "Terraform")).toMatchObject(
@@ -1327,6 +1331,89 @@ describe("openings and fit check", () => {
       company: "Airbnb",
       fitCheck: null,
     });
+  });
+
+  it("judges a long opening in small batches, so no answer outgrows its limit", async () => {
+    const ctx = await setup();
+    const openingId = await ctx.add();
+    const keywords = Array.from({ length: 33 }, (_, index) => ({
+      text: `Tool ${index + 1}`,
+      category: "tool",
+      importance: "mandatory",
+    }));
+    const batches: string[][] = [];
+
+    await ctx.analyze(
+      openingId,
+      fitScript(
+        (terms) => {
+          batches.push(terms.map((term) => term.text));
+          return allMet(terms);
+        },
+        { ...extraction, keywords }
+      )
+    );
+
+    expect(batches.length).toBeGreaterThan(1);
+    for (const batch of batches) expect(batch.length).toBeLessThanOrEqual(10);
+    // Every requirement judged once, none left out.
+    expect(batches.flat().sort()).toEqual(
+      [
+        ...keywords.map((k) => k.text),
+        ...extraction.requirements.map((r) => r.text),
+      ].sort()
+    );
+    const detail = await ctx.detail(openingId);
+    expect(detail.fitCheck!.items).toHaveLength(35);
+    expect(
+      detail.fitCheck!.items.find((item) => item.term === "Tool 33")
+    ).toMatchObject({ explanation: "Shown in the profile." });
+  });
+
+  it("marks the opening failed when its first analysis breaks, never still being read", async () => {
+    const ctx = await setup();
+    const openingId = await ctx.add();
+
+    await expect(
+      ctx.analyze(
+        openingId,
+        fitScript(() => {
+          throw new Error("provider down");
+        })
+      )
+    ).rejects.toThrow("provider down");
+
+    expect(await ctx.detail(openingId)).toMatchObject({
+      status: "failed",
+      progress: null,
+      fitCheck: null,
+    });
+
+    // Trying again reads it from the start, at its usual cost.
+    await ctx.openings.retryAnalysis({ userId: ctx.user.id, openingId });
+    expect((await ctx.detail(openingId)).status).toBe("processing");
+    await expect(
+      ctx.openings.retryAnalysis({ userId: ctx.user.id, openingId })
+    ).rejects.toMatchObject({ code: "NOT_FOUND" });
+    await ctx.analyze(openingId, fitScript(allMet));
+    expect(await ctx.detail(openingId)).toMatchObject({
+      status: "analyzed",
+      fitCheck: { band: "high" },
+    });
+  });
+
+  it("fails an opening whose analysis died with its run, for the user to try again", async () => {
+    const ctx = await setup();
+    const openingId = await ctx.add();
+    const later = new Date(Date.now() + 2 * 60 * 60 * 1000);
+
+    // Its run never marked anything: the sweep finds it, past its time.
+    await ctx.openings.failStuckAnalyses(new Date());
+    expect((await ctx.detail(openingId)).status).toBe("processing");
+    await ctx.tasks.failStalled(later);
+    await ctx.openings.failStuckAnalyses(later);
+
+    expect((await ctx.detail(openingId)).status).toBe("failed");
   });
 
   it("refuses another user's opening", async () => {

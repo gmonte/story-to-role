@@ -472,6 +472,18 @@ function DescriptionBody({ opening }: { opening: OpeningDetail }) {
         </div>
       )}
 
+      {opening.status === "failed" && (
+        <div className="border-warning-border bg-warning-soft flex gap-2 rounded-lg border p-4 text-sm">
+          <TriangleAlert className="text-warning mt-0.5 size-4 shrink-0" />
+          <p>
+            {t.formatMessage({
+              defaultMessage:
+                "The analysis didn’t finish, and no credits were used. Try again to read the opening from the start.",
+            })}
+          </p>
+        </div>
+      )}
+
       {opening.status === "rejected" && (
         <div className="border-warning-border bg-warning-soft rounded-lg border p-4 text-sm">
           <p>{labels.rejection(opening.rejectionReason)}</p>

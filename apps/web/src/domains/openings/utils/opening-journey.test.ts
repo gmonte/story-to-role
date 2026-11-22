@@ -44,6 +44,7 @@ describe("phoneActionTarget", () => {
     expect(phoneActionTarget("reopen")).toBeNull();
     expect(phoneActionTarget("go_to_career")).toBeNull();
     expect(phoneActionTarget("add_again")).toBeNull();
+    expect(phoneActionTarget("retry_analysis")).toBeNull();
   });
 });
 
@@ -93,8 +94,13 @@ describe("availableViews", () => {
     expect(availableViews({ status: "closed" })).toHaveLength(3);
   });
 
-  it("keeps a rejected, processing or external opening on its own page", () => {
-    for (const status of ["rejected", "processing", "external"] as const) {
+  it("keeps a rejected, processing, failed or external opening on its own page", () => {
+    for (const status of [
+      "rejected",
+      "processing",
+      "failed",
+      "external",
+    ] as const) {
       expect(availableViews({ status })).toEqual(["opening"]);
     }
   });
@@ -108,6 +114,12 @@ describe("primaryAction", () => {
   it("offers to add a rejected opening again", () => {
     expect(primaryAction({ ...analyzed, status: "rejected" })).toBe(
       "add_again"
+    );
+  });
+
+  it("offers to try a failed analysis again", () => {
+    expect(primaryAction({ ...analyzed, status: "failed" })).toBe(
+      "retry_analysis"
     );
   });
 

@@ -6,6 +6,7 @@ import { runTask } from "@repo/api/domains/tasks/run-task";
 import { db } from "@repo/api/tools/db";
 import { localEmbedder } from "@repo/api/tools/embeddings/embedder";
 import { getStorage } from "@repo/api/tools/storage/storage";
+import { taskMaxDuration } from "@repo/api/domains/tasks/task-durations";
 
 import { refreshVersionVectors } from "../similar/embed-versions";
 import { runAdaptDocument } from "../adaptation/run-adapt-document";
@@ -13,7 +14,7 @@ import { runAdaptDocument } from "../adaptation/run-adapt-document";
 export const adaptDocumentTask = task({
   id: "adapt_document",
   retry: { maxAttempts: 1 },
-  maxDuration: 600,
+  maxDuration: taskMaxDuration.adapt_document,
   run: async ({ taskId }: { taskId: string }) => {
     await runTask(
       { db, taskId, type: "adapt_document" },

@@ -3,15 +3,16 @@ import type { NeverIncludeFilter } from "@repo/api/domains/profile/rules/never-i
 
 import type { AiFunding } from "./ai-funding";
 import { AiUsageRepository } from "./ai-usage-repository";
-import type {
-  AiAgentRequest,
-  AiObjectRequest,
-  AiRole,
-  AiSearchRequest,
-  AiSource,
-  AiTextRequest,
-  AiUsage,
-  ProviderPackage,
+import {
+  type AiAgentRequest,
+  type AiObjectRequest,
+  type AiRole,
+  type AiSearchRequest,
+  type AiSource,
+  type AiTextRequest,
+  type AiUsage,
+  type ProviderPackage,
+  OutputTruncatedError,
 } from "./providers/provider-package";
 
 export type AiClient = {
@@ -77,9 +78,29 @@ export function createAiClient({
     },
 
     async generateObject({ purpose, ...request }) {
-      const result = await providerPackage.generateObject(guard(request));
-      await recordUsage(purpose, request.role, result.usage);
-      return result;
+      const call = async (maxTokens: number) => {
+        try {
+          const result = await providerPackage.generateObject(
+            guard({ ...request, maxTokens })
+          );
+          await recordUsage(purpose, request.role, result.usage);
+          return result;
+        } catch (error) {
+          // A cut answer is paid for all the same.
+          if (error instanceof OutputTruncatedError) {
+            await recordUsage(purpose, request.role, error.usage);
+          }
+          throw error;
+        }
+      };
+      // An answer cut at its limit is asked for once more, with twice the
+      // room.
+      try {
+        return await call(request.maxTokens);
+      } catch (error) {
+        if (!(error instanceof OutputTruncatedError)) throw error;
+        return call(request.maxTokens * 2);
+      }
     },
 
     async runAgent({ purpose, ...request }) {

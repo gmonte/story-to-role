@@ -13,6 +13,7 @@ import {
   Ellipsis,
   FileText,
   Loader2,
+  RotateCw,
   TriangleAlert,
 } from "lucide-react";
 import Link from "next/link";
@@ -395,6 +396,12 @@ function PrimaryActionButton({
       onError: (error) => toast.error(error.message),
     })
   );
+  const retry = useMutation(
+    trpc.openings.retryAnalysis.mutationOptions({
+      onSuccess: refresh,
+      onError: (error) => toast.error(error.message),
+    })
+  );
   const setClosed = useMutation(
     trpc.openings.setClosed.mutationOptions({
       onSuccess: refresh,
@@ -452,6 +459,20 @@ function PrimaryActionButton({
             onClick={() => analyze.mutate({ openingId })}
           >
             {t.formatMessage({ defaultMessage: "Analyze this opening" })}
+          </Button>
+          <CreditCost credits={credits.data?.estimates.fitCheck} />
+        </div>
+      );
+    case "retry_analysis":
+      return (
+        <div className="flex items-center gap-2">
+          <Button
+            size="sm"
+            disabled={retry.isPending}
+            onClick={() => retry.mutate({ openingId })}
+          >
+            <RotateCw />
+            {t.formatMessage({ defaultMessage: "Try again" })}
           </Button>
           <CreditCost credits={credits.data?.estimates.fitCheck} />
         </div>

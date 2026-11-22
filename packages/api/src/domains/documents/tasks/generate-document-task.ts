@@ -6,6 +6,7 @@ import { runTask } from "@repo/api/domains/tasks/run-task";
 import { db } from "@repo/api/tools/db";
 import { localEmbedder } from "@repo/api/tools/embeddings/embedder";
 import { getStorage } from "@repo/api/tools/storage/storage";
+import { taskMaxDuration } from "@repo/api/domains/tasks/task-durations";
 
 import { refreshVersionVectors } from "../similar/embed-versions";
 import { DocumentsRepository } from "../documents-repository";
@@ -17,7 +18,7 @@ import { runUpdateLetter } from "../letter/run-update-letter";
 export const generateDocumentTask = task({
   id: "generate_document",
   retry: { maxAttempts: 1 },
-  maxDuration: 900,
+  maxDuration: taskMaxDuration.generate_document,
   run: async ({ taskId }: { taskId: string }) => {
     await runTask(
       { db, taskId, type: "generate_document" },

@@ -138,6 +138,26 @@ export const openingsRouter = createTRPCRouter({
       return { realtime };
     }),
 
+  retryAnalysis: userProcedure
+    .use(rateLimited("taskStart"))
+    .meta(
+      openApiMeta(
+        "openings",
+        "POST",
+        "/openings/by-id/{openingId}/retry",
+        "Analyzes again an opening whose analysis failed"
+      )
+    )
+    .input(z.object({ openingId: z.uuid() }))
+    .output(z.object({ realtime: realtimeSubscriptionSchema }))
+    .mutation(async ({ ctx, input }) => {
+      const { realtime } = await new OpeningsService(db).retryAnalysis({
+        userId: ctx.userId,
+        ...input,
+      });
+      return { realtime };
+    }),
+
   reanalyze: userProcedure
     .use(rateLimited("taskStart"))
     .meta(

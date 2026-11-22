@@ -57,6 +57,16 @@ export class KeyUnusableError extends Error {
   }
 }
 
+/**
+ * The model's answer reached its token limit before the end, so it came back
+ * cut (a structured answer, mid-JSON). Its tokens were still spent.
+ */
+export class OutputTruncatedError extends Error {
+  constructor(readonly usage: AiUsage) {
+    super("The model's answer was cut at its token limit");
+  }
+}
+
 /** A web search turn: the provider's own search tool, within a limit. */
 export type AiSearchRequest = AiTextRequest & { maxSearches: number };
 

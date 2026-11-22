@@ -75,6 +75,8 @@ export const openingDetailSchema = openingSummarySchema.extend({
   notes: z.string().nullable(),
   sourceUrl: z.string().nullable(),
   rejectionReason: openingRejectionReasonSchema.nullable(),
+  // The last check broke: the fit check shown is the previous one.
+  checkFailed: z.boolean(),
   language: interviewLanguageSchema.nullable(),
   suggestedTone: toneSchema.nullable(),
   fitCheck: z

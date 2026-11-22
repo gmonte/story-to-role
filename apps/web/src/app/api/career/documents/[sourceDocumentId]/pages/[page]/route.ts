@@ -1,3 +1,4 @@
+import { auth } from "@clerk/nextjs/server";
 import type { NextRequest } from "next/server";
 import { z } from "zod";
 
@@ -16,6 +17,7 @@ export async function GET(
   _request: NextRequest,
   { params }: { params: Promise<{ sourceDocumentId: string; page: string }> }
 ) {
+  await auth.protect();
   const userId = await currentUserId();
   if (!userId) return new Response(null, { status: 401 });
   const { sourceDocumentId, page } = await params;

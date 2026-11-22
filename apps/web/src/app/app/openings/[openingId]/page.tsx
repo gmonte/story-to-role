@@ -1,3 +1,5 @@
+import { auth } from "@clerk/nextjs/server";
+
 import { getTranslation } from "@repo/intl/get-translation";
 
 import { OpeningBody } from "~/domains/openings/components/opening-panel";
@@ -9,6 +11,7 @@ export default async function OpeningPage({
 }: {
   params: Promise<{ openingId: string }>;
 }) {
+  await auth.protect();
   const { openingId } = await params;
   const t = await getTranslation(await getLocaleFromNextCookies());
 

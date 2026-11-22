@@ -1,5 +1,6 @@
 "use server";
 
+import { auth as clerkAuth } from "@clerk/nextjs/server";
 import { after } from "next/server";
 import { auth, runs, sessions } from "@trigger.dev/sdk";
 import { chat } from "@trigger.dev/sdk/ai";
@@ -23,6 +24,7 @@ async function requireUser() {
  * reconnects to an answer still being written.
  */
 export async function loadAgentChat(subject: AgentChatSubject) {
+  await clerkAuth.protect();
   const current = await new AgentChatService(db).current(
     await requireUser(),
     subject
@@ -50,6 +52,7 @@ export async function loadAgentChat(subject: AgentChatSubject) {
  * the start action doesn't expose.
  */
 export async function startAgentChatSession({ chatId }: { chatId: string }) {
+  await clerkAuth.protect();
   const owned = await new AgentChatService(db).requireOwn({
     userId: await requireUser(),
     chatId,
@@ -75,6 +78,7 @@ export async function startAgentChatSession({ chatId }: { chatId: string }) {
 
 /** A fresh session-scoped token, for the conversation's owner only. */
 export async function mintAgentChatToken(chatId: string) {
+  await clerkAuth.protect();
   await new AgentChatService(db).requireOwn({
     userId: await requireUser(),
     chatId,
@@ -91,6 +95,7 @@ export async function mintAgentChatToken(chatId: string) {
  * starts a new run on the same session. Only for the conversation's owner.
  */
 export async function recoverAgentChatRun({ chatId }: { chatId: string }) {
+  await clerkAuth.protect();
   await new AgentChatService(db).requireOwn({
     userId: await requireUser(),
     chatId,
@@ -118,6 +123,7 @@ async function cancelChatRuns(chatId: string) {
  * stay.
  */
 export async function startNewAgentChat(subject: AgentChatSubject) {
+  await clerkAuth.protect();
   const started = await new AgentChatService(db).startNew(
     await requireUser(),
     subject

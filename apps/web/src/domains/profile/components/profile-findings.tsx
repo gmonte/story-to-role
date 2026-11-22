@@ -15,6 +15,8 @@ import type { ProfileFinding } from "@repo/api/domains/profile/truth/lint";
 import { Button } from "@repo/web/components/ui/button";
 import { cn } from "@repo/web/lib/utils";
 
+import { onCardClick } from "~/domains/workspace/utils/card-click";
+
 import { FindingQuickActions } from "./finding-quick-actions";
 import { useProfileLabels } from "../hooks/use-profile-labels";
 import { useProfileEditor } from "./profile-editor-context";
@@ -129,7 +131,15 @@ export function ProfileFindings() {
   const item = (finding: ProfileFinding, index: number) => (
     <li
       key={`${finding.code}-${finding.line}-${finding.from}-${index}`}
-      className="bg-card flex flex-col gap-2 rounded-lg border p-3 text-[13px] leading-snug"
+      className={cn(
+        "bg-card flex flex-col gap-2 rounded-lg border p-3 text-[13px] leading-snug",
+        finding.line !== null && "cursor-pointer"
+      )}
+      onClick={onCardClick(
+        () =>
+          finding.line !== null &&
+          goToLine(finding.line, { from: finding.from, to: finding.to })
+      )}
     >
       <button
         type="button"

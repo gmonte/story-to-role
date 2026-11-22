@@ -31,6 +31,7 @@ import { cn } from "@repo/web/lib/utils";
 import type { AgentAttachment } from "@repo/api/domains/agents/agent-message";
 
 import { useTRPC } from "~/tools/trpc/client";
+import { onCardClick } from "~/domains/workspace/utils/card-click";
 
 import { useFindingLabel } from "./coverage-review";
 import { useDocumentAgent } from "./document-agent-context";
@@ -320,9 +321,10 @@ export function DocumentFindings() {
       <li
         key={key}
         className={cn(
-          "bg-card flex flex-col gap-2 rounded-lg border p-3 text-[13px] leading-5",
+          "bg-card flex cursor-pointer flex-col gap-2 rounded-lg border p-3 text-[13px] leading-5",
           activeFinding === key && "border-brand-accent"
         )}
+        onClick={onCardClick(() => goToFinding(finding))}
         {...rowProps(key)}
       >
         <button
@@ -383,8 +385,10 @@ export function DocumentFindings() {
         key={key}
         className={cn(
           "bg-card flex flex-col gap-2 rounded-lg border p-3 text-[13px] leading-5",
+          note.lineId && "cursor-pointer",
           activeFinding === key && "border-brand-accent"
         )}
+        onClick={note.lineId ? onCardClick(() => goToNote(note)) : undefined}
         {...rowProps(key)}
       >
         <button

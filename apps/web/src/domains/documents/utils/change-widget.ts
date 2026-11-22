@@ -41,9 +41,10 @@ export const removedWordsClass = cn(
   "bg-destructive/20 text-foreground decoration-destructive/70 rounded-xs line-through"
 );
 
-// As in the profile: tinted and underlined, so the new words read apart.
+// Tinted stronger than the card around them, bold and underlined, so the
+// new words read apart from the line they join.
 const addedWordsClass = cn(
-  "rounded-xs bg-fit-high-soft underline decoration-success/70 underline-offset-2"
+  "bg-success/25 text-foreground decoration-success rounded-xs font-semibold underline decoration-2 underline-offset-2"
 );
 
 function button(

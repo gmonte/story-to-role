@@ -261,7 +261,7 @@ function DocumentToolbar({
             </Tabs>
           )}
           {/* On a phone the legend is one line that scrolls sideways. */}
-          <div className="text-muted-foreground flex flex-wrap gap-3 text-xs max-sm:order-last max-sm:basis-full max-sm:flex-nowrap max-sm:overflow-x-auto max-sm:[scrollbar-width:none] max-sm:[&::-webkit-scrollbar]:hidden max-sm:[&>*]:shrink-0">
+          <div className="text-muted-foreground flex flex-wrap gap-3 text-xs max-sm:order-last max-sm:basis-full max-sm:[scrollbar-width:none] max-sm:flex-nowrap max-sm:overflow-x-auto max-sm:[&::-webkit-scrollbar]:hidden max-sm:[&>*]:shrink-0">
             <Legend className="border-l-origin-profile">
               {t.formatMessage({ defaultMessage: "Your profile" })}
             </Legend>

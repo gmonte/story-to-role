@@ -54,6 +54,7 @@
   },
   "devDependencies": {
     "@electric-sql/pglite": "catalog:testing",
+    "@electric-sql/pglite-pgvector": "catalog:testing",
     "@repo/eslint-config": "workspace:*",
     "@repo/typescript-config": "workspace:*",
     "@trigger.dev/build": "catalog:api",

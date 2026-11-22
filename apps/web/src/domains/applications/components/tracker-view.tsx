@@ -50,13 +50,13 @@ function useView(): [View, (view: View) => void] {
   const pathname = usePathname();
   const params = useSearchParams();
   const fromUrl = params.get("view");
-  const stored = useSyncExternalStore(
+  const stored = useSyncExternalStore<View>(
     (listener) => {
       listeners.add(listener);
       return () => listeners.delete(listener);
     },
     readStoredView,
-    () => "list" as View
+    () => "list"
   );
   const view: View =
     fromUrl === "kanban" || fromUrl === "list" ? fromUrl : stored;

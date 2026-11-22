@@ -171,7 +171,7 @@ export function OpeningHeader({
     letter: <Mail className="size-4" />,
   };
   const switcher = journey.views.length > 1 && (
-    <nav className="-mb-px flex items-end gap-6 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+    <nav className="-mb-px flex [scrollbar-width:none] items-end gap-6 overflow-x-auto [&::-webkit-scrollbar]:hidden">
       {openingViews.map((step) => {
         const enabled = journey.views.includes(step);
         const active = view === step;
@@ -253,7 +253,7 @@ export function OpeningHeader({
           {/* On a phone the chips scroll sideways instead of piling up. */}
           <div
             className={cn(
-              "flex flex-wrap items-center gap-x-2 gap-y-1 max-sm:flex-nowrap max-sm:overflow-x-auto max-sm:[scrollbar-width:none] max-sm:[&::-webkit-scrollbar]:hidden max-sm:[&>*]:shrink-0",
+              "flex flex-wrap items-center gap-x-2 gap-y-1 max-sm:[scrollbar-width:none] max-sm:flex-nowrap max-sm:overflow-x-auto max-sm:[&::-webkit-scrollbar]:hidden max-sm:[&>*]:shrink-0",
               compact && "hidden"
             )}
           >

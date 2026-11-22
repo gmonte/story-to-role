@@ -427,8 +427,7 @@ export const ProfileDecorations = Extension.create({
           init: () => DecorationSet.empty,
           apply(tr, set) {
             const next = tr.getMeta(decorationsKey) as
-              | DecorationSet
-              | undefined;
+              DecorationSet | undefined;
             return next ?? set.map(tr.mapping, tr.doc);
           },
         },

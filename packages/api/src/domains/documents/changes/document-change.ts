@@ -12,9 +12,7 @@ import type {
 
 /** The content a change can target: a resume, a letter or LinkedIn. */
 export type ChangeableContent =
-  | ResumeContent
-  | CoverLetterContent
-  | LinkedinContent;
+  ResumeContent | CoverLetterContent | LinkedinContent;
 
 /**
  * A change proposed to a document (ADR 0009; resume spec, "Document
@@ -486,13 +484,11 @@ function rewriteLines(
   origin: LineOrigin
 ): Line[] {
   const replaced = lines.slice(range.start, range.end);
-  const next = written.map(
-    (text, index): Line => ({
-      id: replaced[index]?.id ?? newChangeLineId(),
-      text,
-      origin,
-    })
-  );
+  const next = written.map((text, index): Line => ({
+    id: replaced[index]?.id ?? newChangeLineId(),
+    text,
+    origin,
+  }));
   return [...lines.slice(0, range.start), ...next, ...lines.slice(range.end)];
 }
 

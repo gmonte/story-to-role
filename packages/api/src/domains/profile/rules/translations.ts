@@ -20,12 +20,10 @@ export type ProfileTranslations = Partial<
 export function parseTranslations(value: string) {
   const { entries, malformed } = parsePublicNames(value);
   return {
-    entries: entries.map(
-      (entry): Translation => ({
-        original: entry.original,
-        translation: entry.public,
-      })
-    ),
+    entries: entries.map((entry): Translation => ({
+      original: entry.original,
+      translation: entry.public,
+    })),
     malformed,
   };
 }

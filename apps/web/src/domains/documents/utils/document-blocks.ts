@@ -38,9 +38,7 @@ export const isResumeSection = (
 
 /** The content the document editor shows: a resume, a letter or LinkedIn. */
 export type EditableContent =
-  | ResumeContent
-  | CoverLetterContent
-  | LinkedinContent;
+  ResumeContent | CoverLetterContent | LinkedinContent;
 
 /**
  * The document as the editor holds it (resume spec, "Document workspace"):
@@ -135,14 +133,12 @@ function experienceBlocks(
     ...(entry.relevance
       ? [{ type: "entryNote", ownerId, text: entry.relevance } as const]
       : []),
-    ...entry.lines.map(
-      (line): DocumentBlock => ({
-        type: "bullet",
-        lineId: line.id,
-        ownerId,
-        text: line.text,
-      })
-    ),
+    ...entry.lines.map((line): DocumentBlock => ({
+      type: "bullet",
+      lineId: line.id,
+      ownerId,
+      text: line.text,
+    })),
   ];
 }
 
@@ -197,14 +193,12 @@ function sectionBlocks(
                 text: entry.link,
               } as const,
             ]),
-        ...entry.lines.map(
-          (line): DocumentBlock => ({
-            type: "bullet",
-            lineId: line.id,
-            ownerId: entry.projectId,
-            text: line.text,
-          })
-        ),
+        ...entry.lines.map((line): DocumentBlock => ({
+          type: "bullet",
+          lineId: line.id,
+          ownerId: entry.projectId,
+          text: line.text,
+        })),
       ]);
     default:
       return section.entries.map((entry) => ({
@@ -250,13 +244,11 @@ function linkedinBlocks(
     ...(aboutParagraphs(content.about.text).length
       ? aboutParagraphs(content.about.text)
       : [""]
-    ).map(
-      (text): DocumentBlock => ({
-        type: "paragraph",
-        lineId: content.about.id,
-        text,
-      })
-    ),
+    ).map((text): DocumentBlock => ({
+      type: "paragraph",
+      lineId: content.about.id,
+      text,
+    })),
     ...(content.experiences.length
       ? [
           title("experience"),
@@ -297,25 +289,21 @@ function linkedinBlocks(
     ...(content.certifications.length
       ? [
           title("certifications"),
-          ...content.certifications.map(
-            (entry): DocumentBlock => ({
-              type: "credential",
-              credentialId: entry.credentialId,
-              text: certificationText(entry),
-            })
-          ),
+          ...content.certifications.map((entry): DocumentBlock => ({
+            type: "credential",
+            credentialId: entry.credentialId,
+            text: certificationText(entry),
+          })),
         ]
       : []),
     ...(content.languages.length
       ? [
           title("languages"),
-          ...content.languages.map(
-            (entry): DocumentBlock => ({
-              type: "credential",
-              credentialId: entry.credentialId,
-              text: languageText(entry, language),
-            })
-          ),
+          ...content.languages.map((entry): DocumentBlock => ({
+            type: "credential",
+            credentialId: entry.credentialId,
+            text: languageText(entry, language),
+          })),
         ]
       : []),
   ];
@@ -331,13 +319,11 @@ export function contentToBlocks(
     return [
       ...headerBlocks(content),
       { type: "greeting", text: content.greeting },
-      ...content.paragraphs.map(
-        (line): DocumentBlock => ({
-          type: "paragraph",
-          lineId: line.id,
-          text: line.text,
-        })
-      ),
+      ...content.paragraphs.map((line): DocumentBlock => ({
+        type: "paragraph",
+        lineId: line.id,
+        text: line.text,
+      })),
       { type: "closing", text: content.closing },
     ];
   }
@@ -403,10 +389,10 @@ function linkedinFrom(
     );
   return {
     ...base,
-    headline: optionalLine(
-      headline as { lineId: string; text: string } | undefined,
-      [...base.headlineOptions, ...(base.headline ? [base.headline] : [])]
-    ),
+    headline: optionalLine(headline, [
+      ...base.headlineOptions,
+      ...(base.headline ? [base.headline] : []),
+    ]),
     about: {
       ...base.about,
       text: paragraphs

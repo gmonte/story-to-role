@@ -12,8 +12,7 @@ type Insert<T extends { $inferInsert: unknown }> = T["$inferInsert"];
  * their documents.
  */
 export type AgentChatSubject =
-  | { kind: "profile" }
-  | { kind: "document"; documentId: string };
+  { kind: "profile" } | { kind: "document"; documentId: string };
 
 export type AgentChat = typeof agentChatsTable.$inferSelect;
 

@@ -1,11 +1,7 @@
 import type { AgentAttachment } from "@repo/api/domains/agents/agent-message";
 
 export type ReviewerFeedbackSection =
-  | "contradiction"
-  | "advice"
-  | "partial"
-  | "not_shown"
-  | "review";
+  "contradiction" | "advice" | "partial" | "not_shown" | "review";
 
 /**
  * One piece of a reviewer's feedback (or all of it) as the attachment the

@@ -1,3 +1,5 @@
+import { auth } from "@clerk/nextjs/server";
+
 import { getTranslation } from "@repo/intl/get-translation";
 
 import { LibraryDocumentBody } from "~/domains/documents/components/library-document-view";
@@ -9,6 +11,7 @@ export default async function LibraryDocumentPage({
 }: {
   params: Promise<{ documentId: string }>;
 }) {
+  await auth.protect();
   const { documentId } = await params;
   const t = await getTranslation(await getLocaleFromNextCookies());
 

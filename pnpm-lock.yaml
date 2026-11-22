@@ -127,6 +127,9 @@ catalogs:
       specifier: 12.2.0
       version: 12.2.0
   quality:
+    '@clerk/eslint-plugin':
+      specifier: 0.2.0
+      version: 0.2.0
     '@eslint/js':
       specifier: 9.39.5
       version: 9.39.5
@@ -451,6 +454,9 @@ importers:
         specifier: catalog:common
         version: 4.6.7
     devDependencies:
+      '@clerk/eslint-plugin':
+        specifier: catalog:quality
+        version: 0.2.0(eslint@9.39.5(jiti@2.7.0))
       '@repo/eslint-config':
         specifier: workspace:*
         version: link:../../configs/eslint-config
@@ -1002,6 +1008,13 @@ packages:
   '@clerk/backend@3.31.4':
     resolution: {integrity: sha512-lirZtugApjg9P5fQEWiR4iHZvOFc8Z4zQlTadu169C8GF/M5DMvTOEnlllFDZA823nipbHkJJf3I6/Wnromtbw==}
     engines: {node: '>=20.9.0'}
+
+  '@clerk/eslint-plugin@0.2.0':
+    resolution: {integrity: sha512-j9o85RYTAOG8Sm++oCDYatw0XYOY4avOTj1aNFQooU+hQdjn/fVAPwPYNCMklXogguO/1bJpb+lQEdG68x75Cg==}
+    engines: {node: '>=20.9.0'}
+    hasBin: true
+    peerDependencies:
+      eslint: '>=9'
 
   '@clerk/localizations@4.26.3':
     resolution: {integrity: sha512-qfuu/CJP7F0faOqsCexlV5rHTl6WPkxIuhR2lNajfEH0hDjo8DaOO6tMgu7i0QOadphMYtTSfRJPsPMVAa2M8Q==}
@@ -10132,6 +10145,10 @@ snapshots:
     transitivePeerDependencies:
       - react
       - react-dom
+
+  '@clerk/eslint-plugin@0.2.0(eslint@9.39.5(jiti@2.7.0))':
+    dependencies:
+      eslint: 9.39.5(jiti@2.7.0)
 
   '@clerk/localizations@4.26.3(react-dom@19.3.1(react@19.3.1))(react@19.3.1)':
     dependencies:

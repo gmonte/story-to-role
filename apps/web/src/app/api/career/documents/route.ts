@@ -22,6 +22,7 @@ const formSchema = z.object({
  * it can't (no credits), the file stays and can be imported later.
  */
 export async function POST(request: NextRequest) {
+  await auth.protect();
   const { userId: clerkUserId } = await auth();
   if (!clerkUserId) return new Response(null, { status: 401 });
 

@@ -3,6 +3,7 @@ This is a pnpm workspace monorepo (lerna + nx).
 **Important**: Always run `nvm use` before every command. Each Bash tool call starts a fresh shell, so PATH changes from the previous command don't persist. Run `nvm use && <your-command>` in a single command to chain them.
 
 **Important**: This monorepo uses pnpm named catalogs for dependency management. When installing a new dependency:
+
 1. Get the latest version: `pnpm view <package-name> version`
 2. Ask the user which named catalog it should be added to (check `pnpm-workspace.yaml` for existing catalogs)
 3. Add the version to the chosen named catalog in `pnpm-workspace.yaml` and reference it as `"catalog:<name>"` in the target package's `package.json`
@@ -28,17 +29,19 @@ This is a pnpm workspace monorepo (lerna + nx).
 
 **Important**: Never name a parameter just `id`. Every input that identifies a resource is `<domain>Id` (`positionId`, `openingId`, `applicationId`) — in the tRPC input schema, in the service and repository signatures, and in the REST path, which addresses a specific resource as `/<domain>/by-id/{<domain>Id}`. This applies to parameters, not to an entity's own `id` field inside a payload or output schema, and not to a database column.
 
+**Important**: Every page, layout, route handler and Server Function in `apps/web` checks the session itself with `await auth.protect()` (from `@clerk/nextjs/server`) at its top; `proxy.ts` gates nothing (Clerk deprecated `createRouteMatcher`). The lint rule `@clerk/next/require-auth-protection` flags any that doesn't; a resource meant for signed-out visitors goes in a folder listed as `public` in `apps/web/eslint.config.js`.
+
 **Important**: Never import `radix-ui` directly in `apps/`. Radix primitives must only be used inside `packages/web/`, which wraps them as components. Apps should import these wrappers from `@repo/web/components/ui`. To add a shadcn component, run from the workspace root: `nvm use && cd apps/web && pnpm dlx shadcn@canary add [COMPONENT]`.
 
 **Important**: For UI formatting and i18n, get `t` from `@repo/intl`: use `useTranslation` in client components and `getTranslation` in server components. Use `t.formatMessage` for strings, `t.formatNumber` for numbers and percentages, and `t.formatDate` for dates.
 
 **Important**: Every interface message ships in English and Brazilian Portuguese. The catalogs under `packages/intl/extracted` and `compiled` are generated and git-ignored; the Portuguese text lives in `packages/intl/translations/pt-BR.json` (message id → translation), which extraction applies. After adding or changing a message, run `pnpm exec lerna run intl:extract --scope=@repo/intl` (it also compiles the catalogs the app reads), add the new ids from `packages/intl/extracted/en-US.json` to `translations/pt-BR.json`, and keep their placeholders; `@repo/intl`'s test fails on any message left untranslated.
 
-**Important**: In any translated string (`defaultMessage` / i18n message), never use straight double quotes (`"`) to quote text *inside* the message — use typographic quotes `“` (U+201C) and `”` (U+201D) instead. The generator emits every message as a double-quoted TypeScript string literal in `packages/intl/intl-message-types.ts`, so a straight `"` inside a message closes that literal and breaks type generation. Straight single quotes/apostrophes (`'`) are fine.
+**Important**: In any translated string (`defaultMessage` / i18n message), never use straight double quotes (`"`) to quote text _inside_ the message — use typographic quotes `“` (U+201C) and `”` (U+201D) instead. The generator emits every message as a double-quoted TypeScript string literal in `packages/intl/intl-message-types.ts`, so a straight `"` inside a message closes that literal and breaks type generation. Straight single quotes/apostrophes (`'`) are fine.
 
 **Important**: A procedure with `openapi` meta is rendered into an OpenAPI document by `trpc-to-openapi`, which accepts far less than Zod does. It only runs when someone opens `/api/docs`, so a schema it rejects throws in the browser at request time rather than failing the build. The rules:
 
-- **The root of `.input()` must be a `ZodObject`.** Never a `z.union` or `z.discriminatedUnion`. A path parameter is resolved against the root object's *keys*, so `{positionId}` in the path needs `positionId` at the top level, non-optional. To branch on a discriminant, keep the identifiers at the root and nest the union under one key.
+- **The root of `.input()` must be a `ZodObject`.** Never a `z.union` or `z.discriminatedUnion`. A path parameter is resolved against the root object's _keys_, so `{positionId}` in the path needs `positionId` at the top level, non-optional. To branch on a discriminant, keep the identifiers at the root and nest the union under one key.
 - **Every root key of a GET/DELETE input must be a primitive** (string, number, boolean, bigint, date), or an array or enum of one — they become query parameters.
 - **`z.void()` has no OpenAPI representation** for outputs of mutations; return an object instead.
 

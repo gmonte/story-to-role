@@ -62,6 +62,8 @@ catalogs:
     react-intl: 12.2.0
 
   quality:
+    # Experimental: pinned, as Clerk asks (minors may break before 1.0).
+    "@clerk/eslint-plugin": 0.2.0
     "@eslint/js": 9.39.5
     "@next/eslint-plugin-next": 16.4.6
     "@tanstack/eslint-plugin-query": 5.108.2

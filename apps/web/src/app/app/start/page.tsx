@@ -1,3 +1,4 @@
+import { auth } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
 
 import { getTranslation } from "@repo/intl/get-translation";
@@ -9,6 +10,7 @@ import { getLocaleFromNextCookies } from "~/tools/intl/utils/get-locale-from-nex
 import { caller } from "~/tools/trpc/server";
 
 export default async function StartPage() {
+  await auth.protect();
   // Decided here, so someone who has started never sees a blank screen.
   const destination = startDestination(await caller.career.startState({}));
   if (destination) redirect(destination);

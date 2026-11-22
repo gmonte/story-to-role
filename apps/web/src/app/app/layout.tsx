@@ -1,3 +1,4 @@
+import { auth } from "@clerk/nextjs/server";
 import { cookies } from "next/headers";
 
 import { SidebarProvider } from "@repo/web/components/ui/sidebar";
@@ -11,6 +12,8 @@ export default async function WorkspaceLayout({
 }: {
   children: React.ReactNode;
 }) {
+  // Each page checks the session itself (Clerk: resource-based auth).
+  await auth.protect();
   // A fresh sign-up lands here before the Clerk webhook creates the local
   // user, so every page would fail with "User not found" for a moment.
   const { ready } = await caller.users.accountReady({});

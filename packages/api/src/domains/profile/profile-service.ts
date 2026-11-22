@@ -593,6 +593,24 @@ export class ProfileService {
   }
 
   /**
+   * Puts accepted suggestions back to waiting: the user undid them in the
+   * editor, which took the change out of the draft.
+   */
+  async reopenSuggestions(input: {
+    userId: string;
+    profileSuggestionIds: string[];
+  }) {
+    const repository = new ProfileRepository(this.db);
+    const document = await repository.findDocument(input.userId, profileKind);
+    if (!document) throw new TRPCError({ code: "NOT_FOUND" });
+    const reopened = await repository.reopenSuggestions({
+      documentId: document.id,
+      profileSuggestionIds: input.profileSuggestionIds,
+    });
+    return { reopened };
+  }
+
+  /**
    * Adds a company to the job preferences' excluded companies (profile
    * spec: "A company can be excluded from an opening or the tracker, which
    * adds it here"): in the draft, and in what screening reads, as a new

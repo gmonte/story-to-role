@@ -96,6 +96,8 @@ const lintDelayMs = 150;
 
 // A scroll the editor didn't ask for waits out typing this recent.
 const typingQuietMs = 2000;
+// How many accepts back an undo still brings a suggestion back.
+const maxUndoableAccepts = 20;
 
 type ProfileEditorState = {
   editor: Editor | null;
@@ -280,6 +282,8 @@ export function ProfileEditorProvider({
   const [blocks, setBlocks] = useState(() => parseBlocks(draft.markdown));
   const lintTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
   const lastEditAt = useRef(0);
+  // Told of every change to the text, to bring back an undone suggestion.
+  const textChanged = useRef<(doc: Editor["state"]["doc"]) => void>(undefined);
 
   const editor = useEditor({
     extensions: profileExtensions(),
@@ -294,6 +298,7 @@ export function ProfileEditorProvider({
     },
     onUpdate: ({ editor: current, transaction }) => {
       if (!transaction.docChanged) return;
+      textChanged.current?.(current.state.doc);
       lastEditAt.current = Date.now();
       clearTimeout(lintTimer.current);
       lintTimer.current = setTimeout(() => {
@@ -385,6 +390,21 @@ export function ProfileEditorProvider({
   const { mutate: resolveSuggestions } = useMutation(
     trpc.profile.resolveSuggestions.mutationOptions()
   );
+  const { mutate: reopenSuggestions } = useMutation(
+    trpc.profile.reopenSuggestions.mutationOptions()
+  );
+  // The suggestions accepted here, with the text just before and after:
+  // an undo back to `before` makes them wait again, a redo to `after`
+  // accepts them again. `recording` chains the answers sent to the server.
+  const accepted = useRef<
+    Array<{
+      suggestions: ProfileSuggestion[];
+      before: string;
+      after: string;
+      waiting: boolean;
+      recording: Promise<unknown>;
+    }>
+  >([]);
   const forgetSuggestions = (ids: string[]) => {
     setAnswered((current) => new Set([...current, ...ids]));
     queryClient.setQueryData(
@@ -740,17 +760,78 @@ export function ProfileEditorProvider({
       );
       return;
     }
+    const before = serializeBlocks(currentBlocks());
     applyBlocks(editor, next);
     forgetSuggestions(applied);
-    // Recorded once the draft holds the change: if the save fails, the
-    // suggestion is still waiting after a reload, like the text it changed.
-    void saveNow().then((revision) => {
-      if (revision === null) return;
-      resolveSuggestions(
-        { resolution: "accepted", profileSuggestionIds: applied },
-        { onError: () => suggestionsNotRecorded(applied) }
-      );
-    });
+    accepted.current = [
+      ...accepted.current.slice(-(maxUndoableAccepts - 1)),
+      {
+        suggestions: suggestions
+          .filter((s) => applied.includes(s.id))
+          .map(({ range: _range, ...suggestion }) => suggestion),
+        before,
+        after: serializeBlocks(next),
+        waiting: false,
+        recording: recordAccepted(applied),
+      },
+    ];
+  };
+
+  // Recorded once the draft holds the change: if the save fails, the
+  // suggestion is still waiting after a reload, like the text it changed.
+  const recordAccepted = (ids: string[]) =>
+    saveNow().then(
+      (revision) =>
+        revision !== null &&
+        new Promise((settle) =>
+          resolveSuggestions(
+            { resolution: "accepted", profileSuggestionIds: ids },
+            {
+              onError: () => suggestionsNotRecorded(ids),
+              onSettled: settle,
+            }
+          )
+        )
+    );
+
+  // An undo or a redo across an accepted suggestion: it waits again in the
+  // text and the chat, or is accepted again.
+  textChanged.current = (doc) => {
+    if (!accepted.current.length) return;
+    const text = serializeBlocks(docToBlocks(doc));
+    for (const entry of accepted.current) {
+      const ids = entry.suggestions.map((s) => s.id);
+      if (!entry.waiting && text === entry.before) {
+        entry.waiting = true;
+        setAnswered(
+          (current) => new Set([...current].filter((id) => !ids.includes(id)))
+        );
+        queryClient.setQueryData(
+          trpc.profile.suggestions.queryKey({}),
+          (current: ProfileSuggestion[] | undefined) =>
+            [
+              ...(current ?? []).filter((s) => !ids.includes(s.id)),
+              ...entry.suggestions,
+            ].sort((a, b) => +new Date(a.createdAt) - +new Date(b.createdAt))
+        );
+        entry.recording = entry.recording.then(
+          () =>
+            new Promise((settle) =>
+              reopenSuggestions(
+                { profileSuggestionIds: ids },
+                {
+                  onError: () => void refreshSuggestions(),
+                  onSettled: settle,
+                }
+              )
+            )
+        );
+      } else if (entry.waiting && text === entry.after) {
+        entry.waiting = false;
+        forgetSuggestions(ids);
+        entry.recording = entry.recording.then(() => recordAccepted(ids));
+      }
+    }
   };
 
   const rejectSuggestions = (profileSuggestionIds?: string[]) => {

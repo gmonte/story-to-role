@@ -53,7 +53,11 @@ import { LetterService } from "./letter/letter-service";
 import { runGenerateLetter } from "./letter/run-generate-letter";
 import { runUpdateLetter } from "./letter/run-update-letter";
 import type { CoverLetterContent } from "./schemas/cover-letter-content";
-import { generationsTable, reviewRoundsTable } from "./db/documents-tables";
+import {
+  documentSnapshotsTable,
+  generationsTable,
+  reviewRoundsTable,
+} from "./db/documents-tables";
 import { DocumentsRepository } from "./documents-repository";
 import { DocumentsService } from "./documents-service";
 import type { AdjustDraft } from "./generation/adjust-resume";
@@ -1716,6 +1720,31 @@ describe("resume generation and snapshots", () => {
     expect(failed.snapshotId).toBeNull();
     expect(failed.lines.every((line) => !line.backed)).toBe(true);
     expect(await unbacked()).toEqual(["inflated", "rocket"]);
+  });
+
+  it("never claims a version for a snapshot from before they recorded one, and Use version N pins it", async () => {
+    const ctx = await setup();
+    await ctx.generate("quick", {
+      drafts: [ctx.draft([{ text: "Led a team.", evidence_ids: [] }])],
+      ratings: [9],
+    });
+    const userId = ctx.user.id;
+    const view = async () =>
+      (await ctx.documents.forOpening({ userId, openingId: ctx.opening.id }))
+        .documents[0].versions[0];
+    // Snapshots written before they carried a profile version read the
+    // one published now; the document doesn't know which it was written
+    // from.
+    await ctx.db.update(documentSnapshotsTable).set({ profileVersionId: null });
+
+    expect((await view()).profile).toMatchObject({
+      versionNumber: null,
+      newer: { number: 1 },
+    });
+
+    const { id: versionId } = await view();
+    await ctx.documents.useProfileVersion({ userId, versionId });
+    expect((await view()).profile).toEqual({ versionNumber: 1, newer: null });
   });
 
   it("points out a typed line the profile doesn't back; Add to the profile proposes it, and Use version N drops it", async () => {

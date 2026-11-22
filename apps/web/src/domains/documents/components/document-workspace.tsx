@@ -181,12 +181,13 @@ function NewerProfileNotice() {
     <div className="border-warning-border bg-warning-soft flex items-center gap-3 rounded-lg border p-3 text-xs">
       <TriangleAlert className="text-warning size-4 shrink-0" />
       <span className="min-w-0 flex-1">
-        {version.profile.versionNumber === null ||
-        version.profile.versionNumber === undefined
+        {/* A document from before versions were recorded doesn't know
+            which one it was written from. */}
+        {version.profile.versionNumber === null
           ? t.formatMessage(
               {
                 defaultMessage:
-                  "Profile version {number} is newer than this document's.",
+                  "This document was written before it recorded its profile version. Use version {number} to pin it to the one published now.",
               },
               { number: newer.number }
             )

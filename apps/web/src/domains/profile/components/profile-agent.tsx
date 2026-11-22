@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useEffectEvent, useRef, useState } from "react";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useChatActions } from "@trigger.dev/sdk/chat/react";
@@ -136,8 +136,6 @@ function Conversation({
   const [turnDone, setTurnDone] = useState(0);
   // The suggestions there were when the turn began.
   const knownIds = useRef<Set<string>>(new Set());
-  const latestSuggestions = useRef(suggestions);
-  latestSuggestions.current = suggestions;
   const bottom = useRef<HTMLDivElement>(null);
   const input = useRef<HTMLTextAreaElement>(null);
   useEffect(() => {
@@ -180,21 +178,20 @@ function Conversation({
       void queryClient.invalidateQueries({ queryKey: trpc.credits.pathKey() });
     },
   });
+  const takeSnapshot = useEffectEvent(() => {
+    knownIds.current = new Set(suggestions.map((s) => s.id));
+  });
   useEffect(() => {
-    if (busy) {
-      knownIds.current = new Set(latestSuggestions.current.map((s) => s.id));
-    }
     // Only the start of a turn takes the snapshot.
+    if (busy) takeSnapshot();
   }, [busy]);
-  useEffect(() => {
-    if (!turnDone) return;
-    const first = topmostNewSuggestion(
-      knownIds.current,
-      latestSuggestions.current
-    );
+  const showFirstNew = useEffectEvent(() => {
+    const first = topmostNewSuggestion(knownIds.current, suggestions);
     if (first) scrollToLine(first.range!.start);
+  });
+  useEffect(() => {
     // Once per finished turn.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    if (turnDone) showFirstNew();
   }, [turnDone]);
   const { sendAction } = useChatActions({ sendMessage });
 
@@ -220,8 +217,7 @@ function Conversation({
     .join(",");
   const asking = useRef(false);
   const asked = useRef(new Map<string, number>());
-  const catchUp = useRef<() => void>(undefined);
-  catchUp.current = () => {
+  const catchUp = useEffectEvent(() => {
     if (asking.current || (asked.current.get(unsaid) ?? 0) >= 2) return;
     asking.current = true;
     asked.current.set(unsaid, (asked.current.get(unsaid) ?? 0) + 1);
@@ -240,9 +236,9 @@ function Conversation({
       await refreshCareer();
       asking.current = false;
     });
-  };
+  });
   useEffect(() => {
-    if (unsaid && !busy) catchUp.current?.();
+    if (unsaid && !busy) catchUp();
   }, [unsaid, busy]);
 
   // A passage or a finding sent here from the document: the composer takes

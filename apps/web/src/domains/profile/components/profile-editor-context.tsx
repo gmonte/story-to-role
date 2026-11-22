@@ -5,6 +5,7 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -377,6 +378,12 @@ export function ProfileEditorProvider({
   const { mutate: resolveSuggestions } = useMutation(
     trpc.profile.resolveSuggestions.mutationOptions()
   );
+  const forgetSuggestions = (ids: string[]) =>
+    queryClient.setQueryData(
+      trpc.profile.suggestions.queryKey({}),
+      (current: ProfileSuggestion[] | undefined) =>
+        current?.filter((suggestion) => !ids.includes(suggestion.id))
+    );
   // A removal whose lines are already gone is done, not stale (the move's
   // removal accepted by hand, or the lines deleted): recorded as accepted.
   const settledRemovals = useRef(new Set<string>());
@@ -647,13 +654,6 @@ export function ProfileEditorProvider({
     return autosave.saveNow();
   };
 
-  const forgetSuggestions = (ids: string[]) =>
-    queryClient.setQueryData(
-      trpc.profile.suggestions.queryKey({}),
-      (current: ProfileSuggestion[] | undefined) =>
-        current?.filter((suggestion) => !ids.includes(suggestion.id))
-    );
-
   const refreshSuggestions = () =>
     queryClient.invalidateQueries({
       queryKey: trpc.profile.suggestions.queryKey({}),
@@ -744,13 +744,16 @@ export function ProfileEditorProvider({
     );
   };
 
-  suggestionHandlers.current = {
-    accept: (profileSuggestionId, edited) =>
-      acceptSuggestions([profileSuggestionId], { edited }),
-    both: (profileSuggestionId) =>
-      acceptSuggestions([profileSuggestionId], { keepBoth: true }),
-    reject: (profileSuggestionId) => rejectSuggestions([profileSuggestionId]),
-  };
+  // Set before paint, so a click on the text always finds this render's.
+  useLayoutEffect(() => {
+    suggestionHandlers.current = {
+      accept: (profileSuggestionId, edited) =>
+        acceptSuggestions([profileSuggestionId], { edited }),
+      both: (profileSuggestionId) =>
+        acceptSuggestions([profileSuggestionId], { keepBoth: true }),
+      reject: (profileSuggestionId) => rejectSuggestions([profileSuggestionId]),
+    };
+  });
 
   const value: ProfileEditorState = {
     editor,

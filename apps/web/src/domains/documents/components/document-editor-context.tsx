@@ -406,11 +406,14 @@ export function DocumentEditorProvider({
   );
 
   // Optimistic: the keys change here first, then the server records them.
+  // New keys from the server replace them, adjusted during render.
   const [dismissed, setDismissed] = useState(version.dismissedFindings);
   const serverDismissed = version.dismissedFindings.join();
-  useEffect(() => {
+  const [syncedDismissed, setSyncedDismissed] = useState(serverDismissed);
+  if (serverDismissed !== syncedDismissed) {
+    setSyncedDismissed(serverDismissed);
     setDismissed(serverDismissed ? serverDismissed.split(",") : []);
-  }, [serverDismissed]);
+  }
   const { mutate: dismissOnServer } = useMutation(
     trpc.documents.dismissFinding.mutationOptions()
   );

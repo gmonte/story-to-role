@@ -2,7 +2,7 @@ import "~/styles/globals.css";
 
 import { enUS, ptBR } from "@clerk/localizations";
 import { ClerkProvider } from "@clerk/nextjs";
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { IBM_Plex_Mono, IBM_Plex_Sans, Space_Grotesk } from "next/font/google";
 import { ThemeProvider } from "next-themes";
 
@@ -35,6 +35,15 @@ const spaceGrotesk = Space_Grotesk({
   subsets: ["latin"],
   weight: ["600"],
 });
+
+// The page never zooms on a phone: not when an input gets focus (iOS
+// zooms into fields under 16px) and not by pinching, as the owner asked.
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 1,
+  userScalable: false,
+};
 
 export async function generateMetadata(): Promise<Metadata> {
   const locale = await getLocaleFromNextCookies();

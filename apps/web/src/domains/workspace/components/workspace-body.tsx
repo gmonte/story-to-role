@@ -10,6 +10,8 @@ import {
 
 import { GripVertical } from "lucide-react";
 
+import { usePhone } from "../hooks/use-desktop";
+
 // The preview's width while it's open, in pixels: never so narrow it can't be
 // read, never so wide the chat can't be.
 const minPreview = 320;
@@ -107,6 +109,18 @@ export function WorkspaceBody({
     };
     window.addEventListener("pointermove", onMove);
     window.addEventListener("pointerup", onUp);
+  }
+
+  // A phone has no room beside the page: the panel renders under it, where
+  // it draws itself as a bottom bar of sheets.
+  const phone = usePhone();
+  if (phone) {
+    return (
+      <div className="flex min-h-0 flex-1 flex-col">
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col">{chat}</div>
+        {panel}
+      </div>
+    );
   }
 
   return (

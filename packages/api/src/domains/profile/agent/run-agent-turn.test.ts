@@ -416,6 +416,40 @@ describe("the profile agent", () => {
     expect(await ctx.profiles.listSuggestions(ctx.user.id)).toEqual([]);
   });
 
+  it("brings an accepted suggestion back when the user undoes it", async () => {
+    const ctx = await setup();
+    const { model } = agentModel(
+      [
+        [
+          {
+            name: "suggest_change",
+            input: {
+              part: "experience:beta — backend",
+              find: "Melhorei a performance [sem número].",
+              replace: "Melhorei a performance do checkout [sem número].",
+              reason: "Você disse que foi no checkout.",
+            },
+          },
+        ],
+      ],
+      "Sugeri a mudança."
+    );
+    await ctx.say("Foi a performance do checkout.", model);
+    const [suggestion] = await ctx.profiles.listSuggestions(ctx.user.id);
+    const ids = { userId: ctx.user.id, profileSuggestionIds: [suggestion.id] };
+
+    await ctx.profiles.resolveSuggestions({ ...ids, resolution: "accepted" });
+    await ctx.profiles.reopenSuggestions(ids);
+    expect(await ctx.profiles.listSuggestions(ctx.user.id)).toEqual([
+      suggestion,
+    ]);
+
+    // A rejected one is not reopened: rejecting changes no text to undo.
+    await ctx.profiles.resolveSuggestions({ ...ids, resolution: "rejected" });
+    await ctx.profiles.reopenSuggestions(ids);
+    expect(await ctx.profiles.listSuggestions(ctx.user.id)).toEqual([]);
+  });
+
   it("moves an experience to Projects through two suggestions the user accepts together", async () => {
     const ctx = await setup();
     const removal = {

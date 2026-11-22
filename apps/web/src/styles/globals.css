@@ -161,11 +161,14 @@
   );
   border-radius: 2px;
 }
+/* Tinted stronger than the suggestion around them, bold and underlined. */
 .profile-editor .profile-suggestion-added {
-  background: var(--fit-high-soft);
-  color: inherit;
+  background: color-mix(in oklab, var(--success) 25%, transparent);
+  color: var(--foreground);
+  font-weight: 600;
   text-decoration: underline;
-  text-decoration-color: color-mix(in oklab, var(--success) 70%, transparent);
+  text-decoration-color: var(--success);
+  text-decoration-thickness: 2px;
   text-underline-offset: 2px;
   border-radius: 2px;
 }

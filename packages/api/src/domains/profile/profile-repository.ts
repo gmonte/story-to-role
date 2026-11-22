@@ -309,6 +309,29 @@ export class ProfileRepository {
   }
 
   /**
+   * Makes accepted suggestions of the document wait again (the user undid
+   * them in the editor). Returns how many changed.
+   */
+  async reopenSuggestions(input: {
+    documentId: string;
+    profileSuggestionIds: string[];
+  }) {
+    if (!input.profileSuggestionIds.length) return 0;
+    const reopened = await this.tx
+      .update(profileSuggestionsTable)
+      .set({ status: "pending", resolvedAt: null })
+      .where(
+        and(
+          eq(profileSuggestionsTable.documentId, input.documentId),
+          eq(profileSuggestionsTable.status, "accepted"),
+          inArray(profileSuggestionsTable.id, input.profileSuggestionIds)
+        )
+      )
+      .returning({ id: profileSuggestionsTable.id });
+    return reopened.length;
+  }
+
+  /**
    * The evidence passages of a version closest to a vector (ADR 0004):
    * what the person lacks (not done, gaps, studied) and rules never come
    * back as coverage.

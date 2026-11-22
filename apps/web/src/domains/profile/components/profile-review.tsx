@@ -2,10 +2,18 @@
 
 import { useState } from "react";
 
-import { Check, CircleAlert, EyeOff, Sparkles, X } from "lucide-react";
+import {
+  ArrowRight,
+  Check,
+  CircleAlert,
+  EyeOff,
+  Sparkles,
+  X,
+} from "lucide-react";
 
 import { useTranslation } from "@repo/intl/use-translation";
 import { extractProfile } from "@repo/api/domains/profile/truth/extract";
+import { Badge } from "@repo/web/components/ui/badge";
 import { Button } from "@repo/web/components/ui/button";
 
 import { decisionButton } from "~/domains/workspace/utils/decision-buttons";
@@ -13,8 +21,6 @@ import { decisionButton } from "~/domains/workspace/utils/decision-buttons";
 import { useProfileLabels } from "../hooks/use-profile-labels";
 import { useLatestValidation } from "../hooks/use-profile-validation";
 import { useProfileEditor } from "./profile-editor-context";
-
-const labelSeparator = ": ";
 
 /**
  * The last validation's report beside the document (profile spec, "Validate
@@ -129,40 +135,65 @@ export function ProfileReview() {
             {t.formatMessage({ defaultMessage: "Proposed competency levels" })}
           </p>
           <ul className="space-y-2">
-            {proposals.map((proposal) => (
-              <li
-                key={proposal.name}
-                className="bg-card flex flex-col gap-2 rounded-lg border p-3 text-[13px] leading-snug"
-              >
-                <p>
-                  <span className="font-medium">{proposal.name}</span>
-                  {labelSeparator}
-                  {levelLabels[proposal.level]}
-                </p>
-                <p className="text-muted-foreground">{proposal.reason}</p>
-                <div className="flex gap-1.5">
-                  <Button
-                    className={decisionButton}
-                    onClick={() =>
-                      applyCompetencyLevel(proposal.name, proposal.level)
-                    }
-                  >
-                    <Check />
-                    {t.formatMessage({ defaultMessage: "Accept" })}
-                  </Button>
-                  <Button
-                    variant="outline"
-                    className={decisionButton}
-                    onClick={() =>
-                      setRejected((names) => [...names, proposal.name])
-                    }
-                  >
-                    <X />
-                    {t.formatMessage({ defaultMessage: "Reject" })}
-                  </Button>
-                </div>
-              </li>
-            ))}
+            {proposals.map((proposal) => {
+              // Where the competency is now: a new one, or a level it leaves.
+              const current = levels.get(proposal.name.toLowerCase());
+              return (
+                <li
+                  key={proposal.name}
+                  className="bg-card flex flex-col gap-2 rounded-lg border p-3 text-[13px] leading-snug"
+                >
+                  <p className="flex flex-wrap items-center gap-x-1.5 gap-y-1">
+                    <span className="font-medium">{proposal.name}</span>
+                    {current === undefined && (
+                      <Badge variant="secondary">
+                        {t.formatMessage({ defaultMessage: "New competency" })}
+                      </Badge>
+                    )}
+                  </p>
+                  <p className="flex flex-wrap items-center gap-1.5">
+                    {current !== undefined && (
+                      <>
+                        <span className="text-muted-foreground line-through">
+                          {levelLabels[current]}
+                        </span>
+                        <ArrowRight
+                          className="text-muted-foreground size-3.5"
+                          aria-label={t.formatMessage({
+                            defaultMessage: "moves to",
+                          })}
+                        />
+                      </>
+                    )}
+                    <span className="text-success font-medium">
+                      {levelLabels[proposal.level]}
+                    </span>
+                  </p>
+                  <p className="text-muted-foreground">{proposal.reason}</p>
+                  <div className="flex gap-1.5">
+                    <Button
+                      className={decisionButton}
+                      onClick={() =>
+                        applyCompetencyLevel(proposal.name, proposal.level)
+                      }
+                    >
+                      <Check />
+                      {t.formatMessage({ defaultMessage: "Accept" })}
+                    </Button>
+                    <Button
+                      variant="outline"
+                      className={decisionButton}
+                      onClick={() =>
+                        setRejected((names) => [...names, proposal.name])
+                      }
+                    >
+                      <X />
+                      {t.formatMessage({ defaultMessage: "Reject" })}
+                    </Button>
+                  </div>
+                </li>
+              );
+            })}
           </ul>
         </div>
       )}

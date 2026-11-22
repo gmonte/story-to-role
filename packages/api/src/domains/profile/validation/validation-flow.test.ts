@@ -95,6 +95,14 @@ describe("validating and publishing the profile", () => {
       ].filter((title) => title !== "Regras de comunicação")
     );
     expect(estimate.credits).toBeGreaterThan(0);
+    // The cap follows the profile's size: the whole profile is read.
+    const { creditCap } =
+      await import("@repo/api/domains/credits/credit-pricing");
+    expect(
+      creditCap("validate_profile", { parts: 1, profileCharacters: 200_000 })
+    ).toBeGreaterThan(
+      creditCap("validate_profile", { parts: 1, profileCharacters: 20_000 })
+    );
 
     const { profileValidationId } = await ctx.profile.validate({
       userId: ctx.user.id,
@@ -183,6 +191,53 @@ describe("validating and publishing the profile", () => {
       .from(profileVersionsTable)
       .where(eq(profileVersionsTable.id, versionId));
     expect(version.validatedAt).not.toBeNull();
+  });
+
+  it("levels competencies across the whole profile, not only what changed", async () => {
+    const ctx = await setup();
+    const first = await ctx.save(profileText("reduzi custos [medido]."), 0);
+    await ctx.profile.publish({ userId: ctx.user.id, baseRevision: first });
+    const revision = await ctx.save(
+      profileText("reduzi custos [medido].").replace(
+        "### Beta — Backend",
+        [
+          "### Gama — Backend (2026-10 a atual)",
+          "",
+          "- Tecnologias: Python",
+          "- Resultados: um projeto de poucos dias.",
+          "- O que NÃO fiz: não liderei pessoas.",
+          "",
+          "### Beta — Backend",
+        ].join("\n")
+      ),
+      first
+    );
+    const { profileValidationId } = await ctx.profile.validate({
+      userId: ctx.user.id,
+      baseRevision: revision,
+    });
+    const { providerPackage, generateObject } = fakeProviderPackage({
+      object: () => ({ findings: [], competencies: [] }),
+    });
+    await runValidateProfile({
+      db: ctx.db,
+      ai: createAiClient({
+        db: ctx.db,
+        userId: ctx.user.id,
+        funding: "credits",
+        providerPackage,
+      }),
+      cipher: await getUserCipher(ctx.db, ctx.user.id),
+      userId: ctx.user.id,
+      profileValidationId,
+      reportProgress: vi.fn(),
+    });
+    const prompt = JSON.stringify(generateObject.mock.calls[0][0]);
+    // The unchanged experience is there to judge Python's level by...
+    expect(prompt).toContain("reduzi custos [medido].");
+    // ...while only the changed one is under review.
+    expect(prompt).toMatch(/under review[^<]*Gama — Backend/);
+    expect(prompt).not.toMatch(/under review[^<]*Beta — Backend/);
   });
 
   it("stores the extract and passages of each version and embeds them", async () => {

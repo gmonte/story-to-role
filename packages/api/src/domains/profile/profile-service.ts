@@ -67,6 +67,13 @@ function versionSummary(version: ProfileVersionSummary): ProfileVersionSummary {
 // A bound, not a limit anyone meets: the oldest keys fall away first.
 const maxDismissedFindings = 500;
 
+// What Validate's cost depends on: the parts it reviews and the whole
+// profile it reads them in.
+const validationHints = (draft: ProfileBlock[], parts: unknown[]) => ({
+  parts: parts.length,
+  profileCharacters: serializeBlocks(draft).length,
+});
+
 /** A stale tab saving over a newer draft (another tab, a restore). */
 const staleDraft = () =>
   new TRPCError({
@@ -363,7 +370,7 @@ export class ProfileService {
     return {
       parts: parts.map((part) => part.title),
       credits: parts.length
-        ? creditCap("validate_profile", { parts: parts.length })
+        ? creditCap("validate_profile", validationHints(draft, parts))
         : 0,
     };
   }
@@ -415,7 +422,7 @@ export class ProfileService {
         completedAt: new Date(),
       });
     }
-    const hints = { parts: parts.length };
+    const hints = validationHints(draft, parts);
     await this.tasks.assertAffordable({
       userId: input.userId,
       type: "validate_profile",
@@ -590,6 +597,24 @@ export class ProfileService {
       profileSuggestionIds: input.profileSuggestionIds,
     });
     return { resolved };
+  }
+
+  /**
+   * Puts accepted suggestions back to waiting: the user undid them in the
+   * editor, which took the change out of the draft.
+   */
+  async reopenSuggestions(input: {
+    userId: string;
+    profileSuggestionIds: string[];
+  }) {
+    const repository = new ProfileRepository(this.db);
+    const document = await repository.findDocument(input.userId, profileKind);
+    if (!document) throw new TRPCError({ code: "NOT_FOUND" });
+    const reopened = await repository.reopenSuggestions({
+      documentId: document.id,
+      profileSuggestionIds: input.profileSuggestionIds,
+    });
+    return { reopened };
   }
 
   /**

@@ -1,9 +1,9 @@
 "use client";
 
 import {
-  useEffect,
   useRef,
   useState,
+  useSyncExternalStore,
   type PointerEvent as ReactPointerEvent,
   type ReactNode,
 } from "react";
@@ -30,6 +30,11 @@ function readWidth(key: string, fallback: number) {
     return fallback;
   }
 }
+
+// Storage is read when rendering, never watched.
+const subscribeToNothing = () => () => {
+  // Nothing to stop watching.
+};
 
 function saveWidth(key: string, width: number) {
   try {
@@ -74,11 +79,17 @@ export function WorkspaceBody({
       : readWidth(storageKey, defaultPreview)
   );
   // The server renders the default; the saved width comes after hydration,
-  // so both renders agree.
-  const [panelWidth, setPanelWidth] = useState(panelFallback);
-  useEffect(() => {
-    setPanelWidth(readWidth(panelKey, panelFallback));
-  }, [panelKey, panelFallback]);
+  // so both renders agree. A drag holds its width until the screen changes.
+  const savedPanelWidth = useSyncExternalStore(
+    subscribeToNothing,
+    () => readWidth(panelKey, panelFallback),
+    () => panelFallback
+  );
+  const [dragged, setDragged] = useState<{ key: string; width: number }>();
+  const panelWidth =
+    dragged?.key === panelKey ? dragged.width : savedPanelWidth;
+  const setPanelWidth = (next: number) =>
+    setDragged({ key: panelKey, width: next });
 
   /** Drags a divider: leftwards widens the column on its right. */
   function startDrag(

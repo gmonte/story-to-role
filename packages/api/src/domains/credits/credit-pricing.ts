@@ -62,8 +62,10 @@ export type CapHints = {
   linkedinSection?: boolean;
   // A LinkedIn text's coverage review alone: priced as Review again.
   linkedinReview?: boolean;
-  // The profile parts a validation reviews.
+  // The profile parts a validation reviews, and the size of the whole
+  // profile it reads them in.
   parts?: number;
+  profileCharacters?: number;
   // Reviewers a review task runs in parallel: each costs a review.
   reviewers?: number;
 };
@@ -112,9 +114,22 @@ export function creditCap(type: TaskType, hints: CapHints = {}): number {
     case "document_agent_turn":
       // The topic gate plus the agent's reply: about 2, capped at 3.
       return 3;
-    case "validate_profile":
-      // About 5 for one changed part, up to 20 or so for a whole profile.
-      return Math.min(25, 3 + 2 * Math.max(1, hints.parts ?? 1));
+    case "validate_profile": {
+      // The whole profile goes in (about 4 characters a token, read by
+      // Sonnet) and each part under review adds its findings to the answer:
+      // about 8 for one part of a mid-sized profile, 30 for a long new one.
+      const inputTokens = (hints.profileCharacters ?? 40_000) / 4;
+      const inputCredits =
+        (inputTokens *
+          modelPrices["claude-sonnet-5-5"].input *
+          creditSettings.margin) /
+        1_000_000 /
+        creditSettings.usdPerCredit;
+      return Math.min(
+        40,
+        3 + Math.ceil(inputCredits) + Math.max(1, hints.parts ?? 1)
+      );
+    }
     case "sample":
     case "render_pdf":
     case "embed_profile":

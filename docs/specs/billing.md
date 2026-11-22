@@ -35,12 +35,12 @@ Two subscriptions, each monthly or annual: the **credit subscription** (600 cred
 
 As SaaS products usually do (GitHub, Slack, Notion), a switch to a dearer plan applies at once with the unused time credited, and money is never refunded; what is already paid keeps its value:
 
-| From → to | When | Money | Credits |
-| --- | --- | --- | --- |
-| Credit subscription (monthly or annual) → own-key | At once, through a new Checkout; the old subscription is cancelled only once the new one is paid | No refund | The period already paid keeps granting: the current month's credits until it ends and, on an annual plan, 600 credits for each month left until the date the year would have ended |
-| Own-key → credit subscription | At once; the billing period restarts now | The unused own-key time is credited on the first invoice | The new month's 600 once its invoice is paid; credits still carried over from an earlier credit subscription keep coming; the key is deleted |
-| Monthly → annual, same subscription | At once | The unused month is credited | The year starts now |
-| Annual → monthly, same subscription | At the end of the paid year | None | Nothing changes until then |
+| From → to                                         | When                                                                                             | Money                                                    | Credits                                                                                                                                                                            |
+| ------------------------------------------------- | ------------------------------------------------------------------------------------------------ | -------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Credit subscription (monthly or annual) → own-key | At once, through a new Checkout; the old subscription is cancelled only once the new one is paid | No refund                                                | The period already paid keeps granting: the current month's credits until it ends and, on an annual plan, 600 credits for each month left until the date the year would have ended |
+| Own-key → credit subscription                     | At once; the billing period restarts now                                                         | The unused own-key time is credited on the first invoice | The new month's 600 once its invoice is paid; credits still carried over from an earlier credit subscription keep coming; the key is deleted                                       |
+| Monthly → annual, same subscription               | At once                                                                                          | The unused month is credited                             | The year starts now                                                                                                                                                                |
+| Annual → monthly, same subscription               | At the end of the paid year                                                                      | None                                                     | Nothing changes until then                                                                                                                                                         |
 
 A key saved for an own-key Checkout that expires unpaid is deleted (the `checkout.session.expired` event, with reconciliation as the backstop). The plan page shows a scheduled switch to monthly with its date. Restarting the period on a switch to the credit subscription keeps a switch near the end of a month from buying 600 credits for a few days' difference. Plan switches go through the app, never the Customer Portal, so a key is always checked first.
 
@@ -126,22 +126,22 @@ Locally, `stripe listen` does not use the dashboard destination's event list: by
 
 Stripe Brazil standard fees (stripe.com/br/pricing, read 2026-11-14):
 
-| Item | Fee |
-| --- | --- |
-| Domestic card | 3.99% + R$0.39 per successful transaction |
-| International card | +2% on top, computed after conversion to BRL |
-| Pix | 1.19% per paid Pix; by invitation only |
-| Boleto | R$3.45 per paid boleto |
-| Stripe Billing | +0.7% of subscription billing volume; not charged on one-time payments |
-| Checkout, Payment Links, 3D Secure | Included |
-| Dispute | R$55 received, plus R$55 if countered (returned when won) |
+| Item                               | Fee                                                                    |
+| ---------------------------------- | ---------------------------------------------------------------------- |
+| Domestic card                      | 3.99% + R$0.39 per successful transaction                              |
+| International card                 | +2% on top, computed after conversion to BRL                           |
+| Pix                                | 1.19% per paid Pix; by invitation only                                 |
+| Boleto                             | R$3.45 per paid boleto                                                 |
+| Stripe Billing                     | +0.7% of subscription billing volume; not charged on one-time payments |
+| Checkout, Payment Links, 3D Secure | Included                                                               |
+| Dispute                            | R$55 received, plus R$55 if countered (returned when won)              |
 
 Examples: a R$49 subscription on a Brazilian card keeps R$46.31 (5.5% in fees); a R$29 pack keeps R$27.45 (5.3%); a US$12 subscription on a foreign card keeps about US$11.13 (7.3%). Still to confirm with Stripe: the currency conversion fee for USD charges settled in BRL. Neither Stripe's localize-prices page (manual currency prices: "0% fee paid by Stripe users", while conversion in general "is subject to fees as detailed on our pricing page") nor a third-party fee table from November 2025 (Brazil row: 3.99% + R$0.39, +2% for international cards; most other countries add "+2% if currency conversion is required") states one for Brazil. Until a test charge's balance transaction or Stripe support confirms it, USD prices assume the worst case of an extra 2%: about 8.7% + US$0.07 on a US$12 subscription paid with a foreign card. Brazilian taxes on revenue are outside Stripe and need an accountant.
 
 ## Credit value and pricing of actions
 
 - **One credit is about US$0.01 of expected AI cost** on the default provider package, including a 1.5x safety margin for retries, variance and longer thinking. Sale prices per plan cover AI cost, Stripe fees (about 5% to 9%, worst case with a foreign card) and the margin. If the default package changes, credits per action are recalculated; the money value of a credit stays the same.
-- With the Anthropic package, actions cost about: fit check 1, gap question 1, agent message 2, profile validation about 5 (one changed section) to 20 (a whole new profile), adjustment 7, cover letter 14, truth file import about 20 (for about 12,000 words), resume 37 to 55 (Quick, standard level) or 72 to 108 (Quick, maximum level), depending mostly on career length.
+- With the Anthropic package, actions cost about: fit check 1, gap question 1, agent message 2, profile validation about 8 (one changed section of a mid-sized profile, read whole) to 30 (a long new profile), adjustment 7, cover letter 14, truth file import about 20 (for about 12,000 words), resume 37 to 55 (Quick, standard level) or 72 to 108 (Quick, maximum level), depending mostly on career length.
 - **Estimate with a cap.** Before an action, the user sees "up to N credits", computed from their career size, the chosen review depth and writing level. The ledger reserves the cap, settles to the actual cost when the task ends and never charges above the cap. When Thorough stops early, the user pays only the rounds that ran. The per-action table is recalibrated from measured usage.
 
 ## Cost model (estimate)
@@ -150,19 +150,19 @@ Prices from the Claude API reference, cached 2026-10-06, in USD per million toke
 
 Token assumptions per action, to be replaced by measured usage from the first prototype (the provider adapter records usage per call):
 
-| Action | Calls and tokens assumed | Model | Estimated AI cost (USD) |
-| --- | --- | --- | --- |
-| Fit check | Keyword extraction (2k in, 1.3k out) + judgment over retrieved profile passages (4k in, 1.5k out) | Haiku | 0.002 |
-| Fit check | Same, judged by Sonnet | Haiku + Sonnet | 0.024 |
-| Adjustment | One call (6k in, 3k out) | Sonnet | 0.042 |
-| Cover letter | Draft, review, edit; 8k prefix cached | Sonnet | 0.093 |
-| Resume | 7 calls (strategist, review, editor, about two revision rounds, report); 9.5k prefix cached; 2.5k out each | Sonnet | 0.24 |
-| Resume | Same | Opus | 0.46 |
-| Resume, ten positions | Same 7 calls; relevant profile passages only (about 600 tokens per position, 10k prefix cached); 3.5k out each | Sonnet | 0.32 |
-| Resume, ten positions | Same, sending the whole profile instead of retrieved passages (54k prefix) | Sonnet | 0.52 |
-| Agent message | Topic gate (Haiku) + turn with the passage, its section, the index and 10k cached history, 0.7k out | Haiku + Sonnet | 0.011 |
-| Profile validation, one section | The changed section plus the index (4k in, 1.5k out) | Sonnet | 0.023 |
-| Coverage review | Code checks + one call over the document and its passages (8k in, 2k out) | Sonnet | 0.036 |
+| Action                          | Calls and tokens assumed                                                                                       | Model          | Estimated AI cost (USD) |
+| ------------------------------- | -------------------------------------------------------------------------------------------------------------- | -------------- | ----------------------- |
+| Fit check                       | Keyword extraction (2k in, 1.3k out) + judgment over retrieved profile passages (4k in, 1.5k out)              | Haiku          | 0.002                   |
+| Fit check                       | Same, judged by Sonnet                                                                                         | Haiku + Sonnet | 0.024                   |
+| Adjustment                      | One call (6k in, 3k out)                                                                                       | Sonnet         | 0.042                   |
+| Cover letter                    | Draft, review, edit; 8k prefix cached                                                                          | Sonnet         | 0.093                   |
+| Resume                          | 7 calls (strategist, review, editor, about two revision rounds, report); 9.5k prefix cached; 2.5k out each     | Sonnet         | 0.24                    |
+| Resume                          | Same                                                                                                           | Opus           | 0.46                    |
+| Resume, ten positions           | Same 7 calls; relevant profile passages only (about 600 tokens per position, 10k prefix cached); 3.5k out each | Sonnet         | 0.32                    |
+| Resume, ten positions           | Same, sending the whole profile instead of retrieved passages (54k prefix)                                     | Sonnet         | 0.52                    |
+| Agent message                   | Topic gate (Haiku) + turn with the passage, its section, the index and 10k cached history, 0.7k out            | Haiku + Sonnet | 0.011                   |
+| Profile validation, one section | The whole profile, one section under review (20k in, 1.5k out)                                                 | Sonnet         | 0.055                   |
+| Coverage review                 | Code checks + one call over the document and its passages (8k in, 2k out)                                      | Sonnet         | 0.036                   |
 
 Thinking tokens are billed as output and are the largest uncertainty; the estimates assume moderate effort. Output dominates generation cost: each call of the revision loop rewrites the whole resume, so the number of revisions is the largest lever, and a longer career costs more mainly because the resume is longer, not because more context is sent.
 
@@ -177,4 +177,3 @@ Brazilian taxes on revenue (Simples Nacional, ISS, service invoices; possible ex
 ## Open points
 
 - Final credits per plan and prices, after the beta.
-

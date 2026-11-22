@@ -125,6 +125,7 @@ export function OpeningHeader({
   view,
   setView,
   sideButton,
+  compact = false,
 }: {
   openingId: string;
   opening: OpeningDetail;
@@ -132,6 +133,11 @@ export function OpeningHeader({
   setView: (view: OpeningView) => void;
   /** Opens the column that has no room beside the page. */
   sideButton?: SideButton;
+  /**
+   * A document page on a phone: the title on one line beside the actions,
+   * without the chips, so the document keeps the screen.
+   */
+  compact?: boolean;
 }) {
   const t = useTranslation();
   const labels = useOpeningLabels();
@@ -210,11 +216,33 @@ export function OpeningHeader({
   // The same header on the opening, resume and cover letter pages (owner):
   // the document pages differ only below it.
   return (
-    <div className="bg-background/95 z-10 flex shrink-0 flex-col gap-3 border-b px-4 pt-4 backdrop-blur">
-      <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-2">
+    <div
+      className={cn(
+        "bg-background/95 z-10 flex shrink-0 flex-col border-b px-4 backdrop-blur",
+        compact ? "gap-1 pt-2" : "gap-3 pt-4"
+      )}
+    >
+      <div
+        className={cn(
+          "flex items-start justify-between gap-x-4 gap-y-2",
+          compact ? "flex-nowrap" : "flex-wrap"
+        )}
+      >
         {/* On a narrow screen the actions wrap under the title. */}
-        <div className="min-w-0 basis-full sm:flex-1 sm:basis-0">
-          {processing && !opening.title ? (
+        <div
+          className={cn(
+            "min-w-0",
+            compact ? "flex-1 self-center" : "basis-full sm:flex-1 sm:basis-0"
+          )}
+        >
+          {compact ? (
+            <h1
+              className="font-display truncate text-lg font-semibold tracking-tight"
+              title={opening.title ?? undefined}
+            >
+              {opening.title}
+            </h1>
+          ) : processing && !opening.title ? (
             <h1 className="font-display text-2xl font-semibold tracking-tight sm:text-3xl">
               {t.formatMessage({ defaultMessage: "Reading the opening…" })}
             </h1>
@@ -222,7 +250,12 @@ export function OpeningHeader({
             <OpeningTitle openingId={openingId} opening={opening} />
           )}
           {/* On a phone the chips scroll sideways instead of piling up. */}
-          <div className="flex flex-wrap items-center gap-x-2 gap-y-1 max-sm:flex-nowrap max-sm:overflow-x-auto max-sm:[scrollbar-width:none] max-sm:[&::-webkit-scrollbar]:hidden max-sm:[&>*]:shrink-0">
+          <div
+            className={cn(
+              "flex flex-wrap items-center gap-x-2 gap-y-1 max-sm:flex-nowrap max-sm:overflow-x-auto max-sm:[scrollbar-width:none] max-sm:[&::-webkit-scrollbar]:hidden max-sm:[&>*]:shrink-0",
+              compact && "hidden"
+            )}
+          >
             {opening.company && (
               <p className="text-muted-foreground text-sm">{opening.company}</p>
             )}

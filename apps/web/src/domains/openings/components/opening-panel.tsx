@@ -172,6 +172,7 @@ function OpeningScreen({
           view={view}
           setView={setView}
           sideButton={sideButton}
+          compact={phone && view !== "opening"}
         />
         {view === "opening" ? (
           <OpeningPageBody

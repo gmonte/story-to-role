@@ -100,13 +100,12 @@ export function DocumentWorkspace({
             indexButton={
               phone && (
                 <Button
-                  size="sm"
+                  size="icon"
                   variant="outline"
-                  className="h-10"
+                  aria-label={t.formatMessage({ defaultMessage: "Index" })}
                   onClick={() => setIndexOpen(true)}
                 >
                   <ListTree />
-                  {t.formatMessage({ defaultMessage: "Index" })}
                 </Button>
               )
             }
@@ -245,7 +244,9 @@ function DocumentToolbar({
   return (
     <div className="bg-background/95 sticky top-0 z-10 flex flex-col gap-2 border-b px-4 py-2 backdrop-blur">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <div className="flex flex-wrap items-center gap-3">
+        {/* On a phone the index and the score share the first line, the
+            legend goes under them. */}
+        <div className="flex flex-wrap items-center gap-3 max-sm:contents">
           {indexButton}
           {/* One version needs no tabs: they'd be a button doing nothing. */}
           {versions.length > 1 && (
@@ -259,7 +260,8 @@ function DocumentToolbar({
               </TabsList>
             </Tabs>
           )}
-          <div className="text-muted-foreground flex flex-wrap gap-3 text-xs">
+          {/* On a phone the legend is one line that scrolls sideways. */}
+          <div className="text-muted-foreground flex flex-wrap gap-3 text-xs max-sm:order-last max-sm:basis-full max-sm:flex-nowrap max-sm:overflow-x-auto max-sm:[scrollbar-width:none] max-sm:[&::-webkit-scrollbar]:hidden max-sm:[&>*]:shrink-0">
             <Legend className="border-l-origin-profile">
               {t.formatMessage({ defaultMessage: "Your profile" })}
             </Legend>
@@ -298,7 +300,9 @@ function DocumentToolbar({
             onClick={() => undo.mutate({ versionId: version.id })}
           >
             <RotateCcw />
-            {t.formatMessage({ defaultMessage: "Undo" })}
+            <span className="max-sm:sr-only">
+              {t.formatMessage({ defaultMessage: "Undo" })}
+            </span>
           </Button>
         </div>
       </div>

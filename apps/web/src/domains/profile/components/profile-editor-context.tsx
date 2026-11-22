@@ -369,23 +369,30 @@ export function ProfileEditorProvider({
   };
 
   const suggestionsQuery = useQuery(trpc.profile.suggestions.queryOptions({}));
+  // Answered here, until the server has recorded it: a reload of the list
+  // meanwhile (the agent's turn ending) would bring it back as waiting.
+  const [answered, setAnswered] = useState<ReadonlySet<string>>(new Set());
   const suggestions = useMemo<LocatedSuggestion[]>(
     () =>
-      (suggestionsQuery.data ?? []).map((suggestion) => ({
-        ...suggestion,
-        range: locateChange(blocks, suggestion),
-      })),
-    [suggestionsQuery.data, blocks]
+      (suggestionsQuery.data ?? [])
+        .filter((suggestion) => !answered.has(suggestion.id))
+        .map((suggestion) => ({
+          ...suggestion,
+          range: locateChange(blocks, suggestion),
+        })),
+    [suggestionsQuery.data, blocks, answered]
   );
   const { mutate: resolveSuggestions } = useMutation(
     trpc.profile.resolveSuggestions.mutationOptions()
   );
-  const forgetSuggestions = (ids: string[]) =>
+  const forgetSuggestions = (ids: string[]) => {
+    setAnswered((current) => new Set([...current, ...ids]));
     queryClient.setQueryData(
       trpc.profile.suggestions.queryKey({}),
       (current: ProfileSuggestion[] | undefined) =>
         current?.filter((suggestion) => !ids.includes(suggestion.id))
     );
+  };
   // A removal whose lines are already gone is done, not stale (the move's
   // removal accepted by hand, or the lines deleted): recorded as accepted.
   const settledRemovals = useRef(new Set<string>());
@@ -670,7 +677,10 @@ export function ProfileEditorProvider({
 
   // The answer didn't reach the server: the list shows what it still holds
   // (a change already in the text no longer fits, and can be rejected).
-  const suggestionsNotRecorded = () => {
+  const suggestionsNotRecorded = (ids: string[]) => {
+    setAnswered(
+      (current) => new Set([...current].filter((id) => !ids.includes(id)))
+    );
     void refreshSuggestions();
     toast.error(
       t.formatMessage({
@@ -738,7 +748,7 @@ export function ProfileEditorProvider({
       if (revision === null) return;
       resolveSuggestions(
         { resolution: "accepted", profileSuggestionIds: applied },
-        { onError: suggestionsNotRecorded }
+        { onError: () => suggestionsNotRecorded(applied) }
       );
     });
   };
@@ -749,7 +759,7 @@ export function ProfileEditorProvider({
     forgetSuggestions(ids);
     resolveSuggestions(
       { resolution: "rejected", profileSuggestionIds: ids },
-      { onError: suggestionsNotRecorded }
+      { onError: () => suggestionsNotRecorded(ids) }
     );
   };
 

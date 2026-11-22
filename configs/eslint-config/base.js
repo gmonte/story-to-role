@@ -22,6 +22,16 @@ export const baseConfig = [
     rules: {
       ...formatjsPlugin.configs.recommended.rules,
       "formatjs/enforce-description": "off",
+      // eslint-plugin-formatjs 7+ also inspects messages that 6.x silently
+      // skipped (t.formatMessage calls), and flags existing messages that use
+      // several plurals, a select or leading placeholders. Rewriting them
+      // would change message ids and every pt-BR translation, so these stay
+      // off until someone does that on purpose.
+      "formatjs/blocklist-elements": "off",
+      "formatjs/no-multiple-plurals": "off",
+      "formatjs/prefer-full-sentence": "off",
+      "formatjs/prefer-pound-in-plural": "off",
+      "formatjs/enforce-plural-rules": "off",
       "formatjs/no-id": "error",
       "formatjs/no-literal-string-in-jsx": "warn",
       "formatjs/no-literal-string-in-object": [

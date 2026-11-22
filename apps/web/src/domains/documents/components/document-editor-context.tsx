@@ -438,27 +438,23 @@ export function DocumentEditorProvider({
     const all = version.coverage?.findings ?? [];
     const review = version.coverage?.review;
     const allNotes: ReviewNote[] = [
-      ...(review?.inconsistencies ?? []).map(
-        (row): ReviewNote => ({
-          kind: "inconsistency",
-          lineId: row.lineId,
-          lineText: row.lineText,
-          text: row.explanation,
-          profileSuggestion: null,
-        })
-      ),
-      ...(review?.suggestions ?? []).map(
-        (row): ReviewNote => ({
-          kind: "suggestion",
-          lineId: row.lineId,
-          lineText: row.lineText,
-          text: row.text,
-          profileSuggestion:
-            review && row.kind === "profile" && row.lineId
-              ? { coverageReviewId: review.id, lineId: row.lineId }
-              : null,
-        })
-      ),
+      ...(review?.inconsistencies ?? []).map((row): ReviewNote => ({
+        kind: "inconsistency",
+        lineId: row.lineId,
+        lineText: row.lineText,
+        text: row.explanation,
+        profileSuggestion: null,
+      })),
+      ...(review?.suggestions ?? []).map((row): ReviewNote => ({
+        kind: "suggestion",
+        lineId: row.lineId,
+        lineText: row.lineText,
+        text: row.text,
+        profileSuggestion:
+          review && row.kind === "profile" && row.lineId
+            ? { coverageReviewId: review.id, lineId: row.lineId }
+            : null,
+      })),
     ];
     const ignoredFinding = (finding: DocumentFinding) =>
       hidden.has(coverageFindingKey(finding));

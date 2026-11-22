@@ -68,12 +68,7 @@ export type CoverageFindingCode = (typeof coverageFindingCodes)[number];
 
 /** What an untranslated finding points at, in its params. */
 export type UntranslatedField =
-  | "employer"
-  | "title"
-  | "city"
-  | "credential"
-  | "institution"
-  | "level";
+  "employer" | "title" | "city" | "credential" | "institution" | "level";
 
 /**
  * The code-printed fields of a resume that read as the profile's language

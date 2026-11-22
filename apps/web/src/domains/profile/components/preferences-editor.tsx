@@ -58,10 +58,7 @@ const lintDelayMs = 150;
 const dot = "·";
 
 type AddableSection =
-  | "excludedCompanies"
-  | "excludedSectors"
-  | "locations"
-  | "discardRules";
+  "excludedCompanies" | "excludedSectors" | "locations" | "discardRules";
 
 /**
  * The job preferences (profile spec, "Job preferences"): the same block

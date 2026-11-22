@@ -309,9 +309,8 @@ async function setup({
       }))
     );
     const points = await repository.listPoints(opening.id);
-    return texts.map(
-      (text) =>
-        points.find((point) => cipher.decrypt(point.encryptedText) === text)!
+    return texts.map((text) =>
+      points.find((point) => cipher.decrypt(point.encryptedText) === text)!
     );
   }
 
@@ -3483,8 +3482,8 @@ describe("resume generation and snapshots", () => {
     expect(JSON.stringify(prompt)).toContain("deploys took hours");
 
     const letterDocument = () =>
-      view().then(
-        (data) => data.documents.find((d) => d.kind === "cover_letter")!
+      view().then((data) =>
+        data.documents.find((d) => d.kind === "cover_letter")!
       );
     let [letter] = (await letterDocument()).versions;
     expect(letter.content).toMatchObject({

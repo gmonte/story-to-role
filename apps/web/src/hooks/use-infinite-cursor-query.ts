@@ -34,8 +34,7 @@ export function useInfiniteCursorQuery<TOptions>(options: TOptions) {
   const query = useInfiniteQuery(options as UseInfiniteQueryOptions);
 
   const data = query.data as
-    | InfiniteData<{ data: Array<RowOf<TOptions>>; total: number }>
-    | undefined;
+    InfiniteData<{ data: Array<RowOf<TOptions>>; total: number }> | undefined;
 
   // Stable identity while the loaded pages are unchanged, so consumers can
   // safely depend on `rows` in their own memos and effects.

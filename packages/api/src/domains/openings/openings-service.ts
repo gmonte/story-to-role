@@ -678,20 +678,16 @@ export class OpeningsService {
           "Você disse que tem isto ao responder a pergunta de lacuna de uma vaga.",
       };
       const targets: SuggestionTarget[] = [
-        ...positionIds.map(
-          (positionId): SuggestionTarget => ({
-            kind: "experience",
-            positionId,
-            field: "responsibilities",
-          })
-        ),
-        ...projectIds.map(
-          (projectId): SuggestionTarget => ({
-            kind: "project",
-            projectId,
-            field: "responsibilities",
-          })
-        ),
+        ...positionIds.map((positionId): SuggestionTarget => ({
+          kind: "experience",
+          positionId,
+          field: "responsibilities",
+        })),
+        ...projectIds.map((projectId): SuggestionTarget => ({
+          kind: "project",
+          projectId,
+          field: "responsibilities",
+        })),
         ...(input.notTied ? [{ kind: "identityAreas" } as const] : []),
       ];
       const term = (await openings.listTerms(openingId)).find(

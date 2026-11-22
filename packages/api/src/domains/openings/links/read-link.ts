@@ -60,20 +60,18 @@ export function isPublicAddress(address: string): boolean {
     if (lower.startsWith("::ffff:")) return isPublicAddress(lower.slice(7));
     return !(
       // Unspecified, loopback and IPv4-compatible (::a.b.c.d) addresses.
-      (
-        lower.startsWith("::") ||
-        // NAT64, 6to4 and documentation prefixes reach IPv4 or nothing public.
-        lower.startsWith("64:ff9b:") ||
-        lower.startsWith("2002:") ||
-        lower.startsWith("2001:db8:") ||
-        lower.startsWith("fc") ||
-        lower.startsWith("fd") ||
-        lower.startsWith("fe8") ||
-        lower.startsWith("fe9") ||
-        lower.startsWith("fea") ||
-        lower.startsWith("feb") ||
-        lower.startsWith("ff")
-      )
+      lower.startsWith("::") ||
+      // NAT64, 6to4 and documentation prefixes reach IPv4 or nothing public.
+      lower.startsWith("64:ff9b:") ||
+      lower.startsWith("2002:") ||
+      lower.startsWith("2001:db8:") ||
+      lower.startsWith("fc") ||
+      lower.startsWith("fd") ||
+      lower.startsWith("fe8") ||
+      lower.startsWith("fe9") ||
+      lower.startsWith("fea") ||
+      lower.startsWith("feb") ||
+      lower.startsWith("ff")
     );
   }
   return false;

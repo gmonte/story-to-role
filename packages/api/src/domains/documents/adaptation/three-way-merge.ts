@@ -217,7 +217,7 @@ export function proposalDiff(before: DocumentContent, after: DocumentContent) {
     .map(({ line }) => ({
       lineId: line.id,
       before: old.get(line.id)?.line.text ?? null,
-      after: line.text as string | null,
+      after: line.text,
     }));
   const removed = [...old.values()]
     .filter(({ line }) => !proposed.has(line.id))

@@ -24,7 +24,7 @@ import type { DbClient } from "@repo/api/tools/db-client";
 import { triggerClient } from "@repo/api/tools/trigger/trigger-client";
 
 import { finishTask, TaskStalledError } from "./run-task";
-import { maxDurationOf } from "./task-durations";
+import { maxDurationOf, stallGraceMs } from "./task-durations";
 import { TasksRepository } from "./tasks-repository";
 import type { RealtimeSubscription, Task, TaskType } from "./schemas/task";
 
@@ -46,9 +46,7 @@ const asPaymentRequired = (error: unknown) => {
 const keptFor = (tx: DbClient, userId: string, type: TaskType, now: Date) =>
   keepsReserve(type) ? creditReserve(tx, userId, now) : Promise.resolve(0);
 
-// Past its time limit, a run gets this long before the sweep calls it dead;
-// a task never started, this long after it was created.
-const stallGraceMs = 5 * 60 * 1000;
+// A task never started is called dead this long after it was created.
 const neverStartedMs = 60 * 60 * 1000;
 
 // Tasks that run one at a time per user (their task caps the key): an

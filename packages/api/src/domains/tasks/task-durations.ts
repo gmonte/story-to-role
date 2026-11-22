@@ -18,3 +18,9 @@ export const defaultMaxDuration = 3600;
 export const maxDurationOf = (type: TaskType): number =>
   (taskMaxDuration as Partial<Record<TaskType, number>>)[type] ??
   defaultMaxDuration;
+
+// Past its time limit, a run gets this long before the sweep calls it dead.
+export const stallGraceMs = 5 * 60 * 1000;
+
+/** The message of a task the sweep failed: its run died or never started. */
+export const stalledMessage = "The task stalled";

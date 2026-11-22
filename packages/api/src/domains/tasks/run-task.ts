@@ -5,6 +5,7 @@ import { AiKeysRepository } from "@repo/api/domains/ai/ai-keys-repository";
 import { KeyUnusableError } from "@repo/api/domains/ai/providers/provider-package";
 import { settleTask } from "@repo/api/domains/credits/settle-task";
 
+import { stalledMessage } from "./task-durations";
 import { TasksRepository } from "./tasks-repository";
 import type { TaskProgress, TaskType } from "./schemas/task";
 
@@ -40,9 +41,7 @@ export async function runTask(
   }
   // The sweep already failed it (its run started too late): nothing waits
   // on it any more.
-  if (owner.errorMessage === stalledMessage) return;
-
-  await repository.markProcessing(taskId);
+  if (!(await repository.markProcessing(taskId))) return;
 
   let outcome: void | { charge: false };
   try {
@@ -82,8 +81,6 @@ export class TaskStalledError extends Error {
     super(stalledMessage);
   }
 }
-
-const stalledMessage = "The task stalled";
 
 /**
  * Ends a task: marks it completed or failed and settles its credits. A

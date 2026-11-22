@@ -20,6 +20,7 @@ import {
 } from "@repo/api/domains/profile/suggestions/suggest-line";
 import { ProfileService } from "@repo/api/domains/profile/profile-service";
 import type { ProfileLanguage } from "@repo/api/domains/profile/truth/sections";
+import { stallGraceMs } from "@repo/api/domains/tasks/task-durations";
 
 import type { openingsTable } from "./db/openings-tables";
 import { conditionCategories, type ConditionStance } from "./schemas/opening";
@@ -359,7 +360,7 @@ export class OpeningsService {
     const openings = new OpeningsRepository(this.db);
     // An opening is created a moment before its task: left alone a while.
     const rows = await openings.listStuckAnalyses(
-      new Date(now.getTime() - 5 * 60 * 1000)
+      new Date(now.getTime() - stallGraceMs)
     );
     for (const row of rows) await openings.failAnalysis(row.id);
   }
@@ -370,7 +371,8 @@ export class OpeningsService {
    */
   async retryAnalysis(input: { userId: string; openingId: string }) {
     const profile = await this.requireProfile(input.userId);
-    const row = await new OpeningsRepository(this.db).findOpening({
+    const openings = new OpeningsRepository(this.db);
+    const row = await openings.findOpening({
       profileId: profile.id,
       openingId: input.openingId,
     });
@@ -380,7 +382,7 @@ export class OpeningsService {
       type: "analyze_opening",
     });
     // Only one request moves it on: a second click analyzes nothing twice.
-    const claimed = await new OpeningsRepository(this.db).moveStatus(row.id, {
+    const claimed = await openings.moveStatus(row.id, {
       from: "failed",
       to: "processing",
     });
@@ -388,7 +390,7 @@ export class OpeningsService {
     return this.tasks.startOrUndo(
       { userId: input.userId, type: "analyze_opening", subjectId: row.id },
       async () => {
-        await new OpeningsRepository(this.db).moveStatus(row.id, {
+        await openings.moveStatus(row.id, {
           from: "processing",
           to: "failed",
         });

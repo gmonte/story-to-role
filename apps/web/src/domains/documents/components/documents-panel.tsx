@@ -24,7 +24,7 @@ import { useSelectedVersion } from "../hooks/use-selected-version";
 import { AdaptVersionDialog } from "./adapt-version-dialog";
 import { CoverageReviewBlock } from "./coverage-review";
 import { CoverageScore } from "./coverage-score";
-import { oldestWithBullets } from "../utils/version-checks";
+import { oldestWithBullets, pageLimitText } from "../utils/version-checks";
 import { DownloadZipButton } from "./download-zip-button";
 import { GenerateResumeDialog } from "./generate-resume-dialog";
 import { OutdatedNotice, SyncProposal } from "./language-sync";
@@ -325,18 +325,12 @@ export function VersionChecks({ version }: { version: VersionView }) {
       {version.pages > version.maxPages &&
         !(version.coverage && version.pdf.ready) && (
           <p className="border-warning-border bg-warning-soft rounded-lg border p-2.5 text-xs">
-            {t.formatMessage(
-              {
-                defaultMessage:
-                  "{measured, select, yes {{pages} pages in the PDF} other {About {pages} pages}}: over the page limit this document was written with ({limit}). {position, select, none {Turn off an optional section.} other {Trim the bullets of {position}, your oldest position, or turn off an optional section.}}",
-              },
-              {
-                limit: version.maxPages,
-                measured: version.pdf.ready ? "yes" : "no",
-                pages: t.formatNumber(version.pages),
-                position: oldestWithBullets(version) ?? "none",
-              }
-            )}
+            {pageLimitText(t, {
+              limit: version.maxPages,
+              measured: version.pdf.ready,
+              pages: t.formatNumber(version.pages),
+              position: oldestWithBullets(version),
+            })}
           </p>
         )}
       {emphasis && (

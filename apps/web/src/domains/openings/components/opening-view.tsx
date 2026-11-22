@@ -432,12 +432,23 @@ function AnalysisProgress({ opening }: { opening: OpeningDetail }) {
         found?.requirements !== undefined &&
         t.formatMessage(
           {
-            defaultMessage:
-              "It asks for {keywords, plural, =0 {no listed skills} one {# skill} other {# skills}} and {requirements, plural, =0 {no other requirements} one {# requirement} other {# requirements}}.",
+            defaultMessage: "It asks for {keywords} and {requirements}.",
           },
           {
-            keywords: found.keywords ?? 0,
-            requirements: found.requirements,
+            keywords: t.formatMessage(
+              {
+                defaultMessage:
+                  "{keywords, plural, =0 {no listed skills} one {# skill} other {# skills}}",
+              },
+              { keywords: found.keywords ?? 0 }
+            ),
+            requirements: t.formatMessage(
+              {
+                defaultMessage:
+                  "{requirements, plural, =0 {no other requirements} one {# requirement} other {# requirements}}",
+              },
+              { requirements: found.requirements }
+            ),
           }
         )
       }

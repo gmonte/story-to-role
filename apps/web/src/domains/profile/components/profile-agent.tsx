@@ -21,6 +21,7 @@ import { listParts } from "@repo/api/domains/profile/truth/suggestions";
 import { useTranslation } from "@repo/intl/use-translation";
 import { Button } from "@repo/web/components/ui/button";
 import { toast } from "@repo/web/components/ui/sonner";
+import { cn } from "@repo/web/lib/utils";
 
 import { loadAgentChat } from "~/domains/agents/actions/agent-chat-actions";
 import {
@@ -127,8 +128,8 @@ function Conversation({
     refreshSuggestions,
     refreshDismissed,
     suggestions,
-    goToLine,
     scrollToLine,
+    revealLine,
     acceptSuggestions,
     rejectSuggestions,
   } = useProfileEditor();
@@ -379,18 +380,30 @@ function Conversation({
                   }
                   const waiting = suggestions.find((s) => s.id === proposed);
                   if (waiting) {
-                    // The change itself, to answer here or in the text.
+                    const reveal = () =>
+                      waiting.range && revealLine(waiting.range.start);
+                    // The change itself, to answer here or in the text; a
+                    // click anywhere but its buttons shows it in the text.
                     return (
                       <div
                         key={index}
-                        className="bg-card flex flex-col gap-2 rounded-lg border p-3 text-sm"
+                        onClick={(event) => {
+                          const target = event.target as HTMLElement;
+                          if (target.closest("button")) return;
+                          // Not when the words were selected to copy.
+                          if (window.getSelection()?.toString()) return;
+                          reveal();
+                        }}
+                        className={cn(
+                          "bg-card flex flex-col gap-2 rounded-lg border p-3 text-sm",
+                          waiting.range &&
+                            "hover:border-foreground/30 cursor-pointer"
+                        )}
                       >
                         <button
                           type="button"
                           disabled={!waiting.range}
-                          onClick={() =>
-                            waiting.range && goToLine(waiting.range.start)
-                          }
+                          onClick={reveal}
                           className="text-muted-foreground hover:text-foreground flex items-center gap-1.5 text-left text-xs"
                         >
                           <PencilLine className="size-3.5 shrink-0" />

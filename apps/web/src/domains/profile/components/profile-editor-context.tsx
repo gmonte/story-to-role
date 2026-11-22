@@ -143,6 +143,8 @@ type ProfileEditorState = {
   // Smoothly scrolls a line into view without moving the cursor or focus;
   // skipped while the user is typing in the editor.
   scrollToLine: (line: number) => void;
+  /** Smoothly centres a line the user asked to see, even while typing. */
+  revealLine: (line: number) => void;
   // What the agent's composer is about: a passage, and a finding or review.
   agentTopic: AgentTopic | null;
   // `line` is where the passage starts, which tells its part.
@@ -628,11 +630,9 @@ export function ProfileEditorProvider({
     [editor]
   );
 
-  const scrollToLine = useCallback(
+  const revealLine = useCallback(
     (line: number) => {
       if (!editor || editor.isDestroyed) return;
-      // Not under the cursor of someone who is typing.
-      if (Date.now() - lastEditAt.current < typingQuietMs) return;
       const start = blockPositions(editor.state.doc)[line];
       if (start === undefined) return;
       const node = editor.view.nodeDOM(start);
@@ -641,6 +641,15 @@ export function ProfileEditorProvider({
       }
     },
     [editor]
+  );
+
+  const scrollToLine = useCallback(
+    (line: number) => {
+      // Not under the cursor of someone who is typing.
+      if (Date.now() - lastEditAt.current < typingQuietMs) return;
+      revealLine(line);
+    },
+    [revealLine]
   );
 
   /** Saves what is in the editor now, resolving to the saved revision. */
@@ -833,6 +842,7 @@ export function ProfileEditorProvider({
     rejectSuggestions,
     refreshSuggestions,
     scrollToLine,
+    revealLine,
     agentTopic,
     talkAbout: ({ quote, line, attachment }) =>
       setAgentTopic({

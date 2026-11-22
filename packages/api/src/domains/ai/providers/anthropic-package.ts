@@ -4,6 +4,7 @@ import { z } from "zod";
 
 import {
   KeyUnusableError,
+  OutputTruncatedError,
   ToolRefusal,
   type AiRole,
   type AiTextRequest,
@@ -277,15 +278,33 @@ export function createAnthropicPackage({
       const params = toParams(request);
       // Streamed and gathered: a long output (a profile's first draft)
       // would exceed the time a plain request may take.
-      const response = await client.messages
-        .stream({
-          ...params,
-          output_config: {
-            ...params.output_config,
-            format: zodOutputFormat(request.schema),
-          },
-        })
-        .finalMessage();
+      const stream = client.messages.stream({
+        ...params,
+        output_config: {
+          ...params.output_config,
+          format: zodOutputFormat(request.schema),
+        },
+      });
+      // The SDK parses the answer before handing it over, so a cut one
+      // fails as bad JSON: the stop reason, read on the way, names it.
+      const last: { stopReason?: string | null; usage?: AiUsage } = {};
+      stream.on("streamEvent", (event, snapshot) => {
+        if (event.type !== "message_delta") return;
+        last.stopReason = event.delta.stop_reason;
+        last.usage = toUsage(snapshot.model, snapshot.usage);
+      });
+      let response;
+      try {
+        response = await stream.finalMessage();
+      } catch (error) {
+        if (last.stopReason === "max_tokens" && last.usage) {
+          throw new OutputTruncatedError(last.usage);
+        }
+        throw error;
+      }
+      if (response.stop_reason === "max_tokens") {
+        throw new OutputTruncatedError(toUsage(response.model, response.usage));
+      }
 
       return {
         object: response.parsed_output ?? null,

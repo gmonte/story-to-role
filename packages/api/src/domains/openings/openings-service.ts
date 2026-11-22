@@ -20,6 +20,7 @@ import {
 } from "@repo/api/domains/profile/suggestions/suggest-line";
 import { ProfileService } from "@repo/api/domains/profile/profile-service";
 import type { ProfileLanguage } from "@repo/api/domains/profile/truth/sections";
+import { stallGraceMs } from "@repo/api/domains/tasks/task-durations";
 
 import type { openingsTable } from "./db/openings-tables";
 import { conditionCategories, type ConditionStance } from "./schemas/opening";
@@ -302,6 +303,8 @@ export class OpeningsService {
               )
             : null,
         rejectionReason: row.rejectionReason,
+        // The last check broke: the fit check shown is the previous one.
+        checkFailed: row.status === "analyzed" && row.checkFailedAt !== null,
         language: row.language,
         suggestedTone: row.suggestedTone,
         fitCheck: items,
@@ -343,6 +346,53 @@ export class OpeningsService {
         await new OpeningsRepository(this.db).moveStatus(row.id, {
           from: "processing",
           to: "external",
+        });
+      }
+    );
+  }
+
+  /**
+   * The sweep's part for openings: one still being analyzed when its task
+   * already ended, or died, is failed (or keeps its earlier result), so the
+   * page never shows it still being read.
+   */
+  async failStuckAnalyses(now = new Date()) {
+    const openings = new OpeningsRepository(this.db);
+    // An opening is created a moment before its task: left alone a while.
+    const rows = await openings.listStuckAnalyses(
+      new Date(now.getTime() - stallGraceMs)
+    );
+    for (const row of rows) await openings.failAnalysis(row.id);
+  }
+
+  /**
+   * Analyzes again, from the start and at its usual cost, an opening whose
+   * analysis failed.
+   */
+  async retryAnalysis(input: { userId: string; openingId: string }) {
+    const profile = await this.requireProfile(input.userId);
+    const openings = new OpeningsRepository(this.db);
+    const row = await openings.findOpening({
+      profileId: profile.id,
+      openingId: input.openingId,
+    });
+    if (row?.status !== "failed") throw notFound();
+    await this.tasks.assertAffordable({
+      userId: input.userId,
+      type: "analyze_opening",
+    });
+    // Only one request moves it on: a second click analyzes nothing twice.
+    const claimed = await openings.moveStatus(row.id, {
+      from: "failed",
+      to: "processing",
+    });
+    if (!claimed) throw new TRPCError({ code: "CONFLICT" });
+    return this.tasks.startOrUndo(
+      { userId: input.userId, type: "analyze_opening", subjectId: row.id },
+      async () => {
+        await openings.moveStatus(row.id, {
+          from: "processing",
+          to: "failed",
         });
       }
     );
@@ -436,6 +486,7 @@ export class OpeningsService {
       if (
         !row ||
         row.status === "processing" ||
+        row.status === "failed" ||
         row.status === "rejected" ||
         row.status === "external"
       )

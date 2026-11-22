@@ -200,6 +200,16 @@ export function FitColumn({ opening }: { opening: OpeningDetail }) {
                 )}
               </p>
             )}
+            {/* A check that broke left the previous one in place. */}
+            {opening.checkFailed && (
+              <p className="border-warning-border bg-warning-soft flex gap-2 rounded-md border p-2.5 text-xs">
+                <TriangleAlert className="text-warning mt-0.5 size-3.5 shrink-0" />
+                {t.formatMessage({
+                  defaultMessage:
+                    "The last check didn’t finish, so this is the one before it. No credits were used. Check again to try once more.",
+                })}
+              </p>
+            )}
             {/* The check is worth running again once what it read changed. */}
             {fitCheck.outdated && (
               <p className="border-warning-border bg-warning-soft flex gap-2 rounded-md border p-2.5 text-xs">

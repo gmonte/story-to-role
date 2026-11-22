@@ -1,4 +1,15 @@
-import { and, desc, eq, gt, inArray, like } from "drizzle-orm";
+import {
+  and,
+  desc,
+  eq,
+  gt,
+  inArray,
+  isNull,
+  like,
+  lt,
+  ne,
+  or,
+} from "drizzle-orm";
 
 import type { AiFunding } from "@repo/api/domains/ai/ai-funding";
 import type { DbClient } from "@repo/api/tools/db-client";
@@ -12,6 +23,7 @@ import type {
 } from "@repo/api/domains/documents/schemas/document";
 
 import { tasksTable } from "./db/tasks-tables";
+import { stalledMessage } from "./task-durations";
 import type { Task, TaskProgress, TaskType } from "./schemas/task";
 
 const taskColumns = {
@@ -105,6 +117,27 @@ export class TasksRepository {
     return row;
   }
 
+  /** Tasks created before `before` that never finished, for the sweep. */
+  async listUnfinished(before: Date) {
+    return this.tx
+      .select({
+        id: tasksTable.id,
+        userId: tasksTable.userId,
+        type: tasksTable.type,
+        status: tasksTable.status,
+        funding: tasksTable.funding,
+        createdAt: tasksTable.createdAt,
+        startedAt: tasksTable.startedAt,
+      })
+      .from(tasksTable)
+      .where(
+        and(
+          inArray(tasksTable.status, ["pending", "processing"]),
+          lt(tasksTable.createdAt, before)
+        )
+      );
+  }
+
   async setRunId(input: { taskId: string; runId: string }) {
     await this.tx
       .update(tasksTable)
@@ -112,11 +145,25 @@ export class TasksRepository {
       .where(eq(tasksTable.id, input.taskId));
   }
 
+  /**
+   * False when the sweep already failed the task (its run started too
+   * late): checked in the same statement, so the two can't cross.
+   */
   async markProcessing(taskId: string) {
-    await this.tx
+    const marked = await this.tx
       .update(tasksTable)
       .set({ status: "processing", startedAt: new Date() })
-      .where(eq(tasksTable.id, taskId));
+      .where(
+        and(
+          eq(tasksTable.id, taskId),
+          or(
+            isNull(tasksTable.errorMessage),
+            ne(tasksTable.errorMessage, stalledMessage)
+          )
+        )
+      )
+      .returning({ id: tasksTable.id });
+    return marked.length > 0;
   }
 
   async updateProgress(input: { taskId: string; progress: TaskProgress }) {

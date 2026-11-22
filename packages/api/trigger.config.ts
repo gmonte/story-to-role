@@ -1,6 +1,8 @@
 import { defineConfig } from "@trigger.dev/sdk";
 import { syncEnvVars } from "@trigger.dev/build/extensions/core";
 
+import { defaultMaxDuration } from "./src/domains/tasks/task-durations";
+
 /* eslint-disable no-console -- deploy build extension: logs show up in deploy output. */
 
 const BUILD_ONLY_VARS = ["REDIS_KEY_PREFIX", "APP_URL"];
@@ -140,5 +142,5 @@ export default defineConfig({
     ],
   },
   // Generous ceiling: resume generation with review rounds takes minutes.
-  maxDuration: 3600,
+  maxDuration: defaultMaxDuration,
 });

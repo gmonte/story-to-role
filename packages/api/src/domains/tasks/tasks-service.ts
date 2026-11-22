@@ -23,6 +23,8 @@ import { CreditsRepository } from "@repo/api/domains/credits/credits-repository"
 import type { DbClient } from "@repo/api/tools/db-client";
 import { triggerClient } from "@repo/api/tools/trigger/trigger-client";
 
+import { finishTask, TaskStalledError } from "./run-task";
+import { maxDurationOf, stallGraceMs } from "./task-durations";
 import { TasksRepository } from "./tasks-repository";
 import type { RealtimeSubscription, Task, TaskType } from "./schemas/task";
 
@@ -43,6 +45,9 @@ const asPaymentRequired = (error: unknown) => {
 /** What an action may not touch: the credit reserve, for profile work. */
 const keptFor = (tx: DbClient, userId: string, type: TaskType, now: Date) =>
   keepsReserve(type) ? creditReserve(tx, userId, now) : Promise.resolve(0);
+
+// A task never started is called dead this long after it was created.
+const neverStartedMs = 60 * 60 * 1000;
 
 // Tasks that run one at a time per user (their task caps the key): an
 // import compares with the suggestions the one before it left waiting.
@@ -189,6 +194,34 @@ export class TasksService {
         return created;
       })
       .catch(asPaymentRequired);
+  }
+
+  /**
+   * Fails the tasks whose run died (a crash or a deploy never lets it mark
+   * its task) or never started, releasing their reservations: nothing waits
+   * on them forever.
+   */
+  async failStalled(now = new Date()) {
+    const repository = new TasksRepository(this.db);
+    const rows = await repository.listUnfinished(
+      new Date(now.getTime() - stallGraceMs)
+    );
+    for (const row of rows) {
+      const deadline =
+        row.status === "processing" && row.startedAt
+          ? row.startedAt.getTime() +
+            maxDurationOf(row.type) * 1000 +
+            stallGraceMs
+          : row.createdAt.getTime() + neverStartedMs;
+      if (now.getTime() <= deadline) continue;
+      await finishTask({
+        db: this.db,
+        taskId: row.id,
+        userId: row.userId,
+        funding: row.funding,
+        error: new TaskStalledError(),
+      });
+    }
   }
 
   /**

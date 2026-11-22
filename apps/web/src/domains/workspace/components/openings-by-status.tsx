@@ -76,6 +76,10 @@ export function OpeningsByStatus() {
       items: byGroup("processing"),
     },
     {
+      label: t.formatMessage({ defaultMessage: "Analysis didn't finish" }),
+      items: byGroup("failed"),
+    },
+    {
       label: t.formatMessage({ defaultMessage: "Analyzed openings" }),
       items: byGroup("analyzed"),
     },

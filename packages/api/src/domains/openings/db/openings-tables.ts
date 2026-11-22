@@ -65,6 +65,9 @@ export const openingsTable = createTable(
       .notNull()
       .default(sql`'{}'::text[]`),
     closedAt: d.timestamp({ withTimezone: true }),
+    // When a new check of an analyzed opening broke: its result is the
+    // previous one. Cleared when a check finishes.
+    checkFailedAt: d.timestamp({ withTimezone: true }),
   }),
   (t) => [index("openings_profile_id_idx").on(t.profileId)]
 );

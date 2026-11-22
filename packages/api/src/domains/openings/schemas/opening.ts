@@ -6,11 +6,14 @@ export type OpeningKind = z.infer<typeof openingKindSchema>;
 
 /**
  * Where an opening stands outside the tracker: still being read, analyzed
- * (applications move it on in later slices), refused, or closed by the user.
+ * (applications move it on in later slices), refused, failed, or closed by
+ * the user.
  */
 export const openingStatusSchema = z.enum([
   "processing",
   "analyzed",
+  // Its first analysis broke before the end: the user may try again.
+  "failed",
   "rejected",
   "closed",
   // Registered by hand with an external application, not analyzed.

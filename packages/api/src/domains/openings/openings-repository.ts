@@ -1,6 +1,7 @@
-import { and, asc, desc, eq, inArray } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, lt, notExists, sql } from "drizzle-orm";
 
 import { applicationsTable } from "@repo/api/domains/applications/db/applications-tables";
+import { tasksTable } from "@repo/api/domains/tasks/db/tasks-tables";
 import type { DbClient } from "@repo/api/tools/db-client";
 
 import {
@@ -92,6 +93,57 @@ export class OpeningsRepository {
       )
       .returning({ id: openingsTable.id });
     return moved.length > 0;
+  }
+
+  /**
+   * Ends an analysis that broke. An opening analyzed before (it has its
+   * vector) keeps that result, as only the new check failed; one never
+   * analyzed is failed, for the user to try again.
+   */
+  async failAnalysis(openingId: string) {
+    await this.tx
+      .update(openingsTable)
+      .set({
+        status: sql`case when ${openingsTable.embedding} is null then 'failed' else 'analyzed' end`,
+        checkFailedAt: sql`case when ${openingsTable.embedding} is null then null else now() end`,
+      })
+      .where(
+        and(
+          eq(openingsTable.id, openingId),
+          eq(openingsTable.status, "processing")
+        )
+      );
+  }
+
+  /**
+   * Openings still being analyzed, last changed before `before`, with no
+   * analysis task pending or running: their run died without a word.
+   */
+  async listStuckAnalyses(before: Date) {
+    return this.tx
+      .select({ id: openingsTable.id })
+      .from(openingsTable)
+      .where(
+        and(
+          eq(openingsTable.status, "processing"),
+          lt(
+            sql`coalesce(${openingsTable.updatedAt}, ${openingsTable.createdAt})`,
+            before
+          ),
+          notExists(
+            this.tx
+              .select({ id: tasksTable.id })
+              .from(tasksTable)
+              .where(
+                and(
+                  eq(tasksTable.subjectId, openingsTable.id),
+                  eq(tasksTable.type, "analyze_opening"),
+                  inArray(tasksTable.status, ["pending", "processing"])
+                )
+              )
+          )
+        )
+      );
   }
 
   async updateOpening(

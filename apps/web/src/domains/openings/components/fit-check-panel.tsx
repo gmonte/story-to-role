@@ -220,9 +220,18 @@ export function FitColumn({ opening }: { opening: OpeningDetail }) {
                 })}
               </p>
             )}
-            <div className="flex items-center gap-2">
-              <RunFitCheck openingId={opening.id} again enabled />
-            </div>
+            {/* A closed opening is checked again once it is reopened. */}
+            {opening.status === "closed" ? (
+              <p className="text-muted-foreground text-xs">
+                {t.formatMessage({
+                  defaultMessage: "Reopen the opening to check it again.",
+                })}
+              </p>
+            ) : (
+              <div className="flex items-center gap-2">
+                <RunFitCheck openingId={opening.id} again enabled />
+              </div>
+            )}
           </div>
           {fitCheck.preferenceConflicts.length > 0 && (
             <div className="border-destructive/40 bg-destructive/5 rounded-lg border p-3 text-sm">

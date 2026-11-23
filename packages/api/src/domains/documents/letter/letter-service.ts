@@ -123,6 +123,10 @@ export class LetterService {
         openingId: input.openingId,
       });
       if (!opening) throw notFound();
+      // Like a resume, only an analyzed opening gets a letter.
+      if (opening.status !== "analyzed") {
+        throw new TRPCError({ code: "PRECONDITION_FAILED" });
+      }
       const application = await repository.findOrInsertApplication({
         profileId: profile.id,
         openingId: opening.id,

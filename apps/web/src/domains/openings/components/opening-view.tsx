@@ -327,6 +327,14 @@ export function DocumentPage({
                   "The AI writes a resume for this opening from your published profile. You can generate it even with a low fit, and then review it line by line.",
               })}
             </p>
+            {/* Its button stays away until the opening is reopened. */}
+            {opening.status === "closed" && (
+              <p className="text-muted-foreground text-sm">
+                {t.formatMessage({
+                  defaultMessage: "Reopen the opening to generate one.",
+                })}
+              </p>
+            )}
             {journey.resume?.generation?.status === "failed" && (
               <p className="border-destructive/40 bg-destructive/10 rounded-lg border p-2.5 text-xs">
                 {t.formatMessage({
@@ -351,19 +359,22 @@ export function DocumentPage({
               />
             )}
           </div>
-          <SimilarDocuments
-            separator={
-              <div className="text-muted-foreground flex items-center gap-3 text-xs">
-                <Separator className="flex-1" />
-                {t.formatMessage({ defaultMessage: "or" })}
-                <Separator className="flex-1" />
-              </div>
-            }
-            openingId={openingId}
-            defaultLanguage={journey.language}
-            defaultTone={journey.tone}
-            pendingGaps={pendingGaps(opening)}
-          />
+          {/* Adjusting one of them writes a resume too. */}
+          {opening.status !== "closed" && (
+            <SimilarDocuments
+              separator={
+                <div className="text-muted-foreground flex items-center gap-3 text-xs">
+                  <Separator className="flex-1" />
+                  {t.formatMessage({ defaultMessage: "or" })}
+                  <Separator className="flex-1" />
+                </div>
+              }
+              openingId={openingId}
+              defaultLanguage={journey.language}
+              defaultTone={journey.tone}
+              pendingGaps={pendingGaps(opening)}
+            />
+          )}
         </div>
       </div>
     </div>

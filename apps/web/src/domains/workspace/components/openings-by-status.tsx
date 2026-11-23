@@ -4,7 +4,6 @@ import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
-import { closedStatuses } from "@repo/api/domains/applications/schemas/application";
 import type { OpeningSummary } from "@repo/api/domains/openings/schemas/opening-view";
 import { useTranslation } from "@repo/intl/use-translation";
 import { cn } from "@repo/web/lib/utils";
@@ -18,6 +17,8 @@ import { Skeleton } from "@repo/web/components/ui/skeleton";
 
 import { useOpeningLabels } from "~/domains/openings/hooks/use-opening-labels";
 import { useTRPC } from "~/tools/trpc/client";
+
+import { sidebarGroup } from "../utils/sidebar-group";
 
 /**
  * The openings grouped by status (workspace spec): analyzed, in
@@ -59,17 +60,8 @@ export function OpeningsByStatus() {
     );
   }
 
-  // With an application, the tracker's status places it; without one,
-  // the opening's own.
-  const inGroup = (opening: OpeningSummary) => {
-    const status = opening.applicationStatus;
-    if (!status) return opening.status;
-    if (status === "offer") return "in_process";
-    if (closedStatuses.includes(status)) return "closed";
-    return status;
-  };
   const byGroup = (group: string) =>
-    openings.data.filter((opening) => inGroup(opening) === group);
+    openings.data.filter((opening) => sidebarGroup(opening) === group);
   const groups: Array<{ label: string; items: OpeningSummary[] }> = [
     {
       label: t.formatMessage({ defaultMessage: "Openings being analyzed" }),

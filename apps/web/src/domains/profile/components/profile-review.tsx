@@ -15,10 +15,13 @@ import { useTranslation } from "@repo/intl/use-translation";
 import { extractProfile } from "@repo/api/domains/profile/truth/extract";
 import { Badge } from "@repo/web/components/ui/badge";
 import { Button } from "@repo/web/components/ui/button";
+import { cn } from "@repo/web/lib/utils";
 
+import { onCardClick } from "~/domains/workspace/utils/card-click";
 import { decisionButton } from "~/domains/workspace/utils/decision-buttons";
 
 import { useProfileLabels } from "../hooks/use-profile-labels";
+import { competencyPosition } from "../utils/competency-position";
 import { useLatestValidation } from "../hooks/use-profile-validation";
 import { useProfileEditor } from "./profile-editor-context";
 
@@ -79,7 +82,10 @@ export function ProfileReview() {
         {reviewFindings.map((finding, index) => (
           <li
             key={`${finding.quote}-${index}`}
-            className="bg-card flex flex-col gap-2 rounded-lg border p-3 text-[13px] leading-snug"
+            className="bg-card flex cursor-pointer flex-col gap-2 rounded-lg border p-3 text-[13px] leading-snug"
+            onClick={onCardClick(() =>
+              goToLine(finding.line, { from: finding.from, to: finding.to })
+            )}
           >
             <button
               type="button"
@@ -138,13 +144,36 @@ export function ProfileReview() {
             {proposals.map((proposal) => {
               // Where the competency is now: a new one, or a level it leaves.
               const current = levels.get(proposal.name.toLowerCase());
+              // A competency already listed opens where it is.
+              const position = competencyPosition(blocks, proposal.name);
+              const open = position
+                ? () =>
+                    goToLine(position.line, {
+                      from: position.from,
+                      to: position.to,
+                    })
+                : undefined;
               return (
                 <li
                   key={proposal.name}
-                  className="bg-card flex flex-col gap-2 rounded-lg border p-3 text-[13px] leading-snug"
+                  className={cn(
+                    "bg-card flex flex-col gap-2 rounded-lg border p-3 text-[13px] leading-snug",
+                    open && "cursor-pointer"
+                  )}
+                  onClick={open && onCardClick(open)}
                 >
                   <p className="flex flex-wrap items-center gap-x-1.5 gap-y-1">
-                    <span className="font-medium">{proposal.name}</span>
+                    {open ? (
+                      <button
+                        type="button"
+                        onClick={open}
+                        className="text-left font-medium hover:underline"
+                      >
+                        {proposal.name}
+                      </button>
+                    ) : (
+                      <span className="font-medium">{proposal.name}</span>
+                    )}
                     {current === undefined && (
                       <Badge variant="secondary">
                         {t.formatMessage({ defaultMessage: "New competency" })}

@@ -321,7 +321,7 @@ describe("openings and fit check", () => {
     expect(JSON.stringify(detail)).not.toMatch(/percent|%/i);
   });
 
-  it("makes a gap of what the profile marks studied, not done or lacking, whatever the judge says", async () => {
+  it("makes partial what the profile marks studied, and a gap what it says was not done or lacking, whatever the judge says", async () => {
     const ctx = await setup();
     const openingId = await ctx.add();
     await ctx.analyze(
@@ -339,13 +339,18 @@ describe("openings and fit check", () => {
     const { fitCheck } = await ctx.detail(openingId);
     const verdict = (term: string) =>
       fitCheck!.items.find((item) => item.term === term)!;
-    expect(verdict("Spark")).toMatchObject({ verdict: "gap", passages: [] });
+    // Studied without professional use is not the same as not having it.
+    expect(verdict("Spark")).toMatchObject({
+      verdict: "partial",
+      passages: [],
+      gapQuestion: null,
+    });
     expect(verdict("Spark").explanation).toContain("Spark");
     expect(verdict("Kafka").verdict).toBe("gap");
     expect(verdict("Kafka").explanation).toContain("I did not touch Kafka");
     expect(verdict("Go").verdict).toBe("gap");
-    // Kafka is mandatory: missing it makes the band low.
-    expect(fitCheck!.band).toBe("low");
+    // One mandatory gap among many: covered by proportion, medium.
+    expect(fitCheck!.band).toBe("medium");
   });
 
   it("makes a gap of a requirement the judge ties to a line of what is lacking", async () => {
@@ -387,7 +392,7 @@ describe("openings and fit check", () => {
         "The profile says this was not done: “I did not touch Kafka.”.",
       gapQuestion: null,
     });
-    expect(fitCheck!.band).toBe("low");
+    expect(fitCheck!.band).toBe("medium");
   });
 
   it("counts a concept the profile only knows as partial, never met", async () => {
@@ -449,9 +454,9 @@ describe("openings and fit check", () => {
     const openingId = await ctx.add();
     await ctx.analyze(openingId, fitScript(allMet));
     const { fitCheck } = await ctx.detail(openingId);
-    // Spark, studied only, is a gap, but the posting only wishes for it.
+    // Spark, studied only, is partial, and the posting only wishes for it.
     expect(fitCheck!.items.find((item) => item.term === "Spark")!.verdict).toBe(
-      "gap"
+      "partial"
     );
     expect(fitCheck!.band).toBe("high");
   });

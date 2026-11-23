@@ -141,6 +141,30 @@ describe("the published profile's extract", () => {
     });
   });
 
+  it("reads the concepts the person masters and knows, the known ones as such", () => {
+    const withConcepts = profile.replace(
+      "- Estudei, sem experiência profissional: Spark",
+      "- Estudei, sem experiência profissional: Spark\n- Conceitos que domino: DDD, SOLID\n- Conceitos que conheço: CQRS"
+    );
+    expect(extractProfile(parseBlocks(withConcepts)).competencies).toEqual(
+      expect.arrayContaining([
+        { name: "DDD", level: "conceptMaster" },
+        { name: "SOLID", level: "conceptMaster" },
+        { name: "CQRS", level: "conceptKnown" },
+      ])
+    );
+    const kinds = Object.fromEntries(
+      profilePassages(parseBlocks(withConcepts)).map((passage) => [
+        passage.text,
+        passage.kind,
+      ])
+    );
+    expect(kinds).toMatchObject({
+      "Conceitos que domino: DDD, SOLID": "evidence",
+      "Conceitos que conheço: CQRS": "known",
+    });
+  });
+
   it("reads the method's example without losing experiences", () => {
     const example = readFileSync(
       join(__dirname, "fixtures", "method-example.md"),

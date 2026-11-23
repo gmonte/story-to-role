@@ -5,6 +5,7 @@ import { canonicalMonth, readMonth } from "./dates";
 import { canonicalMarkText, findMarks, hasFigure } from "./marks";
 import {
   competencyLevelOf,
+  isConceptLevel,
   normalizeLabel,
   profileSectionKeys,
   type CompetencyLevel,
@@ -545,8 +546,11 @@ function lintCompetencies(structure: ProfileStructure, blocks: ProfileBlock[]) {
         : [];
     })
     .join("\n");
+  // What was only studied, and concepts, need no experience behind them.
   for (const competency of competencies) {
-    if (competency.level === "studied") continue;
+    if (competency.level === "studied" || isConceptLevel(competency.level)) {
+      continue;
+    }
     if (!mentions(experienceText, competency.name)) {
       findings.push(
         finding("competencyUnbacked", competency.line, competency, {

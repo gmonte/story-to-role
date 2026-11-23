@@ -2,7 +2,7 @@ import type { ProfileBlock } from "./blocks";
 import { insertEntry, setCompetencyLevel } from "./insert";
 import type { ProfileFinding } from "./lint";
 import {
-  competencyLevels,
+  skillLevels,
   experienceFieldLabels,
   type CompetencyLevel,
   type ProfileLanguage,
@@ -61,7 +61,8 @@ export function quickActionsFor(
   switch (finding.code) {
     case "competencyMissing": {
       if (!name) return [];
-      return competencyLevels.map((level) => {
+      // A tool an experience names is used: never a concept.
+      return skillLevels.map((level) => {
         const result = insertEntry(blocks, { kind: "competency", name, level });
         return {
           id: "addCompetency" as const,

@@ -291,6 +291,24 @@ describe("the profile as generation reads it", () => {
     expect(source.gaps).toEqual(["Nuvem em produção."]);
   });
 
+  it("lists the concepts the person masters as skills, never the ones they only know", () => {
+    const { skills } = readProfileSource({
+      careerProfileId: "career",
+      profile: publishedOf(
+        profileMarkdown.replace(
+          "- Domino: Python, SQL\n",
+          "- Domino: Python, SQL\n- Conceitos que domino: DDD\n- Conceitos que conheço: CQRS\n"
+        )
+      ),
+    });
+    const names = skills.map((skill) => skill.name);
+    expect(names).toContain("DDD");
+    expect(names).not.toContain("CQRS");
+    expect(
+      skills.find((skill) => skill.name === "DDD")!.evidenceIds
+    ).toHaveLength(1);
+  });
+
   it("ties a competency to its passage by the whole word", () => {
     const { skills } = readProfileSource({
       careerProfileId: "career",

@@ -302,6 +302,12 @@ function EntryForm({
                   defaultMessage: "Studied, without professional experience",
                 })}
               </SelectItem>
+              <SelectItem value="conceptMaster">
+                {t.formatMessage({ defaultMessage: "Concepts I master" })}
+              </SelectItem>
+              <SelectItem value="conceptKnown">
+                {t.formatMessage({ defaultMessage: "Concepts I know" })}
+              </SelectItem>
             </SelectContent>
           </Select>
         </Field>

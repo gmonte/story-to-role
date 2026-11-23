@@ -340,17 +340,23 @@ export class ProfileRepository {
     versionId: string;
     embedding: number[];
     limit: number;
+    // Screening also reads the concepts the person only knows.
+    withKnown?: boolean;
   }) {
     return this.tx
       .select({
         id: profilePassagesTable.id,
+        kind: profilePassagesTable.kind,
         encryptedText: profilePassagesTable.encryptedText,
       })
       .from(profilePassagesTable)
       .where(
         and(
           eq(profilePassagesTable.versionId, input.versionId),
-          eq(profilePassagesTable.kind, "evidence"),
+          inArray(
+            profilePassagesTable.kind,
+            input.withKnown ? ["evidence", "known"] : ["evidence"]
+          ),
           isNotNull(profilePassagesTable.embedding)
         )
       )

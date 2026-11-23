@@ -193,6 +193,44 @@ describe("validating and publishing the profile", () => {
     expect(version.validatedAt).not.toBeNull();
   });
 
+  it("never proposes a level for a concept, which is the person's to place", async () => {
+    const ctx = await setup();
+    const revision = await ctx.save(
+      profileText("melhorei a entrega.").replace(
+        "- Uso com frequência: Python",
+        "- Uso com frequência: Python\n- Conceitos que domino: DDD"
+      ),
+      0
+    );
+    const { profileValidationId } = await ctx.profile.validate({
+      userId: ctx.user.id,
+      baseRevision: revision,
+    });
+    const { providerPackage } = fakeProviderPackage({
+      object: () => ({
+        findings: [],
+        competencies: [
+          { name: "DDD", level: "studied", reason: "sem experiência" },
+          { name: "Python", level: "master", reason: "anos de uso" },
+        ],
+      }),
+    });
+    const report = await runValidateProfile({
+      db: ctx.db,
+      ai: createAiClient({
+        db: ctx.db,
+        userId: ctx.user.id,
+        funding: "credits",
+        providerPackage,
+      }),
+      cipher: await getUserCipher(ctx.db, ctx.user.id),
+      userId: ctx.user.id,
+      profileValidationId,
+      reportProgress: vi.fn(),
+    });
+    expect(report.competencies.map((c) => c.name)).toEqual(["Python"]);
+  });
+
   it("levels competencies across the whole profile, not only what changed", async () => {
     const ctx = await setup();
     const first = await ctx.save(profileText("reduzi custos [medido]."), 0);

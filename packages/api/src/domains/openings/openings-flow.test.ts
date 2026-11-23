@@ -268,9 +268,9 @@ function parseJudgmentPrompt(system: string) {
   return blocks.map((block) => ({
     termId: block.split(" ")[0],
     text: block.split("\n")[0].split("]: ")[1],
-    passages: [...block.matchAll(/passage ([0-9a-f-]{36}): ([^\n]*)/g)].map(
-      (m) => ({ id: m[1], line: m[2] })
-    ),
+    passages: [
+      ...block.matchAll(/passage ([0-9a-f-]{36})(?: \([^)]*\))?: ([^\n]*)/g),
+    ].map((m) => ({ id: m[1], line: m[2] })),
   }));
 }
 
@@ -388,6 +388,60 @@ describe("openings and fit check", () => {
       gapQuestion: null,
     });
     expect(fitCheck!.band).toBe("low");
+  });
+
+  it("counts a concept the profile only knows as partial, never met", async () => {
+    const ctx = await setup({ publish: false });
+    await ctx.publishDocument(
+      profile.replace(
+        "- Studied, without professional experience: Spark",
+        "- Studied, without professional experience: Spark\n- Concepts I master: Domain-driven design\n- Concepts I know: Event sourcing"
+      )
+    );
+    const openingId = await ctx.add();
+    // The judge calls both met, citing the concept lines.
+    const citeConcept = (terms: Judged[]) => ({
+      items: terms.map((term) => {
+        const concept = term.passages.find((p) =>
+          p.line.startsWith("Concepts")
+        );
+        return {
+          term_id: term.termId,
+          verdict: "met",
+          passage_ids: [(concept ?? term.passages[0]).id],
+          explanation: "Shown in the profile.",
+        };
+      }),
+    });
+    await ctx.analyze(
+      openingId,
+      fitScript(citeConcept, {
+        ...extraction,
+        keywords: [
+          {
+            text: "Event sourcing",
+            category: "hard_skill",
+            importance: "mandatory",
+          },
+          {
+            text: "Domain-driven design",
+            category: "hard_skill",
+            importance: "mandatory",
+          },
+        ],
+        requirements: [],
+      })
+    );
+
+    const items = (await ctx.detail(openingId)).fitCheck!.items;
+    expect(items.find((item) => item.term === "Event sourcing")).toMatchObject({
+      verdict: "partial",
+      explanation:
+        "The profile lists this as a concept you know, not one you master.",
+    });
+    expect(
+      items.find((item) => item.term === "Domain-driven design")
+    ).toMatchObject({ verdict: "met" });
   });
 
   it("is high when the mandatory requirements are met, a desirable gap aside", async () => {

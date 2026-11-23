@@ -145,14 +145,32 @@ export const sectionHeadings: Record<
   },
 };
 
-/** The four competency levels, as the lines under Competencies start. */
+/**
+ * The competency levels, as the lines under Competencies start: four for
+ * the tools and skills a person uses, and two for the concepts they master
+ * or know (patterns, methods, practices), which need no experience behind
+ * them.
+ */
 export const competencyLevels = [
   "master",
   "often",
   "occasional",
   "studied",
+  "conceptMaster",
+  "conceptKnown",
 ] as const;
 export type CompetencyLevel = (typeof competencyLevels)[number];
+
+/** The levels of what a person uses, which Validate proposes. */
+export const skillLevels = [
+  "master",
+  "often",
+  "occasional",
+  "studied",
+] as const satisfies readonly CompetencyLevel[];
+
+export const isConceptLevel = (level: CompetencyLevel | null) =>
+  level === "conceptMaster" || level === "conceptKnown";
 
 export const competencyLabels: Record<
   ProfileLanguage,
@@ -163,12 +181,16 @@ export const competencyLabels: Record<
     often: "Uso com frequência",
     occasional: "Experiência pontual",
     studied: "Estudei, sem experiência profissional",
+    conceptMaster: "Conceitos que domino",
+    conceptKnown: "Conceitos que conheço",
   },
   "en-US": {
     master: "I master",
     often: "I use often",
     occasional: "Occasional experience",
     studied: "Studied, without professional experience",
+    conceptMaster: "Concepts I master",
+    conceptKnown: "Concepts I know",
   },
 };
 
@@ -187,6 +209,8 @@ const competencyAliases: Record<CompetencyLevel, string[]> = {
     "studied, without professional experience",
     "studied",
   ],
+  conceptMaster: ["conceitos que domino", "concepts i master"],
+  conceptKnown: ["conceitos que conheco", "concepts i know"],
 };
 
 export function competencyLevelOf(label: string): CompetencyLevel | null {

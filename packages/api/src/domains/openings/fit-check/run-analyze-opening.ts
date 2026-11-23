@@ -134,7 +134,8 @@ const fixedExplanations: Record<
     | "answerOnly"
     | "noPreferences"
     | "excluded"
-    | "sector",
+    | "sector"
+    | "known",
     string
   >
 > = {
@@ -150,6 +151,8 @@ const fixedExplanations: Record<
     noPreferences:
       "Suas preferências de vaga não dizem; escreva e publique as preferências para isto ser avaliado.",
     sector: "A vaga cita este setor, excluído nas suas preferências de vaga.",
+    known:
+      "O perfil lista isto como um conceito que você conhece, sem dominar.",
   },
   "en-US": {
     studied:
@@ -163,6 +166,7 @@ const fixedExplanations: Record<
     noPreferences:
       "Your job preferences don't say; write and publish them to have this checked.",
     sector: "The opening names this sector, excluded in your job preferences.",
+    known: "The profile lists this as a concept you know, not one you master.",
   },
 };
 
@@ -411,13 +415,17 @@ async function screenOpening(
 
   // Each requirement retrieves the closest passages that are evidence; what
   // the profile says the person lacks never comes back as coverage.
-  const retrieved = new Map<string, Array<{ id: string; text: string }>>();
+  const retrieved = new Map<
+    string,
+    Array<{ id: string; text: string; known: boolean }>
+  >();
   for (const term of termRows) {
     const rows = term.embedding
       ? await profiles.nearestEvidencePassages({
           versionId: published.versionId,
           embedding: term.embedding,
           limit: passagesPerTerm,
+          withKnown: true,
         })
       : [];
     retrieved.set(
@@ -425,9 +433,16 @@ async function screenOpening(
       rows.map((row) => ({
         id: row.id,
         text: cipher.decrypt(row.encryptedText),
+        known: row.kind === "known",
       }))
     );
   }
+  // A concept the person only knows covers a requirement partly at most.
+  const knownIds = new Set(
+    [...retrieved.values()].flatMap((rows) =>
+      rows.filter((row) => row.known).map((row) => row.id)
+    )
+  );
 
   const lacks = {
     studied: extract.competencies
@@ -515,6 +530,7 @@ async function screenOpening(
           "- What the profile says the person lacks (competencies only studied, known gaps, what they did not do) is a gap, never coverage. When one of those lines says the person lacks what the requirement asks, answer gap and give the line's number in `lack`; a line that only mentions the same word about something else is not that.",
           "- Years and seniority read from the positions' periods in the overview; cite passages of the positions that count.",
           "- Location and work model are judged against the job preferences, and then need no passage. With no job preferences written, they need a passage like any other requirement.",
+          "- A passage marked as a concept the person knows, not masters, supports partial at most.",
           "- Cite only passage ids listed below, under this requirement or another. Explain in one short sentence.",
           `- Write explanations in ${languageNames[language]}.`,
           "- A requirement may carry the user's answer for this opening (a story of something they did, possibly tied to positions or projects). It is evidence the profile does not hold yet: when it clearly satisfies the requirement, answer met or partial, set answer_used true and explain from the answer. Judge it as strictly as a passage: it needs to describe what was done, and a number counts only as the user wrote it.",
@@ -565,7 +581,7 @@ async function screenOpening(
             `Requirement ${term.id} [${term.kind}, ${term.category}, ${term.importance}]: ${cipher.decrypt(term.encryptedText)}`,
             ...(retrieved.get(term.id) ?? []).map(
               (row) =>
-                `  - passage ${row.id}: ${row.text.replace(/\n/g, " / ")}`
+                `  - passage ${row.id}${row.known ? " (a concept the person knows, not masters)" : ""}: ${row.text.replace(/\n/g, " / ")}`
             ),
             ...((retrieved.get(term.id) ?? []).length === 0
               ? ["  - no passage retrieved"]
@@ -676,6 +692,20 @@ async function screenOpening(
         verdict: "gap" as const,
         passageIds,
         explanation: words.noPassage,
+        declared: false,
+        counts: true,
+        citesAnswer: false,
+      };
+    }
+    if (
+      verdict === "met" &&
+      passageIds.every((passageId) => knownIds.has(passageId))
+    ) {
+      return {
+        term,
+        verdict: "partial" as const,
+        passageIds,
+        explanation: words.known,
         declared: false,
         counts: true,
         citesAnswer: false,

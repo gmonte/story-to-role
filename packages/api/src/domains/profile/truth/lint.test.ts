@@ -223,6 +223,14 @@ describe("the profile linter", () => {
     expect(codes(lint(markdown))).toEqual(codes(lint(valid)));
   });
 
+  it("asks no experience behind the concepts a person masters or knows", () => {
+    const markdown = valid.replace(
+      "- Uso com frequência: PostgreSQL\n",
+      "- Uso com frequência: PostgreSQL\n- Conceitos que domino: DDD\n- Conceitos que conheço: CQRS\n"
+    );
+    expect(codes(lint(markdown))).toEqual(codes(lint(valid)));
+  });
+
   it("marks a studied competency used in an experience", () => {
     const markdown = valid.replace(
       "- Tecnologias: Python\n",

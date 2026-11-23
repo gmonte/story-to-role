@@ -132,6 +132,23 @@ describe("the insert menu", () => {
     );
   });
 
+  it("adds a concept to its line, written at the end of Competencies when the profile lacks it", () => {
+    const older =
+      "## Competências\n\n- Domino: Python\n- Estudei, sem experiência profissional: Spark\n";
+    expect(
+      insert(older, { kind: "competency", name: "CQRS", level: "conceptKnown" })
+    ).toContain(
+      "- Estudei, sem experiência profissional: Spark\n- Conceitos que conheço: CQRS\n"
+    );
+    expect(
+      insert(serializeBlocks(profileTemplate("pt-BR")), {
+        kind: "competency",
+        name: "DDD",
+        level: "conceptMaster",
+      })
+    ).toContain("- Conceitos que domino: DDD\n");
+  });
+
   it("creates a missing section where it belongs", () => {
     const markdown = insert("## Identidade profissional\n\n## Competências\n", {
       kind: "experience",

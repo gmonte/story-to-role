@@ -25,8 +25,10 @@ export async function loadPendingGapAnswers(input: {
   const split = await new InstructionsRepository(input.db).splitFitCheckItemIds(
     input.openingId
   );
+  // Only what the description as it is now asks: an edited one's old
+  // requirements, and the answers to them, no longer count.
   const terms = new Map(
-    (await openings.listTerms(input.openingId)).map((term) => [
+    (await openings.listCurrentTerms(input.openingId)).map((term) => [
       term.id,
       input.cipher.decrypt(term.encryptedText),
     ])
@@ -34,6 +36,7 @@ export async function loadPendingGapAnswers(input: {
   return (await openings.listFitCheckItems(fitCheck.id))
     .filter(
       (item) =>
+        terms.has(item.termId) &&
         (item.encryptedGapAnswer !== null || item.conditionStance !== null) &&
         !split.has(item.id)
     )

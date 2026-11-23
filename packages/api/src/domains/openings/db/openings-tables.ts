@@ -49,6 +49,9 @@ export const openingsTable = createTable(
     // When the user last edited the description: a fit check made before
     // it read other text, so it is outdated.
     descriptionEditedAt: d.timestamp({ withTimezone: true }),
+    // When the description was last read into keywords and requirements:
+    // edited after it, what was read belongs to the old text.
+    descriptionReadAt: d.timestamp({ withTimezone: true }),
     encryptedNotes: d.text(),
     encryptedSourceUrl: d.text(),
     // Why it was refused (not a job posting, unreadable link…), no content.

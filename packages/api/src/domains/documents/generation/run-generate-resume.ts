@@ -581,9 +581,13 @@ export async function loadOpeningBrief(input: {
   const opening = await openings.findOpeningById(input.openingId);
   if (!opening) throw new Error(`Opening ${input.openingId} not found`);
   const open = (value: string | null) => (value ? cipher.decrypt(value) : null);
-  const terms = await openings.listTerms(opening.id);
+  // Only what the description as it is now asks: an edited one's old
+  // keywords and requirements, and the check judged on them, don't count.
+  const terms = await openings.listCurrentTerms(opening.id);
   const [fitCheck] = await openings.latestFitChecks([opening.id]);
-  const items = fitCheck ? await openings.listFitCheckItems(fitCheck.id) : [];
+  const items = (
+    fitCheck ? await openings.listFitCheckItems(fitCheck.id) : []
+  ).filter((item) => terms.some((term) => term.id === item.termId));
   const termText = new Map(
     terms.map((term) => [term.id, cipher.decrypt(term.encryptedText)])
   );

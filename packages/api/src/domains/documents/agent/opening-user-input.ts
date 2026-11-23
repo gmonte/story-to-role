@@ -51,13 +51,17 @@ export async function loadOpeningUserInput(input: {
 
   const openings = new OpeningsRepository(db);
   const [fitCheck] = await openings.latestFitChecks([input.openingId]);
-  const items = fitCheck ? await openings.listFitCheckItems(fitCheck.id) : [];
+  // Only what the description as it is now asks (an edited one's old
+  // requirements no longer count).
   const terms = new Map(
-    (await openings.listTerms(input.openingId)).map((term) => [
+    (await openings.listCurrentTerms(input.openingId)).map((term) => [
       term.id,
       cipher.decrypt(term.encryptedText),
     ])
   );
+  const items = (
+    fitCheck ? await openings.listFitCheckItems(fitCheck.id) : []
+  ).filter((item) => terms.has(item.termId));
   const positions = new Map(
     career.positions.map((position) => [
       position.id,

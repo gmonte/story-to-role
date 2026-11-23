@@ -716,6 +716,106 @@ describe("openings and fit check", () => {
     ).rejects.toMatchObject({ code: "NOT_FOUND" });
   });
 
+  it("reads an edited description again when checked, dropping what only the old text asked", async () => {
+    const ctx = await setup();
+    const openingId = await ctx.add();
+    // Kubernetes and Terraform are gaps with questions; both answered.
+    const gapsWithQuestions = (keywords: string[]) => ({
+      object: (request: { system: string }) => {
+        if (request.system.startsWith("Write"))
+          return {
+            questions: [
+              ...request.system.matchAll(/- ([0-9a-f-]{36}): (.*)/g),
+            ].map((m) => ({ term_id: m[1], question: `About ${m[2]}?` })),
+          };
+        return fitScript((terms) => ({
+          items: terms.map((term) => ({
+            term_id: term.termId,
+            verdict: keywords.includes(term.text) ? "gap" : "met",
+            passage_ids: keywords.includes(term.text)
+              ? []
+              : term.passages.slice(0, 1).map((p) => p.id),
+            explanation: "Judged.",
+          })),
+        })).object(request);
+      },
+    });
+    await ctx.analyze(
+      openingId,
+      gapsWithQuestions(["Kubernetes", "Terraform"])
+    );
+    const first = (await ctx.detail(openingId)).fitCheck!.items;
+    for (const term of ["Kubernetes", "Terraform"]) {
+      await ctx.openings.answerGapQuestion({
+        userId: ctx.user.id,
+        fitCheckItemId: first.find((item) => item.term === term)!.id,
+        answer: `I used ${term} at Acme.`,
+        notTied: true,
+      });
+    }
+    await ctx.openings.rename({
+      userId: ctx.user.id,
+      openingId,
+      title: "Platform role I picked",
+    });
+
+    const newPosting = `Platform Engineer at Globex. Strong Terraform and Go. ${"Build the platform. ".repeat(8)}`;
+    await ctx.openings.updateDescription({
+      userId: ctx.user.id,
+      openingId,
+      description: newPosting,
+    });
+    // Until it is read again, documents see nothing the old text asked.
+    expect(
+      await loadPendingGapAnswers({ db: ctx.db, cipher: ctx.cipher, openingId })
+    ).toEqual([]);
+
+    await ctx.openings.reanalyze({ userId: ctx.user.id, openingId });
+    const reread = await ctx.analyze(openingId, {
+      object: (request: { system: string; messages?: unknown }) => {
+        if (request.system.startsWith("Read the job posting"))
+          return {
+            ...extraction,
+            title: "Platform Engineer",
+            keywords: [
+              { text: "Terraform", category: "tool", importance: "mandatory" },
+              { text: "Go", category: "hard_skill", importance: "mandatory" },
+            ],
+            requirements: [],
+          };
+        return gapsWithQuestions(["Terraform", "Go"]).object(request);
+      },
+    });
+    const calls = reread.generateObject.mock.calls.map(([call]) => call);
+    // The new text was read; the content check isn't asked again.
+    expect(
+      calls.find((call) => call.system.startsWith("Read the job posting"))
+    ).toBeDefined();
+    expect(JSON.stringify(calls)).toContain("Strong Terraform and Go");
+    expect(calls.some((call) => call.system.startsWith("Decide whether"))).toBe(
+      false
+    );
+
+    const detail = await ctx.detail(openingId);
+    expect(detail.title).toBe("Platform role I picked");
+    const items = detail.fitCheck!.items;
+    expect(items.map((item) => item.term).sort()).toEqual(["Go", "Terraform"]);
+    // The answer to a requirement the new text still asks is kept.
+    expect(items.find((item) => item.term === "Terraform")).toMatchObject({
+      gapAnswer: "I used Terraform at Acme.",
+    });
+    expect(detail.fitCheck!.outdated).toBe(false);
+    expect(
+      (
+        await loadPendingGapAnswers({
+          db: ctx.db,
+          cipher: ctx.cipher,
+          openingId,
+        })
+      ).map((answer) => answer.answer)
+    ).toEqual(["I used Terraform at Acme."]);
+  });
+
   it("reads the fit check as outdated after a gap answer, until it runs again", async () => {
     const ctx = await setup();
     const openingId = await ctx.add();

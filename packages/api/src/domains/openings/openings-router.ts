@@ -219,6 +219,25 @@ export const openingsRouter = createTRPCRouter({
       return ok;
     }),
 
+  deleteOpening: userProcedure
+    .meta(
+      openApiMeta(
+        "openings",
+        "DELETE",
+        "/openings/by-id/{openingId}",
+        "Deletes an opening with its application and documents"
+      )
+    )
+    .input(z.object({ openingId: z.uuid() }))
+    .output(okSchema)
+    .mutation(async ({ ctx, input }) => {
+      await new OpeningsService(db).deleteOpening({
+        userId: ctx.userId,
+        ...input,
+      });
+      return ok;
+    }),
+
   rename: userProcedure
     .meta(
       openApiMeta(

@@ -170,6 +170,11 @@ export class OpeningsRepository {
       );
   }
 
+  /** Deletes the opening; its application, documents and checks cascade. */
+  async deleteOpening(openingId: string) {
+    await this.tx.delete(openingsTable).where(eq(openingsTable.id, openingId));
+  }
+
   async updateOpening(
     openingId: string,
     changes: Partial<Insert<typeof openingsTable>>

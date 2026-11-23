@@ -12,6 +12,10 @@ import { TasksService } from "@repo/api/domains/tasks/tasks-service";
 import type { DbClient } from "@repo/api/tools/db-client";
 import { TasksRepository } from "@repo/api/domains/tasks/tasks-repository";
 import { loadProfileSource } from "@repo/api/domains/documents/generation/load-profile-source";
+import { DocumentsRepository } from "@repo/api/domains/documents/documents-repository";
+import { AgentChatRepository } from "@repo/api/domains/agents/agent-chat-repository";
+import { getStorage } from "@repo/api/tools/storage/storage";
+import { triggerClient } from "@repo/api/tools/trigger/trigger-client";
 import { ProfileRepository } from "@repo/api/domains/profile/profile-repository";
 import {
   readTargetText,
@@ -496,6 +500,53 @@ export class OpeningsService {
         closedAt: input.closed ? new Date() : null,
       });
     });
+  }
+
+  /**
+   * Deletes the opening and everything that is its: the application, its
+   * documents with every version, the answers, research and instructions.
+   * Final, so the UI confirms. The documents' cached PDFs and agent
+   * conversations go afterwards, best effort.
+   */
+  async deleteOpening(input: { userId: string; openingId: string }) {
+    const profile = await this.requireProfile(input.userId);
+    const { renderedKeys, chatIds } = await this.db.transaction(async (tx) => {
+      const openings = new OpeningsRepository(tx);
+      const row = await openings.findOpening({
+        profileId: profile.id,
+        openingId: input.openingId,
+      });
+      if (!row) throw notFound();
+      const documents = new DocumentsRepository(tx);
+      const application = await documents.findApplicationByOpening(row.id);
+      const owned = application
+        ? await documents.listApplicationDocuments(application.id)
+        : [];
+      const chats = new AgentChatRepository(tx);
+      const keys: string[] = [];
+      const chatIds: string[] = [];
+      for (const document of owned) {
+        keys.push(...(await documents.renderedKeysOfDocument(document.id)));
+        chatIds.push(...(await chats.listChatIdsOfDocument(document.id)));
+      }
+      await openings.deleteOpening(row.id);
+      return { renderedKeys: keys, chatIds };
+    });
+    if (renderedKeys.length > 0) {
+      const storage = getStorage();
+      await Promise.all(
+        renderedKeys.map((key) => storage.delete(key).catch(() => undefined))
+      );
+    }
+    await Promise.all(
+      chatIds.map(async (chatId) => {
+        await triggerClient.cancelChatRuns(chatId).catch(() => undefined);
+        await triggerClient
+          .closeSession(chatId, "opening deleted")
+          .catch(() => undefined);
+      })
+    );
+    return { openingId: input.openingId };
   }
 
   /** The description is the user's to edit; nothing runs again by itself. */

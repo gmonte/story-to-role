@@ -107,9 +107,9 @@ export function DocumentEditor() {
           {t.formatMessage({ defaultMessage: "Talk about this" })}
         </button>
       )}
-      {/* The sheet is the PDF: paper in both themes, and everything on it
-          takes the light palette (doc-sheet, ADR 0012). */}
-      <article className="bg-doc-paper shadow-sheet rounded-xs">
+      {/* The sheet: light paper, dark, or following the theme, as the user
+          set it (doc-sheet, ADR 0012); everything on it takes its palette. */}
+      <article className="doc-sheet bg-doc-paper shadow-sheet rounded-xs">
         <div className="doc-sheet text-doc-foreground font-doc bg-transparent px-12 py-10">
           <EditorContent editor={editor} />
         </div>

@@ -11,6 +11,7 @@ import { IntlProvider } from "@repo/intl/intl-provider";
 import { Toaster } from "@repo/web/components/ui/sonner";
 import { cn } from "@repo/web/lib/utils";
 
+import { getSheetThemeFromNextCookies } from "~/domains/workspace/utils/get-sheet-theme-from-next-cookies";
 import { getLocaleFromNextCookies } from "~/tools/intl/utils/get-locale-from-next-cookies";
 import { TRPCReactProvider } from "~/tools/trpc/client";
 
@@ -65,6 +66,7 @@ export default async function RootLayout({
 }) {
   const locale = await getLocaleFromNextCookies();
   const t = await getTranslation(locale);
+  const sheetTheme = await getSheetThemeFromNextCookies();
 
   const clerkLocalization = locale === "pt-BR" ? ptBR : enUS;
 
@@ -74,7 +76,8 @@ export default async function RootLayout({
       signInUrl="/sign-in"
       signUpUrl="/sign-up"
     >
-      <html lang={locale} suppressHydrationWarning>
+      {/* The document sheet's look, read by globals.css. */}
+      <html lang={locale} data-sheet={sheetTheme} suppressHydrationWarning>
         <body
           className={cn(
             plexSans.variable,

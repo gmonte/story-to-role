@@ -9,9 +9,9 @@
 @custom-variant dark (&:is(.dark *));
 
 :root,
-/* The document sheet is the PDF: whatever sits on it takes the light
-   palette in both themes (ADR 0012). Its paper comes from the sheet's own
-   frame, which keeps the theme's doc-paper. */
+/* The document sheet (ADR 0012): light paper by default, so whatever sits
+   on it takes the light palette; the user may set it to follow the theme
+   (the default) or to stay dark, through <html data-sheet>, below. */
 .doc-sheet {
   --radius: 0.5rem; /* 8px: cards e painéis; botões e campos usam radius-md (6px), etiquetas radius-sm (4px) */
 
@@ -167,7 +167,10 @@
     0 2px 6px oklch(0.205 0.01 268 / 0.06); /* Menus e popovers */
 }
 
-.dark {
+.dark,
+/* The sheet follows the theme ("auto"), or stays dark whatever it is. */
+.dark:not([data-sheet="light"]) .doc-sheet,
+[data-sheet="dark"] .doc-sheet {
   /* Superfícies e texto (shadcn) */
   --background: oklch(
     0.205 0.01 268
@@ -224,18 +227,12 @@
     0.3 0.05 45
   ); /* Fundo do selo de créditos e do plano recomendado */
 
-  /* Documento (folha de papel, igual ao PDF) */
-  --doc-paper: oklch(
-    0.965 0.004 95
-  ); /* Folha: continua papel no escuro (um tom abaixo do branco para não ofuscar) */
-  --doc-foreground: oklch(
-    0.205 0.01 268
-  ); /* Texto da folha: tinta, igual ao PDF */
-  --doc-muted: oklch(0.45 0.01 262); /* Metadados na folha */
-  --doc-accent: oklch(
-    0.36 0.07 255
-  ); /* Títulos na folha: o mesmo azul-tinta, porque a folha é o PDF */
-  --doc-rule: oklch(0.84 0.01 255); /* Filete sob os títulos */
+  /* Documento (folha escura, quando segue o tema ou é escolhida escura) */
+  --doc-paper: oklch(0.22 0.006 85); /* Folha: quase preto quente */
+  --doc-foreground: oklch(0.9 0.006 95); /* Texto da folha (12,8:1) */
+  --doc-muted: oklch(0.72 0.01 262); /* Metadados na folha (7:1) */
+  --doc-accent: oklch(0.76 0.075 250); /* Títulos na folha: azul claro (8:1) */
+  --doc-rule: oklch(0.36 0.01 255); /* Filete sob os títulos */
 
   /* Aderência */
   --fit-high: oklch(0.79 0.13 155); /* Aderência alta: texto/ponto */
@@ -252,14 +249,12 @@
   --status-interview: oklch(0.77 0.11 320); /* Entrevista */
 
   /* Marcas de origem na folha */
-  --origin-profile: oklch(
-    0.56 0.1 185
-  ); /* Perfil (na folha, que é papel: mesmo valor do claro) */
-  --origin-edited: oklch(0.56 0.14 250); /* Editado por você (na folha) */
+  --origin-profile: oklch(0.72 0.1 185); /* Perfil (na folha escura, 7,3:1) */
+  --origin-edited: oklch(0.72 0.12 250); /* Editado por você (7:1) */
   --origin-instruction: oklch(
-    0.45 0.15 265
-  ); /* Instrução da candidatura (na folha) */
-  --origin-written: oklch(0.62 0.15 65); /* Escrito por você (na folha) */
+    0.7 0.12 270
+  ); /* Instrução da candidatura (6,4:1) */
+  --origin-written: oklch(0.78 0.13 70); /* Escrito por você (8,5:1) */
 
   /* Avisos e confirmação */
   --warning: oklch(0.84 0.12 80); /* Texto de aviso */
@@ -268,7 +263,14 @@
   --success: oklch(0.79 0.13 155); /* Confirmações */
 }
 
-.dark {
+/* White paper on a dark desk: a step below white, so it doesn't glare. */
+.dark[data-sheet="light"] .doc-sheet {
+  --doc-paper: oklch(0.965 0.004 95);
+}
+
+.dark,
+/* The sheet's shadow falls on the desk: the theme's, whatever the sheet. */
+.dark .doc-sheet {
   /* No escuro as sombras precisam de mais opacidade para existir */
   --elevation-panel: 0 1px 2px oklch(0 0 0 / 0.4);
   --elevation-sheet:

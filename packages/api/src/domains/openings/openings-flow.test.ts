@@ -365,7 +365,9 @@ describe("openings and fit check", () => {
       fitScript(
         (terms, system) => {
           const line = Number(
-            /^(\d+)\. did not do: I did not touch Kafka\.$/m.exec(system)![1]
+            /^(\d+)\. did not do \(Platform Engineer, Acme\): I did not touch Kafka\.$/m.exec(
+              system
+            )![1]
           );
           return {
             items: allMet(terms).items.map((item) =>
@@ -542,7 +544,9 @@ describe("openings and fit check", () => {
       "1. studied, without professional experience: Spark"
     );
     expect(prompt).toContain("2. known gap: Go in production.");
-    expect(prompt).toContain("3. did not do: I did not touch Kafka.");
+    expect(prompt).toContain(
+      "3. did not do (Platform Engineer, Acme): I did not touch Kafka."
+    );
     expect(prompt).toContain("- accepted work models: remote");
     expect(prompt).toContain("- salary: Minimum: R$ 20.000 CLT");
     // Excluded companies are checked by code.

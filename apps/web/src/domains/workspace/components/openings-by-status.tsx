@@ -104,7 +104,10 @@ export function OpeningsByStatus() {
         .map((group) => (
           <div key={group.label} className="flex flex-col gap-1">
             <span className="text-muted-foreground truncate px-2 text-[11px] font-semibold tracking-[0.07em] whitespace-nowrap uppercase">
-              {group.label}
+              {t.formatMessage(
+                { defaultMessage: "{group} ({count, number})" },
+                { group: group.label, count: group.items.length }
+              )}
             </span>
             <SidebarMenu>
               {group.items.map((opening) => {

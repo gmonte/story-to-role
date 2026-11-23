@@ -5,7 +5,10 @@ import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { createAiClient } from "@repo/api/domains/ai/ai-client";
 import { loadPendingGapAnswers } from "@repo/api/domains/applications/load-gap-answers";
 import { instructionPointsTable } from "@repo/api/domains/applications/db/instructions-tables";
+import { applicationsTable } from "@repo/api/domains/applications/db/applications-tables";
 import { careerProfilesTable } from "@repo/api/domains/career/db/career-tables";
+import { documentsTable } from "@repo/api/domains/documents/db/documents-tables";
+import { DocumentsRepository } from "@repo/api/domains/documents/documents-repository";
 import {
   loadOpeningUserInput,
   userInputLines,
@@ -1580,6 +1583,39 @@ describe("openings and fit check", () => {
     await ctx.openings.failStuckAnalyses(later);
 
     expect((await ctx.detail(openingId)).status).toBe("failed");
+  });
+
+  it("deletes an opening with its application and documents, only for its owner", async () => {
+    const ctx = await setup();
+    const openingId = await ctx.add();
+    await ctx.analyze(openingId, fitScript(allMet));
+    const [career] = await ctx.db.select().from(careerProfilesTable);
+    const documents = new DocumentsRepository(ctx.db);
+    const application = await documents.findOrInsertApplication({
+      profileId: career.id,
+      openingId,
+    });
+    await documents.findOrInsertApplicationDocument({
+      profileId: career.id,
+      applicationId: application.id,
+      kind: "resume",
+    });
+
+    const grace = await createTestUser("grace-delete@example.com");
+    await new CareerService(ctx.db).getOrCreateProfile({
+      userId: grace.id,
+      defaultLanguage: "en-US",
+    });
+    await expect(
+      ctx.openings.deleteOpening({ userId: grace.id, openingId })
+    ).rejects.toMatchObject({ code: "NOT_FOUND" });
+
+    await ctx.openings.deleteOpening({ userId: ctx.user.id, openingId });
+    await expect(ctx.detail(openingId)).rejects.toMatchObject({
+      code: "NOT_FOUND",
+    });
+    expect(await ctx.db.select().from(applicationsTable)).toEqual([]);
+    expect(await ctx.db.select().from(documentsTable)).toEqual([]);
   });
 
   it("refuses another user's opening", async () => {

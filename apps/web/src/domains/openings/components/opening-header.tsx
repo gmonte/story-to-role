@@ -14,6 +14,7 @@ import {
   FileText,
   Loader2,
   RotateCw,
+  Trash2,
   TriangleAlert,
 } from "lucide-react";
 import Link from "next/link";
@@ -68,6 +69,7 @@ import {
   pendingGaps,
   useExcludeCompany,
 } from "./fit-check-panel";
+import { DeleteOpeningDialog } from "./delete-opening-dialog";
 
 /** The documents of an opening the header and the steps both read. */
 export function useOpeningJourney(openingId: string, opening: OpeningDetail) {
@@ -488,7 +490,7 @@ function PrimaryActionButton({
   }
 }
 
-/** The rare actions: closing the opening, excluding its company. */
+/** The rare actions: closing or deleting the opening, excluding its company. */
 function OpeningMenu({
   openingId,
   opening,
@@ -511,13 +513,18 @@ function OpeningMenu({
     })
   );
   const excludeCompany = useExcludeCompany(openingId, opening.company);
+  const [deleting, setDeleting] = useState(false);
   const canClose = opening.status === "analyzed" || opening.status === "closed";
   const canExclude = opening.status === "analyzed" && !!opening.company;
-  if (!canClose && !canExclude && !canZip && !opening.sourceUrl) return null;
 
   return (
     <>
       {zip.dialog}
+      <DeleteOpeningDialog
+        openingId={openingId}
+        open={deleting}
+        onOpenChange={setDeleting}
+      />
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <Button
@@ -582,6 +589,14 @@ function OpeningMenu({
               </DropdownMenuItem>
             </>
           )}
+          <DropdownMenuSeparator />
+          <DropdownMenuItem
+            variant="destructive"
+            onSelect={() => setDeleting(true)}
+          >
+            <Trash2 />
+            {t.formatMessage({ defaultMessage: "Delete the opening" })}
+          </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
     </>

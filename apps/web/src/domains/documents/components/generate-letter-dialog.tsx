@@ -35,6 +35,7 @@ import { toast } from "@repo/web/components/ui/sonner";
 import { CreditCost } from "~/domains/credits/components/credit-cost";
 import { useCredits } from "~/domains/credits/hooks/use-credits";
 import { letterCredits } from "~/domains/credits/utils/credit-costs";
+import { useOpening } from "~/domains/openings/hooks/use-opening";
 import { useOpeningLabels } from "~/domains/openings/hooks/use-opening-labels";
 import { useTRPC } from "~/tools/trpc/client";
 
@@ -85,12 +86,23 @@ export function GenerateLetterNow({
   const refresh = useRefreshDocuments();
   const credits = useCredits();
   const resume = latestResumeIn(resumeVersions, defaultLanguage);
+  const closed = useOpening(openingId).data?.status === "closed";
   const generate = useMutation(
     trpc.letters.generate.mutationOptions({
       onSuccess: refresh,
       onError: (error) => toast.error(error.message),
     })
   );
+  // A closed opening writes nothing new until it is reopened.
+  if (closed) {
+    return (
+      <p className="text-muted-foreground text-sm">
+        {t.formatMessage({
+          defaultMessage: "Reopen the opening to write the cover letter.",
+        })}
+      </p>
+    );
+  }
   return (
     <div className="flex flex-col items-start gap-2">
       <div className="flex flex-wrap items-center gap-3">
@@ -176,6 +188,8 @@ export function GenerateLetterDialog({
   trigger: ReactNode;
 }) {
   const [open, setOpen] = useState(false);
+  const closed = useOpening(openingId).data?.status === "closed";
+  if (closed) return null;
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>{trigger}</DialogTrigger>

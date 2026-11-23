@@ -4191,6 +4191,12 @@ describe("resume generation and snapshots", () => {
     await expect(
       letters.generate({ ...asked, storyLineId: career.evidence[1].id })
     ).rejects.toMatchObject({ code: "BAD_REQUEST" });
+    // A closed opening writes nothing new until it is reopened.
+    await ctx.openings.updateOpening(ctx.opening.id, { status: "closed" });
+    await expect(letters.generate(asked)).rejects.toMatchObject({
+      code: "PRECONDITION_FAILED",
+    });
+    await ctx.openings.updateOpening(ctx.opening.id, { status: "analyzed" });
 
     const { generationId } = await letters.generate({
       ...asked,

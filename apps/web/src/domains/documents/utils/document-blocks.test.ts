@@ -8,6 +8,7 @@ import {
   blocksToContent,
   contentToBlocks,
   isEditableBlock,
+  isRemovableBlock,
   linesById,
   moveSectionBlocks,
   type DocumentBlock,
@@ -280,6 +281,25 @@ describe("blocksToContent", () => {
     expect(next.sections[1]).toMatchObject({
       groups: [{ label: "Core", text: "Kubernetes" }],
     });
+  });
+
+  it("removes a skill group whose line the user deleted", () => {
+    const blocks = contentToBlocks(resume, "en-US").filter(
+      (block) => block.type !== "skill"
+    );
+    const next = blocksToContent(resume, blocks);
+    expect(next.sections[1]).toMatchObject({ kind: "skills", groups: [] });
+  });
+
+  it("lets Backspace remove an emptied bullet, paragraph or skill group, never a fact", () => {
+    expect(
+      (["bullet", "paragraph", "skill"] as const).every(isRemovableBlock)
+    ).toBe(true);
+    expect(
+      (["summary", "entry", "sectionTitle", "name"] as const).some(
+        isRemovableBlock
+      )
+    ).toBe(false);
   });
 
   it("writes the header and a position's facts both ways, as the user typed them", () => {

@@ -95,6 +95,10 @@ export const isEditableBlock = (block: DocumentBlock) =>
 export const isListBlock = (type: DocumentBlock["type"]) =>
   type === "bullet" || type === "paragraph";
 
+/** A block Backspace removes once emptied: a list's line or a skill group. */
+export const isRemovableBlock = (type: DocumentBlock["type"]) =>
+  isListBlock(type) || type === "skill";
+
 /** The line id a block edits, when it edits one. */
 export function lineIdOf(block: DocumentBlock) {
   return "lineId" in block ? block.lineId : null;
@@ -501,12 +505,13 @@ export function blocksToContent<T extends EditableContent>(
             ? { ...section, line: { ...section.line, text: summary.text } }
             : section;
         case "skills":
+          // A group whose line the user deleted leaves the document.
           return {
             ...section,
-            groups: section.groups.map((group) => ({
-              ...group,
-              text: skills.get(group.id) ?? group.text,
-            })),
+            groups: section.groups.flatMap((group) => {
+              const text = skills.get(group.id);
+              return text === undefined ? [] : [{ ...group, text }];
+            }),
           };
         case "experience":
           return {

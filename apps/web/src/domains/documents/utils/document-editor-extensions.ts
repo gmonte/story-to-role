@@ -15,6 +15,7 @@ import {
   type DocumentBlock,
   isEditableBlock,
   isListBlock,
+  isRemovableBlock,
   newLineId,
 } from "./document-blocks";
 
@@ -323,8 +324,8 @@ function editableParent(editor: Editor) {
 /**
  * The keys of the flat blocks: Enter splits a bullet or a paragraph into
  * a new one (a single line never splits), Backspace at the start of an
- * empty bullet removes it and never merges two blocks, Delete at the end
- * never pulls the next block in.
+ * empty bullet, paragraph or skill group removes it and never merges two
+ * blocks, Delete at the end never pulls the next block in.
  */
 export const DocumentKeys = Extension.create({
   name: "documentKeys",
@@ -352,7 +353,7 @@ export const DocumentKeys = Extension.create({
         if (!empty || $from.parentOffset !== 0) return false;
         const parent = editableParent(editor);
         if (!parent) return true;
-        if (!isListBlock(parent.attrs.type) || parent.node.textContent) {
+        if (!isRemovableBlock(parent.attrs.type) || parent.node.textContent) {
           return true;
         }
         return editor.commands.command(({ tr, dispatch }) => {

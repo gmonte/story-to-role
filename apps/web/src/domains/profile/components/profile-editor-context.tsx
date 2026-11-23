@@ -36,6 +36,7 @@ import {
 } from "@repo/api/domains/profile/truth/insert";
 import {
   findingKey,
+  levelProposalKey,
   reviewNoteKey,
   findingKeys,
   withoutDismissed,
@@ -136,6 +137,12 @@ type ProfileEditorState = {
   restoreReviewFinding: (note: LocatedReviewFinding) => void;
   refreshDismissed: () => Promise<void>;
   applyCompetencyLevel: (name: string, level: CompetencyLevel) => void;
+  /** Rejected competency level proposals stay rejected, like ignored findings. */
+  rejectLevelProposal: (proposal: { name: string; level: string }) => void;
+  isLevelProposalRejected: (proposal: {
+    name: string;
+    level: string;
+  }) => boolean;
   // The suggestions waiting, with the lines each would replace now (null
   // when its lines were edited away).
   suggestions: LocatedSuggestion[];
@@ -959,6 +966,10 @@ export function ProfileEditorProvider({
     ignoreReviewFinding: (note) => setReviewIgnored(note, true),
     restoreReviewFinding: (note) => setReviewIgnored(note, false),
     refreshDismissed,
+    rejectLevelProposal: (proposal) =>
+      setKeyIgnored(levelProposalKey(proposal), true),
+    isLevelProposalRejected: (proposal) =>
+      dismissed.includes(levelProposalKey(proposal)),
     applyCompetencyLevel: (name, level) => {
       if (!editor) return;
       applyBlocks(editor, setCompetencyLevel(currentBlocks(), name, level));

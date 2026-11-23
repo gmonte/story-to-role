@@ -1,7 +1,5 @@
 "use client";
 
-import { useState } from "react";
-
 import {
   ArrowRight,
   Check,
@@ -39,10 +37,11 @@ export function ProfileReview() {
     goToLine,
     blocks,
     applyCompetencyLevel,
+    rejectLevelProposal,
+    isLevelProposalRejected,
     talkAbout,
   } = useProfileEditor();
   const validation = useLatestValidation();
-  const [rejected, setRejected] = useState<string[]>([]);
   const report = validation.data?.report;
   if (!report) return null;
 
@@ -55,7 +54,7 @@ export function ProfileReview() {
   );
   const proposals = report.competencies.filter(
     (proposal) =>
-      !rejected.includes(proposal.name) &&
+      !isLevelProposalRejected(proposal) &&
       levels.get(proposal.name.toLowerCase()) !== proposal.level
   );
 
@@ -212,9 +211,7 @@ export function ProfileReview() {
                     <Button
                       variant="outline"
                       className={decisionButton}
-                      onClick={() =>
-                        setRejected((names) => [...names, proposal.name])
-                      }
+                      onClick={() => rejectLevelProposal(proposal)}
                     >
                       <X />
                       {t.formatMessage({ defaultMessage: "Reject" })}

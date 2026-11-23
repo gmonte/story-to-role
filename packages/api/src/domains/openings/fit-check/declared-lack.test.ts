@@ -6,6 +6,7 @@ const lacks = {
   studied: ["Spark", "Airflow"],
   gaps: ["Cloud em produção (apenas estudos e projetos pessoais)."],
   notDone: ["não administrei infraestrutura em nuvem; não mexi em Kafka."],
+  evidence: [],
 };
 
 describe("what the profile declares the person lacks", () => {
@@ -34,6 +35,7 @@ describe("what the profile declares the person lacks", () => {
       studied: ["React Native"],
       gaps: ["Never led a team of more than 5 Python developers."],
       notDone: ["I did not define the AWS architecture of the platform."],
+      evidence: [],
     };
     // React is not React Native; an app in it is.
     expect(declaredLack("React", profile)).toBeNull();
@@ -49,8 +51,26 @@ describe("what the profile declares the person lacks", () => {
       studied: [],
       gaps: ["Kubernetes: nunca mexi; só Docker."],
       notDone: [],
+      evidence: [],
     };
     expect(declaredLack("Docker", profile)).toBeNull();
     expect(declaredLack("Kubernetes", profile)?.kind).toBe("gap");
+  });
+
+  it("is not what one position did not do when another position did it", () => {
+    const profile = {
+      studied: [],
+      gaps: [],
+      notDone: ["Não fiz frontend. Não tive visão do produto."],
+      evidence: [
+        "Muitos anos de foco em frontend (React, Next.js).",
+        "Desenvolvi o frontend da plataforma SGG.",
+      ],
+    };
+    expect(declaredLack("Frontend", profile)).toBeNull();
+    // Without such evidence, the line still says it.
+    expect(declaredLack("Frontend", { ...profile, evidence: [] })?.kind).toBe(
+      "notDone"
+    );
   });
 });

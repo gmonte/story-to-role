@@ -13,6 +13,7 @@ import { isExcludedCompany } from "@repo/api/domains/profile/preferences/prefere
 import { ProfileRepository } from "@repo/api/domains/profile/profile-repository";
 import { mentions } from "@repo/api/domains/profile/truth/lint";
 import { parseBlocks } from "@repo/api/domains/profile/truth/blocks";
+import { profilePassages } from "@repo/api/domains/profile/truth/extract";
 import {
   languageNames,
   type ProfileLanguage,
@@ -467,7 +468,8 @@ async function screenOpening(
     profileVersionId: published.versionId,
   });
   const profiles = new ProfileRepository(db);
-  const { language } = readStructure(parseBlocks(published.markdown));
+  const blocks = parseBlocks(published.markdown);
+  const { language } = readStructure(blocks);
   const { extract } = published;
   const preferences = await loadPublishedPreferences({
     db,
@@ -512,12 +514,22 @@ async function screenOpening(
       .map((competency) => competency.name),
     gaps: extract.gaps,
     notDone: extract.experiences.flatMap((experience) => experience.notDone),
+    evidence: profilePassages(blocks)
+      .filter((passage) => passage.kind === "evidence")
+      .map((passage) => passage.text),
   };
-  // Numbered, so the judge can say which line makes a requirement a gap.
+  // Numbered, so the judge can say which line makes a requirement a gap. A
+  // did-not-do line names its position: it speaks for that one only.
   const lackLines = [
     ...lacks.studied.map((text) => ({ kind: "studied" as const, text })),
     ...lacks.gaps.map((text) => ({ kind: "gap" as const, text })),
-    ...lacks.notDone.map((text) => ({ kind: "notDone" as const, text })),
+    ...extract.experiences.flatMap((experience) =>
+      experience.notDone.map((text) => ({
+        kind: "notDone" as const,
+        text,
+        position: `${experience.title}, ${experience.company}`,
+      }))
+    ),
   ];
   const lackLabels = {
     studied: "studied, without professional experience",
@@ -590,6 +602,7 @@ async function screenOpening(
           "- partial: related passages, but not at the level asked (fewer years, an adjacent tool).",
           "- gap: no passage satisfies it. Similar wording is not enough: a senior or many-years requirement against a junior or short history is a gap. Never suppose.",
           "- What the profile says the person lacks (known gaps, what they did not do) is a gap, never coverage; a competency only studied, without professional use, is partial at most. When one of those lines says the person lacks what the requirement asks, answer gap and give the line's number in `lack`; a line that only mentions the same word about something else is not that.",
+          "- A did-not-do line speaks for its own position only. When passages of other positions show the person did what the requirement asks, judge from them and leave `lack` empty; point at the line only when nothing else covers it.",
           "- Years and seniority read from the positions' periods in the overview; cite passages of the positions that count.",
           "- Location and work model are judged against the job preferences, and then need no passage. With no job preferences written, they need a passage like any other requirement.",
           "- A passage marked as a concept the person knows, not masters, supports partial at most.",
@@ -615,7 +628,7 @@ async function screenOpening(
           ...(lackLines.length
             ? lackLines.map(
                 (line, index) =>
-                  `${index + 1}. ${lackLabels[line.kind]}: ${line.text}`
+                  `${index + 1}. ${lackLabels[line.kind]}${"position" in line ? ` (${line.position})` : ""}: ${line.text}`
               )
             : ["- (none)"]),
           "",

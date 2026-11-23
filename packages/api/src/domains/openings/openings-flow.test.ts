@@ -237,10 +237,10 @@ type Judged = ReturnType<typeof parseJudgmentPrompt>[number];
 function fitScript(
   judge: (terms: Judged[], system: string) => unknown,
   extracted: object = extraction,
-  // The numbered preferences the opening breaks, from their own call.
+  // The numbered preferences the judge looked at, from their own call.
   conflicts: (
     rules: string[]
-  ) => Array<{ rule: number; explanation: string }> = () => []
+  ) => Array<{ rule: number; broken: boolean; explanation: string }> = () => []
 ) {
   return {
     object: (request: { system: string }) => {
@@ -583,9 +583,16 @@ describe("openings and fit check", () => {
         return [
           {
             rule: rules.indexOf("Minimum: R$ 20.000 CLT") + 1,
+            broken: true,
             explanation: "Pays R$ 9.000.",
           },
-          { rule: 99, explanation: "Invented." },
+          // One the opening meets is not a conflict, whatever it says.
+          {
+            rule: rules.indexOf("I accept: remote") + 1,
+            broken: false,
+            explanation: "The opening is remote: no conflict.",
+          },
+          { rule: 99, broken: true, explanation: "Invented." },
         ];
       })
     );

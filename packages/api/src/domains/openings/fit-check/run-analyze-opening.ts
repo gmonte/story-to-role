@@ -110,7 +110,12 @@ const judgmentSchema = z.object({
 const preferenceCheckSchema = z.object({
   conflicts: z.array(
     z.object({
-      rule: z.number().int().describe("The number of the preference broken"),
+      rule: z.number().int().describe("The number of the preference"),
+      broken: z
+        .boolean()
+        .describe(
+          "True only when the opening's text breaks it; false when it meets it or can't be compared"
+        ),
       explanation: z.string(),
     })
   ),
@@ -803,7 +808,7 @@ async function screenOpening(
       schema: preferenceCheckSchema,
       system: [
         "Check a job opening against the job preferences a person wrote, one preference at a time. Report each one the opening breaks: a work model the person doesn't accept, a location outside the accepted ones, pay the opening states below the person's minimum, the company's business in an excluded sector, a discard rule that applies.",
-        "- Report a preference only when the opening's own text breaks it. A preference the opening doesn't speak to is not broken; never suppose.",
+        "- Report a preference only when the opening's own text breaks it, with broken true. A preference the opening meets, doesn't speak to, or that can't be compared (another currency, a contract type it doesn't state) is not broken; never suppose.",
         "- `rule` is the preference's number; explain in one short sentence what in the opening breaks it.",
         `- Write explanations in ${languageNames[language]}.`,
         "- An empty list when the opening breaks none.",
@@ -816,8 +821,9 @@ async function screenOpening(
       ].join("\n"),
       messages: [{ role: "user", content: posting }],
     });
+    // Only what the judge says is broken: it lists what it compared too.
     judgedConflicts = (check?.conflicts ?? []).flatMap((conflict) => {
-      const rule = rules[conflict.rule - 1];
+      const rule = conflict.broken ? rules[conflict.rule - 1] : undefined;
       return rule
         ? [{ rule: rule.text, explanation: conflict.explanation }]
         : [];

@@ -22,8 +22,8 @@ export default [
   // Every page, route and Server Function checks the session itself; the
   // proxy doesn't gate anything. Public: the landing, signing in or up,
   // webhooks (they check their signatures), the tRPC and REST handlers
-  // (their procedures check the session) and the locale and currency
-  // cookies.
+  // (their procedures check the session) and the locale, currency and
+  // sheet look cookies.
   {
     plugins: { "@clerk/next": clerkNext },
     rules: {
@@ -42,6 +42,7 @@ export default [
             // Cookie setters the landing's switchers call, signed out too.
             "src/tools/intl/actions",
             "src/domains/billing/actions",
+            "src/domains/workspace/actions",
           ],
         },
       ],

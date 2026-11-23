@@ -2,7 +2,7 @@
 
 import { useSyncExternalStore } from "react";
 
-import { Monitor, Moon, Sun } from "lucide-react";
+import { FileText, Monitor, Moon, Sun } from "lucide-react";
 import { useTheme } from "next-themes";
 
 import { useTranslation } from "@repo/intl/use-translation";
@@ -12,17 +12,35 @@ import {
   DropdownMenuHeader,
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@repo/web/components/ui/dropdown-menu";
 import { Button } from "@repo/web/components/ui/button";
 import { SidebarMenuButton } from "@repo/web/components/ui/sidebar";
 
+import { setSheetThemeAction } from "../actions/set-sheet-theme-action";
+import { type SheetTheme, sheetThemeSchema } from "../utils/sheet-theme";
+
 // Nothing to subscribe to: the snapshots only tell the server and browser apart.
 const subscribe = () => () => undefined;
 
+// The sheet's look lives on <html data-sheet>, where globals.css reads it.
+function subscribeToSheet(onChange: () => void) {
+  const observer = new MutationObserver(onChange);
+  observer.observe(document.documentElement, {
+    attributes: true,
+    attributeFilter: ["data-sheet"],
+  });
+  return () => observer.disconnect();
+}
+const readSheet = (): SheetTheme =>
+  sheetThemeSchema.catch("auto").parse(document.documentElement.dataset.sheet);
+
 /**
  * Light, dark or following the system, remembered by next-themes in this
- * browser. `icon` is a bare icon button, for a page without the sidebar.
+ * browser, and the document sheet's own look (light, dark, or following the
+ * theme), kept in a cookie so the server renders it. `icon` is a bare icon
+ * button, for a page without the sidebar.
  */
 export function ThemeSwitcher({
   variant = "sidebar",
@@ -57,6 +75,28 @@ export function ThemeSwitcher({
   ];
   const current =
     themes.find((option) => isClient && option.value === theme) ?? themes[2];
+  const sheet = useSyncExternalStore(subscribeToSheet, readSheet, () => "auto");
+  const sheets: Array<{ value: SheetTheme; label: string }> = [
+    {
+      value: "light",
+      label: t.formatMessage({ defaultMessage: "White paper" }),
+    },
+    {
+      value: "dark",
+      label: t.formatMessage({ defaultMessage: "Dark paper" }),
+    },
+    {
+      value: "auto",
+      label: t.formatMessage({
+        defaultMessage: "Automatic (follows the theme)",
+      }),
+    },
+  ];
+  const setSheet = (value: string) => {
+    const next = sheetThemeSchema.parse(value);
+    document.documentElement.dataset.sheet = next;
+    void setSheetThemeAction(next);
+  };
 
   return (
     <DropdownMenu>
@@ -90,6 +130,18 @@ export function ThemeSwitcher({
           {themes.map((option) => (
             <DropdownMenuRadioItem key={option.value} value={option.value}>
               <option.icon />
+              {option.label}
+            </DropdownMenuRadioItem>
+          ))}
+        </DropdownMenuRadioGroup>
+        <DropdownMenuSeparator />
+        <DropdownMenuHeader>
+          {t.formatMessage({ defaultMessage: "Document sheet" })}
+        </DropdownMenuHeader>
+        <DropdownMenuRadioGroup value={sheet} onValueChange={setSheet}>
+          {sheets.map((option) => (
+            <DropdownMenuRadioItem key={option.value} value={option.value}>
+              <FileText />
               {option.label}
             </DropdownMenuRadioItem>
           ))}

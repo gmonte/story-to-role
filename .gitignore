@@ -68,3 +68,6 @@ packages/intl/compiled/
 
 # local file storage (STORAGE_DRIVER=local)
 .storage
+
+# Database backups (scripts/backup-database.sh)
+.database/

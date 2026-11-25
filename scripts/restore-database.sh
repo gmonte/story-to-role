@@ -157,8 +157,8 @@ EOF
   echo "Target database: $TARGET_DATABASE on ${TARGET_HOST:-localhost}"
 
   if [ "$TARGET_IS_LOCAL" -eq 0 ] && [ "$ASSUME_YES" -eq 0 ]; then
-    printf 'This replaces everything in %s on %s. Type the database name to continue: ' \
-      "$TARGET_DATABASE" "$TARGET_HOST"
+    printf 'This replaces everything in %s on %s.\nType “%s” to continue: ' \
+      "$TARGET_DATABASE" "$TARGET_HOST" "$TARGET_DATABASE"
     read -r CONFIRMATION
 
     if [ "$CONFIRMATION" != "$TARGET_DATABASE" ]; then

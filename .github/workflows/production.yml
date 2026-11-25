@@ -61,4 +61,5 @@ jobs:
           VERCEL_PROJECT_NAME: ${{ vars.VERCEL_PROJECT_NAME }}
         run: |
           vercel link --token $VERCEL_TOKEN --project $VERCEL_PROJECT_NAME --yes
-          vercel --prod --token $VERCEL_TOKEN
+          # TRIGGER_DEPLOY makes predeploy deploy the Trigger.dev tasks.
+          vercel --prod --token $VERCEL_TOKEN -b "TRIGGER_DEPLOY=true"

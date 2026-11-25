@@ -40,7 +40,10 @@ export const env = createEnv({
     // production and local development each have their own and need none.
     REDIS_KEY_PREFIX: z.string().default(""),
 
-    TRIGGER_PROJECT_REF: z.string(),
+    // Only the CLI/config reads TRIGGER_PROJECT_REF (`trigger.config.ts`), so
+    // it stays optional: Trigger.dev never syncs TRIGGER_* vars, and the
+    // deployed worker validates this schema when it imports the tasks.
+    TRIGGER_PROJECT_REF: z.string().optional(),
     TRIGGER_SECRET_KEY: z.string(),
 
     // StoryToRole's own key: the topic gate and the default provider package.

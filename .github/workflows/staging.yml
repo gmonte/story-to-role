@@ -70,8 +70,9 @@ jobs:
           # APP_URL is the alias the deployment is served from, which Vercel
           # doesn't expose on its own (getBaseUrl reads it). Previews share one
           # Upstash database, so each gets its own REDIS_KEY_PREFIX.
+          # TRIGGER_DEPLOY makes predeploy deploy the Trigger.dev tasks.
           REDIS_KEY_PREFIX="stg:"
-          DEPLOY_URL=$(vercel deploy --token $VERCEL_TOKEN --target preview -b "APP_URL=$STAGING_URL" -e "APP_URL=$STAGING_URL" -b "REDIS_KEY_PREFIX=$REDIS_KEY_PREFIX" -e "REDIS_KEY_PREFIX=$REDIS_KEY_PREFIX")
+          DEPLOY_URL=$(vercel deploy --token $VERCEL_TOKEN --target preview -b "APP_URL=$STAGING_URL" -e "APP_URL=$STAGING_URL" -b "REDIS_KEY_PREFIX=$REDIS_KEY_PREFIX" -e "REDIS_KEY_PREFIX=$REDIS_KEY_PREFIX" -b "TRIGGER_DEPLOY=true")
           vercel alias --token $VERCEL_TOKEN set "$DEPLOY_URL" "$STAGING_URL"
 
           # Remove the previous staging deployment to stay within free plan limits

@@ -17,7 +17,7 @@
     "db:up": "pnpm db:generate && pnpm db:migrate",
     "lint": "eslint . --max-warnings=0 --no-warn-ignored",
     "lint:fix": "eslint . --fix",
-    "predeploy": "pnpm db:migrate",
+    "predeploy": "pnpm db:migrate && if [ \"$TRIGGER_DEPLOY\" = true ]; then pnpm trigger:deploy; else echo 'TRIGGER_DEPLOY is not true (PR preview) — skipping trigger:deploy'; fi",
     "stripe:listen": "tsx scripts/stripe-listen.ts",
     "stripe:setup": "tsx scripts/stripe-setup.ts",
     "test": "vitest run --passWithNoTests",

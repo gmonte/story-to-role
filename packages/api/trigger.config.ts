@@ -25,9 +25,19 @@ type VercelEnvVar = {
  * injects the target's values); the Vercel API only supplies the key list.
  * Needs VERCEL_PROJECT_ID + VERCEL_ACCESS_TOKEN (or VERCEL_TOKEN), optional
  * VERCEL_TEAM_ID, in the build env.
+ *
+ * Outside a Vercel build it refuses to sync: the Vercel API lists encrypted
+ * values, so any var missing from `process.env` would reach Trigger.dev as
+ * ciphertext. A thrown error only skips the sync; the deploy goes on.
  */
 const syncVercelEnvForCurrentTarget = syncEnvVars(
   async ({ env }) => {
+    if (!process.env.VERCEL) {
+      throw new Error(
+        "syncVercelEnvForCurrentTarget: not a Vercel build (VERCEL is unset), so env vars are not synced."
+      );
+    }
+
     const read = (key: string) => process.env[key] ?? env[key];
 
     const vercelTarget = read("NEXT_PUBLIC_ENV") ?? "production";

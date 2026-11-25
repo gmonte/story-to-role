@@ -50,6 +50,7 @@
     "zod": "catalog:common"
   },
   "devDependencies": {
+    "@clerk/eslint-plugin": "catalog:quality",
     "@repo/eslint-config": "workspace:*",
     "@repo/typescript-config": "workspace:*",
     "@tailwindcss/postcss": "catalog:web",

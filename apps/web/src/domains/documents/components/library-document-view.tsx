@@ -9,6 +9,7 @@ import { useTranslation } from "@repo/intl/use-translation";
 import { Button } from "@repo/web/components/ui/button";
 
 import { WorkspaceBody } from "~/domains/workspace/components/workspace-body";
+import { WorkspaceSkeleton } from "~/domains/workspace/components/workspace-skeleton";
 
 import { useLibraryDocument } from "../hooks/use-library";
 import { useSelectedVersion } from "../hooks/use-selected-version";
@@ -27,10 +28,14 @@ import { ResumeWorkspace } from "./resume-workspace";
 
 /** A library document's screen: the workspace and its side panel. */
 export function LibraryDocumentBody({ documentId }: { documentId: string }) {
+  const document = useLibraryDocument(documentId);
+  // The whole screen in outline until the document arrives.
+  if (!document.data) return <WorkspaceSkeleton />;
   return (
     <DocumentAgentProvider>
       <WorkspaceBody
         layoutId="library-document"
+        flushPanel
         chat={<LibraryDocumentView documentId={documentId} />}
         panel={<LibraryDocumentPanel documentId={documentId} />}
       />
@@ -61,7 +66,7 @@ export function LibraryDocumentView({ documentId }: { documentId: string }) {
         </div>
       )}
       {generation?.status === "failed" && versions.length === 0 && (
-        <div className="m-6 flex items-center justify-between gap-3 rounded-lg border border-red-500/40 bg-red-500/10 p-2.5 text-xs">
+        <div className="border-destructive/40 bg-destructive/10 m-6 flex items-center justify-between gap-3 rounded-lg border p-2.5 text-xs">
           <span>
             {t.formatMessage({
               defaultMessage: "The last generation failed. Try again.",

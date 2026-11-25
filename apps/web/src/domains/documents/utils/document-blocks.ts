@@ -38,9 +38,7 @@ export const isResumeSection = (
 
 /** The content the document editor shows: a resume, a letter or LinkedIn. */
 export type EditableContent =
-  | ResumeContent
-  | CoverLetterContent
-  | LinkedinContent;
+  ResumeContent | CoverLetterContent | LinkedinContent;
 
 /**
  * The document as the editor holds it (resume spec, "Document workspace"):
@@ -97,6 +95,10 @@ export const isEditableBlock = (block: DocumentBlock) =>
 export const isListBlock = (type: DocumentBlock["type"]) =>
   type === "bullet" || type === "paragraph";
 
+/** A block Backspace removes once emptied: a list's line or a skill group. */
+export const isRemovableBlock = (type: DocumentBlock["type"]) =>
+  isListBlock(type) || type === "skill";
+
 /** The line id a block edits, when it edits one. */
 export function lineIdOf(block: DocumentBlock) {
   return "lineId" in block ? block.lineId : null;
@@ -135,14 +137,12 @@ function experienceBlocks(
     ...(entry.relevance
       ? [{ type: "entryNote", ownerId, text: entry.relevance } as const]
       : []),
-    ...entry.lines.map(
-      (line): DocumentBlock => ({
-        type: "bullet",
-        lineId: line.id,
-        ownerId,
-        text: line.text,
-      })
-    ),
+    ...entry.lines.map((line): DocumentBlock => ({
+      type: "bullet",
+      lineId: line.id,
+      ownerId,
+      text: line.text,
+    })),
   ];
 }
 
@@ -197,14 +197,12 @@ function sectionBlocks(
                 text: entry.link,
               } as const,
             ]),
-        ...entry.lines.map(
-          (line): DocumentBlock => ({
-            type: "bullet",
-            lineId: line.id,
-            ownerId: entry.projectId,
-            text: line.text,
-          })
-        ),
+        ...entry.lines.map((line): DocumentBlock => ({
+          type: "bullet",
+          lineId: line.id,
+          ownerId: entry.projectId,
+          text: line.text,
+        })),
       ]);
     default:
       return section.entries.map((entry) => ({
@@ -250,13 +248,11 @@ function linkedinBlocks(
     ...(aboutParagraphs(content.about.text).length
       ? aboutParagraphs(content.about.text)
       : [""]
-    ).map(
-      (text): DocumentBlock => ({
-        type: "paragraph",
-        lineId: content.about.id,
-        text,
-      })
-    ),
+    ).map((text): DocumentBlock => ({
+      type: "paragraph",
+      lineId: content.about.id,
+      text,
+    })),
     ...(content.experiences.length
       ? [
           title("experience"),
@@ -297,25 +293,21 @@ function linkedinBlocks(
     ...(content.certifications.length
       ? [
           title("certifications"),
-          ...content.certifications.map(
-            (entry): DocumentBlock => ({
-              type: "credential",
-              credentialId: entry.credentialId,
-              text: certificationText(entry),
-            })
-          ),
+          ...content.certifications.map((entry): DocumentBlock => ({
+            type: "credential",
+            credentialId: entry.credentialId,
+            text: certificationText(entry),
+          })),
         ]
       : []),
     ...(content.languages.length
       ? [
           title("languages"),
-          ...content.languages.map(
-            (entry): DocumentBlock => ({
-              type: "credential",
-              credentialId: entry.credentialId,
-              text: languageText(entry, language),
-            })
-          ),
+          ...content.languages.map((entry): DocumentBlock => ({
+            type: "credential",
+            credentialId: entry.credentialId,
+            text: languageText(entry, language),
+          })),
         ]
       : []),
   ];
@@ -331,13 +323,11 @@ export function contentToBlocks(
     return [
       ...headerBlocks(content),
       { type: "greeting", text: content.greeting },
-      ...content.paragraphs.map(
-        (line): DocumentBlock => ({
-          type: "paragraph",
-          lineId: line.id,
-          text: line.text,
-        })
-      ),
+      ...content.paragraphs.map((line): DocumentBlock => ({
+        type: "paragraph",
+        lineId: line.id,
+        text: line.text,
+      })),
       { type: "closing", text: content.closing },
     ];
   }
@@ -403,10 +393,10 @@ function linkedinFrom(
     );
   return {
     ...base,
-    headline: optionalLine(
-      headline as { lineId: string; text: string } | undefined,
-      [...base.headlineOptions, ...(base.headline ? [base.headline] : [])]
-    ),
+    headline: optionalLine(headline, [
+      ...base.headlineOptions,
+      ...(base.headline ? [base.headline] : []),
+    ]),
     about: {
       ...base.about,
       text: paragraphs
@@ -515,12 +505,13 @@ export function blocksToContent<T extends EditableContent>(
             ? { ...section, line: { ...section.line, text: summary.text } }
             : section;
         case "skills":
+          // A group whose line the user deleted leaves the document.
           return {
             ...section,
-            groups: section.groups.map((group) => ({
-              ...group,
-              text: skills.get(group.id) ?? group.text,
-            })),
+            groups: section.groups.flatMap((group) => {
+              const text = skills.get(group.id);
+              return text === undefined ? [] : [{ ...group, text }];
+            }),
           };
         case "experience":
           return {

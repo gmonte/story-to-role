@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-import { competencyLevels } from "../truth/sections";
+import { competencyLevels, skillLevels } from "../truth/sections";
 import { profileValidationStatusSchema } from "./profile";
 
 /** What the quality review looks for (profile spec, "Validate and publish"). */
@@ -38,7 +38,7 @@ export const validationAnswerSchema = z.object({
     .array(
       z.object({
         name: z.string(),
-        level: z.enum(competencyLevels),
+        level: z.enum(skillLevels),
         reason: z.string(),
       })
     )

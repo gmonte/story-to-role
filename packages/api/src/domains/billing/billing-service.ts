@@ -2,6 +2,7 @@ import { clerkClient } from "@clerk/nextjs/server";
 import { TRPCError } from "@trpc/server";
 import type Stripe from "stripe";
 
+import { AiKeysRepository } from "@repo/api/domains/ai/ai-keys-repository";
 import {
   ensureMonthlyCredits,
   grantCredits,
@@ -9,17 +10,25 @@ import {
   packOrigin,
   revokeLots,
 } from "@repo/api/domains/credits/credit-ledger";
+import { AiKeysService } from "@repo/api/domains/ai/ai-keys-service";
+import {
+  currentPlan,
+  planUsesKey,
+} from "@repo/api/domains/credits/credit-plan";
 import { creditSettings } from "@repo/api/domains/credits/credit-pricing";
 import { UsersRepository } from "@repo/api/domains/users/users-repository";
 import type { DbClient } from "@repo/api/tools/db-client";
 import { getStripe } from "@repo/api/tools/stripe/stripe-client";
 import { logger } from "@repo/common/tools/logger";
 
-import { billingCatalog } from "./billing-catalog";
+import { billingCatalog, offerFor, planOfProduct } from "./billing-catalog";
 import { BillingRepository } from "./billing-repository";
 import {
+  type BillingInterval,
+  billingIntervalSchema,
   type BillingStatus,
   type CheckoutProduct,
+  type Currency,
   checkoutProductSchema,
   isLiveSubscription,
   type SubscriptionStatus,
@@ -36,15 +45,21 @@ export type StripeGateway = Pick<
   | "subscriptions"
   | "prices"
   | "invoicePayments"
+  | "subscriptionSchedules"
 >;
 
 const idOf = (value: string | { id: string } | null | undefined) =>
   typeof value === "string" ? value : (value?.id ?? null);
 
-/** The service period an invoice paid for (its subscription line's). */
+/**
+ * The service period an invoice paid for: its subscription line's, never
+ * a proration's (a switch's invoice credits the old plan's unused time).
+ */
 function paidPeriod(invoice: Stripe.Invoice) {
   const line = invoice.lines.data.find(
-    (row) => row.parent?.type === "subscription_item_details"
+    (row) =>
+      row.parent?.type === "subscription_item_details" &&
+      !row.parent.subscription_item_details?.proration
   );
   const period = line?.period ?? invoice.lines.data[0]?.period;
   return period
@@ -65,7 +80,9 @@ function paidPeriod(invoice: Stripe.Invoice) {
 export class BillingService {
   constructor(
     private readonly db: DbClient,
-    private readonly stripe: StripeGateway = getStripe()
+    private readonly stripe: StripeGateway = getStripe(),
+    // The key check the own-key Checkout runs first (tests replace it).
+    private readonly keys: Pick<AiKeysService, "store"> = new AiKeysService(db)
   ) {}
 
   async status(userId: string): Promise<BillingStatus> {
@@ -73,48 +90,72 @@ export class BillingService {
     const subscription = await repository.findSubscriptionByUserId(userId);
     return {
       subscription: subscription && {
+        plan: subscription.plan,
         status: subscription.status,
         interval: subscription.interval,
         currentPeriodEnd: subscription.currentPeriodEnd,
         cancelAtPeriodEnd: subscription.cancelAtPeriodEnd,
+        scheduledInterval: subscription.scheduledInterval,
       },
+      carryoverEndsAt:
+        (await repository.findCarryover(userId, new Date()))?.paidPeriodEnd ??
+        null,
       hasCustomer: !!(await repository.findCustomerByUserId(userId)),
     };
   }
 
-  /** A Stripe Checkout page for the subscription or a pack. */
+  /**
+   * A Stripe Checkout page for a subscription or a pack. The own-key
+   * subscription opens only with a key the provider accepts, saved first;
+   * from the credit subscription it is the switch (billing spec, "Switching
+   * plans"), which cancels the old one once the new one is paid.
+   */
   async startCheckout(input: {
     userId: string;
     product: CheckoutProduct;
+    apiKey?: string;
+    currency: Currency;
     baseUrl: string;
   }) {
     const price = billingCatalog.prices[input.product];
-    const subscribing = price.product === "subscription";
+    const subscribing = price.product !== "pack";
+    const ownKey = price.product === "own_key";
+    let replaces: string | null = null;
     if (subscribing) {
-      const current = await new BillingRepository(
-        this.db
-      ).findSubscriptionByUserId(input.userId);
-      if (current && isLiveSubscription(current.status)) {
-        // One subscription: changes go through the Customer Portal.
+      const current = await new BillingRepository(this.db).findLiveSubscription(
+        input.userId,
+        new Date()
+      );
+      if (current && ownKey && current.plan === "credits") {
+        replaces = current.stripeSubscriptionId;
+      } else if (current) {
+        // One subscription: other changes have their own paths.
         throw new TRPCError({ code: "CONFLICT" });
       }
     }
-    const [stripePrice] = (
-      await this.stripe.prices.list({
-        lookup_keys: [price.lookupKey],
-        active: true,
-      })
-    ).data;
-    if (!stripePrice) {
-      throw new Error(`Price ${price.lookupKey} is missing: run stripe:setup`);
+    if (ownKey) {
+      if (!input.apiKey) throw new TRPCError({ code: "BAD_REQUEST" });
+      await this.keys.store({ userId: input.userId, apiKey: input.apiKey });
     }
+    // A switch keeps the currency of the subscription it replaces: one
+    // customer's subscriptions share a currency.
+    const currency = replaces
+      ? ((await this.stripe.subscriptions.retrieve(replaces))
+          .currency as Currency)
+      : input.currency;
+    const stripePrice = await this.priceId(input.product);
     const customer = await this.customerFor(input.userId);
-    const metadata = { userId: input.userId, product: input.product };
+    const metadata = {
+      userId: input.userId,
+      product: input.product,
+      ...(replaces ? { replaces } : {}),
+    };
     const session = await this.stripe.checkout.sessions.create({
       mode: subscribing ? "subscription" : "payment",
       customer,
       client_reference_id: input.userId,
-      line_items: [{ price: stripePrice.id, quantity: 1 }],
+      line_items: [{ price: stripePrice, quantity: 1 }],
+      currency,
       metadata,
       ...(subscribing
         ? { subscription_data: { metadata } }
@@ -149,7 +190,89 @@ export class BillingService {
     };
   }
 
-  /** The Customer Portal: card, invoices, monthly or annual, cancelling. */
+  /**
+   * Billing spec, "Switching plans": an own-key subscriber moves to the
+   * credit subscription at once, the period restarting now and the unused
+   * own-key time credited on the invoice. If the payment doesn't go
+   * through, Stripe keeps the subscription as it was.
+   */
+  async switchToCredits(input: { userId: string }) {
+    const current = await new BillingRepository(this.db).findLiveSubscription(
+      input.userId,
+      new Date()
+    );
+    if (current?.plan !== "own_key") {
+      throw new TRPCError({ code: "PRECONDITION_FAILED" });
+    }
+    const item = await this.itemOf(current.stripeSubscriptionId);
+    const price = await this.priceId(offerFor("credits", current.interval));
+    const params: Stripe.SubscriptionUpdateParams = {
+      items: [{ id: item.id, price }],
+      billing_cycle_anchor: { type: "now" },
+      proration_behavior: "always_invoice",
+      payment_behavior: "pending_if_incomplete",
+    };
+    const updated = await this.stripe.subscriptions.update(
+      current.stripeSubscriptionId,
+      params
+    );
+    await this.syncSubscription(current.stripeSubscriptionId, input.userId);
+    return { applied: !updated.pending_update };
+  }
+
+  /**
+   * Monthly ↔ annual within the same subscription, confirmed in the
+   * Customer Portal on its interval-change configuration: a longer
+   * interval applies at once, a shorter one at the period's end.
+   */
+  async changeInterval(input: { userId: string; baseUrl: string }) {
+    const repository = new BillingRepository(this.db);
+    const current = await repository.findLiveSubscription(
+      input.userId,
+      new Date()
+    );
+    const customer = await repository.findCustomerByUserId(input.userId);
+    if (!current || !customer) {
+      throw new TRPCError({ code: "PRECONDITION_FAILED" });
+    }
+    const item = await this.itemOf(current.stripeSubscriptionId);
+    const target = offerFor(
+      current.plan,
+      current.interval === "year" ? "month" : "year"
+    );
+    const configuration = (
+      await this.stripe.billingPortal.configurations.list({ limit: 100 })
+    ).data.find(
+      (row) =>
+        row.active &&
+        row.metadata?.purpose === billingCatalog.intervalChangePortal
+    );
+    if (!configuration) {
+      throw new Error(
+        "The interval-change portal is missing: run stripe:setup"
+      );
+    }
+    const returnUrl = `${input.baseUrl}/app/billing`;
+    const session = await this.stripe.billingPortal.sessions.create({
+      customer: customer.stripeCustomerId,
+      configuration: configuration.id,
+      return_url: returnUrl,
+      flow_data: {
+        type: "subscription_update_confirm",
+        subscription_update_confirm: {
+          subscription: current.stripeSubscriptionId,
+          items: [{ id: item.id, price: await this.priceId(target) }],
+        },
+        after_completion: {
+          type: "redirect",
+          redirect: { return_url: returnUrl },
+        },
+      },
+    });
+    return { url: session.url };
+  }
+
+  /** The Customer Portal: card, invoices, cancelling. */
   async portal(input: { userId: string; baseUrl: string }) {
     const customer = await new BillingRepository(this.db).findCustomerByUserId(
       input.userId
@@ -201,6 +324,9 @@ export class BillingService {
       case "charge.refunded":
         await this.applyRefund(event.data.object, customer.userId);
         break;
+      case "checkout.session.expired":
+        await this.releaseAbandonedKey(event.data.object, customer.userId);
+        break;
       default:
         // checkout.session.async_payment_failed: nothing was granted.
         return { handled: false };
@@ -231,6 +357,8 @@ export class BillingService {
           })
           .autoPagingToArray({ limit: 1000 });
         for (const session of sessions) {
+          // A switch to the own-key plan whose return and webhook were lost.
+          await this.endReplaced(session, customer.userId);
           if (session.mode !== "payment") continue;
           await this.applyCheckout(session, customer.userId);
           const charge = (session.payment_intent as Stripe.PaymentIntent | null)
@@ -241,6 +369,18 @@ export class BillingService {
               originPrefix: packOrigin(session.id),
             });
           }
+        }
+        // Checkouts that expired lately (a lost expiry event): a key saved
+        // for an own-key Checkout nobody paid goes.
+        const expired = await this.stripe.checkout.sessions
+          .list({
+            customer: customer.stripeCustomerId,
+            status: "expired",
+            created: { gte: Math.floor(Date.now() / 1000) - 3 * 24 * 3600 },
+          })
+          .autoPagingToArray({ limit: 100 });
+        for (const session of expired) {
+          await this.releaseAbandonedKey(session, customer.userId);
         }
       } catch (error) {
         logger.error(logTags, "Reconciliation failed for a customer", {
@@ -280,6 +420,27 @@ export class BillingService {
       await this.stripe.checkout.sessions.expire(session.id);
     }
     await this.stripe.customers.del(customer.stripeCustomerId);
+  }
+
+  /** The Stripe price of a catalog offer, by its lookup key. */
+  private async priceId(product: CheckoutProduct) {
+    const { lookupKey } = billingCatalog.prices[product];
+    const [price] = (
+      await this.stripe.prices.list({ lookup_keys: [lookupKey], active: true })
+    ).data;
+    if (!price)
+      throw new Error(`Price ${lookupKey} is missing: run stripe:setup`);
+    return price.id;
+  }
+
+  /** A subscription's one item, as Stripe has it now. */
+  private async itemOf(stripeSubscriptionId: string) {
+    const [item] = (
+      await this.stripe.subscriptions.retrieve(stripeSubscriptionId)
+    ).items.data;
+    if (!item)
+      throw new Error(`Subscription ${stripeSubscriptionId} has no item`);
+    return item;
   }
 
   private async customerFor(userId: string) {
@@ -322,6 +483,7 @@ export class BillingService {
     if (session.mode === "subscription") {
       const subscriptionId = idOf(session.subscription);
       if (subscriptionId) await this.syncSubscription(subscriptionId, userId);
+      await this.endReplaced(session, userId);
       return;
     }
     // A pack: granted once paid (Pix completes asynchronously).
@@ -344,7 +506,9 @@ export class BillingService {
 
   /**
    * Saves Stripe's current view of a subscription, records its latest
-   * invoice when paid, and grants that month's credits from it.
+   * invoice when paid, and grants that month's credits from it. When the
+   * own-key plan ends (its period over, or switched to the credit
+   * subscription), the key goes too, unless a courtesy grant still uses it.
    */
   private async syncSubscription(subscriptionId: string, userId: string) {
     const subscription = await this.stripe.subscriptions.retrieve(
@@ -358,16 +522,30 @@ export class BillingService {
         ? subscription.latest_invoice
         : null;
     const period = invoice?.status === "paid" ? paidPeriod(invoice) : null;
+    const plan = planOfProduct(idOf(item.price.product));
+    const status = subscription.status as SubscriptionStatus;
+    const interval =
+      item.price.recurring?.interval === "year" ? "year" : "month";
+    const scheduledInterval = await this.scheduledInterval(
+      subscription,
+      interval,
+      item.current_period_end
+    );
     await this.db.transaction(async (tx) => {
       const repository = new BillingRepository(tx);
+      const before = await repository.findSubscriptionByStripeId(
+        subscription.id
+      );
       await repository.upsertSubscription({
         userId,
         stripeSubscriptionId: subscription.id,
-        status: subscription.status as SubscriptionStatus,
-        interval: item.price.recurring?.interval === "year" ? "year" : "month",
+        plan,
+        status,
+        interval,
         currentPeriodStart: new Date(item.current_period_start * 1000),
         currentPeriodEnd: new Date(item.current_period_end * 1000),
         cancelAtPeriodEnd: subscription.cancel_at_period_end,
+        scheduledInterval,
       });
       if (invoice?.id && period) {
         await repository.recordPaidInvoice({
@@ -377,8 +555,86 @@ export class BillingService {
           periodEnd: period.end,
         });
       }
-      await ensureMonthlyCredits(tx, userId, new Date());
+      const now = new Date();
+      await ensureMonthlyCredits(tx, userId, now);
+      // Only a live own-key plan ends: a first payment still pending (or
+      // failed) keeps the key the user just checked.
+      const leftOwnKey =
+        before?.plan === "own_key" &&
+        isLiveSubscription(before.status) &&
+        (plan === "credits" || !isLiveSubscription(status));
+      const { kind } = await currentPlan(tx, userId, now);
+      if (leftOwnKey && !planUsesKey(kind)) {
+        await new AiKeysRepository(tx).delete(userId);
+      }
     });
+  }
+
+  /**
+   * The interval a subscription schedule switches to at the period's end
+   * (the portal schedules a shorter interval there), if it differs.
+   */
+  private async scheduledInterval(
+    subscription: Stripe.Subscription,
+    interval: BillingInterval,
+    periodEnd: number
+  ): Promise<BillingInterval | null> {
+    const scheduleId = idOf(subscription.schedule);
+    if (!scheduleId) return null;
+    const schedule = await this.stripe.subscriptionSchedules.retrieve(
+      scheduleId,
+      { expand: ["phases.items.price"] }
+    );
+    const next = schedule.phases.find((phase) => phase.start_date >= periodEnd);
+    const price = next?.items[0]?.price;
+    const nextInterval =
+      typeof price === "object" && price && "recurring" in price
+        ? price.recurring?.interval
+        : null;
+    const parsed = billingIntervalSchema.safeParse(nextInterval);
+    return parsed.success && parsed.data !== interval ? parsed.data : null;
+  }
+
+  /**
+   * An own-key Checkout that expired unpaid (billing spec, "Plans and AI
+   * funding"): the key saved for it goes, unless the user's plan uses one
+   * (another Checkout paid since, or a courtesy grant).
+   */
+  private async releaseAbandonedKey(
+    session: Stripe.Checkout.Session,
+    userId: string
+  ) {
+    const product = checkoutProductSchema.safeParse(session.metadata?.product);
+    if (!product.success || session.payment_status === "paid") return;
+    if (billingCatalog.prices[product.data].product !== "own_key") return;
+    await this.db.transaction(async (tx) => {
+      const { kind } = await currentPlan(tx, userId, new Date());
+      if (!planUsesKey(kind)) await new AiKeysRepository(tx).delete(userId);
+    });
+  }
+
+  /**
+   * The credit subscription the own-key one replaced ends now, refunding
+   * nothing (billing spec, "Switching plans"); its paid period keeps
+   * granting credits. Done once: the return from Checkout, the webhook and
+   * reconciliation may all get here.
+   */
+  private async endReplaced(session: Stripe.Checkout.Session, userId: string) {
+    const stripeSubscriptionId = session.metadata?.replaces;
+    if (!stripeSubscriptionId || session.payment_status !== "paid") return;
+    const repository = new BillingRepository(this.db);
+    const old =
+      await repository.findSubscriptionByStripeId(stripeSubscriptionId);
+    if (old?.userId !== userId || old.replacedAt) return;
+    const current =
+      await this.stripe.subscriptions.retrieve(stripeSubscriptionId);
+    if (isLiveSubscription(current.status as SubscriptionStatus)) {
+      await this.stripe.subscriptions.cancel(stripeSubscriptionId, {
+        prorate: false,
+        invoice_now: false,
+      });
+    }
+    await repository.markReplaced(stripeSubscriptionId, new Date());
   }
 
   /**

@@ -37,7 +37,7 @@ export function ReminderList() {
         {reminders.data.map((reminder) => (
           <li
             key={reminder.key}
-            className="flex items-start justify-between gap-2 rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 text-sm"
+            className="border-warning-border bg-warning-soft flex items-start justify-between gap-2 rounded-lg border p-3 text-sm"
           >
             <Link
               href={`/app/openings/${reminder.openingId}`}

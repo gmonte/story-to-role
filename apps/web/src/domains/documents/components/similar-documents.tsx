@@ -126,7 +126,7 @@ function SimilarRow({
   const other = document.language !== defaultLanguage;
 
   return (
-    <li className="bg-background flex flex-col gap-1.5 rounded-lg border p-2.5 text-xs">
+    <li className="bg-card flex flex-col gap-1.5 rounded-lg border p-2.5 text-xs">
       <span className="text-sm">
         {source.kind === "library"
           ? t.formatMessage(

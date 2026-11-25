@@ -5,6 +5,7 @@ import { AiKeysRepository } from "@repo/api/domains/ai/ai-keys-repository";
 import { KeyUnusableError } from "@repo/api/domains/ai/providers/provider-package";
 import { settleTask } from "@repo/api/domains/credits/settle-task";
 
+import { stalledMessage } from "./task-durations";
 import { TasksRepository } from "./tasks-repository";
 import type { TaskProgress, TaskType } from "./schemas/task";
 
@@ -38,8 +39,9 @@ export async function runTask(
   if (owner?.type !== type) {
     throw new Error(`Task ${taskId} is not a ${String(type)} task`);
   }
-
-  await repository.markProcessing(taskId);
+  // The sweep already failed it (its run started too late): nothing waits
+  // on it any more.
+  if (!(await repository.markProcessing(taskId))) return;
 
   let outcome: void | { charge: false };
   try {
@@ -71,6 +73,13 @@ export async function runTask(
     funding: owner.funding,
     charge: outcome?.charge,
   });
+}
+
+/** A task whose run died or never started, failed by the sweep. */
+export class TaskStalledError extends Error {
+  constructor() {
+    super(stalledMessage);
+  }
 }
 
 /**
@@ -109,7 +118,11 @@ export async function finishTask(input: {
   }
   await repository.markFailed({
     taskId,
-    errorMessage: keyFailure ? `key_${keyFailure}` : "The task failed",
+    errorMessage: keyFailure
+      ? `key_${keyFailure}`
+      : input.error instanceof TaskStalledError
+        ? stalledMessage
+        : "The task failed",
   });
   // A failed task releases its reservation (billing spec).
   await settleTask(db, { userId, taskId, succeeded: false });

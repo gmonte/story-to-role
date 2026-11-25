@@ -3,13 +3,14 @@ import { task } from "@trigger.dev/sdk";
 import { createTaskAi } from "@repo/api/domains/ai/create-task-ai";
 import { runTask } from "@repo/api/domains/tasks/run-task";
 import { db } from "@repo/api/tools/db";
+import { taskMaxDuration } from "@repo/api/domains/tasks/task-durations";
 
 import { runReviewResume } from "../generation/run-review-resume";
 
 export const reviewDocumentTask = task({
   id: "review_document",
   retry: { maxAttempts: 1 },
-  maxDuration: 300,
+  maxDuration: taskMaxDuration.review_document,
   run: async ({ taskId }: { taskId: string }) => {
     await runTask(
       { db, taskId, type: "review_document" },

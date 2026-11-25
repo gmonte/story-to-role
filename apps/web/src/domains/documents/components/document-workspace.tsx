@@ -3,7 +3,13 @@
 import { useState, type ReactNode } from "react";
 
 import { useMutation } from "@tanstack/react-query";
-import { Check, ListTree, Pencil, RotateCcw } from "lucide-react";
+import {
+  Check,
+  ListTree,
+  Pencil,
+  RotateCcw,
+  TriangleAlert,
+} from "lucide-react";
 import Link from "next/link";
 
 import type { VersionView } from "@repo/api/domains/documents/schemas/document-view";
@@ -94,13 +100,12 @@ export function DocumentWorkspace({
             indexButton={
               phone && (
                 <Button
-                  size="sm"
+                  size="icon"
                   variant="outline"
-                  className="h-10"
+                  aria-label={t.formatMessage({ defaultMessage: "Index" })}
                   onClick={() => setIndexOpen(true)}
                 >
                   <ListTree />
-                  {t.formatMessage({ defaultMessage: "Index" })}
                 </Button>
               )
             }
@@ -173,24 +178,36 @@ function NewerProfileNotice() {
   const newer = version.profile.newer;
   if (!newer) return null;
   return (
-    <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-amber-500/40 bg-amber-500/10 p-2.5 text-xs">
-      <span>
-        {t.formatMessage(
-          {
-            defaultMessage:
-              "Profile version {number} is newer than this document's{current, select, none {} other { (version {current})}}.",
-          },
-          {
-            number: newer.number,
-            current: version.profile.versionNumber ?? "none",
-          }
-        )}
+    <div className="border-warning-border bg-warning-soft flex items-center gap-3 rounded-lg border p-3 text-xs">
+      <TriangleAlert className="text-warning size-4 shrink-0" />
+      <span className="min-w-0 flex-1">
+        {/* A document from before versions were recorded doesn't know
+            which one it was written from. */}
+        {version.profile.versionNumber === null
+          ? t.formatMessage(
+              {
+                defaultMessage:
+                  "This document was written before it recorded its profile version. Use version {number} to pin it to the one published now.",
+              },
+              { number: newer.number }
+            )
+          : t.formatMessage(
+              {
+                defaultMessage:
+                  "Profile version {number} is newer than this document's (version {current}).",
+              },
+              {
+                number: newer.number,
+                current: version.profile.versionNumber,
+              }
+            )}
         <Link href="/app/career" className="ml-1 underline underline-offset-2">
           {t.formatMessage({ defaultMessage: "Open My career" })}
         </Link>
       </span>
       <Button
         size="sm"
+        className="shrink-0"
         disabled={use.isPending || saveStatus !== "saved"}
         onClick={() => use.mutate({ versionId: version.id })}
       >
@@ -237,7 +254,9 @@ function DocumentToolbar({
   return (
     <div className="bg-background/95 sticky top-0 z-10 flex flex-col gap-2 border-b px-4 py-2 backdrop-blur">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <div className="flex flex-wrap items-center gap-3">
+        {/* On a phone the index and the score share the first line, the
+            legend goes under them. */}
+        <div className="flex flex-wrap items-center gap-3 max-sm:contents">
           {indexButton}
           {/* One version needs no tabs: they'd be a button doing nothing. */}
           {versions.length > 1 && (
@@ -251,17 +270,18 @@ function DocumentToolbar({
               </TabsList>
             </Tabs>
           )}
-          <div className="text-muted-foreground flex flex-wrap gap-3 text-xs">
-            <Legend className="border-l-emerald-500">
+          {/* On a phone the legend is one line that scrolls sideways. */}
+          <div className="text-muted-foreground flex flex-wrap gap-3 text-xs max-sm:order-last max-sm:basis-full max-sm:[scrollbar-width:none] max-sm:flex-nowrap max-sm:overflow-x-auto max-sm:[&::-webkit-scrollbar]:hidden max-sm:[&>*]:shrink-0">
+            <Legend className="border-l-origin-profile">
               {t.formatMessage({ defaultMessage: "Your profile" })}
             </Legend>
-            <Legend className="border-dashed border-l-emerald-500">
+            <Legend className="border-l-origin-edited border-dashed">
               {t.formatMessage({ defaultMessage: "Edited by you" })}
             </Legend>
-            <Legend className="border-l-sky-500">
+            <Legend className="border-l-origin-instruction">
               {t.formatMessage({ defaultMessage: "Application instruction" })}
             </Legend>
-            <Legend className="border-l-amber-500">
+            <Legend className="border-l-origin-written">
               {t.formatMessage({ defaultMessage: "Written by you" })}
             </Legend>
           </div>
@@ -290,7 +310,9 @@ function DocumentToolbar({
             onClick={() => undo.mutate({ versionId: version.id })}
           >
             <RotateCcw />
-            {t.formatMessage({ defaultMessage: "Undo" })}
+            <span className="max-sm:sr-only">
+              {t.formatMessage({ defaultMessage: "Undo" })}
+            </span>
           </Button>
         </div>
       </div>

@@ -2,9 +2,8 @@
 
 import type { ReactNode } from "react";
 
-import { Loader2 } from "lucide-react";
-
 import { ResizableAside } from "~/domains/workspace/components/resizable-aside";
+import { WorkspaceSkeleton } from "~/domains/workspace/components/workspace-skeleton";
 
 import { useProfileDraftQuery } from "../hooks/use-profile-draft";
 import { DocumentSwitch } from "./document-switch";
@@ -23,11 +22,7 @@ import { ProfileToolbar } from "./profile-toolbar";
 export function ProfileEditorGate({ children }: { children: ReactNode }) {
   const draft = useProfileDraftQuery();
   if (!draft.data) {
-    return (
-      <div className="flex flex-1 items-center justify-center">
-        <Loader2 className="text-muted-foreground size-5 animate-spin" />
-      </div>
-    );
+    return <WorkspaceSkeleton />;
   }
   return (
     <ProfileEditorProvider draft={draft.data}>{children}</ProfileEditorProvider>

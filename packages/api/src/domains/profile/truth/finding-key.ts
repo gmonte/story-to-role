@@ -105,6 +105,17 @@ export function reviewNoteKey(note: { message: string; quote: string }) {
   return sha256Hex(`review | ${note.message} | ${note.quote}`).slice(0, 16);
 }
 
+/**
+ * The key a rejected competency level proposal is stored under (with the
+ * ignored findings): the competency and the level proposed, so a later
+ * validation proposing another level shows it again.
+ */
+export function levelProposalKey(proposal: { name: string; level: string }) {
+  return sha256Hex(
+    `level | ${proposal.name.trim().toLowerCase()} | ${proposal.level}`
+  ).slice(0, 16);
+}
+
 /** Findings the user hasn't ignored; format findings can't be ignored. */
 export function withoutDismissed(
   findings: ProfileFinding[],

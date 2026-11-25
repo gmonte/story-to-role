@@ -205,7 +205,7 @@ function AdaptForm({
             </div>
           )}
           {repeats && (
-            <p className="rounded-md border border-amber-500/40 bg-amber-500/10 p-2.5 text-xs">
+            <p className="border-warning-border bg-warning-soft rounded-md border p-2.5 text-xs">
               {t.formatMessage(
                 {
                   defaultMessage:

@@ -38,6 +38,7 @@ export function availableViews(input: {
       return openingViews;
     case "external":
     case "processing":
+    case "failed":
     case "rejected":
       return ["opening"];
   }
@@ -52,6 +53,7 @@ export type PrimaryAction =
   | "record_reply"
   | "reopen"
   | "analyze"
+  | "retry_analysis"
   | "add_again";
 
 export type JourneyState = {
@@ -86,6 +88,8 @@ export function primaryAction(state: JourneyState): PrimaryAction | null {
       return null;
     case "rejected":
       return "add_again";
+    case "failed":
+      return "retry_analysis";
     case "external":
       return "analyze";
     case "closed":
@@ -144,6 +148,7 @@ export function phoneActionTarget(
     case "go_to_career":
     case "reopen":
     case "analyze":
+    case "retry_analysis":
     case "add_again":
     case null:
       return null;

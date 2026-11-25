@@ -1,18 +1,27 @@
 "use client";
 
-import { useState } from "react";
-
-import { Check, CircleAlert, EyeOff, MessageSquare, X } from "lucide-react";
+import {
+  ArrowRight,
+  Check,
+  CircleAlert,
+  EyeOff,
+  Sparkles,
+  X,
+} from "lucide-react";
 
 import { useTranslation } from "@repo/intl/use-translation";
 import { extractProfile } from "@repo/api/domains/profile/truth/extract";
+import { Badge } from "@repo/web/components/ui/badge";
 import { Button } from "@repo/web/components/ui/button";
+import { cn } from "@repo/web/lib/utils";
+
+import { onCardClick } from "~/domains/workspace/utils/card-click";
+import { decisionButton } from "~/domains/workspace/utils/decision-buttons";
 
 import { useProfileLabels } from "../hooks/use-profile-labels";
+import { competencyPosition } from "../utils/competency-position";
 import { useLatestValidation } from "../hooks/use-profile-validation";
 import { useProfileEditor } from "./profile-editor-context";
-
-const labelSeparator = ": ";
 
 /**
  * The last validation's report beside the document (profile spec, "Validate
@@ -28,10 +37,11 @@ export function ProfileReview() {
     goToLine,
     blocks,
     applyCompetencyLevel,
+    rejectLevelProposal,
+    isLevelProposalRejected,
     talkAbout,
   } = useProfileEditor();
   const validation = useLatestValidation();
-  const [rejected, setRejected] = useState<string[]>([]);
   const report = validation.data?.report;
   if (!report) return null;
 
@@ -44,7 +54,7 @@ export function ProfileReview() {
   );
   const proposals = report.competencies.filter(
     (proposal) =>
-      !rejected.includes(proposal.name) &&
+      !isLevelProposalRejected(proposal) &&
       levels.get(proposal.name.toLowerCase()) !== proposal.level
   );
 
@@ -56,7 +66,7 @@ export function ProfileReview() {
           { count: reviewFindings.length }
         )}
         {reviewFindings.length > 0 && (
-          <CircleAlert className="size-3.5 text-amber-600" />
+          <CircleAlert className="text-warning size-3.5" />
         )}
       </p>
       {reviewFindings.length === 0 && (
@@ -67,26 +77,32 @@ export function ProfileReview() {
           })}
         </p>
       )}
-      <ul className="space-y-1">
+      <ul className="space-y-2">
         {reviewFindings.map((finding, index) => (
-          <li key={`${finding.quote}-${index}`}>
+          <li
+            key={`${finding.quote}-${index}`}
+            className="bg-card flex cursor-pointer flex-col gap-2 rounded-lg border p-3 text-[13px] leading-snug"
+            onClick={onCardClick(() =>
+              goToLine(finding.line, { from: finding.from, to: finding.to })
+            )}
+          >
             <button
               type="button"
               onClick={() =>
                 goToLine(finding.line, { from: finding.from, to: finding.to })
               }
-              className="hover:bg-muted w-full rounded px-2 py-1 text-left text-xs"
+              className="text-left hover:underline"
             >
-              <span className="text-primary block font-medium">
+              <span className="block font-medium">
                 {reviewKinds[finding.kind]}
               </span>
               <span className="text-muted-foreground">{finding.message}</span>
             </button>
-            <div className="flex flex-wrap items-center gap-1 px-2 pb-1">
+            <div className="flex flex-wrap items-center gap-1.5">
               <Button
                 size="sm"
                 variant="ghost"
-                className="text-muted-foreground h-6 px-2 text-xs"
+                className="text-muted-foreground h-7 px-2.5 text-xs"
                 title={t.formatMessage({ defaultMessage: "Talk about this" })}
                 aria-label={t.formatMessage({
                   defaultMessage: "Talk about this",
@@ -99,12 +115,13 @@ export function ProfileReview() {
                   })
                 }
               >
-                <MessageSquare className="size-3" />
+                <Sparkles className="text-brand-accent size-3" />
+                {t.formatMessage({ defaultMessage: "Chat" })}
               </Button>
               <Button
                 size="sm"
                 variant="ghost"
-                className="text-muted-foreground h-6 px-2 text-xs"
+                className="text-muted-foreground h-7 px-2.5 text-xs"
                 title={t.formatMessage({
                   defaultMessage: "This finding doesn't apply: stop showing it",
                 })}
@@ -122,43 +139,87 @@ export function ProfileReview() {
           <p className="text-muted-foreground text-xs font-medium">
             {t.formatMessage({ defaultMessage: "Proposed competency levels" })}
           </p>
-          <ul className="space-y-1">
-            {proposals.map((proposal) => (
-              <li key={proposal.name} className="rounded border p-2 text-xs">
-                <p>
-                  <span className="font-medium">{proposal.name}</span>
-                  {labelSeparator}
-                  {levelLabels[proposal.level]}
-                </p>
-                <p className="text-muted-foreground mt-0.5">
-                  {proposal.reason}
-                </p>
-                <div className="mt-1 flex gap-1">
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="h-6 px-2 text-xs"
-                    onClick={() =>
-                      applyCompetencyLevel(proposal.name, proposal.level)
-                    }
-                  >
-                    <Check className="size-3" />
-                    {t.formatMessage({ defaultMessage: "Accept" })}
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    className="h-6 px-2 text-xs"
-                    onClick={() =>
-                      setRejected((names) => [...names, proposal.name])
-                    }
-                  >
-                    <X className="size-3" />
-                    {t.formatMessage({ defaultMessage: "Reject" })}
-                  </Button>
-                </div>
-              </li>
-            ))}
+          <ul className="space-y-2">
+            {proposals.map((proposal) => {
+              // Where the competency is now: a new one, or a level it leaves.
+              const current = levels.get(proposal.name.toLowerCase());
+              // A competency already listed opens where it is.
+              const position = competencyPosition(blocks, proposal.name);
+              const open = position
+                ? () =>
+                    goToLine(position.line, {
+                      from: position.from,
+                      to: position.to,
+                    })
+                : undefined;
+              return (
+                <li
+                  key={proposal.name}
+                  className={cn(
+                    "bg-card flex flex-col gap-2 rounded-lg border p-3 text-[13px] leading-snug",
+                    open && "cursor-pointer"
+                  )}
+                  onClick={open && onCardClick(open)}
+                >
+                  <p className="flex flex-wrap items-center gap-x-1.5 gap-y-1">
+                    {open ? (
+                      <button
+                        type="button"
+                        onClick={open}
+                        className="text-left font-medium hover:underline"
+                      >
+                        {proposal.name}
+                      </button>
+                    ) : (
+                      <span className="font-medium">{proposal.name}</span>
+                    )}
+                    {current === undefined && (
+                      <Badge variant="secondary">
+                        {t.formatMessage({ defaultMessage: "New competency" })}
+                      </Badge>
+                    )}
+                  </p>
+                  <p className="flex flex-wrap items-center gap-1.5">
+                    {current !== undefined && (
+                      <>
+                        <span className="text-muted-foreground line-through">
+                          {levelLabels[current]}
+                        </span>
+                        <ArrowRight
+                          className="text-muted-foreground size-3.5"
+                          aria-label={t.formatMessage({
+                            defaultMessage: "moves to",
+                          })}
+                        />
+                      </>
+                    )}
+                    <span className="text-success font-medium">
+                      {levelLabels[proposal.level]}
+                    </span>
+                  </p>
+                  <p className="text-muted-foreground">{proposal.reason}</p>
+                  <div className="flex gap-1.5">
+                    <Button
+                      className={decisionButton}
+                      onClick={() =>
+                        applyCompetencyLevel(proposal.name, proposal.level)
+                      }
+                    >
+                      <Check />
+                      {t.formatMessage({ defaultMessage: "Accept" })}
+                    </Button>
+                    <Button
+                      variant="outline"
+                      className={decisionButton}
+                      onClick={() => rejectLevelProposal(proposal)}
+                    >
+                      <X />
+                      {t.formatMessage({ defaultMessage: "Reject" })}
+                    </Button>
+                  </div>
+                </li>
+              );
+            })}
           </ul>
         </div>
       )}

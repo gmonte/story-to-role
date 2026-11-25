@@ -1,7 +1,7 @@
 "use client";
 
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { RotateCw } from "lucide-react";
+import { RotateCw, TriangleAlert } from "lucide-react";
 import Link from "next/link";
 
 import { conditionCategories } from "@repo/api/domains/openings/schemas/opening";
@@ -34,6 +34,13 @@ type FitItem = NonNullable<OpeningDetail["fitCheck"]>["items"][number];
  * then partial, then met; within each, mandatory before desirable, then by
  * kind and name.
  */
+
+/** A requirement's verdict as a soft fill (ADR 0012: req tokens). */
+const verdictTone = {
+  met: "border-transparent bg-req-met-soft text-req-met",
+  partial: "border-transparent bg-req-partial-soft text-req-partial",
+  gap: "border-transparent bg-req-gap-soft text-req-gap",
+} as const;
 export function byFitOrder(a: FitItem, b: FitItem) {
   return (
     verdictOrder[a.verdict] - verdictOrder[b.verdict] ||
@@ -54,11 +61,55 @@ export function pendingGaps(opening: OpeningDetail) {
 }
 
 /** The band's colors, on a chip or a block. */
+/** The band's own color for text (its title on the fit card, its chip). */
+export function bandTextClassName(band: "high" | "medium" | "low") {
+  return cn(
+    band === "high" && "text-fit-high",
+    band === "medium" && "text-fit-mid",
+    band === "low" && "text-fit-low"
+  );
+}
+
+/** The band's dot, as on the opening's chip and in the sidebar. */
+export function bandDotClassName(band: "high" | "medium" | "low") {
+  return cn(
+    band === "high" && "bg-fit-high",
+    band === "medium" && "bg-fit-mid",
+    band === "low" && "bg-fit-low"
+  );
+}
+
+/** Met, partial and gap as one segmented bar, in that order. */
+function VerdictBar({
+  items,
+}: {
+  items: Array<{ verdict: "met" | "partial" | "gap" }>;
+}) {
+  const count = (verdict: "met" | "partial" | "gap") =>
+    items.filter((item) => item.verdict === verdict).length;
+  return (
+    <div
+      aria-hidden="true"
+      className="flex h-1.5 gap-0.5 overflow-hidden rounded-full"
+    >
+      {count("met") > 0 && (
+        <span className="bg-fit-high" style={{ flex: count("met") }} />
+      )}
+      {count("partial") > 0 && (
+        <span className="bg-fit-mid" style={{ flex: count("partial") }} />
+      )}
+      {count("gap") > 0 && (
+        <span className="bg-fit-low" style={{ flex: count("gap") }} />
+      )}
+    </div>
+  );
+}
+
 export function bandClassName(band: "high" | "medium" | "low") {
   return cn(
-    band === "high" && "border-emerald-500/40 bg-emerald-500/10",
-    band === "medium" && "border-amber-500/40 bg-amber-500/10",
-    band === "low" && "border-red-500/40 bg-red-500/10"
+    band === "high" && "border-fit-high/40 bg-fit-high-soft",
+    band === "medium" && "border-fit-mid/40 bg-fit-mid-soft",
+    band === "low" && "border-fit-low/40 bg-fit-low-soft"
   );
 }
 
@@ -86,34 +137,47 @@ export function FitColumn({ opening }: { opening: OpeningDetail }) {
         <>
           <div
             className={cn(
-              "flex flex-col gap-2 rounded-lg border p-3",
+              "flex flex-col gap-3 rounded-lg border p-4",
               bandClassName(fitCheck.band)
             )}
           >
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              {/* Its hint ("a hint from your profile") lives once, on the
-                  header's chip. */}
-              <p className="font-medium">{labels.band(fitCheck.band)}</p>
-              <div className="flex items-center gap-2">
-                <RunFitCheck
-                  openingId={opening.id}
-                  again
-                  enabled
-                  highlight={fitCheck.outdated}
-                />
-              </div>
+            {/* Its hint ("a hint from your profile") lives once, on the
+                header's chip. */}
+            <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+              <p
+                className={cn(
+                  "font-display text-xl font-semibold",
+                  bandTextClassName(fitCheck.band)
+                )}
+              >
+                {labels.band(fitCheck.band)}
+              </p>
+              <p className="text-sm">
+                {t.formatMessage(
+                  {
+                    defaultMessage:
+                      "{met, number} of {total, number} required met",
+                  },
+                  {
+                    met: fitCheck.items.filter(
+                      (item) =>
+                        item.importance === "mandatory" &&
+                        item.verdict === "met"
+                    ).length,
+                    total: fitCheck.items.filter(
+                      (item) => item.importance === "mandatory"
+                    ).length,
+                  }
+                )}
+              </p>
             </div>
+            <VerdictBar items={fitCheck.items} />
             <div className="flex flex-wrap gap-1.5">
               {(["met", "partial", "gap"] as const).map((verdict) => (
                 <Badge
                   key={verdict}
-                  variant={
-                    verdict === "gap"
-                      ? "destructive"
-                      : verdict === "met"
-                        ? "default"
-                        : "secondary"
-                  }
+                  variant="outline"
+                  className={verdictTone[verdict]}
                 >
                   {cn(
                     t.formatNumber(
@@ -126,7 +190,7 @@ export function FitColumn({ opening }: { opening: OpeningDetail }) {
               ))}
             </div>
             {blockers > 0 && (
-              <p className="text-xs font-medium text-red-600 dark:text-red-400">
+              <p className="text-destructive text-xs font-medium">
                 {t.formatMessage(
                   {
                     defaultMessage:
@@ -136,18 +200,41 @@ export function FitColumn({ opening }: { opening: OpeningDetail }) {
                 )}
               </p>
             )}
+            {/* A check that broke left the previous one in place. */}
+            {opening.checkFailed && (
+              <p className="border-warning-border bg-warning-soft flex gap-2 rounded-md border p-2.5 text-xs">
+                <TriangleAlert className="text-warning mt-0.5 size-3.5 shrink-0" />
+                {t.formatMessage({
+                  defaultMessage:
+                    "The last check didn’t finish, so this is the one before it. No credits were used. Check again to try once more.",
+                })}
+              </p>
+            )}
             {/* The check is worth running again once what it read changed. */}
             {fitCheck.outdated && (
-              <p className="text-xs font-medium">
+              <p className="border-warning-border bg-warning-soft flex gap-2 rounded-md border p-2.5 text-xs">
+                <TriangleAlert className="text-warning mt-0.5 size-3.5 shrink-0" />
                 {t.formatMessage({
                   defaultMessage:
                     "This check is outdated: you answered questions, edited the description, or published your profile or job preferences again since it ran. Its status and totals don’t count that yet. Check again to include it.",
                 })}
               </p>
             )}
+            {/* A closed opening is checked again once it is reopened. */}
+            {opening.status === "closed" ? (
+              <p className="text-muted-foreground text-xs">
+                {t.formatMessage({
+                  defaultMessage: "Reopen the opening to check it again.",
+                })}
+              </p>
+            ) : (
+              <div className="flex items-center gap-2">
+                <RunFitCheck openingId={opening.id} again enabled />
+              </div>
+            )}
           </div>
           {fitCheck.preferenceConflicts.length > 0 && (
-            <div className="rounded-lg border border-red-500/40 bg-red-500/5 p-3 text-sm">
+            <div className="border-destructive/40 bg-destructive/5 rounded-lg border p-3 text-sm">
               <p className="font-medium">
                 {t.formatMessage({
                   defaultMessage: "It breaks your job preferences:",
@@ -309,18 +396,10 @@ function FitCheckItem({
   return (
     <li
       id={`fit-item-${item.id}`}
-      className="bg-background flex flex-col gap-1.5 rounded-lg border p-3"
+      className="bg-card flex flex-col gap-1.5 rounded-lg border p-3"
     >
       <div className="flex items-center gap-1.5">
-        <Badge
-          variant={
-            item.verdict === "gap"
-              ? "destructive"
-              : item.verdict === "met"
-                ? "default"
-                : "secondary"
-          }
-        >
+        <Badge variant="outline" className={verdictTone[item.verdict]}>
           {labels.verdict(item.verdict)}
         </Badge>
         <span className="text-muted-foreground text-[11px]">

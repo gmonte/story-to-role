@@ -36,15 +36,12 @@ import {
   TabsList,
   TabsTrigger,
 } from "@repo/web/components/ui/tabs";
-import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetHeader,
-  SheetTitle,
-} from "@repo/web/components/ui/sheet";
 import { cn } from "@repo/web/lib/utils";
 
+import {
+  PhoneSheetBar,
+  type PhoneSheetTab,
+} from "~/domains/workspace/components/phone-sheet-bar";
 import { usePhone } from "~/domains/workspace/hooks/use-desktop";
 import { useTRPC } from "~/tools/trpc/client";
 
@@ -106,20 +103,22 @@ export function DocumentSidePanel({
     <Tabs
       value={tab}
       onValueChange={setTab}
-      className={cn("gap-3", tab === "agent" && "h-full min-h-0 flex-col")}
+      // Flush in its column, as My career's: the tabs and each tab's
+      // content keep their own margins.
+      className="flex h-full min-h-0 flex-col gap-0"
     >
-      <TabsList className="w-full">
+      <TabsList className="mx-3 mt-3 self-start">
         {agent && (
-          <TabsTrigger value="agent" className="flex-1">
+          <TabsTrigger value="agent">
             {t.formatMessage({ defaultMessage: "Agent" })}
           </TabsTrigger>
         )}
         {preview && (
-          <TabsTrigger value="preview" className="flex-1">
+          <TabsTrigger value="preview">
             {t.formatMessage({ defaultMessage: "Preview" })}
           </TabsTrigger>
         )}
-        <TabsTrigger value="versions" className="flex-1">
+        <TabsTrigger value="versions">
           {t.formatMessage({ defaultMessage: "Versions" })}
         </TabsTrigger>
       </TabsList>
@@ -128,17 +127,23 @@ export function DocumentSidePanel({
         <TabsContent
           value="agent"
           forceMount
-          className="bg-background -mx-4 flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border data-[state=inactive]:hidden"
+          className="flex min-h-0 flex-1 flex-col overflow-hidden data-[state=inactive]:hidden"
         >
           {agent}
         </TabsContent>
       )}
       {preview && (
-        <TabsContent value="preview">
-          <PdfPreview key={version.id} version={version} />
+        <TabsContent
+          value="preview"
+          className="flex min-h-0 flex-1 flex-col p-4"
+        >
+          <PdfPreview key={version.id} version={version} fill />
         </TabsContent>
       )}
-      <TabsContent value="versions" className="flex flex-col gap-4">
+      <TabsContent
+        value="versions"
+        className="flex min-h-0 flex-col gap-4 overflow-y-auto p-4"
+      >
         {versions}
       </TabsContent>
     </Tabs>
@@ -170,69 +175,35 @@ function PhoneDocumentBar({
     setSeen(topicId);
     setOpen("agent");
   }
-  const tabs = [
-    agent && {
-      key: "agent",
-      label: t.formatMessage({ defaultMessage: "Agent" }),
-    },
-    preview && {
-      key: "preview",
-      label: t.formatMessage({ defaultMessage: "Preview" }),
-    },
+  const tabs: PhoneSheetTab[] = [
+    ...(agent
+      ? [
+          {
+            key: "agent",
+            label: t.formatMessage({ defaultMessage: "Agent" }),
+            content: agent,
+          },
+        ]
+      : []),
+    ...(preview
+      ? [
+          {
+            key: "preview",
+            label: t.formatMessage({ defaultMessage: "Preview" }),
+            content: <PdfPreview key={version.id} version={version} />,
+            scroll: true,
+          },
+        ]
+      : []),
     {
       key: "versions",
       label: t.formatMessage({ defaultMessage: "Versions" }),
+      content: versions,
+      scroll: true,
     },
-  ].filter((tab) => !!tab);
-  const current = tabs.find((tab) => tab.key === open);
+  ];
 
-  return (
-    <>
-      <div className="bg-background/95 flex shrink-0 gap-2 border-t px-3 pt-2 pb-[calc(0.5rem+env(safe-area-inset-bottom))] backdrop-blur">
-        {tabs.map((tab) => (
-          <Button
-            key={tab.key}
-            variant="outline"
-            className="h-11 flex-1"
-            onClick={() => setOpen(tab.key)}
-          >
-            {tab.label}
-          </Button>
-        ))}
-      </div>
-      <Sheet
-        open={open !== null}
-        onOpenChange={(next) => !next && setOpen(null)}
-      >
-        <SheetContent
-          side="bottom"
-          className="h-[92dvh] gap-0 p-0 pb-[env(safe-area-inset-bottom)]"
-        >
-          <SheetHeader className="border-b p-4 pr-12">
-            <SheetTitle>{current?.label}</SheetTitle>
-            <SheetDescription className="sr-only">
-              {current?.label}
-            </SheetDescription>
-          </SheetHeader>
-          {open === "agent" && (
-            <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-              {agent}
-            </div>
-          )}
-          {open === "preview" && (
-            <div className="min-h-0 flex-1 overflow-y-auto p-4">
-              <PdfPreview key={version.id} version={version} />
-            </div>
-          )}
-          {open === "versions" && (
-            <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto p-4">
-              {versions}
-            </div>
-          )}
-        </SheetContent>
-      </Sheet>
-    </>
-  );
+  return <PhoneSheetBar tabs={tabs} open={open} onOpenChange={setOpen} />;
 }
 
 const previewRenderDelayMs = 2500;
@@ -242,7 +213,14 @@ const previewRenderDelayMs = 2500;
  * it refreshes with every saved change. Open findings ask once for
  * "Generate PDF anyway".
  */
-export function PdfPreview({ version }: { version: VersionView }) {
+export function PdfPreview({
+  version,
+  fill = false,
+}: {
+  version: VersionView;
+  // Fill the column's height (desktop) instead of a page's proportion.
+  fill?: boolean;
+}) {
   const t = useTranslation();
   const trpc = useTRPC();
   const refresh = useRefreshDocuments();
@@ -286,7 +264,7 @@ export function PdfPreview({ version }: { version: VersionView }) {
           })}
           onConfirm={() => setAcknowledged(true)}
         />
-        <div className="flex flex-col gap-2 rounded-lg border border-amber-500/40 bg-amber-500/10 p-2.5 text-xs">
+        <div className="border-warning-border bg-warning-soft flex flex-col gap-2 rounded-lg border p-2.5 text-xs">
           <p>
             {t.formatMessage({
               defaultMessage:
@@ -306,16 +284,26 @@ export function PdfPreview({ version }: { version: VersionView }) {
     );
   }
   return (
-    <div className="flex flex-col gap-2">
+    <div className={cn("flex flex-col gap-2", fill && "min-h-0 flex-1")}>
       {ready ? (
         <iframe
           key={snapshotId}
           title={t.formatMessage({ defaultMessage: "PDF preview" })}
           src={`/api/documents/versions/${version.id}/pdf?inline=1${acknowledged ? "&acknowledge=1" : ""}#toolbar=0&view=FitH`}
-          className="bg-muted aspect-[1/1.414] w-full rounded-lg border"
+          className={cn(
+            "bg-muted w-full rounded-lg border",
+            // In the column it takes the height left above its footer; in
+            // the phone's sheet, which scrolls, a page's proportion.
+            fill ? "min-h-0 flex-1" : "aspect-[1/1.414]"
+          )}
         />
       ) : (
-        <div className="bg-muted/40 text-muted-foreground flex aspect-[1/1.414] w-full flex-col items-center justify-center gap-2 rounded-lg border text-xs">
+        <div
+          className={cn(
+            "bg-muted/40 text-muted-foreground flex w-full flex-col items-center justify-center gap-2 rounded-lg border text-xs",
+            fill ? "min-h-0 flex-1" : "aspect-[1/1.414]"
+          )}
+        >
           <Loader2 className="size-4 animate-spin" />
           {t.formatMessage({ defaultMessage: "Rendering the PDF…" })}
         </div>
@@ -362,7 +350,7 @@ export function VersionList({
             type="button"
             onClick={() => select(row.id)}
             className={cn(
-              "bg-background flex w-full items-center justify-between rounded-lg border p-2.5 text-left text-sm",
+              "bg-card flex w-full items-center justify-between rounded-lg border p-2.5 text-left text-sm",
               version.id === row.id && "border-primary"
             )}
           >
@@ -458,7 +446,7 @@ export function VersionActions({
       {generateAgain?.(
         version,
         <Button size="sm" variant="ghost">
-          <Sparkles />
+          <Sparkles className="text-brand-accent" />
           {t.formatMessage({ defaultMessage: "Generate again" })}
         </Button>
       )}

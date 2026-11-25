@@ -12,17 +12,33 @@ import {
   ensureMonthlyCredits,
   lockedStoredCredits,
 } from "./credit-ledger";
-import { currentPlan, paidMonth } from "./credit-plan";
+import {
+  currentPlan,
+  paidMonth,
+  planUsesKey,
+  type PlanKind,
+} from "./credit-plan";
 import { creditCap, usdForUsage } from "./credit-pricing";
 import { creditReserve, nearReserve, resumeEstimate } from "./credit-reserve";
 import { settleTask } from "./settle-task";
 import { CreditsRepository } from "./credits-repository";
-import type { CourtesyGrant, CreditSummary } from "./schemas/credits";
 import type {
+  AdminUsers,
+  CourtesyGrant,
+  CreditSummary,
+} from "./schemas/credits";
+import type {
+  PlatformUsage,
+  PlatformUsageUsers,
   UsageOperations,
   UsageStatement,
 } from "./schemas/usage-statement";
-import { buildUsageOperations, buildUsageStatement } from "./usage-statement";
+import {
+  buildPlatformUsage,
+  buildPlatformUsers,
+  buildUsageOperations,
+  buildUsageStatement,
+} from "./usage-statement";
 import { UsageStatementRepository } from "./usage-statement-repository";
 import { grantWelcomeCredits } from "./welcome-credits";
 
@@ -212,7 +228,10 @@ export class CreditsService {
     return { from: new Date(now.getTime() - 30 * 24 * 3600 * 1000), to: now };
   }
 
+  /** The user's key, on the plans that use one (own-key, courtesy). */
   private async keyFunding(tx: DbClient, userId: string, now: Date) {
+    const { kind } = await currentPlan(tx, userId, now);
+    if (!planUsesKey(kind)) return null;
     const key = await new AiKeysRepository(tx).findByUserId(userId);
     if (!key) return null;
     const { start: monthStart } = billingMonth(now);
@@ -231,6 +250,119 @@ export class CreditsService {
         (await decideFunding(tx, { userId, cap: 1, scope: "any", now })) ===
         "key",
       spentThisMonthUsd: Math.round(usdForUsage(usage) * 100) / 100,
+    };
+  }
+
+  /**
+   * The usage statement over every user, for the admin; without a window,
+   * the current calendar month.
+   */
+  async platformUsage(input: {
+    from?: Date;
+    to?: Date;
+    now?: Date;
+  }): Promise<PlatformUsage> {
+    const { window, calls, debitedByTask } = await this.platformCalls(input);
+    return buildPlatformUsage({ calls, debitedByTask, window });
+  }
+
+  /**
+   * A page of the admin's statement by user, the biggest spender first,
+   * filtered by name or email. Spending is only known once each user's
+   * operations are priced, so the cursor is an offset into that order.
+   */
+  async platformUsageUsers(input: {
+    from?: Date;
+    to?: Date;
+    now?: Date;
+    search?: string;
+    cursor?: string | null;
+    limit: number;
+  }): Promise<PlatformUsageUsers> {
+    const { window, calls, debitedByTask } = await this.platformCalls(input);
+    const repository = new UsageStatementRepository(this.db);
+    const users = buildPlatformUsers({
+      calls,
+      debitedByTask,
+      window,
+      users: await repository.usersByIds([
+        ...new Set(calls.map((call) => call.userId)),
+      ]),
+    });
+    const search = input.search?.trim().toLowerCase();
+    const found = search
+      ? users.filter(
+          (user) =>
+            user.email.toLowerCase().includes(search) ||
+            !!user.name?.toLowerCase().includes(search)
+        )
+      : users;
+    const offsetKey = decodeCursor(input.cursor)?.keys[0];
+    const offset = typeof offsetKey === "number" ? offsetKey : 0;
+    const next = offset + input.limit;
+    return {
+      data: found.slice(offset, next),
+      nextCursor:
+        next < found.length ? encodeCursor({ keys: [next], id: "" }) : null,
+      total: found.length,
+    };
+  }
+
+  /** Every user's calls in the admin's window: the calendar month by default. */
+  private async platformCalls(input: { from?: Date; to?: Date; now?: Date }) {
+    const month = billingMonth(input.now ?? new Date());
+    const window = {
+      from: input.from ?? month.start,
+      to: input.to ?? month.next,
+    };
+    if (window.from >= window.to) throw new TRPCError({ code: "BAD_REQUEST" });
+    const repository = new UsageStatementRepository(this.db);
+    const calls = await repository.callsBetween(null, window.from, window.to);
+    const debitedByTask = await repository.debitedByTask(taskIdsOf(calls));
+    return { window, calls, debitedByTask };
+  }
+
+  /**
+   * A page of the accounts for the admin, newest first, found by name or
+   * email, each with its plan and its key's state.
+   */
+  async adminUsers(input: {
+    search?: string;
+    plan?: PlanKind;
+    cursor?: string | null;
+    limit: number;
+    now?: Date;
+  }): Promise<AdminUsers> {
+    const now = input.now ?? new Date();
+    const repository = new CreditsRepository(this.db);
+    const after = decodeCursor(input.cursor);
+    const page = await repository.adminUsersPage({
+      search: input.search,
+      plan: input.plan,
+      now,
+      cursor:
+        after && typeof after.keys[0] === "string"
+          ? { createdAt: after.keys[0], userId: after.id }
+          : null,
+      // One more than shown tells whether a next page exists.
+      limit: input.limit + 1,
+    });
+    const shown = page.slice(0, input.limit);
+    const last = shown[shown.length - 1];
+    return {
+      data: shown.map((user) => ({
+        userId: user.userId,
+        email: user.email,
+        name: user.name || null,
+        createdAt: user.createdAt,
+        plan: user.plan,
+        keyStatus: user.keyStatus,
+      })),
+      nextCursor:
+        page.length > input.limit && last
+          ? encodeCursor({ keys: [last.createdAtText], id: last.userId })
+          : null,
+      total: await repository.countAdminUsers({ ...input, now }),
     };
   }
 

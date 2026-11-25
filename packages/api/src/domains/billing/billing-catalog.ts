@@ -1,18 +1,29 @@
-import type { CheckoutProduct } from "./schemas/billing";
+import type {
+  BillingInterval,
+  CheckoutProduct,
+  SubscriptionPlan,
+} from "./schemas/billing";
 
 /**
  * What StoryToRole sells, created in Stripe by `stripe:setup` (billing
  * spec, "Payments": products and prices come from a versioned script so
  * every environment matches). One price per offer with a BRL and a USD
- * amount; Checkout presents the customer's currency. Amounts are the
+ * amount; Checkout charges in the currency the user chose. Amounts are the
  * spec's initial hypothesis, in the smallest unit; a price change gets a
  * new lookup key (v2), never an edit.
  */
 export const billingCatalog = {
+  // The metadata that marks the Customer Portal configuration for
+  // switching between monthly and annual (stripe:setup creates it).
+  intervalChangePortal: "interval_change",
   products: {
     subscription: {
       id: "storytorole_subscription",
       name: "StoryToRole subscription",
+    },
+    own_key: {
+      id: "storytorole_own_key",
+      name: "StoryToRole own-key subscription",
     },
     pack: { id: "storytorole_pack", name: "StoryToRole credit pack" },
   },
@@ -31,6 +42,20 @@ export const billingCatalog = {
       usd: 12000,
       brl: 59000,
     },
+    own_key_monthly: {
+      lookupKey: "own_key_monthly_v1",
+      product: "own_key",
+      interval: "month",
+      usd: 500,
+      brl: 1990,
+    },
+    own_key_annual: {
+      lookupKey: "own_key_annual_v1",
+      product: "own_key",
+      interval: "year",
+      usd: 5000,
+      brl: 19900,
+    },
     pack: {
       lookupKey: "pack_300_v1",
       product: "pack",
@@ -40,18 +65,40 @@ export const billingCatalog = {
     },
   },
 } as const satisfies {
+  intervalChangePortal: string;
   products: Record<string, { id: string; name: string }>;
   prices: Record<
     CheckoutProduct,
     {
       lookupKey: string;
-      product: "subscription" | "pack";
+      product: "subscription" | "own_key" | "pack";
       interval: "month" | "year" | null;
       usd: number;
       brl: number;
     }
   >;
 };
+
+/**
+ * The plan a Stripe product subscribes to (billing spec, "Subscription"):
+ * the own-key subscription, else the credit subscription.
+ */
+export const planOfProduct = (productId: string | null): SubscriptionPlan =>
+  productId === billingCatalog.products.own_key.id ? "own_key" : "credits";
+
+const offers = {
+  credits: { month: "subscription_monthly", year: "subscription_annual" },
+  own_key: { month: "own_key_monthly", year: "own_key_annual" },
+} as const satisfies Record<
+  SubscriptionPlan,
+  Record<BillingInterval, CheckoutProduct>
+>;
+
+/** The catalog offer of a subscription plan, monthly or annual. */
+export const offerFor = (
+  plan: SubscriptionPlan,
+  interval: BillingInterval
+): CheckoutProduct => offers[plan][interval];
 
 /** The webhook events StoryToRole handles (and `stripe:listen` forwards). */
 export const stripeEvents = [
@@ -63,4 +110,5 @@ export const stripeEvents = [
   "customer.subscription.updated",
   "customer.subscription.deleted",
   "charge.refunded",
+  "checkout.session.expired",
 ] as const;

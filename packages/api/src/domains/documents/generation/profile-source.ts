@@ -434,9 +434,13 @@ export function readProfileSource(input: {
     }
   }
 
-  // A competency only studied is never a skill of the resume.
+  // A competency only studied, or a concept only known, is never a skill of
+  // the resume.
   const skills = profile.extract.competencies
-    .filter((competency) => competency.level !== "studied")
+    .filter(
+      (competency) =>
+        competency.level !== "studied" && competency.level !== "conceptKnown"
+    )
     .map((competency) => {
       const name = normalizeLabel(competency.name);
       const passageId = [...competencyPassage.entries()].find(([line]) =>

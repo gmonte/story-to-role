@@ -178,7 +178,7 @@ export function GapQuestion({
             />
           )}
           {mode === "have" ? (
-            <div className="grid gap-2 rounded-md border p-2.5">
+            <div className="bg-muted/50 grid gap-2 rounded-md border p-2.5">
               <Label>
                 {t.formatMessage({ defaultMessage: "Where did you do it?" })}
               </Label>
@@ -275,7 +275,7 @@ export function GapQuestion({
               )}
             </div>
           ) : mode === "lack" ? (
-            <div className="grid gap-1.5 rounded-md border p-2.5">
+            <div className="bg-muted/50 grid gap-1.5 rounded-md border p-2.5">
               <p className="text-muted-foreground text-xs">
                 {t.formatMessage({
                   defaultMessage:

@@ -6,6 +6,8 @@ import { parseBlocks } from "./blocks";
 import {
   findingKey,
   findingKeys,
+  levelProposalKey,
+  reviewNoteKey,
   sha256Hex,
   withoutDismissed,
 } from "./finding-key";
@@ -54,5 +56,14 @@ describe("finding key", () => {
     const blocks = parseBlocks("# Perfil\n\nUsei Redux no app");
     const [, old] = findingKeys(finding, blocks);
     expect(withoutDismissed([finding], blocks, [old])).toEqual([]);
+  });
+
+  it("keys a rejected level proposal by its competency and level", () => {
+    const key = levelProposalKey({ name: "React", level: "often" });
+    expect(key).toMatch(/^[0-9a-f]{16}$/);
+    expect(levelProposalKey({ name: "react ", level: "often" })).toBe(key);
+    // Another level proposed later is a new proposal.
+    expect(levelProposalKey({ name: "React", level: "master" })).not.toBe(key);
+    expect(reviewNoteKey({ message: "React", quote: "often" })).not.toBe(key);
   });
 });

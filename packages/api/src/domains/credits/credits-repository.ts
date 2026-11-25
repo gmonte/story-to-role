@@ -1,9 +1,23 @@
-import { and, desc, eq, gt, isNull, like, lt, or, sql } from "drizzle-orm";
+import {
+  and,
+  desc,
+  eq,
+  gt,
+  ilike,
+  isNull,
+  like,
+  lt,
+  or,
+  sql,
+  type SQL,
+} from "drizzle-orm";
 
 import {
   documentsTable,
   generationsTable,
 } from "@repo/api/domains/documents/db/documents-tables";
+import { aiKeysTable } from "@repo/api/domains/ai/db/ai-tables";
+import { subscriptionsTable } from "@repo/api/domains/billing/db/billing-tables";
 import { tasksTable } from "@repo/api/domains/tasks/db/tasks-tables";
 import { usersTable } from "@repo/api/domains/users/db/users-tables";
 import type { DbClient } from "@repo/api/tools/db-client";
@@ -14,6 +28,7 @@ import {
   creditLotsTable,
   storedCreditConfirmationsTable,
 } from "./db/credits-tables";
+import type { PlanKind } from "./credit-plan";
 
 type Insert<T extends { $inferInsert: unknown }> = T["$inferInsert"];
 
@@ -301,4 +316,111 @@ export class CreditsRepository {
       .limit(1)
       .then((rows) => rows[0] ?? null);
   }
+
+  /**
+   * A keyset page of the accounts not deleted, newest first (the admin's
+   * list), matching `search` in the name or email and `plan` if given. The
+   * plan is worked out as `currentPlan` does, in SQL so it can filter. The
+   * cursor is the last row's creation time (as Postgres text, to keep its
+   * microseconds) and id.
+   */
+  adminUsersPage(input: {
+    search?: string;
+    plan?: PlanKind;
+    now: Date;
+    cursor: { createdAt: string; userId: string } | null;
+    limit: number;
+  }) {
+    const plan = planOfUser(input.now);
+    return (
+      this.tx
+        .select({
+          userId: usersTable.id,
+          email: usersTable.email,
+          name: usersTable.fullName,
+          createdAt: usersTable.createdAt,
+          createdAtText: sql<string>`${usersTable.createdAt}::text`,
+          plan,
+          keyStatus: aiKeysTable.status,
+        })
+        .from(usersTable)
+        // The join also keeps the plan's subqueries naming their tables.
+        .leftJoin(
+          aiKeysTable,
+          and(
+            eq(aiKeysTable.userId, usersTable.id),
+            eq(aiKeysTable.provider, "anthropic")
+          )
+        )
+        .where(
+          and(
+            adminUsersMatching(input, plan),
+            input.cursor
+              ? sql`(${usersTable.createdAt} < ${input.cursor.createdAt}::timestamptz or (${usersTable.createdAt} = ${input.cursor.createdAt}::timestamptz and ${usersTable.id} < ${input.cursor.userId}::uuid))`
+              : undefined
+          )
+        )
+        .orderBy(desc(usersTable.createdAt), desc(usersTable.id))
+        .limit(input.limit)
+    );
+  }
+
+  /** How many accounts `adminUsersPage` pages through. */
+  async countAdminUsers(input: {
+    search?: string;
+    plan?: PlanKind;
+    now: Date;
+  }) {
+    const [row] = await this.tx
+      .select({ total: sql<number>`count(*)::int` })
+      .from(usersTable)
+      .where(adminUsersMatching(input, planOfUser(input.now)));
+    return row?.total ?? 0;
+  }
+}
+
+/**
+ * The user's plan, as `currentPlan` decides it: the live subscription's
+ * (own-key or credits), else an active courtesy grant, else Free.
+ */
+function planOfUser(now: Date) {
+  // A subscription stays live three days past its period, as in billing.
+  const grace = new Date(now.getTime() - 3 * 24 * 3600 * 1000).toISOString();
+  return sql<PlanKind>`coalesce(
+    (select case when ${subscriptionsTable.plan} = 'own_key' then 'own_key' else 'subscription' end
+      from ${subscriptionsTable}
+      where ${subscriptionsTable.userId} = ${usersTable.id}
+        and ${subscriptionsTable.status} in ('active', 'trialing', 'past_due', 'unpaid')
+        and ${subscriptionsTable.currentPeriodEnd} > ${grace}::timestamptz
+        and ${subscriptionsTable.replacedAt} is null
+      order by ${subscriptionsTable.currentPeriodEnd} desc
+      limit 1),
+    case when exists (
+      select 1 from ${courtesyGrantsTable}
+      where ${courtesyGrantsTable.userId} = ${usersTable.id}
+        and ${courtesyGrantsTable.endedAt} is null
+        and (${courtesyGrantsTable.endsAt} is null or ${courtesyGrantsTable.endsAt} > ${now.toISOString()}::timestamptz)
+    ) then 'courtesy' else 'free' end
+  )`;
+}
+
+function adminUsersMatching(
+  input: { search?: string; plan?: PlanKind },
+  plan: SQL<PlanKind>
+) {
+  const term = input.search?.trim();
+  // `%` and `_` typed in the search are taken literally.
+  const pattern = term
+    ? `%${term.replace(/[\\%_]/g, (char) => `\\${char}`)}%`
+    : null;
+  return and(
+    isNull(usersTable.deletedAt),
+    pattern
+      ? or(
+          ilike(usersTable.email, pattern),
+          ilike(usersTable.fullName, pattern)
+        )
+      : undefined,
+    input.plan ? sql`${plan} = ${input.plan}` : undefined
+  );
 }

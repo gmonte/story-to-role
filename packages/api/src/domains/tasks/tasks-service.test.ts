@@ -147,4 +147,27 @@ describe("tasks", () => {
     expect(failed.status).toBe("failed");
     expect(failed.errorMessage).toBe("The task failed");
   });
+
+  it("fails a task its run died on, past its time limit, and never runs it after", async () => {
+    const db = await getTestDatabase();
+    const user = await createUser("ada@example.com");
+    const tasks = new TasksService(db, fakeTrigger());
+    const { task } = await tasks.start({ userId: user.id, type: "sample" });
+
+    // Still within its time: nothing happens.
+    await tasks.failStalled(new Date());
+    expect((await findTask(task.id)).status).toBe("pending");
+
+    await tasks.failStalled(new Date(Date.now() + 2 * 60 * 60 * 1000));
+    expect(await findTask(task.id)).toMatchObject({
+      status: "failed",
+      errorMessage: "The task stalled",
+    });
+
+    // A run that starts late finds it already failed and does nothing.
+    const handler = vi.fn(async () => undefined);
+    await runTask({ db, taskId: task.id, type: "sample" }, handler);
+    expect(handler).not.toHaveBeenCalled();
+    expect((await findTask(task.id)).status).toBe("failed");
+  });
 });

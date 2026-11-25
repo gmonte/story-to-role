@@ -114,7 +114,7 @@ export function CompanyResearch({
         />
       )}
       {data.status === "failed" && (
-        <p className="text-xs text-red-600">
+        <p className="text-destructive text-xs">
           {t.formatMessage({
             defaultMessage: "The research didn't finish. Try again.",
           })}
@@ -176,7 +176,7 @@ function FactSelection({
         {facts.map((fact) => (
           <li
             key={fact.id}
-            className="bg-background flex items-start gap-2 rounded-md border p-2 text-xs"
+            className="bg-card flex items-start gap-2 rounded-md border p-2 text-xs"
           >
             <Checkbox
               className="mt-0.5"

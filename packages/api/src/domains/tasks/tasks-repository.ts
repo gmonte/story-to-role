@@ -1,9 +1,29 @@
-import { and, desc, eq, gt, inArray, like } from "drizzle-orm";
+import {
+  and,
+  desc,
+  eq,
+  gt,
+  inArray,
+  isNull,
+  like,
+  lt,
+  ne,
+  or,
+} from "drizzle-orm";
 
 import type { AiFunding } from "@repo/api/domains/ai/ai-funding";
 import type { DbClient } from "@repo/api/tools/db-client";
+import {
+  documentsTable,
+  generationsTable,
+} from "@repo/api/domains/documents/db/documents-tables";
+import type {
+  DocumentKind,
+  GenerationKind,
+} from "@repo/api/domains/documents/schemas/document";
 
 import { tasksTable } from "./db/tasks-tables";
+import { stalledMessage } from "./task-durations";
 import type { Task, TaskProgress, TaskType } from "./schemas/task";
 
 const taskColumns = {
@@ -26,12 +46,30 @@ export class TasksRepository {
     subjectId?: string;
     funding?: AiFunding;
     reviewers?: number;
+    documentKind?: DocumentKind;
+    generationKind?: GenerationKind;
   }): Promise<Task> {
     const [task] = await this.tx
       .insert(tasksTable)
       .values(input)
       .returning(taskColumns);
     return task;
+  }
+
+  /** The kinds of a generation and of its document, to keep on its task. */
+  async generationKinds(generationId: string) {
+    const [row] = await this.tx
+      .select({
+        documentKind: documentsTable.kind,
+        generationKind: generationsTable.kind,
+      })
+      .from(generationsTable)
+      .innerJoin(
+        documentsTable,
+        eq(documentsTable.id, generationsTable.documentId)
+      )
+      .where(eq(generationsTable.id, generationId));
+    return row ?? null;
   }
 
   /** The runs still going for the user: what deleting the account stops. */
@@ -79,6 +117,27 @@ export class TasksRepository {
     return row;
   }
 
+  /** Tasks created before `before` that never finished, for the sweep. */
+  async listUnfinished(before: Date) {
+    return this.tx
+      .select({
+        id: tasksTable.id,
+        userId: tasksTable.userId,
+        type: tasksTable.type,
+        status: tasksTable.status,
+        funding: tasksTable.funding,
+        createdAt: tasksTable.createdAt,
+        startedAt: tasksTable.startedAt,
+      })
+      .from(tasksTable)
+      .where(
+        and(
+          inArray(tasksTable.status, ["pending", "processing"]),
+          lt(tasksTable.createdAt, before)
+        )
+      );
+  }
+
   async setRunId(input: { taskId: string; runId: string }) {
     await this.tx
       .update(tasksTable)
@@ -86,11 +145,25 @@ export class TasksRepository {
       .where(eq(tasksTable.id, input.taskId));
   }
 
+  /**
+   * False when the sweep already failed the task (its run started too
+   * late): checked in the same statement, so the two can't cross.
+   */
   async markProcessing(taskId: string) {
-    await this.tx
+    const marked = await this.tx
       .update(tasksTable)
       .set({ status: "processing", startedAt: new Date() })
-      .where(eq(tasksTable.id, taskId));
+      .where(
+        and(
+          eq(tasksTable.id, taskId),
+          or(
+            isNull(tasksTable.errorMessage),
+            ne(tasksTable.errorMessage, stalledMessage)
+          )
+        )
+      )
+      .returning({ id: tasksTable.id });
+    return marked.length > 0;
   }
 
   async updateProgress(input: { taskId: string; progress: TaskProgress }) {

@@ -33,7 +33,7 @@ export const storedInconsistencySchema = z.union([
     quote: "",
     profileLine: "",
     kind: "other" as const,
-    text: text as string | null,
+    text: text,
   })),
 ]);
 export type StoredInconsistency = z.infer<typeof storedInconsistencySchema>;

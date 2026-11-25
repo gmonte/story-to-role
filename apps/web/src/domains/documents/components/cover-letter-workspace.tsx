@@ -3,6 +3,7 @@
 import type { ReactNode } from "react";
 
 import { useMutation } from "@tanstack/react-query";
+import { TriangleAlert } from "lucide-react";
 
 import type { CoverLetterContent } from "@repo/api/domains/documents/schemas/cover-letter-content";
 import type { DocumentView } from "@repo/api/domains/documents/schemas/document-view";
@@ -70,14 +71,15 @@ export function CoverLetterWorkspace({
     version.letter?.outdated && (
       <div
         key="outdated"
-        className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-amber-500/40 bg-amber-500/10 p-2.5 text-xs"
+        className="border-warning-border bg-warning-soft flex flex-wrap items-center gap-3 rounded-lg border p-3 text-xs"
       >
-        <span>
+        <TriangleAlert className="text-warning size-4 shrink-0" />
+        <span className="min-w-0 flex-1">
           {t.formatMessage({
             defaultMessage: "The resume changed after this letter was written.",
           })}
         </span>
-        <div className="flex gap-1">
+        <div className="flex shrink-0 gap-1">
           <Button
             size="sm"
             disabled={update.isPending}
@@ -99,7 +101,7 @@ export function CoverLetterWorkspace({
     version.pages > 1 && (
       <p
         key="pages"
-        className="rounded-lg border border-amber-500/40 bg-amber-500/10 p-2.5 text-xs"
+        className="border-warning-border bg-warning-soft rounded-lg border p-2.5 text-xs"
       >
         {t.formatMessage(
           {

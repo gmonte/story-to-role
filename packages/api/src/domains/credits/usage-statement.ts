@@ -11,6 +11,8 @@ import type {
 
 import { creditsForUsage, usdForUsage } from "./credit-pricing";
 import type {
+  PlatformUsage,
+  PlatformUsageUser,
   UsageOperation,
   UsageOperationRow,
   UsagePayer,
@@ -19,6 +21,7 @@ import type {
 
 export type UsageCall = AiUsage & {
   callId: string;
+  userId: string;
   createdAt: Date;
   purpose: string;
   funding: AiFunding;
@@ -119,6 +122,7 @@ function buildOperations(input: {
       }));
       return {
         operationId,
+        userId: first.userId,
         operation: operationOf(first),
         // Its last call: the window is about when calls were made.
         at: calls[calls.length - 1].createdAt,
@@ -152,7 +156,9 @@ export function buildUsageOperations(input: {
   debitedByTask: Map<string, number>;
   showsPlatformCost: boolean;
 }): UsageOperationRow[] {
-  return buildOperations(input).map(({ rawUsd: _rawUsd, ...row }) => row);
+  return buildOperations(input).map(
+    ({ rawUsd: _rawUsd, userId: _userId, ...row }) => row
+  );
 }
 
 /**
@@ -165,10 +171,7 @@ export function buildUsageStatement(input: {
   window: { from: Date; to: Date };
   showsPlatformCost: boolean;
 }): UsageStatement {
-  const operations = buildOperations(input).filter(
-    (operation) =>
-      operation.at >= input.window.from && operation.at < input.window.to
-  );
+  const operations = operationsInWindow(input);
 
   const payers: UsagePayer[] = ["credits", "key", "storytorole"];
   const totals = payers
@@ -187,13 +190,25 @@ export function buildUsageStatement(input: {
     })
     .filter((total) => total.operations > 0);
 
-  const kinds = new Map<string, typeof operations>();
+  return {
+    window: input.window,
+    showsPlatformCost: input.showsPlatformCost,
+    totals,
+    summary: summarize(operations),
+  };
+}
+
+type Operation = ReturnType<typeof buildOperations>[number];
+
+/** The average of each kind of completed operation, costliest first. */
+function summarize(operations: Operation[]) {
+  const kinds = new Map<string, Operation[]>();
   for (const row of operations) {
     if (row.status !== "completed") continue;
     const key = JSON.stringify(row.operation);
     kinds.set(key, [...(kinds.get(key) ?? []), row]);
   }
-  const summary = [...kinds.values()]
+  return [...kinds.values()]
     .map((rows) => {
       const count = rows.length;
       const totalCredits = rows.reduce((total, row) => total + row.credits, 0);
@@ -212,16 +227,143 @@ export function buildUsageStatement(input: {
           ? roundUsd(rows.reduce((total, row) => total + row.rawUsd, 0) / count)
           : null,
         totalCredits,
+        models: modelShares(rows),
       };
     })
     .sort((a, b) => b.totalCredits - a.totalCredits);
+}
 
-  return {
-    window: input.window,
-    showsPlatformCost: input.showsPlatformCost,
-    totals,
-    summary,
-  };
+/**
+ * Each model's share of a kind's averages: its parts summed over the
+ * kind's operations and divided by all of them, so the shares add up to
+ * the averages. US$ shows only when every operation of the kind shows it.
+ */
+function modelShares(rows: Operation[]) {
+  const count = rows.length;
+  const showsUsd = rows.every((row) => row.usd !== null);
+  const parts = new Map<string, Array<Operation["models"][number]>>();
+  for (const row of rows) {
+    for (const part of row.models) {
+      parts.set(part.model, [...(parts.get(part.model) ?? []), part]);
+    }
+  }
+  return [...parts.entries()]
+    .map(([model, ofModel]) => {
+      const sum = (pick: (part: (typeof ofModel)[number]) => number) =>
+        ofModel.reduce((total, part) => total + pick(part), 0);
+      return {
+        model,
+        operations: ofModel.length,
+        averageInputTokens: Math.round(sum((part) => part.inputTokens) / count),
+        averageOutputTokens: Math.round(
+          sum((part) => part.outputTokens) / count
+        ),
+        averageCredits: oneDecimal(sum((part) => part.credits) / count),
+        averageUsd: showsUsd
+          ? roundUsd(sum((part) => part.usd ?? 0) / count)
+          : null,
+      };
+    })
+    .sort((a, b) => b.averageCredits - a.averageCredits);
+}
+
+/** The operations whose last call falls in the window. */
+function operationsInWindow(input: {
+  calls: UsageCall[];
+  debitedByTask: Map<string, number>;
+  window: { from: Date; to: Date };
+  showsPlatformCost: boolean;
+}) {
+  return buildOperations(input).filter(
+    (operation) =>
+      operation.at >= input.window.from && operation.at < input.window.to
+  );
+}
+
+/**
+ * The usage statement over every user's calls (the admin's), with the
+ * platform's cost, and each model's average use over the completed
+ * operations that called it, the costliest model first.
+ */
+export function buildPlatformUsage(input: {
+  calls: UsageCall[];
+  debitedByTask: Map<string, number>;
+  window: { from: Date; to: Date };
+}): PlatformUsage {
+  const scope = { ...input, showsPlatformCost: true };
+  const parts = new Map<string, Array<UsageOperationRow["models"][number]>>();
+  for (const operation of operationsInWindow(scope)) {
+    if (operation.status !== "completed") continue;
+    for (const part of operation.models) {
+      parts.set(part.model, [...(parts.get(part.model) ?? []), part]);
+    }
+  }
+  const models = [...parts.entries()]
+    .map(([model, rows]) => {
+      const count = rows.length;
+      const sum = (pick: (row: (typeof rows)[number]) => number) =>
+        rows.reduce((total, row) => total + pick(row), 0);
+      const totalUsd = sum((row) => row.usd ?? 0);
+      return {
+        model,
+        operations: count,
+        averageInputTokens: Math.round(sum((row) => row.inputTokens) / count),
+        averageOutputTokens: Math.round(sum((row) => row.outputTokens) / count),
+        averageCredits: oneDecimal(sum((row) => row.credits) / count),
+        averageUsd: roundUsd(totalUsd / count),
+        totalUsd: roundUsd(totalUsd),
+      };
+    })
+    .sort((a, b) => b.totalUsd - a.totalUsd);
+  return { ...buildUsageStatement(scope), models };
+}
+
+/**
+ * Each user's spending in the window (the admin's statement), the biggest
+ * first, with their own average per kind of operation.
+ */
+export function buildPlatformUsers(input: {
+  calls: UsageCall[];
+  debitedByTask: Map<string, number>;
+  window: { from: Date; to: Date };
+  users: Map<string, { email: string; name: string | null }>;
+}): PlatformUsageUser[] {
+  const ofUsers = new Map<string, Operation[]>();
+  for (const operation of operationsInWindow({
+    ...input,
+    showsPlatformCost: true,
+  })) {
+    ofUsers.set(operation.userId, [
+      ...(ofUsers.get(operation.userId) ?? []),
+      operation,
+    ]);
+  }
+  return [...ofUsers.entries()]
+    .map(([userId, rows]) => {
+      const sum = (pick: (row: Operation) => number) =>
+        rows.reduce((total, row) => total + pick(row), 0);
+      const paidBy = (payer: UsagePayer) =>
+        oneDecimal(sum((row) => (row.payer === payer ? row.credits : 0)));
+      return {
+        userId,
+        email: input.users.get(userId)?.email ?? "",
+        name: input.users.get(userId)?.name ?? null,
+        operations: rows.length,
+        creditsSpent: paidBy("credits"),
+        keyCredits: paidBy("key"),
+        storytoroleCredits: paidBy("storytorole"),
+        usd: roundUsd(sum((row) => row.rawUsd)),
+        summary: summarize(rows),
+      };
+    })
+    .sort(
+      (a, b) =>
+        totalCredits(b) - totalCredits(a) || a.email.localeCompare(b.email)
+    );
+}
+
+function totalCredits(user: PlatformUsageUser) {
+  return user.creditsSpent + user.keyCredits + user.storytoroleCredits;
 }
 
 function isFinished(status: TaskStatus | null) {

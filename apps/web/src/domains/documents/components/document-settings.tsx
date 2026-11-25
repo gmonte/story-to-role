@@ -60,7 +60,7 @@ export function DocumentSettings({
 export function PublishProfileNotice() {
   const t = useTranslation();
   return (
-    <div className="flex flex-col items-start gap-2 rounded-md border border-amber-500/40 bg-amber-500/10 p-2.5 text-xs">
+    <div className="border-warning-border bg-warning-soft flex flex-col items-start gap-2 rounded-md border p-2.5 text-xs">
       <p>
         {t.formatMessage({
           defaultMessage:

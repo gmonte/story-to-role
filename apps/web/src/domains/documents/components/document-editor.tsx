@@ -94,7 +94,7 @@ export function DocumentEditor() {
       {selection && agent && (
         <button
           type="button"
-          className="bg-popover text-popover-foreground hover:bg-accent absolute z-20 flex items-center gap-1.5 rounded-md border px-2 py-1 text-xs font-medium shadow-md"
+          className="bg-popover text-popover-foreground hover:bg-accent shadow-pop absolute z-20 flex items-center gap-1.5 rounded-md border px-2 py-1 text-xs font-medium"
           style={{ left: selection.left, top: selection.top }}
           // The selection stays while the button is pressed.
           onMouseDown={(event) => event.preventDefault()}
@@ -103,12 +103,16 @@ export function DocumentEditor() {
             setSelection(null);
           }}
         >
-          <Sparkles className="text-primary size-3.5" />
+          <Sparkles className="text-brand-accent size-3.5" />
           {t.formatMessage({ defaultMessage: "Talk about this" })}
         </button>
       )}
-      <article className="bg-background rounded-lg border px-12 py-10 shadow-sm">
-        <EditorContent editor={editor} />
+      {/* The sheet: light paper, dark, or following the theme, as the user
+          set it (doc-sheet, ADR 0012); everything on it takes its palette. */}
+      <article className="doc-sheet bg-doc-paper shadow-sheet rounded-xs">
+        <div className="doc-sheet text-doc-foreground font-doc bg-transparent px-12 py-10">
+          <EditorContent editor={editor} />
+        </div>
       </article>
       <TraceHoverCard
         editor={editor}

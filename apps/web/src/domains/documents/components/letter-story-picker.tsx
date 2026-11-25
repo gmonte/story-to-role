@@ -55,7 +55,7 @@ export function LetterStoryPicker({
       {stories.map((story) => (
         <label
           key={story.lineId}
-          className="flex items-start gap-2 rounded-md border p-2.5 text-sm"
+          className="bg-card flex items-start gap-2 rounded-md border p-2.5 text-sm"
         >
           <RadioGroupItem value={story.lineId} className="mt-0.5" />
           <span className="flex min-w-0 flex-col gap-1">

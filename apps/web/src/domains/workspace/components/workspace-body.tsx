@@ -1,14 +1,16 @@
 "use client";
 
 import {
-  useEffect,
   useRef,
   useState,
+  useSyncExternalStore,
   type PointerEvent as ReactPointerEvent,
   type ReactNode,
 } from "react";
 
 import { GripVertical } from "lucide-react";
+
+import { usePhone } from "../hooks/use-desktop";
 
 // The preview's width while it's open, in pixels: never so narrow it can't be
 // read, never so wide the chat can't be.
@@ -28,6 +30,11 @@ function readWidth(key: string, fallback: number) {
     return fallback;
   }
 }
+
+// Storage is read when rendering, never watched.
+const subscribeToNothing = () => () => {
+  // Nothing to stop watching.
+};
 
 function saveWidth(key: string, width: number) {
   try {
@@ -72,11 +79,17 @@ export function WorkspaceBody({
       : readWidth(storageKey, defaultPreview)
   );
   // The server renders the default; the saved width comes after hydration,
-  // so both renders agree.
-  const [panelWidth, setPanelWidth] = useState(panelFallback);
-  useEffect(() => {
-    setPanelWidth(readWidth(panelKey, panelFallback));
-  }, [panelKey, panelFallback]);
+  // so both renders agree. A drag holds its width until the screen changes.
+  const savedPanelWidth = useSyncExternalStore(
+    subscribeToNothing,
+    () => readWidth(panelKey, panelFallback),
+    () => panelFallback
+  );
+  const [dragged, setDragged] = useState<{ key: string; width: number }>();
+  const panelWidth =
+    dragged?.key === panelKey ? dragged.width : savedPanelWidth;
+  const setPanelWidth = (next: number) =>
+    setDragged({ key: panelKey, width: next });
 
   /** Drags a divider: leftwards widens the column on its right. */
   function startDrag(
@@ -107,6 +120,18 @@ export function WorkspaceBody({
     };
     window.addEventListener("pointermove", onMove);
     window.addEventListener("pointerup", onUp);
+  }
+
+  // A phone has no room beside the page: the panel renders under it, where
+  // it draws itself as a bottom bar of sheets.
+  const phone = usePhone();
+  if (phone) {
+    return (
+      <div className="flex min-h-0 flex-1 flex-col">
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col">{chat}</div>
+        {panel}
+      </div>
+    );
   }
 
   return (

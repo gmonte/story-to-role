@@ -13,6 +13,8 @@ import {
   Ellipsis,
   FileText,
   Loader2,
+  RotateCw,
+  Trash2,
   TriangleAlert,
 } from "lucide-react";
 import Link from "next/link";
@@ -41,7 +43,6 @@ import {
 } from "@repo/web/components/ui/tooltip";
 import { cn } from "@repo/web/lib/utils";
 
-import { useTrackerLabels } from "~/domains/applications/hooks/use-tracker-labels";
 import { CreditCost } from "~/domains/credits/components/credit-cost";
 import { useCredits } from "~/domains/credits/hooks/use-credits";
 import { useDownloadZip } from "~/domains/documents/components/download-zip-button";
@@ -49,6 +50,7 @@ import { useOpeningDocuments } from "~/domains/documents/hooks/use-opening-docum
 import { useTRPC } from "~/tools/trpc/client";
 import { CoverageScoreBadge } from "~/domains/documents/components/coverage-score";
 import { useSelectedVersion } from "~/domains/documents/hooks/use-selected-version";
+import { ApplicationStatusBadge } from "~/domains/applications/components/application-status-badge";
 
 import { useRefreshOpenings } from "../hooks/use-opening";
 import { isRecheck } from "./opening-view";
@@ -62,9 +64,12 @@ import {
 } from "../utils/opening-journey";
 import {
   bandClassName,
+  bandDotClassName,
+  bandTextClassName,
   pendingGaps,
   useExcludeCompany,
 } from "./fit-check-panel";
+import { DeleteOpeningDialog } from "./delete-opening-dialog";
 
 /** The documents of an opening the header and the steps both read. */
 export function useOpeningJourney(openingId: string, opening: OpeningDetail) {
@@ -123,6 +128,7 @@ export function OpeningHeader({
   view,
   setView,
   sideButton,
+  compact = false,
 }: {
   openingId: string;
   opening: OpeningDetail;
@@ -130,10 +136,14 @@ export function OpeningHeader({
   setView: (view: OpeningView) => void;
   /** Opens the column that has no room beside the page. */
   sideButton?: SideButton;
+  /**
+   * A document page on a phone: the title on one line beside the actions,
+   * without the chips, so the document keeps the screen.
+   */
+  compact?: boolean;
 }) {
   const t = useTranslation();
   const labels = useOpeningLabels();
-  const trackerLabels = useTrackerLabels();
   const journey = useOpeningJourney(openingId, opening);
   const processing = opening.status === "processing";
   // The score of the resume version open on the resume page (the first one
@@ -163,7 +173,7 @@ export function OpeningHeader({
     letter: <Mail className="size-4" />,
   };
   const switcher = journey.views.length > 1 && (
-    <nav className="-mb-px flex items-end gap-1 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+    <nav className="-mb-px flex [scrollbar-width:none] items-end gap-6 overflow-x-auto [&::-webkit-scrollbar]:hidden">
       {openingViews.map((step) => {
         const enabled = journey.views.includes(step);
         const active = view === step;
@@ -176,17 +186,16 @@ export function OpeningHeader({
             aria-current={active ? "page" : undefined}
             onClick={() => setView(step)}
             className={cn(
-              "text-muted-foreground flex shrink-0 items-center gap-2 rounded-t-md border border-transparent px-4 py-2 text-sm transition-colors max-sm:min-h-11",
+              "text-muted-foreground flex shrink-0 items-center gap-2 border-b-2 border-transparent px-1 py-2.5 text-sm transition-colors max-sm:min-h-11",
               enabled && "hover:text-foreground",
               !enabled && "opacity-50",
-              active &&
-                "bg-background text-foreground border-border border-b-background font-medium"
+              active && "text-foreground border-foreground font-medium"
             )}
           >
             {stepIcons[step]}
             {stepLabels[step]}
             {hint !== "" && hint !== undefined && (
-              <span className="bg-muted text-foreground rounded-full px-2 text-xs font-medium">
+              <span className="bg-secondary text-secondary-foreground rounded-sm px-1.5 font-mono text-[11px] font-medium">
                 {hint}
               </span>
             )}
@@ -210,11 +219,33 @@ export function OpeningHeader({
   // The same header on the opening, resume and cover letter pages (owner):
   // the document pages differ only below it.
   return (
-    <div className="bg-background/95 z-10 flex shrink-0 flex-col gap-3 border-b px-4 pt-4 backdrop-blur">
-      <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-2">
+    <div
+      className={cn(
+        "bg-background/95 z-10 flex shrink-0 flex-col border-b px-4 backdrop-blur",
+        compact ? "gap-1 pt-2" : "gap-3 pt-4"
+      )}
+    >
+      <div
+        className={cn(
+          "flex items-start justify-between gap-x-4 gap-y-2",
+          compact ? "flex-nowrap" : "flex-wrap"
+        )}
+      >
         {/* On a narrow screen the actions wrap under the title. */}
-        <div className="min-w-0 basis-full sm:flex-1 sm:basis-0">
-          {processing && !opening.title ? (
+        <div
+          className={cn(
+            "min-w-0",
+            compact ? "flex-1 self-center" : "basis-full sm:flex-1 sm:basis-0"
+          )}
+        >
+          {compact ? (
+            <h1
+              className="font-display truncate text-lg font-semibold tracking-tight"
+              title={opening.title ?? undefined}
+            >
+              {opening.title}
+            </h1>
+          ) : processing && !opening.title ? (
             <h1 className="font-display text-2xl font-semibold tracking-tight sm:text-3xl">
               {t.formatMessage({ defaultMessage: "Reading the opening…" })}
             </h1>
@@ -222,7 +253,12 @@ export function OpeningHeader({
             <OpeningTitle openingId={openingId} opening={opening} />
           )}
           {/* On a phone the chips scroll sideways instead of piling up. */}
-          <div className="flex flex-wrap items-center gap-x-2 gap-y-1 max-sm:flex-nowrap max-sm:overflow-x-auto max-sm:[scrollbar-width:none] max-sm:[&::-webkit-scrollbar]:hidden max-sm:[&>*]:shrink-0">
+          <div
+            className={cn(
+              "flex flex-wrap items-center gap-x-2 gap-y-1 max-sm:[scrollbar-width:none] max-sm:flex-nowrap max-sm:overflow-x-auto max-sm:[&::-webkit-scrollbar]:hidden max-sm:[&>*]:shrink-0",
+              compact && "hidden"
+            )}
+          >
             {opening.company && (
               <p className="text-muted-foreground text-sm">{opening.company}</p>
             )}
@@ -243,10 +279,18 @@ export function OpeningHeader({
                   <Badge
                     variant="outline"
                     className={cn(
-                      "cursor-default",
-                      bandClassName(opening.fitCheck.band)
+                      "cursor-default gap-1.5 border-transparent",
+                      bandClassName(opening.fitCheck.band),
+                      bandTextClassName(opening.fitCheck.band)
                     )}
                   >
+                    <span
+                      aria-hidden="true"
+                      className={cn(
+                        "size-1.5 rounded-full",
+                        bandDotClassName(opening.fitCheck.band)
+                      )}
+                    />
                     {labels.band(opening.fitCheck.band)}
                   </Badge>
                 </TooltipTrigger>
@@ -259,9 +303,7 @@ export function OpeningHeader({
               </Tooltip>
             )}
             {opening.applicationStatus && (
-              <Badge variant="secondary">
-                {trackerLabels.status(opening.applicationStatus)}
-              </Badge>
+              <ApplicationStatusBadge status={opening.applicationStatus} />
             )}
             {opening.status === "closed" && (
               <Badge variant="outline">
@@ -289,7 +331,7 @@ export function OpeningHeader({
                 <TooltipTrigger asChild>
                   <Badge
                     variant="outline"
-                    className="cursor-default border-amber-500/40 bg-amber-500/10"
+                    className="border-warning-border bg-warning-soft cursor-default"
                   >
                     <TriangleAlert className="size-3" />
                     {t.formatMessage(
@@ -356,6 +398,12 @@ function PrimaryActionButton({
       onError: (error) => toast.error(error.message),
     })
   );
+  const retry = useMutation(
+    trpc.openings.retryAnalysis.mutationOptions({
+      onSuccess: refresh,
+      onError: (error) => toast.error(error.message),
+    })
+  );
   const setClosed = useMutation(
     trpc.openings.setClosed.mutationOptions({
       onSuccess: refresh,
@@ -417,6 +465,20 @@ function PrimaryActionButton({
           <CreditCost credits={credits.data?.estimates.fitCheck} />
         </div>
       );
+    case "retry_analysis":
+      return (
+        <div className="flex items-center gap-2">
+          <Button
+            size="sm"
+            disabled={retry.isPending}
+            onClick={() => retry.mutate({ openingId })}
+          >
+            <RotateCw />
+            {t.formatMessage({ defaultMessage: "Try again" })}
+          </Button>
+          <CreditCost credits={credits.data?.estimates.fitCheck} />
+        </div>
+      );
     case "add_again":
       return (
         <Button asChild size="sm">
@@ -428,7 +490,7 @@ function PrimaryActionButton({
   }
 }
 
-/** The rare actions: closing the opening, excluding its company. */
+/** The rare actions: closing or deleting the opening, excluding its company. */
 function OpeningMenu({
   openingId,
   opening,
@@ -451,13 +513,18 @@ function OpeningMenu({
     })
   );
   const excludeCompany = useExcludeCompany(openingId, opening.company);
+  const [deleting, setDeleting] = useState(false);
   const canClose = opening.status === "analyzed" || opening.status === "closed";
   const canExclude = opening.status === "analyzed" && !!opening.company;
-  if (!canClose && !canExclude && !canZip && !opening.sourceUrl) return null;
 
   return (
     <>
       {zip.dialog}
+      <DeleteOpeningDialog
+        openingId={openingId}
+        open={deleting}
+        onOpenChange={setDeleting}
+      />
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <Button
@@ -522,6 +589,14 @@ function OpeningMenu({
               </DropdownMenuItem>
             </>
           )}
+          <DropdownMenuSeparator />
+          <DropdownMenuItem
+            variant="destructive"
+            onSelect={() => setDeleting(true)}
+          >
+            <Trash2 />
+            {t.formatMessage({ defaultMessage: "Delete the opening" })}
+          </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
     </>

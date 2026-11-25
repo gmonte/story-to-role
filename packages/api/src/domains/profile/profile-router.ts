@@ -262,4 +262,26 @@ export const profileRouter = createTRPCRouter({
         ...input,
       })
     ),
+
+  reopenSuggestions: userProcedure
+    .meta(
+      openApiMeta(
+        "profile",
+        "POST",
+        "/profile/suggestions/reopen",
+        "Puts accepted suggestions back to waiting, after an undo"
+      )
+    )
+    .input(
+      z.object({
+        profileSuggestionIds: z.array(z.uuid()).min(1).max(200),
+      })
+    )
+    .output(z.object({ reopened: z.number().int() }))
+    .mutation(({ ctx, input }) =>
+      new ProfileService(db).reopenSuggestions({
+        userId: ctx.userId,
+        ...input,
+      })
+    ),
 });

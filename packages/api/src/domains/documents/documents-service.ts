@@ -469,9 +469,12 @@ export class DocumentsService {
         }),
         dismissedFindings: version.dismissedFindings,
         profile: {
-          versionNumber: frozen.profileVersionNumber,
           // A snapshot from before they carried a version reads the one
-          // published now: "Use version N" pins it.
+          // published now, but doesn't know which it was written from:
+          // no number to claim. "Use version N" pins it.
+          versionNumber: latest.profileVersionId
+            ? frozen.profileVersionNumber
+            : null,
           newer:
             published &&
             published.id !== latest.profileVersionId &&
@@ -899,7 +902,8 @@ export class DocumentsService {
     openingId: string
   ) {
     const openings = new OpeningsRepository(tx);
-    const terms = (await openings.listTerms(openingId)).filter(
+    // What the description as it is now asks (none until an edit is read).
+    const terms = (await openings.listCurrentTerms(openingId)).filter(
       (term) => term.kind === "keyword"
     );
     if (terms.length === 0) return null;

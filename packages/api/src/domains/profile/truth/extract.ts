@@ -73,10 +73,12 @@ export type ProfileExtract = {
 /**
  * What a passage is to screening and generation: evidence of what the
  * person did or has, or something the profile says they lack (what they
- * did not do, a known gap, a competency only studied), or a rule. Only
- * evidence ever counts as coverage.
+ * did not do, a known gap, a competency only studied), a concept they only
+ * know, or a rule. Only evidence counts as coverage; a known concept counts
+ * as partial at most.
  */
-export type PassageKind = "evidence" | "notDone" | "gap" | "studied" | "rule";
+export type PassageKind =
+  "evidence" | "notDone" | "gap" | "studied" | "known" | "rule";
 
 export type ProfilePassage = {
   kind: PassageKind;
@@ -316,9 +318,9 @@ function passageKind(
   if (section === "rules") return "rule";
   if (section === "competencies") {
     const labelled = splitLabel(blocks[line].text);
-    return labelled && competencyLevelOf(labelled.label) === "studied"
-      ? "studied"
-      : "evidence";
+    const level = labelled ? competencyLevelOf(labelled.label) : null;
+    if (level === "studied") return "studied";
+    return level === "conceptKnown" ? "known" : "evidence";
   }
   const notDone = [...structure.experiences, ...structure.projects].some(
     (entry) => entry.fields.notDone?.line === line

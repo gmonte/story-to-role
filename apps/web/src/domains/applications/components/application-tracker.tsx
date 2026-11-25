@@ -46,6 +46,10 @@ import {
   TypeSection,
 } from "./application-details";
 import { WithdrawDialog } from "./withdraw-dialog";
+import {
+  ApplicationStatusBadge,
+  ApplicationStatusDot,
+} from "./application-status-badge";
 
 /**
  * The opening's application in the tracker (tracker spec), as a summary:
@@ -109,6 +113,7 @@ function NoApplicationYet({ openingId }: { openingId: string }) {
             options={statuses.map((value) => ({
               value,
               label: labels.status(value),
+              icon: <ApplicationStatusDot status={value} />,
             }))}
             onSelect={async (status) => {
               try {
@@ -195,6 +200,7 @@ function TrackerBlock({
             options={statuses.map((value) => ({
               value,
               label: labels.status(value),
+              icon: <ApplicationStatusDot status={value} />,
             }))}
             onSelect={(status) => {
               if (asksReason(status, detail.status)) {
@@ -207,7 +213,7 @@ function TrackerBlock({
         }
       >
         <div className="flex min-w-0 flex-wrap items-center gap-1.5">
-          <Badge variant="secondary">{labels.status(detail.status)}</Badge>
+          <ApplicationStatusBadge status={detail.status} />
           {detail.external && (
             <Badge variant="outline">
               {t.formatMessage({

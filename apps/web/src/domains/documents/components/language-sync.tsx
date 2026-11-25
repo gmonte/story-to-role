@@ -3,7 +3,7 @@
 import { useState } from "react";
 
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { RefreshCw } from "lucide-react";
+import { Check, RefreshCw, X } from "lucide-react";
 
 import type {
   DocumentView,
@@ -26,6 +26,7 @@ import { toast } from "@repo/web/components/ui/sonner";
 import { CreditCost } from "~/domains/credits/components/credit-cost";
 import { useCredits } from "~/domains/credits/hooks/use-credits";
 import { useTRPC } from "~/tools/trpc/client";
+import { decisionButton } from "~/domains/workspace/utils/decision-buttons";
 
 import { useDocumentLabels } from "../hooks/use-document-labels";
 import { useRefreshDocuments } from "../hooks/use-opening-documents";
@@ -52,7 +53,7 @@ export function OutdatedNotice({
     return (
       <div
         key={outdated.versionId}
-        className="flex items-center justify-between gap-2 rounded-lg border border-amber-500/40 bg-amber-500/10 p-2.5 text-xs"
+        className="border-warning-border bg-warning-soft flex items-center justify-between gap-2 rounded-lg border p-2.5 text-xs"
       >
         <span>
           {outdated.baseMissing
@@ -158,7 +159,7 @@ function SyncDialog({
           {changes.map((change) => (
             <li
               key={change.lineId}
-              className="grid gap-1 rounded-md border p-2 text-xs"
+              className="bg-card grid gap-1 rounded-md border p-2 text-xs"
             >
               <label className="flex items-start gap-2">
                 <Checkbox
@@ -185,7 +186,7 @@ function SyncDialog({
                 </span>
               </label>
               {change.conflict && (
-                <p className="rounded bg-amber-500/10 p-1.5">
+                <p className="bg-warning-soft rounded p-1.5">
                   {t.formatMessage(
                     {
                       defaultMessage:
@@ -263,7 +264,7 @@ export function SyncProposal({
   const busy = accept.isPending || discard.isPending;
 
   return (
-    <div className="bg-background flex flex-col gap-2 rounded-lg border border-sky-500/40 p-2.5 text-xs">
+    <div className="bg-card border-origin-edited/40 flex flex-col gap-2 rounded-lg border p-2.5 text-xs">
       <p className="text-sm font-medium">
         {document.kind === "cover_letter"
           ? t.formatMessage({
@@ -287,20 +288,22 @@ export function SyncProposal({
       </ul>
       <div className="flex justify-end gap-2">
         <Button
-          size="sm"
-          variant="ghost"
+          variant="outline"
+          className={decisionButton}
           disabled={busy}
           onClick={() =>
             discard.mutate({ generationId: proposal.generationId })
           }
         >
+          <X />
           {t.formatMessage({ defaultMessage: "Discard" })}
         </Button>
         <Button
-          size="sm"
+          className={decisionButton}
           disabled={busy}
           onClick={() => accept.mutate({ generationId: proposal.generationId })}
         >
+          <Check />
           {t.formatMessage({ defaultMessage: "Accept" })}
         </Button>
       </div>

@@ -7,5 +7,17 @@ export const cookiesConfig = {
       path: "/",
       sameSite: "lax",
     },
+    // The currency prices show and Checkout charges in, BRL or USD.
+    currency: {
+      httpOnly: false,
+      path: "/",
+      sameSite: "lax",
+    },
+    // The document sheet's look: light, dark or following the theme.
+    "sheet-theme": {
+      httpOnly: false,
+      path: "/",
+      sameSite: "lax",
+    },
   },
 } as const;

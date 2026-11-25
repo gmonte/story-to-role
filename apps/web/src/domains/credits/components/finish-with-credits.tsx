@@ -43,7 +43,7 @@ export function FinishWithCredits() {
   return (
     <section
       id="finish-with-credits"
-      className="flex flex-col gap-2 rounded-lg border p-4"
+      className="bg-card flex flex-col gap-2 rounded-lg border p-4"
     >
       <h2 className="font-medium">
         {t.formatMessage({ defaultMessage: "Finish with credits" })}

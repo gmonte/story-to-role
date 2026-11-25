@@ -18,14 +18,14 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuLabel,
+  DropdownMenuHeader,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@repo/web/components/ui/dropdown-menu";
 import { cn } from "@repo/web/lib/utils";
 
 import { useProfileLabels } from "../hooks/use-profile-labels";
-import { blockPositions, isLockedNode } from "../utils/editor-doc";
+import { blockPositions, isFixedBlock } from "../utils/editor-doc";
 import { EntryDialog } from "./entry-dialog";
 import { FindingHoverCard } from "./finding-hover-card";
 import { LinkHoverCard } from "./link-hover-card";
@@ -82,8 +82,8 @@ function dropIndex(editor: Editor, clientY: number) {
 function moveBlock(editor: Editor, from: number, to: number) {
   if (to === from || to === from + 1) return;
   const node = editor.state.doc.child(from);
-  // The title and the template's sections stay where they are.
-  if (isLockedNode(node)) return;
+  // The title, the opening note and the template's sections stay put.
+  if (isFixedBlock(editor.state.doc, from)) return;
   const start = nodeStart(editor, from);
   const tr = editor.state.tr.delete(start, start + node.nodeSize);
   const target = nodeStart(editor, to) - (to > from ? node.nodeSize : 0);
@@ -288,12 +288,10 @@ export function ProfileDocument() {
     return () => dom.removeEventListener("keydown", keys, true);
   }, [editor, slash, slashIndex, slashOptions, chooseSlash]);
 
-  // The title and the template's sections have no handle: they don't move.
+  // The title, the opening note and the template's sections have no
+  // handle: they don't move.
   const lockedHovered =
-    !!editor &&
-    !!hovered &&
-    hovered.index < editor.state.doc.childCount &&
-    isLockedNode(editor.state.doc.child(hovered.index));
+    !!editor && !!hovered && isFixedBlock(editor.state.doc, hovered.index);
 
   function track(event: React.MouseEvent) {
     if (!editor || drag || blockMenu !== null || addMenuOpen) return;
@@ -332,7 +330,7 @@ export function ProfileDocument() {
   return (
     <div
       ref={wrapper}
-      className="relative mx-auto w-full max-w-3xl py-8 pr-6 pl-16"
+      className="relative mx-auto w-full max-w-3xl px-4 py-8 md:pr-6 md:pl-16"
       onMouseMove={track}
       onMouseLeave={() =>
         !drag && blockMenu === null && !addMenuOpen && setHovered(null)
@@ -340,7 +338,8 @@ export function ProfileDocument() {
     >
       {hovered && editor && (
         <div
-          className="absolute left-4 flex items-center gap-0.5"
+          // The add and drag controls need a mouse: phones keep the margin.
+          className="absolute left-4 hidden items-center gap-0.5 md:flex"
           style={{ top: hovered.top }}
         >
           <DropdownMenu open={addMenuOpen} onOpenChange={setAddMenuOpen}>
@@ -356,9 +355,9 @@ export function ProfileDocument() {
               </button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="start">
-              <DropdownMenuLabel>
+              <DropdownMenuHeader>
                 {t.formatMessage({ defaultMessage: "Add to the profile" })}
-              </DropdownMenuLabel>
+              </DropdownMenuHeader>
               {entryKinds.map((kind) => (
                 <DropdownMenuItem key={kind} onSelect={() => setDialog(kind)}>
                   {entryLabels[kind]}
@@ -385,9 +384,9 @@ export function ProfileDocument() {
                 </button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="start">
-                <DropdownMenuLabel>
+                <DropdownMenuHeader>
                   {t.formatMessage({ defaultMessage: "Turn into" })}
-                </DropdownMenuLabel>
+                </DropdownMenuHeader>
                 {blockKinds.map((block) => (
                   <DropdownMenuItem
                     key={block.kind}
@@ -428,7 +427,7 @@ export function ProfileDocument() {
       {selection && (
         <button
           type="button"
-          className="bg-popover text-popover-foreground hover:bg-accent absolute z-20 flex items-center gap-1.5 rounded-md border px-2 py-1 text-xs font-medium shadow-md"
+          className="bg-popover text-popover-foreground hover:bg-accent shadow-pop absolute z-20 flex items-center gap-1.5 rounded-md border px-2 py-1 text-xs font-medium"
           style={{ left: selection.left, top: selection.top }}
           // The selection stays while the button is pressed.
           onMouseDown={(event) => event.preventDefault()}
@@ -437,7 +436,7 @@ export function ProfileDocument() {
             setSelection(null);
           }}
         >
-          <Sparkles className="text-primary size-3.5" />
+          <Sparkles className="text-brand-accent size-3.5" />
           {t.formatMessage({ defaultMessage: "Talk about this" })}
         </button>
       )}
@@ -488,7 +487,7 @@ export function ProfileDocument() {
       />
       {slash && slashOptions.length > 0 && (
         <div
-          className="bg-popover text-popover-foreground absolute z-20 w-64 overflow-hidden rounded-md border p-1 shadow-md"
+          className="bg-popover text-popover-foreground shadow-pop absolute z-20 w-64 overflow-hidden rounded-md border p-1"
           style={{ left: slash.left, top: slash.top }}
           role="listbox"
         >

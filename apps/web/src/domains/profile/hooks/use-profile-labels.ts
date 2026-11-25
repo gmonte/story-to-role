@@ -74,7 +74,7 @@ export function useProfileLabels() {
       case "competencyLevel":
         return t.formatMessage({
           defaultMessage:
-            "Put each competency under a level: master, use often, occasional experience, or studied without professional experience.",
+            "Put each competency under a level: master, use often, occasional experience, studied without professional experience, concepts I master, or concepts I know.",
         });
       case "markFormat":
         return t.formatMessage({
@@ -114,7 +114,7 @@ export function useProfileLabels() {
         return t.formatMessage(
           {
             defaultMessage:
-              "No experience mentions “{name}”: move it to “studied” or say where you used it.",
+              "No experience mentions “{name}”: move it to “studied” or to the concepts, or say where you used it.",
           },
           { name: params.name }
         );
@@ -207,6 +207,8 @@ export function useProfileLabels() {
     studied: t.formatMessage({
       defaultMessage: "Studied, without professional experience",
     }),
+    conceptMaster: t.formatMessage({ defaultMessage: "Concepts I master" }),
+    conceptKnown: t.formatMessage({ defaultMessage: "Concepts I know" }),
   };
 
   return {

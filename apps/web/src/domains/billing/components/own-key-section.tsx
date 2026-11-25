@@ -11,15 +11,18 @@ import { Button } from "@repo/web/components/ui/button";
 import { Input } from "@repo/web/components/ui/input";
 import { Label } from "@repo/web/components/ui/label";
 import { toast } from "@repo/web/components/ui/sonner";
+import { cn } from "@repo/web/lib/utils";
 
 import { useTRPC } from "~/tools/trpc/client";
 
 /**
- * The user's own key (billing spec, "Plans and AI funding": a funding
- * mode of the paid plan). Saved only once a minimal call proves it works;
- * never shown again but for its last characters.
+ * The user's own key on the own-key subscription or the courtesy plan
+ * (billing spec, "Plans and AI funding"). Saved only once a minimal call
+ * proves it works; never shown again but for its last characters. It can
+ * be replaced at any time, and removed once the own-key subscription is
+ * cancelled.
  */
-export function OwnKeySection({ paidPlan }: { paidPlan: boolean }) {
+export function OwnKeySection({ canRemove }: { canRemove: boolean }) {
   const t = useTranslation();
   const trpc = useTRPC();
   const queryClient = useQueryClient();
@@ -80,9 +83,9 @@ export function OwnKeySection({ paidPlan }: { paidPlan: boolean }) {
   const saved = key.data;
 
   return (
-    <section className="flex flex-col gap-3">
+    <section className="flex flex-col gap-2">
       <div className="flex items-center gap-2">
-        <h2 className="font-medium">
+        <h2 className="text-lg font-semibold">
           {t.formatMessage({ defaultMessage: "Your own API key" })}
         </h2>
         <Badge variant="outline" className="gap-1">
@@ -93,65 +96,64 @@ export function OwnKeySection({ paidPlan }: { paidPlan: boolean }) {
       <p className="text-muted-foreground">
         {t.formatMessage({
           defaultMessage:
-            "With your own Anthropic key, your AI calls are paid by it instead of credits. A key from a Console organization linked to Claude Max or Team uses that plan’s monthly API credits. StoryToRole picks the model for each step.",
+            "Your AI calls are paid by your own Anthropic key. A key from a Console organization linked to Claude Max or Team uses that plan’s monthly API credits. StoryToRole picks the model for each step.",
         })}
       </p>
 
-      {!paidPlan ? (
-        <p className="rounded-lg border border-dashed p-3">
-          {t.formatMessage({
-            defaultMessage:
-              "Your own key comes with the paid plan: the subscription or a courtesy plan.",
-          })}
-        </p>
-      ) : saved ? (
-        <div className="flex flex-col gap-2 rounded-lg border p-4">
-          <span className="flex items-center gap-2">
-            <KeyRound className="size-4" />
-            {t.formatMessage(
-              { defaultMessage: "Key ending in {characters}" },
-              { characters: saved.lastCharacters }
-            )}
-          </span>
-          {saved.status !== "active" && (
-            <p className="rounded-md border border-amber-500/40 bg-amber-500/10 p-2.5 text-xs">
-              {saved.status === "out_of_credit"
-                ? t.formatMessage({
-                    defaultMessage:
-                      "Your key ran out of credit, so the task that used it stopped and nothing was charged. If it renews monthly (Claude Max or Team), it works again on the renewal date; check it again then, or finish with credits.",
-                  })
-                : t.formatMessage({
-                    defaultMessage:
-                      "Anthropic refused your key, so the task that used it stopped and nothing was charged. Save a new key, or finish with credits.",
-                  })}
-            </p>
-          )}
-          <div className="flex gap-2">
+      <div className="bg-card flex flex-col gap-3 rounded-lg border p-4">
+        {saved && (
+          <>
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <span className="flex items-center gap-2 font-medium">
+                <KeyRound className="size-4" />
+                {t.formatMessage(
+                  { defaultMessage: "Key ending in {characters}" },
+                  { characters: saved.lastCharacters }
+                )}
+              </span>
+              <div className="flex gap-2">
+                {saved.status !== "active" && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    disabled={recheck.isPending}
+                    onClick={() => recheck.mutate({})}
+                  >
+                    {t.formatMessage({ defaultMessage: "Check again" })}
+                  </Button>
+                )}
+                {canRemove && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    disabled={remove.isPending}
+                    onClick={() => remove.mutate({})}
+                  >
+                    {t.formatMessage({ defaultMessage: "Remove key" })}
+                  </Button>
+                )}
+              </div>
+            </div>
             {saved.status !== "active" && (
-              <Button
-                size="sm"
-                variant="outline"
-                disabled={recheck.isPending}
-                onClick={() => recheck.mutate({})}
-              >
-                {t.formatMessage({ defaultMessage: "Check again" })}
-              </Button>
+              <p className="border-warning-border bg-warning-soft rounded-md border p-2.5 text-xs">
+                {saved.status === "out_of_credit"
+                  ? t.formatMessage({
+                      defaultMessage:
+                        "Your key ran out of credit, so the task that used it stopped and nothing was charged. If it renews monthly (Claude Max or Team), it works again on the renewal date; check it again then, or finish with credits.",
+                    })
+                  : t.formatMessage({
+                      defaultMessage:
+                        "Anthropic refused your key, so the task that used it stopped and nothing was charged. Save a new key, or finish with credits.",
+                    })}
+              </p>
             )}
-            <Button
-              size="sm"
-              variant="ghost"
-              disabled={remove.isPending}
-              onClick={() => remove.mutate({})}
-            >
-              {t.formatMessage({ defaultMessage: "Remove key" })}
-            </Button>
-          </div>
-        </div>
-      ) : null}
-
-      {paidPlan && (
+          </>
+        )}
         <form
-          className="flex flex-col gap-2 sm:flex-row sm:items-end"
+          className={cn(
+            "flex flex-col gap-2 sm:flex-row sm:items-end",
+            saved && "border-t pt-3"
+          )}
           onSubmit={(event) => {
             event.preventDefault();
             save.mutate({ apiKey });
@@ -176,7 +178,15 @@ export function OwnKeySection({ paidPlan }: { paidPlan: boolean }) {
             {t.formatMessage({ defaultMessage: "Check and save" })}
           </Button>
         </form>
-      )}
+        {saved && !canRemove && (
+          <p className="text-muted-foreground text-xs">
+            {t.formatMessage({
+              defaultMessage:
+                "You can replace your key at any time. To remove it, cancel the own-key subscription first (Manage payments and cancel).",
+            })}
+          </p>
+        )}
+      </div>
     </section>
   );
 }

@@ -327,8 +327,16 @@ export function DocumentPage({
                   "The AI writes a resume for this opening from your published profile. You can generate it even with a low fit, and then review it line by line.",
               })}
             </p>
+            {/* Its button stays away until the opening is reopened. */}
+            {opening.status === "closed" && (
+              <p className="text-muted-foreground text-sm">
+                {t.formatMessage({
+                  defaultMessage: "Reopen the opening to generate one.",
+                })}
+              </p>
+            )}
             {journey.resume?.generation?.status === "failed" && (
-              <p className="rounded-lg border border-red-500/40 bg-red-500/10 p-2.5 text-xs">
+              <p className="border-destructive/40 bg-destructive/10 rounded-lg border p-2.5 text-xs">
                 {t.formatMessage({
                   defaultMessage: "The last generation failed. Try again.",
                 })}
@@ -351,19 +359,22 @@ export function DocumentPage({
               />
             )}
           </div>
-          <SimilarDocuments
-            separator={
-              <div className="text-muted-foreground flex items-center gap-3 text-xs">
-                <Separator className="flex-1" />
-                {t.formatMessage({ defaultMessage: "or" })}
-                <Separator className="flex-1" />
-              </div>
-            }
-            openingId={openingId}
-            defaultLanguage={journey.language}
-            defaultTone={journey.tone}
-            pendingGaps={pendingGaps(opening)}
-          />
+          {/* Adjusting one of them writes a resume too. */}
+          {opening.status !== "closed" && (
+            <SimilarDocuments
+              separator={
+                <div className="text-muted-foreground flex items-center gap-3 text-xs">
+                  <Separator className="flex-1" />
+                  {t.formatMessage({ defaultMessage: "or" })}
+                  <Separator className="flex-1" />
+                </div>
+              }
+              openingId={openingId}
+              defaultLanguage={journey.language}
+              defaultTone={journey.tone}
+              pendingGaps={pendingGaps(opening)}
+            />
+          )}
         </div>
       </div>
     </div>
@@ -432,12 +443,23 @@ function AnalysisProgress({ opening }: { opening: OpeningDetail }) {
         found?.requirements !== undefined &&
         t.formatMessage(
           {
-            defaultMessage:
-              "It asks for {keywords, plural, =0 {no listed skills} one {# skill} other {# skills}} and {requirements, plural, =0 {no other requirements} one {# requirement} other {# requirements}}.",
+            defaultMessage: "It asks for {keywords} and {requirements}.",
           },
           {
-            keywords: found.keywords ?? 0,
-            requirements: found.requirements,
+            keywords: t.formatMessage(
+              {
+                defaultMessage:
+                  "{keywords, plural, =0 {no listed skills} one {# skill} other {# skills}}",
+              },
+              { keywords: found.keywords ?? 0 }
+            ),
+            requirements: t.formatMessage(
+              {
+                defaultMessage:
+                  "{requirements, plural, =0 {no other requirements} one {# requirement} other {# requirements}}",
+              },
+              { requirements: found.requirements }
+            ),
           }
         )
       }
@@ -454,7 +476,7 @@ function DescriptionBody({ opening }: { opening: OpeningDetail }) {
   return (
     <>
       {opening.status === "external" && (
-        <div className="flex flex-col gap-2 rounded-lg border p-4 text-sm">
+        <div className="bg-card flex flex-col gap-2 rounded-lg border p-4 text-sm">
           <p>
             {t.formatMessage({
               defaultMessage:
@@ -472,15 +494,27 @@ function DescriptionBody({ opening }: { opening: OpeningDetail }) {
         </div>
       )}
 
+      {opening.status === "failed" && (
+        <div className="border-warning-border bg-warning-soft flex gap-2 rounded-lg border p-4 text-sm">
+          <TriangleAlert className="text-warning mt-0.5 size-4 shrink-0" />
+          <p>
+            {t.formatMessage({
+              defaultMessage:
+                "The analysis didn’t finish, and no credits were used. Try again to read the opening from the start.",
+            })}
+          </p>
+        </div>
+      )}
+
       {opening.status === "rejected" && (
-        <div className="rounded-lg border border-amber-500/40 bg-amber-500/10 p-4 text-sm">
+        <div className="border-warning-border bg-warning-soft rounded-lg border p-4 text-sm">
           <p>{labels.rejection(opening.rejectionReason)}</p>
         </div>
       )}
 
       {opening.warnings.length > 0 && (
-        <div className="flex gap-2 rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 text-sm">
-          <TriangleAlert className="mt-0.5 size-4 shrink-0 text-amber-600" />
+        <div className="border-warning-border bg-warning-soft flex gap-2 rounded-lg border p-3 text-sm">
+          <TriangleAlert className="text-warning mt-0.5 size-4 shrink-0" />
           <div className="flex flex-col gap-1">
             <p className="font-medium">
               {t.formatMessage({

@@ -52,6 +52,7 @@ import { useApplicationInstructions } from "~/domains/applications/hooks/use-app
 import { CreditCost } from "~/domains/credits/components/credit-cost";
 import { useCredits } from "~/domains/credits/hooks/use-credits";
 import { resumeCredits } from "~/domains/credits/utils/credit-costs";
+import { useOpening } from "~/domains/openings/hooks/use-opening";
 import { useOpeningLabels } from "~/domains/openings/hooks/use-opening-labels";
 import { useTRPC } from "~/tools/trpc/client";
 
@@ -63,26 +64,7 @@ import { DocumentSettings, PublishProfileNotice } from "./document-settings";
 const languages: OutputLanguage[] = ["en-US", "pt-BR"];
 const tones: Tone[] = ["your_style", "formal", "direct", "warm", "technical"];
 
-/**
- * The choices before generating a resume (resume spec): output language
- * (preselected from the opening), review depth, writing level, tone
- * (preselected from the opening's suggestion) and the generation settings
- * for this document. Into an existing version the result becomes its new
- * snapshot. With a reference it adjusts that version instead (the
- * method's prompt 04b): no review rounds, and in the reference's language,
- * since its bullets are kept as written.
- */
-export function GenerateResumeDialog({
-  openingId,
-  defaultLanguage,
-  defaultTone,
-  versionId,
-  pendingGaps,
-  existingLanguages = [],
-  application,
-  reference,
-  trigger,
-}: {
+type GenerateResumeDialogProps = {
   openingId: string;
   defaultLanguage: OutputLanguage;
   defaultTone: Tone;
@@ -97,7 +79,34 @@ export function GenerateResumeDialog({
   /** "Adjust": the similar version the new document starts from. */
   reference?: { versionId: string; language: OutputLanguage };
   trigger: ReactNode;
-}) {
+};
+
+/**
+ * The choices before generating a resume (resume spec): output language
+ * (preselected from the opening), review depth, writing level, tone
+ * (preselected from the opening's suggestion) and the generation settings
+ * for this document. Into an existing version the result becomes its new
+ * snapshot. With a reference it adjusts that version instead (the
+ * method's prompt 04b): no review rounds, and in the reference's language,
+ * since its bullets are kept as written.
+ */
+export function GenerateResumeDialog(props: GenerateResumeDialogProps) {
+  // A closed opening writes nothing new until it is reopened.
+  const closed = useOpening(props.openingId).data?.status === "closed";
+  return closed ? null : <ResumeDialog {...props} />;
+}
+
+function ResumeDialog({
+  openingId,
+  defaultLanguage,
+  defaultTone,
+  versionId,
+  pendingGaps,
+  existingLanguages = [],
+  application,
+  reference,
+  trigger,
+}: GenerateResumeDialogProps) {
   const t = useTranslation();
   const labels = useDocumentLabels();
   const openingLabels = useOpeningLabels();
@@ -188,7 +197,7 @@ export function GenerateResumeDialog({
         )}
 
         {pendingGaps > 0 && (
-          <p className="rounded-md border border-amber-500/40 bg-amber-500/10 p-2.5 text-xs">
+          <p className="border-warning-border bg-warning-soft rounded-md border p-2.5 text-xs">
             {t.formatMessage(
               {
                 defaultMessage:
@@ -235,7 +244,7 @@ export function GenerateResumeDialog({
                 {(["quick", "thorough"] as const).map((option) => (
                   <label
                     key={option}
-                    className="flex items-start gap-2 rounded-md border p-2.5 text-sm"
+                    className="bg-card flex items-start gap-2 rounded-md border p-2.5 text-sm"
                   >
                     <RadioGroupItem value={option} className="mt-0.5" />
                     <span>
@@ -312,7 +321,7 @@ export function GenerateResumeDialog({
         </div>
 
         {repeatsLanguage && (
-          <p className="rounded-md border border-amber-500/40 bg-amber-500/10 p-2.5 text-xs">
+          <p className="border-warning-border bg-warning-soft rounded-md border p-2.5 text-xs">
             {t.formatMessage(
               {
                 defaultMessage:

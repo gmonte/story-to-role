@@ -1,6 +1,18 @@
-import { and, asc, desc, eq, inArray } from "drizzle-orm";
+import {
+  and,
+  asc,
+  desc,
+  eq,
+  inArray,
+  isNull,
+  lt,
+  notExists,
+  or,
+  sql,
+} from "drizzle-orm";
 
 import { applicationsTable } from "@repo/api/domains/applications/db/applications-tables";
+import { tasksTable } from "@repo/api/domains/tasks/db/tasks-tables";
 import type { DbClient } from "@repo/api/tools/db-client";
 
 import {
@@ -13,6 +25,14 @@ import type { ConditionStance, OpeningStatus } from "./schemas/opening";
 import type { GapLinks } from "./schemas/opening-view";
 
 type Insert<T extends { $inferInsert: unknown }> = T["$inferInsert"];
+
+/** Edited after it was last read (or never read since it was edited). */
+export const isDescriptionUnread = (dates: {
+  editedAt: Date | null;
+  readAt: Date | null;
+}) =>
+  dates.editedAt !== null &&
+  (dates.readAt === null || dates.editedAt > dates.readAt);
 
 export class OpeningsRepository {
   constructor(private readonly tx: DbClient) {}
@@ -94,6 +114,67 @@ export class OpeningsRepository {
     return moved.length > 0;
   }
 
+  /**
+   * Ends an analysis that broke. An opening analyzed before (it has its
+   * vector) keeps that result, as only the new check failed; one never
+   * analyzed is failed, for the user to try again.
+   */
+  async failAnalysis(openingId: string) {
+    await this.tx
+      .update(openingsTable)
+      .set({
+        status: sql`case when ${openingsTable.embedding} is null then 'failed' else 'analyzed' end`,
+        checkFailedAt: sql`case when ${openingsTable.embedding} is null then null else now() end`,
+      })
+      .where(
+        and(
+          eq(openingsTable.id, openingId),
+          eq(openingsTable.status, "processing")
+        )
+      );
+  }
+
+  /**
+   * Openings still being analyzed, last changed before `before`, with no
+   * analysis task pending or running: their run died without a word.
+   */
+  async listStuckAnalyses(before: Date) {
+    return this.tx
+      .select({ id: openingsTable.id })
+      .from(openingsTable)
+      .where(
+        and(
+          eq(openingsTable.status, "processing"),
+          // Compared column by column: a bare SQL expression leaves the
+          // date unmapped, which the Postgres driver refuses.
+          or(
+            lt(openingsTable.updatedAt, before),
+            and(
+              isNull(openingsTable.updatedAt),
+              lt(openingsTable.createdAt, before)
+            )
+          ),
+          notExists(
+            this.tx
+              .select({ id: tasksTable.id })
+              .from(tasksTable)
+              .where(
+                and(
+                  eq(tasksTable.subjectId, openingsTable.id),
+                  eq(tasksTable.type, "analyze_opening"),
+                  inArray(tasksTable.status, ["pending", "processing"])
+                )
+              )
+          )
+        )
+      );
+  }
+
+  /** Deletes the opening; its application, documents and checks cascade. */
+  async deleteOpening(openingId: string) {
+    await this.tx.delete(openingsTable).where(eq(openingsTable.id, openingId));
+  }
+
   async updateOpening(
     openingId: string,
     changes: Partial<Insert<typeof openingsTable>>
@@ -113,6 +194,52 @@ export class OpeningsRepository {
       .where(eq(openingTermsTable.openingId, openingId));
     if (terms.length === 0) return [];
     return this.tx.insert(openingTermsTable).values(terms).returning();
+  }
+
+  /**
+   * Whether the description was edited after it was last read: until it is
+   * read again, its keywords and requirements (and the fit check judged on
+   * them) belong to the old text, and nothing matches against them.
+   */
+  async descriptionUnread(openingId: string) {
+    const [row] = await this.tx
+      .select({
+        editedAt: openingsTable.descriptionEditedAt,
+        readAt: openingsTable.descriptionReadAt,
+      })
+      .from(openingsTable)
+      .where(eq(openingsTable.id, openingId));
+    return isDescriptionUnread(row ?? { editedAt: null, readAt: null });
+  }
+
+  /** The keywords and requirements read from the description as it is now. */
+  async listCurrentTerms(openingId: string) {
+    return (await this.descriptionUnread(openingId))
+      ? []
+      : this.listTerms(openingId);
+  }
+
+  async insertTerms(terms: Array<Insert<typeof openingTermsTable>>) {
+    if (terms.length === 0) return [];
+    return this.tx.insert(openingTermsTable).values(terms).returning();
+  }
+
+  async updateTerm(
+    termId: string,
+    changes: Partial<Insert<typeof openingTermsTable>>
+  ) {
+    await this.tx
+      .update(openingTermsTable)
+      .set(changes)
+      .where(eq(openingTermsTable.id, termId));
+  }
+
+  /** Removes terms, and the fit check items and answers judged on them. */
+  async deleteTerms(termIds: string[]) {
+    if (termIds.length === 0) return;
+    await this.tx
+      .delete(openingTermsTable)
+      .where(inArray(openingTermsTable.id, termIds));
   }
 
   listTerms(openingId: string) {

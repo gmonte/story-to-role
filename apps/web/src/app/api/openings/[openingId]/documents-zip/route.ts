@@ -1,3 +1,4 @@
+import { auth } from "@clerk/nextjs/server";
 import type { NextRequest } from "next/server";
 
 import { PdfService } from "@repo/api/domains/documents/rendering/pdf-service";
@@ -11,6 +12,7 @@ export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ openingId: string }> }
 ) {
+  await auth.protect();
   const userId = await currentUserId();
   if (!userId) return new Response(null, { status: 401 });
   const { openingId } = await params;

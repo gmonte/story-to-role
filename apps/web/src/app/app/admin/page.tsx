@@ -1,16 +1,8 @@
-import { getTranslation } from "@repo/intl/get-translation";
+import { auth } from "@clerk/nextjs/server";
+import { redirect } from "next/navigation";
 
-import { CourtesyGrants } from "~/domains/credits/components/courtesy-grants";
-import { WorkspacePage } from "~/domains/workspace/components/workspace-page";
-import { getLocaleFromNextCookies } from "~/tools/intl/utils/get-locale-from-next-cookies";
-
+/** The admin opens on its first tab. */
 export default async function AdminPage() {
-  const t = await getTranslation(await getLocaleFromNextCookies());
-
-  return (
-    <WorkspacePage
-      title={t.formatMessage({ defaultMessage: "Admin" })}
-      chat={<CourtesyGrants />}
-    />
-  );
+  await auth.protect();
+  redirect("/app/admin/usage");
 }

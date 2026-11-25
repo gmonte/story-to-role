@@ -12,6 +12,10 @@ import { TasksService } from "@repo/api/domains/tasks/tasks-service";
 import type { DbClient } from "@repo/api/tools/db-client";
 import { TasksRepository } from "@repo/api/domains/tasks/tasks-repository";
 import { loadProfileSource } from "@repo/api/domains/documents/generation/load-profile-source";
+import { DocumentsRepository } from "@repo/api/domains/documents/documents-repository";
+import { AgentChatRepository } from "@repo/api/domains/agents/agent-chat-repository";
+import { getStorage } from "@repo/api/tools/storage/storage";
+import { triggerClient } from "@repo/api/tools/trigger/trigger-client";
 import { ProfileRepository } from "@repo/api/domains/profile/profile-repository";
 import {
   readTargetText,
@@ -20,6 +24,7 @@ import {
 } from "@repo/api/domains/profile/suggestions/suggest-line";
 import { ProfileService } from "@repo/api/domains/profile/profile-service";
 import type { ProfileLanguage } from "@repo/api/domains/profile/truth/sections";
+import { stallGraceMs } from "@repo/api/domains/tasks/task-durations";
 
 import type { openingsTable } from "./db/openings-tables";
 import { conditionCategories, type ConditionStance } from "./schemas/opening";
@@ -302,6 +307,8 @@ export class OpeningsService {
               )
             : null,
         rejectionReason: row.rejectionReason,
+        // The last check broke: the fit check shown is the previous one.
+        checkFailed: row.status === "analyzed" && row.checkFailedAt !== null,
         language: row.language,
         suggestedTone: row.suggestedTone,
         fitCheck: items,
@@ -343,6 +350,53 @@ export class OpeningsService {
         await new OpeningsRepository(this.db).moveStatus(row.id, {
           from: "processing",
           to: "external",
+        });
+      }
+    );
+  }
+
+  /**
+   * The sweep's part for openings: one still being analyzed when its task
+   * already ended, or died, is failed (or keeps its earlier result), so the
+   * page never shows it still being read.
+   */
+  async failStuckAnalyses(now = new Date()) {
+    const openings = new OpeningsRepository(this.db);
+    // An opening is created a moment before its task: left alone a while.
+    const rows = await openings.listStuckAnalyses(
+      new Date(now.getTime() - stallGraceMs)
+    );
+    for (const row of rows) await openings.failAnalysis(row.id);
+  }
+
+  /**
+   * Analyzes again, from the start and at its usual cost, an opening whose
+   * analysis failed.
+   */
+  async retryAnalysis(input: { userId: string; openingId: string }) {
+    const profile = await this.requireProfile(input.userId);
+    const openings = new OpeningsRepository(this.db);
+    const row = await openings.findOpening({
+      profileId: profile.id,
+      openingId: input.openingId,
+    });
+    if (row?.status !== "failed") throw notFound();
+    await this.tasks.assertAffordable({
+      userId: input.userId,
+      type: "analyze_opening",
+    });
+    // Only one request moves it on: a second click analyzes nothing twice.
+    const claimed = await openings.moveStatus(row.id, {
+      from: "failed",
+      to: "processing",
+    });
+    if (!claimed) throw new TRPCError({ code: "CONFLICT" });
+    return this.tasks.startOrUndo(
+      { userId: input.userId, type: "analyze_opening", subjectId: row.id },
+      async () => {
+        await openings.moveStatus(row.id, {
+          from: "processing",
+          to: "failed",
         });
       }
     );
@@ -436,6 +490,7 @@ export class OpeningsService {
       if (
         !row ||
         row.status === "processing" ||
+        row.status === "failed" ||
         row.status === "rejected" ||
         row.status === "external"
       )
@@ -445,6 +500,53 @@ export class OpeningsService {
         closedAt: input.closed ? new Date() : null,
       });
     });
+  }
+
+  /**
+   * Deletes the opening and everything that is its: the application, its
+   * documents with every version, the answers, research and instructions.
+   * Final, so the UI confirms. The documents' cached PDFs and agent
+   * conversations go afterwards, best effort.
+   */
+  async deleteOpening(input: { userId: string; openingId: string }) {
+    const profile = await this.requireProfile(input.userId);
+    const { renderedKeys, chatIds } = await this.db.transaction(async (tx) => {
+      const openings = new OpeningsRepository(tx);
+      const row = await openings.findOpening({
+        profileId: profile.id,
+        openingId: input.openingId,
+      });
+      if (!row) throw notFound();
+      const documents = new DocumentsRepository(tx);
+      const application = await documents.findApplicationByOpening(row.id);
+      const owned = application
+        ? await documents.listApplicationDocuments(application.id)
+        : [];
+      const chats = new AgentChatRepository(tx);
+      const keys: string[] = [];
+      const chatIds: string[] = [];
+      for (const document of owned) {
+        keys.push(...(await documents.renderedKeysOfDocument(document.id)));
+        chatIds.push(...(await chats.listChatIdsOfDocument(document.id)));
+      }
+      await openings.deleteOpening(row.id);
+      return { renderedKeys: keys, chatIds };
+    });
+    if (renderedKeys.length > 0) {
+      const storage = getStorage();
+      await Promise.all(
+        renderedKeys.map((key) => storage.delete(key).catch(() => undefined))
+      );
+    }
+    await Promise.all(
+      chatIds.map(async (chatId) => {
+        await triggerClient.cancelChatRuns(chatId).catch(() => undefined);
+        await triggerClient
+          .closeSession(chatId, "opening deleted")
+          .catch(() => undefined);
+      })
+    );
+    return { openingId: input.openingId };
   }
 
   /** The description is the user's to edit; nothing runs again by itself. */
@@ -627,20 +729,16 @@ export class OpeningsService {
           "Você disse que tem isto ao responder a pergunta de lacuna de uma vaga.",
       };
       const targets: SuggestionTarget[] = [
-        ...positionIds.map(
-          (positionId): SuggestionTarget => ({
-            kind: "experience",
-            positionId,
-            field: "responsibilities",
-          })
-        ),
-        ...projectIds.map(
-          (projectId): SuggestionTarget => ({
-            kind: "project",
-            projectId,
-            field: "responsibilities",
-          })
-        ),
+        ...positionIds.map((positionId): SuggestionTarget => ({
+          kind: "experience",
+          positionId,
+          field: "responsibilities",
+        })),
+        ...projectIds.map((projectId): SuggestionTarget => ({
+          kind: "project",
+          projectId,
+          field: "responsibilities",
+        })),
         ...(input.notTied ? [{ kind: "identityAreas" } as const] : []),
       ];
       const term = (await openings.listTerms(openingId)).find(

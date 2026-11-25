@@ -34,6 +34,8 @@ import {
   usePhone,
   useWide,
 } from "~/domains/workspace/hooks/use-desktop";
+import { WorkspaceSkeleton } from "~/domains/workspace/components/workspace-skeleton";
+import { useOpeningDocuments } from "~/domains/documents/hooks/use-opening-documents";
 
 import { useOpening, useRefreshOpenings } from "../hooks/use-opening";
 import {
@@ -59,7 +61,8 @@ import {
  */
 export function OpeningBody({ openingId }: { openingId: string }) {
   const opening = useOpening(openingId);
-  if (!opening.data) return null;
+  const documents = useOpeningDocuments(openingId);
+  if (!opening.data || !documents.data) return <WorkspaceSkeleton header />;
   return <OpeningScreen openingId={openingId} opening={opening.data} />;
 }
 
@@ -169,6 +172,7 @@ function OpeningScreen({
           view={view}
           setView={setView}
           sideButton={sideButton}
+          compact={phone && view !== "opening"}
         />
         {view === "opening" ? (
           <OpeningPageBody
@@ -191,6 +195,7 @@ function OpeningScreen({
             }
             // One mount only: the column, or the sheet on a narrow screen.
             panel={desktop ? documentColumn || undefined : undefined}
+            flushPanel
           />
         )}
         {/* A phone: the column is a bottom bar of sheets under the page. */}

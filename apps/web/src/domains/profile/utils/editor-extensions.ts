@@ -24,6 +24,8 @@ import { findLinks } from "./find-links";
 import {
   blocksToDoc,
   docToBlocks,
+  introNote,
+  introNoteOffsets,
   isLockedNode,
   lockedNodeOffsets,
   sameLockedHeadings,
@@ -201,9 +203,10 @@ export const ProfileClipboard = Extension.create({
 export const allowStructure = "allowStructure";
 
 /**
- * The document's title and the template's sections are fixed: a typed,
- * deleted or dragged change to them is rejected, unless the app made it
- * on purpose (paste, undo, fixes, inserts, restores).
+ * The document's title, its opening note and the template's sections are
+ * fixed: a typed, deleted or dragged change to them is rejected, unless the
+ * app made it on purpose (paste, undo, fixes, inserts, restores). The title
+ * and the note can't take the cursor at all.
  */
 export const ProfileLockedHeadings = Extension.create({
   name: "profileLockedHeadings",
@@ -220,19 +223,94 @@ export const ProfileLockedHeadings = Extension.create({
           ) {
             return true;
           }
-          return sameLockedHeadings(state.doc, tr.doc);
+          const before = introNote(state.doc);
+          const after = introNote(tr.doc);
+          return (
+            sameLockedHeadings(state.doc, tr.doc) &&
+            before.length === after.length &&
+            before.every((line, index) => line === after[index])
+          );
         },
         props: {
           decorations: (state) => {
             const decorations: Decoration[] = [];
             for (const offset of lockedNodeOffsets(state.doc)) {
               const node = state.doc.nodeAt(offset)!;
+              const title =
+                node.type.name === "heading" && node.attrs.level === 1;
               decorations.push(
                 Decoration.node(offset, offset + node.nodeSize, {
                   class: "profile-locked-heading",
+                  ...(title ? { contenteditable: "false" } : {}),
                 })
               );
             }
+            for (const offset of introNoteOffsets(state.doc)) {
+              const node = state.doc.nodeAt(offset)!;
+              decorations.push(
+                Decoration.node(offset, offset + node.nodeSize, {
+                  class: "profile-locked-heading",
+                  contenteditable: "false",
+                })
+              );
+            }
+            return DecorationSet.create(state.doc, decorations);
+          },
+        },
+      }),
+    ];
+  },
+});
+
+/**
+ * The profile's figure marks (profile-truth spec): `[medido]` / `[measured]`,
+ * `[estimado]` / `[estimated]` and `[sem número]` / `[no number]`, an
+ * optional source after a colon.
+ */
+const markPattern =
+  /\[(medido|measured|estimado|estimated|sem número|no number)(?::[^\]]*)?\]/giu;
+
+const markTone: Record<string, string> = {
+  medido: "bg-fit-high-soft text-fit-high",
+  measured: "bg-fit-high-soft text-fit-high",
+  estimado: "bg-fit-mid-soft text-fit-mid",
+  estimated: "bg-fit-mid-soft text-fit-mid",
+  "sem número": "bg-secondary text-status-analyzed",
+  "no number": "bg-secondary text-status-analyzed",
+};
+
+/**
+ * Sets the figure marks apart in mono, tinted by how sure the figure is
+ * (ADR 0012); the stored text stays plain.
+ */
+export const ProfileMarks = Extension.create({
+  name: "profileMarks",
+  addProseMirrorPlugins() {
+    return [
+      new Plugin({
+        key: new PluginKey("profileMarks"),
+        props: {
+          decorations: (state) => {
+            const decorations: Decoration[] = [];
+            state.doc.descendants((node, pos) => {
+              if (!node.isTextblock) return true;
+              for (const match of node.textContent.matchAll(markPattern)) {
+                const kind = (match[1] ?? "").toLowerCase();
+                decorations.push(
+                  Decoration.inline(
+                    pos + 1 + match.index,
+                    pos + 1 + match.index + match[0].length,
+                    {
+                      class: cn(
+                        "rounded-sm px-1 font-mono text-[0.82em] box-decoration-clone",
+                        markTone[kind]
+                      ),
+                    }
+                  )
+                );
+              }
+              return false;
+            });
             return DecorationSet.create(state.doc, decorations);
           },
         },
@@ -349,8 +427,7 @@ export const ProfileDecorations = Extension.create({
           init: () => DecorationSet.empty,
           apply(tr, set) {
             const next = tr.getMeta(decorationsKey) as
-              | DecorationSet
-              | undefined;
+              DecorationSet | undefined;
             return next ?? set.map(tr.mapping, tr.doc);
           },
         },
@@ -430,6 +507,7 @@ export function profileExtensions() {
     ProfileLockedHeadings,
     ProfileDecorations,
     ProfileLinks,
+    ProfileMarks,
   ];
 }
 

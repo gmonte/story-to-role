@@ -219,9 +219,9 @@ export function PublishDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <section className="space-y-3 rounded-lg border p-4">
+        <section className="bg-card space-y-3 rounded-lg border p-4">
           <h3 className="flex items-center gap-2 text-sm font-medium">
-            <Sparkles className="text-primary size-4" />
+            <Sparkles className="text-brand-accent size-4" />
             {t.formatMessage({ defaultMessage: "1. Validate (optional)" })}
           </h3>
           {running ? (
@@ -275,7 +275,7 @@ export function PublishDialog({
                 </p>
               )}
               {credits.data?.nearReserve && (
-                <p className="text-xs text-amber-600">
+                <p className="text-warning text-xs">
                   {t.formatMessage({
                     defaultMessage:
                       "Your credits are close to the reserve kept for your resume.",
@@ -305,7 +305,7 @@ export function PublishDialog({
           )}
         </section>
 
-        <section className="space-y-2 rounded-lg border p-4">
+        <section className="bg-card space-y-2 rounded-lg border p-4">
           <h3 className="flex items-center gap-2 text-sm font-medium">
             <Send className="size-4" />
             {t.formatMessage({ defaultMessage: "2. Publish" })}
@@ -322,9 +322,9 @@ export function PublishDialog({
                 })}
           </p>
           {!blocked && pending.length > 0 && (
-            <div className="space-y-1.5 rounded-md border p-3 text-sm">
+            <div className="bg-muted/50 space-y-1.5 rounded-md border p-3 text-sm">
               <p className="flex items-center gap-2 font-medium">
-                <CircleAlert className="size-4 text-amber-600" />
+                <CircleAlert className="text-warning size-4" />
                 {t.formatMessage({
                   defaultMessage: "Still open in your profile:",
                 })}

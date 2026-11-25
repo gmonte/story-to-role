@@ -9,6 +9,7 @@ import { useTranslation } from "@repo/intl/use-translation";
 import { Button } from "@repo/web/components/ui/button";
 
 import { WorkspaceBody } from "~/domains/workspace/components/workspace-body";
+import { WorkspaceSkeleton } from "~/domains/workspace/components/workspace-skeleton";
 
 import { useLibrary, useLibraryDocument } from "../hooks/use-library";
 import { useSelectedVersion } from "../hooks/use-selected-version";
@@ -50,12 +51,20 @@ function useLinkedinDocumentId() {
  */
 export function LinkedinBody() {
   const { loaded, documentId } = useLinkedinDocumentId();
-  if (!loaded) return null;
+  if (!loaded) return <WorkspaceSkeleton />;
   if (!documentId) return <LinkedinEmpty />;
+  return <LinkedinWorkspace documentId={documentId} />;
+}
+
+/** The LinkedIn text in the document workspace, once it has loaded. */
+function LinkedinWorkspace({ documentId }: { documentId: string }) {
+  const document = useLibraryDocument(documentId);
+  if (!document.data) return <WorkspaceSkeleton />;
   return (
     <DocumentAgentProvider>
       <WorkspaceBody
         layoutId="linkedin"
+        flushPanel
         chat={<LinkedinView documentId={documentId} />}
         panel={<LinkedinPanel documentId={documentId} />}
       />
@@ -77,7 +86,7 @@ function LinkedinEmpty() {
   ];
   return (
     <div className="flex flex-1 items-start justify-center overflow-y-auto p-6">
-      <div className="bg-background flex w-full max-w-xl flex-col gap-4 rounded-lg border p-6">
+      <div className="bg-card flex w-full max-w-xl flex-col gap-4 rounded-lg border p-6">
         <div className="flex flex-col gap-1">
           <h2 className="text-lg font-semibold">
             {t.formatMessage({ defaultMessage: "Your LinkedIn, written" })}
@@ -100,7 +109,7 @@ function LinkedinEmpty() {
         <LinkedinDialog
           trigger={
             <Button className="self-start">
-              <Sparkles />
+              <Sparkles className="text-brand-accent" />
               {t.formatMessage({ defaultMessage: "Create my LinkedIn" })}
             </Button>
           }

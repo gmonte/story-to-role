@@ -16,7 +16,7 @@ export function focusDocumentLine(target: {
   const element = selector ? document.querySelector(selector) : null;
   if (!(element instanceof HTMLElement)) return false;
   element.scrollIntoView({ behavior: "smooth", block: "center" });
-  const highlight = ["ring-2", "ring-red-500/60", "transition-shadow"];
+  const highlight = ["ring-2", "ring-destructive/60", "transition-shadow"];
   element.classList.add(...highlight);
   window.setTimeout(() => element.classList.remove(...highlight), 2000);
   return true;

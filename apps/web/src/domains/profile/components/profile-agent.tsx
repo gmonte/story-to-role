@@ -1,11 +1,18 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useEffectEvent, useRef, useState } from "react";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useChatActions } from "@trigger.dev/sdk/chat/react";
 import type { UIMessage } from "ai";
-import { Loader2, Paperclip, Sparkles } from "lucide-react";
+import {
+  Check,
+  Loader2,
+  Paperclip,
+  PencilLine,
+  Sparkles,
+  X,
+} from "lucide-react";
 
 import { composeAgentMessage } from "@repo/api/domains/agents/agent-message";
 import { agentSettings } from "@repo/api/domains/agents/agent-settings";
@@ -14,6 +21,7 @@ import { listParts } from "@repo/api/domains/profile/truth/suggestions";
 import { useTranslation } from "@repo/intl/use-translation";
 import { Button } from "@repo/web/components/ui/button";
 import { toast } from "@repo/web/components/ui/sonner";
+import { cn } from "@repo/web/lib/utils";
 
 import { loadAgentChat } from "~/domains/agents/actions/agent-chat-actions";
 import {
@@ -42,6 +50,7 @@ import {
 } from "~/domains/career/hooks/use-source-upload";
 import { useCredits } from "~/domains/credits/hooks/use-credits";
 import { useTRPC } from "~/tools/trpc/client";
+import { decisionButton } from "~/domains/workspace/utils/decision-buttons";
 
 import { topmostNewSuggestion } from "../utils/topmost-new-suggestion";
 import { maxQuoteCharacters, useProfileEditor } from "./profile-editor-context";
@@ -119,15 +128,15 @@ function Conversation({
     refreshSuggestions,
     refreshDismissed,
     suggestions,
-    goToLine,
     scrollToLine,
+    revealLine,
+    acceptSuggestions,
+    rejectSuggestions,
   } = useProfileEditor();
   const [text, setText] = useState("");
   const [turnDone, setTurnDone] = useState(0);
   // The suggestions there were when the turn began.
   const knownIds = useRef<Set<string>>(new Set());
-  const latestSuggestions = useRef(suggestions);
-  latestSuggestions.current = suggestions;
   const bottom = useRef<HTMLDivElement>(null);
   const input = useRef<HTMLTextAreaElement>(null);
   useEffect(() => {
@@ -170,21 +179,20 @@ function Conversation({
       void queryClient.invalidateQueries({ queryKey: trpc.credits.pathKey() });
     },
   });
+  const takeSnapshot = useEffectEvent(() => {
+    knownIds.current = new Set(suggestions.map((s) => s.id));
+  });
   useEffect(() => {
-    if (busy) {
-      knownIds.current = new Set(latestSuggestions.current.map((s) => s.id));
-    }
     // Only the start of a turn takes the snapshot.
+    if (busy) takeSnapshot();
   }, [busy]);
-  useEffect(() => {
-    if (!turnDone) return;
-    const first = topmostNewSuggestion(
-      knownIds.current,
-      latestSuggestions.current
-    );
+  const showFirstNew = useEffectEvent(() => {
+    const first = topmostNewSuggestion(knownIds.current, suggestions);
     if (first) scrollToLine(first.range!.start);
+  });
+  useEffect(() => {
     // Once per finished turn.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    if (turnDone) showFirstNew();
   }, [turnDone]);
   const { sendAction } = useChatActions({ sendMessage });
 
@@ -210,8 +218,7 @@ function Conversation({
     .join(",");
   const asking = useRef(false);
   const asked = useRef(new Map<string, number>());
-  const catchUp = useRef<() => void>(undefined);
-  catchUp.current = () => {
+  const catchUp = useEffectEvent(() => {
     if (asking.current || (asked.current.get(unsaid) ?? 0) >= 2) return;
     asking.current = true;
     asked.current.set(unsaid, (asked.current.get(unsaid) ?? 0) + 1);
@@ -230,9 +237,9 @@ function Conversation({
       await refreshCareer();
       asking.current = false;
     });
-  };
+  });
   useEffect(() => {
-    if (unsaid && !busy) catchUp.current?.();
+    if (unsaid && !busy) catchUp();
   }, [unsaid, busy]);
 
   // A passage or a finding sent here from the document: the composer takes
@@ -372,33 +379,87 @@ function Conversation({
                     return null;
                   }
                   const waiting = suggestions.find((s) => s.id === proposed);
+                  if (waiting) {
+                    const reveal = () =>
+                      waiting.range && revealLine(waiting.range.start);
+                    // The change itself, to answer here or in the text; a
+                    // click anywhere but its buttons shows it in the text.
+                    return (
+                      <div
+                        key={index}
+                        onClick={(event) => {
+                          const target = event.target as HTMLElement;
+                          if (target.closest("button")) return;
+                          // Not when the words were selected to copy.
+                          if (window.getSelection()?.toString()) return;
+                          reveal();
+                        }}
+                        className={cn(
+                          "bg-card flex flex-col gap-2 rounded-lg border p-3 text-sm",
+                          waiting.range &&
+                            "hover:border-foreground/30 cursor-pointer"
+                        )}
+                      >
+                        <button
+                          type="button"
+                          disabled={!waiting.range}
+                          onClick={reveal}
+                          className="text-muted-foreground hover:text-foreground flex items-center gap-1.5 text-left text-xs"
+                        >
+                          <PencilLine className="size-3.5 shrink-0" />
+                          {t.formatMessage(
+                            { defaultMessage: "Suggestion for {part}" },
+                            { part: waiting.part }
+                          )}
+                        </button>
+                        {waiting.find && (
+                          <p className="text-muted-foreground line-through decoration-1">
+                            {waiting.find}
+                          </p>
+                        )}
+                        <p className="bg-fit-high-soft rounded-md px-2.5 py-2">
+                          {waiting.replace}
+                        </p>
+                        {call.input?.reason && (
+                          <p className="text-muted-foreground text-xs">
+                            {call.input.reason}
+                          </p>
+                        )}
+                        <div className="flex gap-2">
+                          <Button
+                            className={decisionButton}
+                            onClick={() => acceptSuggestions([waiting.id])}
+                          >
+                            <Check />
+                            {t.formatMessage({ defaultMessage: "Accept" })}
+                          </Button>
+                          <Button
+                            variant="outline"
+                            className={decisionButton}
+                            onClick={() => rejectSuggestions([waiting.id])}
+                          >
+                            <X />
+                            {t.formatMessage({ defaultMessage: "Reject" })}
+                          </Button>
+                        </div>
+                      </div>
+                    );
+                  }
                   return (
-                    <button
+                    <p
                       key={index}
-                      type="button"
-                      disabled={!waiting?.range}
-                      onClick={() =>
-                        waiting?.range && goToLine(waiting.range.start)
-                      }
-                      className="bg-primary/5 hover:bg-primary/10 flex items-start gap-2 rounded-md border px-2.5 py-1.5 text-left text-xs disabled:opacity-60"
+                      className="text-muted-foreground flex items-start gap-2 rounded-md border px-2.5 py-1.5 text-xs"
                     >
-                      <Sparkles className="text-primary mt-0.5 size-3.5 shrink-0" />
+                      <Sparkles className="text-brand-accent mt-0.5 size-3.5 shrink-0" />
                       <span>
-                        <span className="block font-medium">
-                          {waiting
-                            ? t.formatMessage({
-                                defaultMessage:
-                                  "Suggestion waiting in the text",
-                              })
-                            : t.formatMessage({
-                                defaultMessage: "Suggestion answered",
-                              })}
+                        <span className="text-foreground block font-medium">
+                          {t.formatMessage({
+                            defaultMessage: "Suggestion answered",
+                          })}
                         </span>
-                        <span className="text-muted-foreground">
-                          {call.input?.reason}
-                        </span>
+                        {call.input?.reason}
                       </span>
-                    </button>
+                    </p>
                   );
                 })}
               </li>
@@ -502,7 +563,7 @@ function Conversation({
             type="button"
             size="icon"
             variant="ghost"
-            className="size-8"
+            className="text-muted-foreground size-8"
             aria-label={attachLabel}
             title={attachLabel}
             onClick={() => fileInput.current?.click()}
@@ -526,7 +587,7 @@ function Introduction({
   const t = useTranslation();
   return (
     <li className="flex flex-col items-center gap-3 px-2 py-8 text-center">
-      <Sparkles className="text-primary size-5" />
+      <Sparkles className="text-brand-accent size-5" />
       <h2 className="font-display text-lg font-semibold tracking-tight">
         {t.formatMessage({ defaultMessage: "Your profile agent" })}
       </h2>

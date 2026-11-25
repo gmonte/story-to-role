@@ -128,7 +128,7 @@ export function ActivityRow({
       role="status"
       className="text-muted-foreground flex items-center gap-2 self-start text-sm"
     >
-      <Sparkles className="text-primary size-4 motion-safe:animate-pulse" />
+      <Sparkles className="text-brand-accent size-4 motion-safe:animate-pulse" />
       <span className="from-foreground via-muted-foreground to-foreground motion-safe:animate-shimmer bg-linear-to-r bg-[length:200%_100%] bg-clip-text text-transparent">
         {phase === "recovering"
           ? t.formatMessage({ defaultMessage: "Reconnecting to the agent…" })
@@ -274,7 +274,7 @@ export function AttachmentCard({
   const attachmentLabel = useAttachmentLabel();
   return (
     <div className="bg-muted/60 mb-2 flex items-start gap-2 rounded-md border px-2.5 py-1.5 text-xs">
-      <Sparkles className="text-muted-foreground mt-0.5 size-3.5 shrink-0" />
+      <Sparkles className="text-brand-accent mt-0.5 size-3.5 shrink-0" />
       <span className="min-w-0 flex-1">
         <span className="text-muted-foreground block font-medium">
           {attachmentLabel(attachment.kind)}
@@ -366,7 +366,7 @@ export function AgentComposer({
   return (
     <form onSubmit={onSubmit} className="border-t p-3">
       {nearReserve && (
-        <p className="mb-2 text-xs text-amber-600">
+        <p className="text-warning mb-2 text-xs">
           {t.formatMessage({
             defaultMessage:
               "Your credits are close to the reserve kept for your resume.",
@@ -378,7 +378,7 @@ export function AgentComposer({
         <ul
           id={`${id}-command-list`}
           role="listbox"
-          className="bg-background mb-2 rounded-md border text-xs shadow-sm"
+          className="bg-card mb-2 rounded-md border text-xs shadow-sm"
         >
           {commands.map((command, index) => (
             <li
@@ -415,7 +415,7 @@ export function AgentComposer({
           })}
         </p>
       )}
-      <div className="bg-background flex flex-col rounded-xl border shadow-sm">
+      <div className="bg-card border-input focus-within:border-ring/60 flex flex-col gap-3.5 rounded-[10px] border px-3 py-2.5 transition-colors">
         <Textarea
           ref={inputRef}
           rows={2}
@@ -465,10 +465,10 @@ export function AgentComposer({
             } else if (decision === "send") onSubmit(event);
           }}
           placeholder={placeholder}
-          className="max-h-40 resize-none border-0 shadow-none focus-visible:ring-0"
+          className="max-h-40 min-h-10 resize-none rounded-none border-0 bg-transparent p-0 text-sm shadow-none focus-visible:ring-0 md:text-sm dark:bg-transparent"
         />
         {/* Below the text, not over it: a long message scrolls clear of it. */}
-        <div className="flex items-center gap-1 pr-2 pb-2 pl-3">
+        <div className="text-muted-foreground flex items-center gap-1.5">
           <CreditCost credits={cost} />
           {actionsStart}
           <span className="mr-auto" />
@@ -483,7 +483,7 @@ export function AgentComposer({
             <Button
               type="button"
               size="icon"
-              className="size-8 rounded-full"
+              className="size-7 rounded-full"
               aria-label={t.formatMessage({ defaultMessage: "Stop" })}
               title={t.formatMessage({ defaultMessage: "Stop" })}
               onClick={onStop}
@@ -495,7 +495,7 @@ export function AgentComposer({
               type="submit"
               size="icon"
               disabled={!canSend}
-              className="size-8 rounded-full"
+              className="size-7 rounded-full"
               aria-label={t.formatMessage({ defaultMessage: "Send" })}
             >
               <ArrowUp />

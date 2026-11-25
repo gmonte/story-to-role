@@ -1,4 +1,4 @@
-import { and, desc, eq, gt, inArray } from "drizzle-orm";
+import { and, desc, eq, gt, inArray, isNotNull, isNull } from "drizzle-orm";
 
 import type { DbClient } from "@repo/api/tools/db-client";
 
@@ -38,12 +38,25 @@ export class BillingRepository {
     return this.tx.select().from(billingCustomersTable);
   }
 
-  /** The user's latest subscription (the one whose period ends last). */
+  findSubscriptionByStripeId(stripeSubscriptionId: string) {
+    return this.tx
+      .select()
+      .from(subscriptionsTable)
+      .where(eq(subscriptionsTable.stripeSubscriptionId, stripeSubscriptionId))
+      .then((rows) => rows[0] ?? null);
+  }
+
+  /** The user's latest subscription, live or not; never a replaced one. */
   findSubscriptionByUserId(userId: string) {
     return this.tx
       .select()
       .from(subscriptionsTable)
-      .where(eq(subscriptionsTable.userId, userId))
+      .where(
+        and(
+          eq(subscriptionsTable.userId, userId),
+          isNull(subscriptionsTable.replacedAt)
+        )
+      )
       .orderBy(desc(subscriptionsTable.currentPeriodEnd))
       .limit(1)
       .then((rows) => rows[0] ?? null);
@@ -52,7 +65,8 @@ export class BillingRepository {
   /**
    * The user's live subscription (billing spec, "Plans and AI funding"):
    * its period not yet over, give or take a few days for a renewal Stripe
-   * hasn't reported yet.
+   * hasn't reported yet. A replaced one no longer counts, even before
+   * Stripe reports it cancelled.
    */
   findLiveSubscription(userId: string, now: Date) {
     const grace = new Date(now.getTime() - 3 * 24 * 3600 * 1000);
@@ -68,7 +82,8 @@ export class BillingRepository {
             "past_due",
             "unpaid",
           ]),
-          gt(subscriptionsTable.currentPeriodEnd, grace)
+          gt(subscriptionsTable.currentPeriodEnd, grace),
+          isNull(subscriptionsTable.replacedAt)
         )
       )
       .orderBy(desc(subscriptionsTable.currentPeriodEnd))
@@ -76,10 +91,44 @@ export class BillingRepository {
       .then((rows) => rows[0] ?? null);
   }
 
+  /**
+   * The credit subscription an own-key one replaced whose paid period
+   * isn't over (billing spec, "Switching plans"): it keeps granting.
+   */
+  findCarryover(userId: string, now: Date) {
+    return this.tx
+      .select()
+      .from(subscriptionsTable)
+      .where(
+        and(
+          eq(subscriptionsTable.userId, userId),
+          eq(subscriptionsTable.plan, "credits"),
+          isNotNull(subscriptionsTable.replacedAt),
+          gt(subscriptionsTable.paidPeriodEnd, now)
+        )
+      )
+      .orderBy(desc(subscriptionsTable.paidPeriodEnd))
+      .limit(1)
+      .then((rows) => rows[0] ?? null);
+  }
+
+  /** Marks a credit subscription as replaced by the own-key one. */
+  async markReplaced(stripeSubscriptionId: string, now: Date) {
+    await this.tx
+      .update(subscriptionsTable)
+      .set({ replacedAt: now })
+      .where(
+        and(
+          eq(subscriptionsTable.stripeSubscriptionId, stripeSubscriptionId),
+          isNull(subscriptionsTable.replacedAt)
+        )
+      );
+  }
+
   async upsertSubscription(
     row: Omit<
       Insert<typeof subscriptionsTable>,
-      "paidInvoiceId" | "paidPeriodStart" | "paidPeriodEnd"
+      "paidInvoiceId" | "paidPeriodStart" | "paidPeriodEnd" | "replacedAt"
     >
   ) {
     await this.tx
@@ -88,11 +137,13 @@ export class BillingRepository {
       .onConflictDoUpdate({
         target: subscriptionsTable.stripeSubscriptionId,
         set: {
+          plan: row.plan,
           status: row.status,
           interval: row.interval,
           currentPeriodStart: row.currentPeriodStart,
           currentPeriodEnd: row.currentPeriodEnd,
           cancelAtPeriodEnd: row.cancelAtPeriodEnd,
+          scheduledInterval: row.scheduledInterval ?? null,
         },
       });
   }

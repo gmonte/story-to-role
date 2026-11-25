@@ -29,6 +29,8 @@ This is a pnpm workspace monorepo (lerna + nx).
 
 **Important**: Never name a parameter just `id`. Every input that identifies a resource is `<domain>Id` (`positionId`, `openingId`, `applicationId`) — in the tRPC input schema, in the service and repository signatures, and in the REST path, which addresses a specific resource as `/<domain>/by-id/{<domain>Id}`. This applies to parameters, not to an entity's own `id` field inside a payload or output schema, and not to a database column.
 
+**Important**: Every page, layout, route handler and Server Function in `apps/web` checks the session itself with `await auth.protect()` (from `@clerk/nextjs/server`) at its top; `proxy.ts` gates nothing (Clerk deprecated `createRouteMatcher`). The lint rule `@clerk/next/require-auth-protection` flags any that doesn't; a resource meant for signed-out visitors goes in a folder listed as `public` in `apps/web/eslint.config.js`.
+
 **Important**: Never import `radix-ui` directly in `apps/`. Radix primitives must only be used inside `packages/web/`, which wraps them as components. Apps should import these wrappers from `@repo/web/components/ui`. To add a shadcn component, run from the workspace root: `nvm use && cd apps/web && pnpm dlx shadcn@canary add [COMPONENT]`.
 
 **Important**: For UI formatting and i18n, get `t` from `@repo/intl`: use `useTranslation` in client components and `getTranslation` in server components. Use `t.formatMessage` for strings, `t.formatNumber` for numbers and percentages, and `t.formatDate` for dates.

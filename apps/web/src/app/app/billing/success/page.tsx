@@ -1,3 +1,5 @@
+import { auth } from "@clerk/nextjs/server";
+
 import { getTranslation } from "@repo/intl/get-translation";
 
 import { CheckoutReturn } from "~/domains/billing/components/checkout-return";
@@ -9,6 +11,7 @@ export default async function CheckoutSuccessPage({
 }: {
   searchParams: Promise<{ session_id?: string }>;
 }) {
+  await auth.protect();
   const t = await getTranslation(await getLocaleFromNextCookies());
   const { session_id: checkoutSessionId } = await searchParams;
 

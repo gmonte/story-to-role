@@ -8,6 +8,8 @@ export type DeclaredLacks = {
   gaps: string[];
   // What the person did not do, per position, each as written.
   notDone: string[];
+  // The passages that are evidence of what the person did or has.
+  evidence: string[];
 };
 
 // A requirement is a sentence; only a short term names one thing.
@@ -44,8 +46,10 @@ function namedIn(line: string, name: string) {
  * opening's term names: a competency only studied, or a short known-gap or
  * did-not-do line naming it. Such a term is a gap, never coverage (resume
  * spec, "Flow"), whatever a model makes of the passages. Returns the line
- * that says so. Anything less plain (a sentence-long requirement, a long
- * line, "a or b") is left to the judge, which points at the line.
+ * that says so. A did-not-do line speaks for its own position only: when
+ * evidence elsewhere in the profile names the term, the judge weighs both.
+ * Anything less plain (a sentence-long requirement, a long line, "a or b")
+ * is left to the judge, which points at the line.
  */
 export function declaredLack(term: string, lacks: DeclaredLacks) {
   const name = term.trim();
@@ -60,6 +64,7 @@ export function declaredLack(term: string, lacks: DeclaredLacks) {
   if (studied) return { kind: "studied" as const, text: studied };
   const gap = lacks.gaps.find((line) => namedIn(line, name));
   if (gap) return { kind: "gap" as const, text: gap };
+  if (lacks.evidence.some((passage) => mentions(passage, name))) return null;
   const notDone = lacks.notDone.find((line) => namedIn(line, name));
   return notDone ? { kind: "notDone" as const, text: notDone } : null;
 }

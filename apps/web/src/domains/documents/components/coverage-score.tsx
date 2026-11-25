@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 
-import { ChevronDown, MessageSquare } from "lucide-react";
+import { ChevronDown, Sparkles } from "lucide-react";
 
 import {
   reviewerAttachment,
@@ -32,10 +32,11 @@ import {
   StaleReviewNotice,
 } from "./review-again";
 
-const badgeVariant = {
-  good: "default",
-  middling: "secondary",
-  low: "destructive",
+/** The score's band as a soft fill (ADR 0012: score tokens). */
+const scoreTone = {
+  good: "border-transparent bg-fit-high-soft text-score-high",
+  middling: "border-transparent bg-fit-mid-soft text-score-mid",
+  low: "border-transparent bg-fit-low-soft text-score-low",
 } as const;
 
 type Review = NonNullable<VersionView["review"]>;
@@ -51,17 +52,15 @@ function useScoreLabel() {
 }
 
 /** The band in a word: Strong, Fair or Low. */
-function BandBadge({ band }: { band: keyof typeof badgeVariant }) {
+function BandBadge({ band }: { band: keyof typeof scoreTone }) {
   const t = useTranslation();
   return (
-    <Badge variant={badgeVariant[band]}>
-      {t.formatMessage(
-        {
-          defaultMessage:
-            "{band, select, good {Strong} middling {Fair} other {Low}}",
-        },
-        { band }
-      )}
+    <Badge variant="outline" className={scoreTone[band]}>
+      {band === "good"
+        ? t.formatMessage({ defaultMessage: "Strong" })
+        : band === "middling"
+          ? t.formatMessage({ defaultMessage: "Fair" })
+          : t.formatMessage({ defaultMessage: "Low" })}
     </Badge>
   );
 }
@@ -82,7 +81,7 @@ export function CoverageScore({ version }: { version: VersionView }) {
   }
 
   return (
-    <div className="bg-background flex flex-col gap-2 rounded-lg border p-2.5 text-xs">
+    <div className="bg-card flex flex-col gap-2 rounded-lg border p-2.5 text-xs">
       <button
         type="button"
         aria-expanded={open}
@@ -134,13 +133,15 @@ function CoverageScoreBody({
       {showExplanation && (
         <div className="text-muted-foreground flex flex-col gap-1.5">
           <p>
-            {t.formatMessage(
-              {
-                defaultMessage:
-                  "The score StoryToRole’s reviewers gave this resume for the {purpose, select, focus {focus} other {opening}}.",
-              },
-              { purpose }
-            )}
+            {purpose === "focus"
+              ? t.formatMessage({
+                  defaultMessage:
+                    "The score StoryToRole’s reviewers gave this resume for the focus.",
+                })
+              : t.formatMessage({
+                  defaultMessage:
+                    "The score StoryToRole’s reviewers gave this resume for the opening.",
+                })}
           </p>
           <p>
             {review.ofEdit && review.rounds.length > 1
@@ -244,7 +245,7 @@ function TalkAboutButton({
       title={label}
       onClick={() => agent.talkAbout({ attachment })}
     >
-      <MessageSquare className="size-3" />
+      <Sparkles className="text-brand-accent size-3" />
     </Button>
   );
 }
@@ -415,7 +416,7 @@ function TalkAboutWholeReview({
         })
       }
     >
-      <MessageSquare className="size-3" />
+      <Sparkles className="text-brand-accent size-3" />
       {t.formatMessage({ defaultMessage: "Talk about this review" })}
     </Button>
   );
@@ -440,7 +441,7 @@ function ReviewerList({ review }: { review: Review }) {
           <Collapsible
             key={round.round}
             defaultOpen={round.kept && needsAttention}
-            className="rounded-md border"
+            className="bg-muted/50 rounded-md border"
           >
             <CollapsibleTrigger
               disabled={empty}
@@ -545,7 +546,9 @@ export function CoverageScoreBadge({
           variant="ghost"
           className={cn("h-7 gap-1.5 px-2", inline && "h-auto p-0")}
         >
-          <Badge variant={badgeVariant[band]}>{label(review)}</Badge>
+          <Badge variant="outline" className={scoreTone[band]}>
+            {label(review)}
+          </Badge>
           {review.inconsistencies > 0 && (
             <span
               role="img"
@@ -565,7 +568,7 @@ export function CoverageScoreBadge({
               aria-label={t.formatMessage({
                 defaultMessage: "Edited after the review",
               })}
-              className="size-2 rounded-full bg-amber-500"
+              className="bg-warning size-2 rounded-full"
             />
           )}
         </Button>

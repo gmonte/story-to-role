@@ -406,11 +406,14 @@ export function DocumentEditorProvider({
   );
 
   // Optimistic: the keys change here first, then the server records them.
+  // New keys from the server replace them, adjusted during render.
   const [dismissed, setDismissed] = useState(version.dismissedFindings);
   const serverDismissed = version.dismissedFindings.join();
-  useEffect(() => {
+  const [syncedDismissed, setSyncedDismissed] = useState(serverDismissed);
+  if (serverDismissed !== syncedDismissed) {
+    setSyncedDismissed(serverDismissed);
     setDismissed(serverDismissed ? serverDismissed.split(",") : []);
-  }, [serverDismissed]);
+  }
   const { mutate: dismissOnServer } = useMutation(
     trpc.documents.dismissFinding.mutationOptions()
   );
@@ -438,27 +441,23 @@ export function DocumentEditorProvider({
     const all = version.coverage?.findings ?? [];
     const review = version.coverage?.review;
     const allNotes: ReviewNote[] = [
-      ...(review?.inconsistencies ?? []).map(
-        (row): ReviewNote => ({
-          kind: "inconsistency",
-          lineId: row.lineId,
-          lineText: row.lineText,
-          text: row.explanation,
-          profileSuggestion: null,
-        })
-      ),
-      ...(review?.suggestions ?? []).map(
-        (row): ReviewNote => ({
-          kind: "suggestion",
-          lineId: row.lineId,
-          lineText: row.lineText,
-          text: row.text,
-          profileSuggestion:
-            review && row.kind === "profile" && row.lineId
-              ? { coverageReviewId: review.id, lineId: row.lineId }
-              : null,
-        })
-      ),
+      ...(review?.inconsistencies ?? []).map((row): ReviewNote => ({
+        kind: "inconsistency",
+        lineId: row.lineId,
+        lineText: row.lineText,
+        text: row.explanation,
+        profileSuggestion: null,
+      })),
+      ...(review?.suggestions ?? []).map((row): ReviewNote => ({
+        kind: "suggestion",
+        lineId: row.lineId,
+        lineText: row.lineText,
+        text: row.text,
+        profileSuggestion:
+          review && row.kind === "profile" && row.lineId
+            ? { coverageReviewId: review.id, lineId: row.lineId }
+            : null,
+      })),
     ];
     const ignoredFinding = (finding: DocumentFinding) =>
       hidden.has(coverageFindingKey(finding));
@@ -940,11 +939,11 @@ export function DocumentEditorProvider({
       });
     });
     const lit = (key: string) =>
-      key === hoveredFinding ? "bg-amber-500/20 rounded-sm" : "";
+      key === hoveredFinding ? "bg-warning-soft rounded-sm" : "";
     findings.forEach((finding, index) => {
       const key = `finding-${index}`;
       const underline = cn(
-        "underline decoration-amber-500/70 decoration-dotted decoration-2 underline-offset-4",
+        "underline decoration-warning/70 decoration-dotted decoration-2 underline-offset-4",
         lit(key)
       );
       if (finding.lineId) {
@@ -976,7 +975,7 @@ export function DocumentEditorProvider({
           from: range.from,
           to: range.to,
           className: cn(
-            "-mx-2 rounded-sm px-2 ring-1 ring-amber-500/50",
+            "-mx-2 rounded-sm px-2 ring-1 ring-warning/50",
             lit(key)
           ),
           finding: key,
@@ -997,16 +996,22 @@ export function DocumentEditorProvider({
             (block) => block.type === "sectionTitle" && block.kind === kind
           );
         const anchor = titleOf(move.anchor);
-        const summary = t.formatMessage(
-          {
-            defaultMessage:
-              "{placement, select, above {Suggested: move this section above {anchor}} other {Suggested: move this section below {anchor}}}",
-          },
-          {
-            placement: move.placement,
-            anchor: anchor && "text" in anchor ? anchor.text : move.anchor,
-          }
-        );
+        const anchorText =
+          anchor && "text" in anchor ? anchor.text : move.anchor;
+        const summary =
+          move.placement === "above"
+            ? t.formatMessage(
+                {
+                  defaultMessage: "Suggested: move this section above {anchor}",
+                },
+                { anchor: anchorText }
+              )
+            : t.formatMessage(
+                {
+                  defaultMessage: "Suggested: move this section below {anchor}",
+                },
+                { anchor: anchorText }
+              );
         specs.push({
           kind: "widget",
           at: positions[range.start],
@@ -1108,7 +1113,7 @@ export function DocumentEditorProvider({
           kind: "inline",
           from: range.from + 1,
           to: range.from + 1 + block.text.length,
-          className: "bg-amber-500/20 rounded-sm",
+          className: "bg-warning-soft rounded-sm",
           key: "hovered-passage",
         });
       }

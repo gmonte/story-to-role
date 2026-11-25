@@ -4,28 +4,38 @@ import type { DbClient } from "@repo/api/tools/db-client";
 import { CreditsRepository } from "./credits-repository";
 
 /**
- * The user's plan (billing spec, "Plans and AI funding"): the paid plan
- * through a live Stripe subscription or, for a user without one, a
- * courtesy grant; else Free.
+ * The user's plan (billing spec, "Plans and AI funding"): the credit or
+ * the own-key subscription through a live Stripe subscription or, for a
+ * user without one, a courtesy grant; else Free. `carryover` is a credit
+ * subscription the own-key one replaced, while its paid period still
+ * grants credits; it keeps granting if the user switches back to credits.
  */
 export async function currentPlan(db: DbClient, userId: string, now: Date) {
-  const subscription = await new BillingRepository(db).findLiveSubscription(
-    userId,
-    now
-  );
+  const billing = new BillingRepository(db);
+  const subscription = await billing.findLiveSubscription(userId, now);
   const courtesy = subscription
     ? null
     : await new CreditsRepository(db).activeCourtesy(userId, now);
+  const ownKey = subscription?.plan === "own_key";
   return {
     subscription,
     courtesy,
+    carryover: subscription ? await billing.findCarryover(userId, now) : null,
     kind: subscription
-      ? ("subscription" as const)
+      ? ownKey
+        ? ("own_key" as const)
+        : ("subscription" as const)
       : courtesy
         ? ("courtesy" as const)
         : ("free" as const),
   };
 }
+
+/** Billing spec: the own-key subscription and the courtesy plan use a key. */
+export const planUsesKey = (kind: PlanKind) =>
+  kind === "own_key" || kind === "courtesy";
+
+export type PlanKind = Awaited<ReturnType<typeof currentPlan>>["kind"];
 
 /** `months` calendar months after `date`, its day clamped to the month's end. */
 function addMonths(date: Date, months: number) {

@@ -12,6 +12,7 @@ import {
 } from "@repo/api/domains/applications/schemas/tracker";
 import { useTranslation } from "@repo/intl/use-translation";
 import { Button } from "@repo/web/components/ui/button";
+import { Skeleton } from "@repo/web/components/ui/skeleton";
 
 import { useTRPC } from "~/tools/trpc/client";
 import { useOpeningLabels } from "~/domains/openings/hooks/use-opening-labels";
@@ -41,7 +42,7 @@ export function TrackerMetricsPanel() {
   };
 
   return (
-    <section className="flex flex-col gap-3 rounded-lg border p-4">
+    <section className="bg-card flex flex-col gap-3 rounded-lg border p-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h2 className="font-medium">
           {t.formatMessage({ defaultMessage: "Metrics" })}
@@ -60,6 +61,17 @@ export function TrackerMetricsPanel() {
           ))}
         </div>
       </div>
+      {/* The figures' room, held while they load. */}
+      {metrics.isPending && (
+        <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+          {[0, 1, 2, 3, 4, 5, 6, 7].map((index) => (
+            <div key={index} className="flex flex-col gap-1.5">
+              <Skeleton className="h-3 w-20" />
+              <Skeleton className="h-4 w-14" />
+            </div>
+          ))}
+        </div>
+      )}
       {metrics.data &&
         (metrics.data.sent === 0 ? (
           <p className="text-muted-foreground">
@@ -81,12 +93,23 @@ function MetricsBody({ metrics }: { metrics: TrackerMetrics }) {
   const rate = (group: { sent: number; responded: number }) =>
     t.formatMessage(
       {
-        defaultMessage:
-          "{sent, plural, =0 {none sent} one {# sent} other {# sent}} · {responded, plural, =0 {no replies} one {# reply} other {# replies}} ({rate})",
+        defaultMessage: "{sent} · {responded} ({rate})",
       },
       {
-        responded: group.responded,
-        sent: group.sent,
+        responded: t.formatMessage(
+          {
+            defaultMessage:
+              "{responded, plural, =0 {no replies} one {# reply} other {# replies}}",
+          },
+          { responded: group.responded }
+        ),
+        sent: t.formatMessage(
+          {
+            defaultMessage:
+              "{sent, plural, =0 {none sent} one {# sent} other {# sent}}",
+          },
+          { sent: group.sent }
+        ),
         rate: t.formatNumber(group.responded / group.sent, {
           style: "percent",
         }),
@@ -142,16 +165,15 @@ function MetricsBody({ metrics }: { metrics: TrackerMetrics }) {
           t.formatMessage({
             defaultMessage: "High-fit openings that reached an interview",
           }),
-          t.formatMessage(
-            {
-              defaultMessage:
-                "{total, plural, =0 {None applied} other {{interviews, number} of {total, number}}}",
-            },
-            {
-              total: metrics.highFit.total,
-              interviews: metrics.highFit.interviews,
-            }
-          )
+          metrics.highFit.total === 0
+            ? t.formatMessage({ defaultMessage: "None applied" })
+            : t.formatMessage(
+                { defaultMessage: "{interviews, number} of {total, number}" },
+                {
+                  total: metrics.highFit.total,
+                  interviews: metrics.highFit.interviews,
+                }
+              )
         )}
       </div>
 

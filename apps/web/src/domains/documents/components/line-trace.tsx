@@ -343,7 +343,7 @@ export function TraceHoverCard({
       role="tooltip"
       // Kept inside the viewport: capped to the room it has, scrolling,
       // above the line when there is more room there.
-      className="bg-popover text-popover-foreground fixed z-50 max-w-sm overflow-y-auto rounded-md border p-2.5 text-xs shadow-md"
+      className="bg-popover text-popover-foreground shadow-pop fixed z-50 max-w-sm overflow-y-auto rounded-md border p-2.5 text-xs"
       style={floatingCardStyle(card.anchor, 384)}
       onMouseDown={(event) => event.preventDefault()}
       onMouseEnter={() => clearTimeout(closeTimer.current)}

@@ -5,7 +5,10 @@ import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { createAiClient } from "@repo/api/domains/ai/ai-client";
 import { loadPendingGapAnswers } from "@repo/api/domains/applications/load-gap-answers";
 import { instructionPointsTable } from "@repo/api/domains/applications/db/instructions-tables";
+import { applicationsTable } from "@repo/api/domains/applications/db/applications-tables";
 import { careerProfilesTable } from "@repo/api/domains/career/db/career-tables";
+import { documentsTable } from "@repo/api/domains/documents/db/documents-tables";
+import { DocumentsRepository } from "@repo/api/domains/documents/documents-repository";
 import {
   loadOpeningUserInput,
   userInputLines,
@@ -220,6 +223,7 @@ async function setup({ publish = true }: { publish?: boolean } = {}) {
     db,
     user,
     cipher,
+    tasks,
     openings,
     rewrite,
     profiles,
@@ -236,10 +240,10 @@ type Judged = ReturnType<typeof parseJudgmentPrompt>[number];
 function fitScript(
   judge: (terms: Judged[], system: string) => unknown,
   extracted: object = extraction,
-  // The numbered preferences the opening breaks, from their own call.
+  // The numbered preferences the judge looked at, from their own call.
   conflicts: (
     rules: string[]
-  ) => Array<{ rule: number; explanation: string }> = () => []
+  ) => Array<{ rule: number; broken: boolean; explanation: string }> = () => []
 ) {
   return {
     object: (request: { system: string }) => {
@@ -267,9 +271,9 @@ function parseJudgmentPrompt(system: string) {
   return blocks.map((block) => ({
     termId: block.split(" ")[0],
     text: block.split("\n")[0].split("]: ")[1],
-    passages: [...block.matchAll(/passage ([0-9a-f-]{36}): ([^\n]*)/g)].map(
-      (m) => ({ id: m[1], line: m[2] })
-    ),
+    passages: [
+      ...block.matchAll(/passage ([0-9a-f-]{36})(?: \([^)]*\))?: ([^\n]*)/g),
+    ].map((m) => ({ id: m[1], line: m[2] })),
   }));
 }
 
@@ -320,7 +324,7 @@ describe("openings and fit check", () => {
     expect(JSON.stringify(detail)).not.toMatch(/percent|%/i);
   });
 
-  it("makes a gap of what the profile marks studied, not done or lacking, whatever the judge says", async () => {
+  it("makes partial what the profile marks studied, and a gap what it says was not done or lacking, whatever the judge says", async () => {
     const ctx = await setup();
     const openingId = await ctx.add();
     await ctx.analyze(
@@ -338,13 +342,18 @@ describe("openings and fit check", () => {
     const { fitCheck } = await ctx.detail(openingId);
     const verdict = (term: string) =>
       fitCheck!.items.find((item) => item.term === term)!;
-    expect(verdict("Spark")).toMatchObject({ verdict: "gap", passages: [] });
+    // Studied without professional use is not the same as not having it.
+    expect(verdict("Spark")).toMatchObject({
+      verdict: "partial",
+      passages: [],
+      gapQuestion: null,
+    });
     expect(verdict("Spark").explanation).toContain("Spark");
     expect(verdict("Kafka").verdict).toBe("gap");
     expect(verdict("Kafka").explanation).toContain("I did not touch Kafka");
     expect(verdict("Go").verdict).toBe("gap");
-    // Kafka is mandatory: missing it makes the band low.
-    expect(fitCheck!.band).toBe("low");
+    // One mandatory gap among many: covered by proportion, medium.
+    expect(fitCheck!.band).toBe("medium");
   });
 
   it("makes a gap of a requirement the judge ties to a line of what is lacking", async () => {
@@ -356,7 +365,9 @@ describe("openings and fit check", () => {
       fitScript(
         (terms, system) => {
           const line = Number(
-            /^(\d+)\. did not do: I did not touch Kafka\.$/m.exec(system)![1]
+            /^(\d+)\. did not do \(Platform Engineer, Acme\): I did not touch Kafka\.$/m.exec(
+              system
+            )![1]
           );
           return {
             items: allMet(terms).items.map((item) =>
@@ -386,7 +397,61 @@ describe("openings and fit check", () => {
         "The profile says this was not done: “I did not touch Kafka.”.",
       gapQuestion: null,
     });
-    expect(fitCheck!.band).toBe("low");
+    expect(fitCheck!.band).toBe("medium");
+  });
+
+  it("counts a concept the profile only knows as partial, never met", async () => {
+    const ctx = await setup({ publish: false });
+    await ctx.publishDocument(
+      profile.replace(
+        "- Studied, without professional experience: Spark",
+        "- Studied, without professional experience: Spark\n- Concepts I master: Domain-driven design\n- Concepts I know: Event sourcing"
+      )
+    );
+    const openingId = await ctx.add();
+    // The judge calls both met, citing the concept lines.
+    const citeConcept = (terms: Judged[]) => ({
+      items: terms.map((term) => {
+        const concept = term.passages.find((p) =>
+          p.line.startsWith("Concepts")
+        );
+        return {
+          term_id: term.termId,
+          verdict: "met",
+          passage_ids: [(concept ?? term.passages[0]).id],
+          explanation: "Shown in the profile.",
+        };
+      }),
+    });
+    await ctx.analyze(
+      openingId,
+      fitScript(citeConcept, {
+        ...extraction,
+        keywords: [
+          {
+            text: "Event sourcing",
+            category: "hard_skill",
+            importance: "mandatory",
+          },
+          {
+            text: "Domain-driven design",
+            category: "hard_skill",
+            importance: "mandatory",
+          },
+        ],
+        requirements: [],
+      })
+    );
+
+    const items = (await ctx.detail(openingId)).fitCheck!.items;
+    expect(items.find((item) => item.term === "Event sourcing")).toMatchObject({
+      verdict: "partial",
+      explanation:
+        "The profile lists this as a concept you know, not one you master.",
+    });
+    expect(
+      items.find((item) => item.term === "Domain-driven design")
+    ).toMatchObject({ verdict: "met" });
   });
 
   it("is high when the mandatory requirements are met, a desirable gap aside", async () => {
@@ -394,9 +459,9 @@ describe("openings and fit check", () => {
     const openingId = await ctx.add();
     await ctx.analyze(openingId, fitScript(allMet));
     const { fitCheck } = await ctx.detail(openingId);
-    // Spark, studied only, is a gap, but the posting only wishes for it.
+    // Spark, studied only, is partial, and the posting only wishes for it.
     expect(fitCheck!.items.find((item) => item.term === "Spark")!.verdict).toBe(
-      "gap"
+      "partial"
     );
     expect(fitCheck!.band).toBe("high");
   });
@@ -479,7 +544,9 @@ describe("openings and fit check", () => {
       "1. studied, without professional experience: Spark"
     );
     expect(prompt).toContain("2. known gap: Go in production.");
-    expect(prompt).toContain("3. did not do: I did not touch Kafka.");
+    expect(prompt).toContain(
+      "3. did not do (Platform Engineer, Acme): I did not touch Kafka."
+    );
     expect(prompt).toContain("- accepted work models: remote");
     expect(prompt).toContain("- salary: Minimum: R$ 20.000 CLT");
     // Excluded companies are checked by code.
@@ -523,9 +590,16 @@ describe("openings and fit check", () => {
         return [
           {
             rule: rules.indexOf("Minimum: R$ 20.000 CLT") + 1,
+            broken: true,
             explanation: "Pays R$ 9.000.",
           },
-          { rule: 99, explanation: "Invented." },
+          // One the opening meets is not a conflict, whatever it says.
+          {
+            rule: rules.indexOf("I accept: remote") + 1,
+            broken: false,
+            explanation: "The opening is remote: no conflict.",
+          },
+          { rule: 99, broken: true, explanation: "Invented." },
         ];
       })
     );
@@ -656,6 +730,106 @@ describe("openings and fit check", () => {
     ).rejects.toMatchObject({ code: "NOT_FOUND" });
   });
 
+  it("reads an edited description again when checked, dropping what only the old text asked", async () => {
+    const ctx = await setup();
+    const openingId = await ctx.add();
+    // Kubernetes and Terraform are gaps with questions; both answered.
+    const gapsWithQuestions = (keywords: string[]) => ({
+      object: (request: { system: string }) => {
+        if (request.system.startsWith("Write"))
+          return {
+            questions: [
+              ...request.system.matchAll(/- ([0-9a-f-]{36}): (.*)/g),
+            ].map((m) => ({ term_id: m[1], question: `About ${m[2]}?` })),
+          };
+        return fitScript((terms) => ({
+          items: terms.map((term) => ({
+            term_id: term.termId,
+            verdict: keywords.includes(term.text) ? "gap" : "met",
+            passage_ids: keywords.includes(term.text)
+              ? []
+              : term.passages.slice(0, 1).map((p) => p.id),
+            explanation: "Judged.",
+          })),
+        })).object(request);
+      },
+    });
+    await ctx.analyze(
+      openingId,
+      gapsWithQuestions(["Kubernetes", "Terraform"])
+    );
+    const first = (await ctx.detail(openingId)).fitCheck!.items;
+    for (const term of ["Kubernetes", "Terraform"]) {
+      await ctx.openings.answerGapQuestion({
+        userId: ctx.user.id,
+        fitCheckItemId: first.find((item) => item.term === term)!.id,
+        answer: `I used ${term} at Acme.`,
+        notTied: true,
+      });
+    }
+    await ctx.openings.rename({
+      userId: ctx.user.id,
+      openingId,
+      title: "Platform role I picked",
+    });
+
+    const newPosting = `Platform Engineer at Globex. Strong Terraform and Go. ${"Build the platform. ".repeat(8)}`;
+    await ctx.openings.updateDescription({
+      userId: ctx.user.id,
+      openingId,
+      description: newPosting,
+    });
+    // Until it is read again, documents see nothing the old text asked.
+    expect(
+      await loadPendingGapAnswers({ db: ctx.db, cipher: ctx.cipher, openingId })
+    ).toEqual([]);
+
+    await ctx.openings.reanalyze({ userId: ctx.user.id, openingId });
+    const reread = await ctx.analyze(openingId, {
+      object: (request: { system: string; messages?: unknown }) => {
+        if (request.system.startsWith("Read the job posting"))
+          return {
+            ...extraction,
+            title: "Platform Engineer",
+            keywords: [
+              { text: "Terraform", category: "tool", importance: "mandatory" },
+              { text: "Go", category: "hard_skill", importance: "mandatory" },
+            ],
+            requirements: [],
+          };
+        return gapsWithQuestions(["Terraform", "Go"]).object(request);
+      },
+    });
+    const calls = reread.generateObject.mock.calls.map(([call]) => call);
+    // The new text was read; the content check isn't asked again.
+    expect(
+      calls.find((call) => call.system.startsWith("Read the job posting"))
+    ).toBeDefined();
+    expect(JSON.stringify(calls)).toContain("Strong Terraform and Go");
+    expect(calls.some((call) => call.system.startsWith("Decide whether"))).toBe(
+      false
+    );
+
+    const detail = await ctx.detail(openingId);
+    expect(detail.title).toBe("Platform role I picked");
+    const items = detail.fitCheck!.items;
+    expect(items.map((item) => item.term).sort()).toEqual(["Go", "Terraform"]);
+    // The answer to a requirement the new text still asks is kept.
+    expect(items.find((item) => item.term === "Terraform")).toMatchObject({
+      gapAnswer: "I used Terraform at Acme.",
+    });
+    expect(detail.fitCheck!.outdated).toBe(false);
+    expect(
+      (
+        await loadPendingGapAnswers({
+          db: ctx.db,
+          cipher: ctx.cipher,
+          openingId,
+        })
+      ).map((answer) => answer.answer)
+    ).toEqual(["I used Terraform at Acme."]);
+  });
+
   it("reads the fit check as outdated after a gap answer, until it runs again", async () => {
     const ctx = await setup();
     const openingId = await ctx.add();
@@ -756,7 +930,8 @@ describe("openings and fit check", () => {
 
     await ctx.publishDocument(profile.replace("Go in production.", "Go."));
     await ctx.openings.reanalyze({ userId: ctx.user.id, openingId });
-    // A check that fails leaves the opening as it was, to run again.
+    // A check that fails leaves the opening as it was, to run again, and
+    // says the new check didn't finish.
     await expect(
       ctx.analyze(openingId, {
         object: () => {
@@ -766,11 +941,13 @@ describe("openings and fit check", () => {
     ).rejects.toThrow("provider down");
     expect(await ctx.detail(openingId)).toMatchObject({
       status: "analyzed",
+      checkFailed: true,
       fitCheck: { outdated: true },
     });
 
     await ctx.openings.reanalyze({ userId: ctx.user.id, openingId });
     await ctx.analyze(openingId, fitScript(allMet));
+    expect((await ctx.detail(openingId)).checkFailed).toBe(false);
     const after = (await ctx.detail(openingId)).fitCheck!;
     expect(after.outdated).toBe(false);
     expect(after.items.find((item) => item.term === "Terraform")).toMatchObject(
@@ -1327,6 +1504,122 @@ describe("openings and fit check", () => {
       company: "Airbnb",
       fitCheck: null,
     });
+  });
+
+  it("judges a long opening in small batches, so no answer outgrows its limit", async () => {
+    const ctx = await setup();
+    const openingId = await ctx.add();
+    const keywords = Array.from({ length: 33 }, (_, index) => ({
+      text: `Tool ${index + 1}`,
+      category: "tool",
+      importance: "mandatory",
+    }));
+    const batches: string[][] = [];
+
+    await ctx.analyze(
+      openingId,
+      fitScript(
+        (terms) => {
+          batches.push(terms.map((term) => term.text));
+          return allMet(terms);
+        },
+        { ...extraction, keywords }
+      )
+    );
+
+    expect(batches.length).toBeGreaterThan(1);
+    for (const batch of batches) expect(batch.length).toBeLessThanOrEqual(10);
+    // Every requirement judged once, none left out.
+    expect(batches.flat().sort()).toEqual(
+      [
+        ...keywords.map((k) => k.text),
+        ...extraction.requirements.map((r) => r.text),
+      ].sort()
+    );
+    const detail = await ctx.detail(openingId);
+    expect(detail.fitCheck!.items).toHaveLength(35);
+    expect(
+      detail.fitCheck!.items.find((item) => item.term === "Tool 33")
+    ).toMatchObject({ explanation: "Shown in the profile." });
+  });
+
+  it("marks the opening failed when its first analysis breaks, never still being read", async () => {
+    const ctx = await setup();
+    const openingId = await ctx.add();
+
+    await expect(
+      ctx.analyze(
+        openingId,
+        fitScript(() => {
+          throw new Error("provider down");
+        })
+      )
+    ).rejects.toThrow("provider down");
+
+    expect(await ctx.detail(openingId)).toMatchObject({
+      status: "failed",
+      progress: null,
+      fitCheck: null,
+    });
+
+    // Trying again reads it from the start, at its usual cost.
+    await ctx.openings.retryAnalysis({ userId: ctx.user.id, openingId });
+    expect((await ctx.detail(openingId)).status).toBe("processing");
+    await expect(
+      ctx.openings.retryAnalysis({ userId: ctx.user.id, openingId })
+    ).rejects.toMatchObject({ code: "NOT_FOUND" });
+    await ctx.analyze(openingId, fitScript(allMet));
+    expect(await ctx.detail(openingId)).toMatchObject({
+      status: "analyzed",
+      fitCheck: { band: "high" },
+    });
+  });
+
+  it("fails an opening whose analysis died with its run, for the user to try again", async () => {
+    const ctx = await setup();
+    const openingId = await ctx.add();
+    const later = new Date(Date.now() + 2 * 60 * 60 * 1000);
+
+    // Its run never marked anything: the sweep finds it, past its time.
+    await ctx.openings.failStuckAnalyses(new Date());
+    expect((await ctx.detail(openingId)).status).toBe("processing");
+    await ctx.tasks.failStalled(later);
+    await ctx.openings.failStuckAnalyses(later);
+
+    expect((await ctx.detail(openingId)).status).toBe("failed");
+  });
+
+  it("deletes an opening with its application and documents, only for its owner", async () => {
+    const ctx = await setup();
+    const openingId = await ctx.add();
+    await ctx.analyze(openingId, fitScript(allMet));
+    const [career] = await ctx.db.select().from(careerProfilesTable);
+    const documents = new DocumentsRepository(ctx.db);
+    const application = await documents.findOrInsertApplication({
+      profileId: career.id,
+      openingId,
+    });
+    await documents.findOrInsertApplicationDocument({
+      profileId: career.id,
+      applicationId: application.id,
+      kind: "resume",
+    });
+
+    const grace = await createTestUser("grace-delete@example.com");
+    await new CareerService(ctx.db).getOrCreateProfile({
+      userId: grace.id,
+      defaultLanguage: "en-US",
+    });
+    await expect(
+      ctx.openings.deleteOpening({ userId: grace.id, openingId })
+    ).rejects.toMatchObject({ code: "NOT_FOUND" });
+
+    await ctx.openings.deleteOpening({ userId: ctx.user.id, openingId });
+    await expect(ctx.detail(openingId)).rejects.toMatchObject({
+      code: "NOT_FOUND",
+    });
+    expect(await ctx.db.select().from(applicationsTable)).toEqual([]);
+    expect(await ctx.db.select().from(documentsTable)).toEqual([]);
   });
 
   it("refuses another user's opening", async () => {

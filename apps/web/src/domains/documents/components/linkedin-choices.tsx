@@ -34,7 +34,7 @@ export function HeadlineOptions() {
   }
   const chosen = content.headline?.id;
   return (
-    <section className="bg-background flex flex-col gap-1.5 rounded-lg border p-3">
+    <section className="bg-card flex flex-col gap-1.5 rounded-lg border p-3">
       <h3 className="text-muted-foreground text-xs font-medium">
         {t.formatMessage({ defaultMessage: "Headline options" })}
       </h3>
@@ -102,7 +102,7 @@ export function LanguageLevels({ language }: { language: OutputLanguage }) {
         : current
     );
   return (
-    <section className="flex flex-col gap-2 rounded-lg border border-amber-500/40 bg-amber-500/10 p-2.5 text-xs">
+    <section className="border-warning-border bg-warning-soft flex flex-col gap-2 rounded-lg border p-2.5 text-xs">
       <span>
         {t.formatMessage({
           defaultMessage:

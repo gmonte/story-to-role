@@ -56,8 +56,7 @@ import {
 
 /** A line code refused, or a headline option longer than LinkedIn takes. */
 export type LinkedinDroppedLine =
-  | DroppedLine
-  | { text: string; reason: "too_long" };
+  DroppedLine | { text: string; reason: "too_long" };
 
 /**
  * Assembles LinkedIn content from a draft by the resume's own rules

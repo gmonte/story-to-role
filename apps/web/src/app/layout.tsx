@@ -2,8 +2,8 @@ import "~/styles/globals.css";
 
 import { enUS, ptBR } from "@clerk/localizations";
 import { ClerkProvider } from "@clerk/nextjs";
-import type { Metadata } from "next";
-import { Geist, Geist_Mono, Space_Grotesk } from "next/font/google";
+import type { Metadata, Viewport } from "next";
+import { IBM_Plex_Mono, IBM_Plex_Sans, Space_Grotesk } from "next/font/google";
 import { ThemeProvider } from "next-themes";
 
 import { getTranslation } from "@repo/intl/get-translation";
@@ -11,17 +11,23 @@ import { IntlProvider } from "@repo/intl/intl-provider";
 import { Toaster } from "@repo/web/components/ui/sonner";
 import { cn } from "@repo/web/lib/utils";
 
+import { getSheetThemeFromNextCookies } from "~/domains/workspace/utils/get-sheet-theme-from-next-cookies";
 import { getLocaleFromNextCookies } from "~/tools/intl/utils/get-locale-from-next-cookies";
 import { TRPCReactProvider } from "~/tools/trpc/client";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
+// ADR 0012: IBM Plex Sans for the interface and the documents, Plex Mono
+// for the profile's marks and credit figures.
+const plexSans = IBM_Plex_Sans({
+  variable: "--font-plex-sans",
   subsets: ["latin"],
+  weight: ["400", "500", "600"],
+  style: ["normal", "italic"],
 });
 
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
+const plexMono = IBM_Plex_Mono({
+  variable: "--font-plex-mono",
   subsets: ["latin"],
+  weight: ["400", "500"],
 });
 
 // The brand's display face: the lockup and the landing page's headings.
@@ -30,6 +36,15 @@ const spaceGrotesk = Space_Grotesk({
   subsets: ["latin"],
   weight: ["600"],
 });
+
+// The page never zooms on a phone: not when an input gets focus (iOS
+// zooms into fields under 16px) and not by pinching, as the owner asked.
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 1,
+  userScalable: false,
+};
 
 export async function generateMetadata(): Promise<Metadata> {
   const locale = await getLocaleFromNextCookies();
@@ -51,6 +66,7 @@ export default async function RootLayout({
 }) {
   const locale = await getLocaleFromNextCookies();
   const t = await getTranslation(locale);
+  const sheetTheme = await getSheetThemeFromNextCookies();
 
   const clerkLocalization = locale === "pt-BR" ? ptBR : enUS;
 
@@ -60,11 +76,12 @@ export default async function RootLayout({
       signInUrl="/sign-in"
       signUpUrl="/sign-up"
     >
-      <html lang={locale} suppressHydrationWarning>
+      {/* The document sheet's look, read by globals.css. */}
+      <html lang={locale} data-sheet={sheetTheme} suppressHydrationWarning>
         <body
           className={cn(
-            geistSans.variable,
-            geistMono.variable,
+            plexSans.variable,
+            plexMono.variable,
             spaceGrotesk.variable,
             "bg-background font-sans antialiased"
           )}

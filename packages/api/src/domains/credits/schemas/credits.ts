@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 import { aiKeyStatusSchema } from "@repo/api/domains/ai/schemas/ai-keys";
+import { createPaginationOutputSchema } from "@repo/api/utils/schemas/pagination";
 
 /**
  * Where a lot of credits comes from (billing spec, "Credit ledger"). Plan
@@ -38,8 +39,8 @@ export const creditEntryKindSchema = z.enum([
 export type CreditEntryKind = z.infer<typeof creditEntryKindSchema>;
 
 export const creditSummarySchema = z.object({
-  // Free, or the paid plan through a subscription or a courtesy grant.
-  plan: z.enum(["free", "subscription", "courtesy"]),
+  // Free, a subscription (credit or own-key) or a courtesy grant.
+  plan: z.enum(["free", "subscription", "own_key", "courtesy"]),
   // What the user can still spend now, plan and stored credits together.
   available: z.number().int(),
   reserved: z.number().int(),
@@ -104,3 +105,23 @@ export const courtesyGrantSchema = z.object({
   active: z.boolean(),
 });
 export type CourtesyGrant = z.infer<typeof courtesyGrantSchema>;
+
+/**
+ * An account as the admin's user list shows it: its plan and, since the
+ * own-key and courtesy plans run on one, the state of the user's key.
+ */
+export const adminUserSchema = z.object({
+  userId: z.string(),
+  email: z.string(),
+  name: z.string().nullable(),
+  createdAt: z.date(),
+  plan: z.enum(["free", "subscription", "own_key", "courtesy"]),
+  // Null without a key.
+  keyStatus: aiKeyStatusSchema.nullable(),
+});
+export type AdminUser = z.infer<typeof adminUserSchema>;
+
+export const adminUsersSchema = createPaginationOutputSchema({
+  dataSchema: adminUserSchema,
+});
+export type AdminUsers = z.infer<typeof adminUsersSchema>;

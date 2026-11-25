@@ -9,9 +9,9 @@ import {
   EyeOff,
   Languages,
   Loader2,
-  MessageSquare,
   SearchCheck,
   Send,
+  Sparkles,
   UserPlus,
   Wand2,
 } from "lucide-react";
@@ -31,6 +31,7 @@ import { cn } from "@repo/web/lib/utils";
 import type { AgentAttachment } from "@repo/api/domains/agents/agent-message";
 
 import { useTRPC } from "~/tools/trpc/client";
+import { onCardClick } from "~/domains/workspace/utils/card-click";
 
 import { useFindingLabel } from "./coverage-review";
 import { useDocumentAgent } from "./document-agent-context";
@@ -59,7 +60,7 @@ function AddTranslation({
       <Button
         size="sm"
         variant="outline"
-        className="h-6 px-2 text-xs"
+        className="h-7 px-2.5 text-xs"
         onClick={() => setOpen(true)}
       >
         <Languages className="size-3" />
@@ -92,7 +93,7 @@ function AddTranslation({
       <Button
         type="submit"
         size="sm"
-        className="h-6 px-2 text-xs"
+        className="h-7 px-2.5 text-xs"
         disabled={action.pending || !translation.trim()}
       >
         {action.pending ? (
@@ -106,7 +107,7 @@ function AddTranslation({
         type="button"
         size="sm"
         variant="ghost"
-        className="text-muted-foreground h-6 px-2 text-xs"
+        className="text-muted-foreground h-7 px-2.5 text-xs"
         onClick={() => setOpen(false)}
       >
         {t.formatMessage({ defaultMessage: "Cancel" })}
@@ -134,7 +135,7 @@ export function ProfileActionButton({
       <Button
         size="sm"
         variant="outline"
-        className="h-6 px-2 text-xs"
+        className="h-7 px-2.5 text-xs"
         disabled={action.pending}
         onClick={action.run}
       >
@@ -174,11 +175,11 @@ function TalkButton({ onClick }: { onClick: () => void }) {
         <Button
           size="sm"
           variant="ghost"
-          className="text-muted-foreground h-6 px-2 text-xs"
+          className="text-muted-foreground h-7 px-2.5 text-xs"
           aria-label={label}
           onClick={onClick}
         >
-          <MessageSquare className="size-3" />
+          <Sparkles className="text-brand-accent size-3" />
         </Button>
       </TooltipTrigger>
       <TooltipContent>{label}</TooltipContent>
@@ -269,7 +270,7 @@ export function DocumentFindings() {
     <Button
       size="sm"
       variant="outline"
-      className="h-6 px-2 text-xs"
+      className="h-7 px-2.5 text-xs"
       disabled={profileCheckBusy}
       title={t.formatMessage({
         defaultMessage:
@@ -317,24 +318,27 @@ export function DocumentFindings() {
     const text = label(finding, version);
     const anchored = finding.lineId !== null || finding.positionId !== null;
     return (
-      <li key={key} className="flex flex-col" {...rowProps(key)}>
+      <li
+        key={key}
+        className={cn(
+          "bg-card flex cursor-pointer flex-col gap-2 rounded-lg border p-3 text-[13px] leading-5",
+          activeFinding === key && "border-brand-accent"
+        )}
+        onClick={onCardClick(() => goToFinding(finding))}
+        {...rowProps(key)}
+      >
         <button
           type="button"
           onClick={() => goToFinding(finding)}
-          className={cn(
-            "hover:bg-muted w-full rounded px-2 py-1 text-left text-xs text-amber-700 dark:text-amber-400",
-            activeFinding === key && "bg-muted"
-          )}
+          className={cn("text-foreground w-full text-left hover:underline")}
         >
           {text}
         </button>
         {reasonOf(finding) && (
-          <p className="text-muted-foreground px-2 text-xs">
-            {reasonOf(finding)}
-          </p>
+          <p className="text-muted-foreground text-xs">{reasonOf(finding)}</p>
         )}
         {
-          <div className="flex flex-wrap items-center gap-1 px-2 pb-1">
+          <div className="flex flex-wrap items-center gap-1.5">
             <ProfileActionButton action={profileActionFor(finding)} />
             {finding.code === "notInProfile" &&
               finding.lineId &&
@@ -343,7 +347,7 @@ export function DocumentFindings() {
               <Button
                 size="sm"
                 variant="outline"
-                className="h-6 px-2 text-xs"
+                className="h-7 px-2.5 text-xs"
                 onClick={fix}
               >
                 <Wand2 className="size-3" />
@@ -358,7 +362,7 @@ export function DocumentFindings() {
             <Button
               size="sm"
               variant="ghost"
-              className="text-muted-foreground h-6 px-2 text-xs"
+              className="text-muted-foreground h-7 px-2.5 text-xs"
               title={t.formatMessage({
                 defaultMessage: "This finding doesn't apply: stop showing it",
               })}
@@ -377,14 +381,22 @@ export function DocumentFindings() {
     const done = !!note.lineId && sent.includes(note.lineId);
     const key = noteKey(note);
     return (
-      <li key={key} className="flex flex-col" {...rowProps(key)}>
+      <li
+        key={key}
+        className={cn(
+          "bg-card flex flex-col gap-2 rounded-lg border p-3 text-[13px] leading-5",
+          note.lineId && "cursor-pointer",
+          activeFinding === key && "border-brand-accent"
+        )}
+        onClick={note.lineId ? onCardClick(() => goToNote(note)) : undefined}
+        {...rowProps(key)}
+      >
         <button
           type="button"
           disabled={!note.lineId}
           onClick={() => goToNote(note)}
           className={cn(
-            "text-muted-foreground hover:bg-muted w-full rounded px-2 py-1 text-left text-xs",
-            activeFinding === key && "bg-muted"
+            "text-muted-foreground w-full text-left hover:underline"
           )}
         >
           {note.kind === "inconsistency"
@@ -394,12 +406,12 @@ export function DocumentFindings() {
               )
             : note.text}
         </button>
-        <div className="flex flex-wrap items-center gap-1 px-2 pb-1">
+        <div className="flex flex-wrap items-center gap-1.5">
           {note.profileSuggestion && (
             <Button
               size="sm"
               variant="outline"
-              className="h-6 px-2 text-xs"
+              className="h-7 px-2.5 text-xs"
               disabled={done || sendToProfile.isPending}
               onClick={() =>
                 note.profileSuggestion &&
@@ -420,7 +432,7 @@ export function DocumentFindings() {
           <Button
             size="sm"
             variant="ghost"
-            className="text-muted-foreground h-6 px-2 text-xs"
+            className="text-muted-foreground h-7 px-2.5 text-xs"
             onClick={() => ignoreNote(note)}
           >
             <EyeOff className="size-3" />
@@ -528,7 +540,7 @@ export function DocumentFindings() {
         <div className="mb-1 px-2">{checkButton(unbackedLineIds)}</div>
       )}
       {open && (
-        <ul className="space-y-0.5">
+        <ul className="space-y-2">
           {findings.map(findingItem)}
           {notes.map(noteItem)}
         </ul>

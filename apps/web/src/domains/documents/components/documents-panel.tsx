@@ -24,7 +24,7 @@ import { useSelectedVersion } from "../hooks/use-selected-version";
 import { AdaptVersionDialog } from "./adapt-version-dialog";
 import { CoverageReviewBlock } from "./coverage-review";
 import { CoverageScore } from "./coverage-score";
-import { oldestWithBullets } from "../utils/version-checks";
+import { oldestWithBullets, pageLimitText } from "../utils/version-checks";
 import { DownloadZipButton } from "./download-zip-button";
 import { GenerateResumeDialog } from "./generate-resume-dialog";
 import { OutdatedNotice, SyncProposal } from "./language-sync";
@@ -94,7 +94,7 @@ export function DocumentsPanel({
 
       {running && <GenerationProgress generation={generation} />}
       {generation?.status === "failed" && (
-        <p className="rounded-lg border border-red-500/40 bg-red-500/10 p-2.5 text-xs">
+        <p className="border-destructive/40 bg-destructive/10 rounded-lg border p-2.5 text-xs">
           {t.formatMessage({
             defaultMessage: "The last generation failed. Try again.",
           })}
@@ -134,7 +134,7 @@ export function DocumentsPanel({
                 type="button"
                 onClick={() => select(version.id)}
                 className={cn(
-                  "bg-background flex w-full items-center justify-between rounded-lg border p-2.5 text-left text-sm",
+                  "bg-card flex w-full items-center justify-between rounded-lg border p-2.5 text-left text-sm",
                   selected?.id === version.id && "border-primary"
                 )}
               >
@@ -324,23 +324,17 @@ export function VersionChecks({ version }: { version: VersionView }) {
       {/* Measured over the limit, a resume shows it as a finding instead. */}
       {version.pages > version.maxPages &&
         !(version.coverage && version.pdf.ready) && (
-          <p className="rounded-lg border border-amber-500/40 bg-amber-500/10 p-2.5 text-xs">
-            {t.formatMessage(
-              {
-                defaultMessage:
-                  "{measured, select, yes {{pages} pages in the PDF} other {About {pages} pages}}: over the page limit this document was written with ({limit}). {position, select, none {Turn off an optional section.} other {Trim the bullets of {position}, your oldest position, or turn off an optional section.}}",
-              },
-              {
-                limit: version.maxPages,
-                measured: version.pdf.ready ? "yes" : "no",
-                pages: t.formatNumber(version.pages),
-                position: oldestWithBullets(version) ?? "none",
-              }
-            )}
+          <p className="border-warning-border bg-warning-soft rounded-lg border p-2.5 text-xs">
+            {pageLimitText(t, {
+              limit: version.maxPages,
+              measured: version.pdf.ready,
+              pages: t.formatNumber(version.pages),
+              position: oldestWithBullets(version),
+            })}
           </p>
         )}
       {emphasis && (
-        <div className="bg-background flex flex-col gap-1.5 rounded-lg border p-2.5 text-xs">
+        <div className="bg-card flex flex-col gap-1.5 rounded-lg border p-2.5 text-xs">
           <p className="text-sm font-medium">
             {emphasis.adjusted
               ? t.formatMessage({
@@ -359,7 +353,7 @@ export function VersionChecks({ version }: { version: VersionView }) {
         </div>
       )}
       {ats && (
-        <div className="bg-background flex flex-col gap-2 rounded-lg border p-2.5 text-xs">
+        <div className="bg-card flex flex-col gap-2 rounded-lg border p-2.5 text-xs">
           <p className="text-sm font-medium">
             {t.formatMessage(
               { defaultMessage: "ATS check: {matched} of {total} keywords" },

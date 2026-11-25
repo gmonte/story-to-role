@@ -138,6 +138,26 @@ export const openingsRouter = createTRPCRouter({
       return { realtime };
     }),
 
+  retryAnalysis: userProcedure
+    .use(rateLimited("taskStart"))
+    .meta(
+      openApiMeta(
+        "openings",
+        "POST",
+        "/openings/by-id/{openingId}/retry",
+        "Analyzes again an opening whose analysis failed"
+      )
+    )
+    .input(z.object({ openingId: z.uuid() }))
+    .output(z.object({ realtime: realtimeSubscriptionSchema }))
+    .mutation(async ({ ctx, input }) => {
+      const { realtime } = await new OpeningsService(db).retryAnalysis({
+        userId: ctx.userId,
+        ...input,
+      });
+      return { realtime };
+    }),
+
   reanalyze: userProcedure
     .use(rateLimited("taskStart"))
     .meta(
@@ -196,6 +216,25 @@ export const openingsRouter = createTRPCRouter({
     .output(okSchema)
     .mutation(async ({ ctx, input }) => {
       await new OpeningsService(db).setClosed({ userId: ctx.userId, ...input });
+      return ok;
+    }),
+
+  deleteOpening: userProcedure
+    .meta(
+      openApiMeta(
+        "openings",
+        "DELETE",
+        "/openings/by-id/{openingId}",
+        "Deletes an opening with its application and documents"
+      )
+    )
+    .input(z.object({ openingId: z.uuid() }))
+    .output(okSchema)
+    .mutation(async ({ ctx, input }) => {
+      await new OpeningsService(db).deleteOpening({
+        userId: ctx.userId,
+        ...input,
+      });
       return ok;
     }),
 

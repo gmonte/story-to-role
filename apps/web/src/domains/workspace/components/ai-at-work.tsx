@@ -44,7 +44,7 @@ export function AiAtWork({
       )}
     >
       <div className="flex min-w-0 items-center gap-2">
-        <Sparkles className="text-primary size-4 shrink-0 motion-safe:animate-pulse" />
+        <Sparkles className="text-brand-accent size-4 shrink-0 motion-safe:animate-pulse" />
         {/* One line: a long file name is cut, and shown whole on hover. */}
         <span
           title={title}
@@ -70,9 +70,9 @@ export function AiAtWork({
                 )}
               >
                 {done ? (
-                  <Check className="size-3.5 text-emerald-600 dark:text-emerald-400" />
+                  <Check className="text-success size-3.5" />
                 ) : active ? (
-                  <Sparkles className="text-primary size-3.5 motion-safe:animate-spin motion-safe:[animation-duration:3s]" />
+                  <Sparkles className="text-brand-accent size-3.5 motion-safe:animate-spin motion-safe:[animation-duration:3s]" />
                 ) : (
                   <Circle className="size-3.5" />
                 )}

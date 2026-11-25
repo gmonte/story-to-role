@@ -2,7 +2,6 @@
   "extends": "@repo/typescript-config/library.json",
   "include": ["src", "scripts", "intl-message-types.ts", "vitest.*.ts"],
   "compilerOptions": {
-    "baseUrl": ".",
     "jsx": "react-jsx",
     "paths": {
       "@repo/intl/*": ["./src/*"],

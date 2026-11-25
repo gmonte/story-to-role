@@ -221,12 +221,20 @@ _Avoid_: Model list, preset, integration
 ## Plans and usage
 
 **Plan**:
-What a user is entitled to use: Free, the subscription, or the courtesy plan.
-_Avoid_: Tier, package, BYOK plan
+What a user is entitled to use: Free, the credit subscription, the own-key subscription, or the courtesy plan.
+_Avoid_: Tier, package
+
+**Credit subscription**:
+The subscription whose monthly credits pay for the AI (pt-BR “Assinatura com créditos”).
+_Avoid_: Pro plan, AI-included plan
+
+**Own-key subscription**:
+The cheaper subscription that pays for the platform only, its AI paid by the user's own key (pt-BR “Assinatura com chave própria”).
+_Avoid_: BYOK plan, key funding plan
 
 **AI funding**:
 Who pays for a user's AI calls: StoryToRole credits or the user's own key from a certified provider.
-_Avoid_: Billing mode, BYOK plan
+_Avoid_: Billing mode
 
 **Courtesy plan**:
 The paid plan granted by the owner to a user without a subscription.

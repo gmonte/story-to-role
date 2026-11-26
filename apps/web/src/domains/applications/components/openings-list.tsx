@@ -117,11 +117,6 @@ function OpeningListRow({ opening }: { opening: BoardOpening }) {
               {openingLabels.band(opening.fitBand)}
             </Badge>
           )}
-          {opening.external && (
-            <Badge variant="outline">
-              {t.formatMessage({ defaultMessage: "Elsewhere" })}
-            </Badge>
-          )}
           <ApplicationStatusBadge status={opening.status} />
         </span>
       </Link>

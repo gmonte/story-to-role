@@ -43,7 +43,6 @@ export const trackedApplicationSchema = z.object({
   company: z.string().nullable(),
   title: z.string().nullable(),
   status: applicationStatusSchema,
-  external: z.boolean(),
   statusChangedAt: z.date(),
   lastActivityAt: z.date(),
   appliedAt: z.date().nullable(),
@@ -72,7 +71,7 @@ export const applicationDetailSchema = trackedApplicationSchema.extend({
   notes: z.string().nullable(),
   declineReason: z.string().nullable(),
   // The resume sent: from the submissions when sent from StoryToRole,
-  // else the one picked by hand (external applications).
+  // else the one picked by hand.
   resumeSent: resumeVersionRefSchema.nullable(),
   resumeSentAutomatically: z.boolean(),
   events: z.array(applicationEventSchema),
@@ -154,10 +153,11 @@ export type TrackerMetrics = z.infer<typeof trackerMetricsSchema>;
 
 /**
  * Where an opening stands on the Openings page (tracker spec, “Where an
- * opening stands”): its application's status, else Analyzed, or Closed for
- * a closed opening with no application.
+ * opening stands”): its application's status, else Not analyzed or
+ * Analyzed, or Closed for a closed opening with no application.
  */
 export const boardStatusSchema = z.enum([
+  "unanalyzed",
   "analyzed",
   ...applicationStatusSchema.options,
   "closed",
@@ -227,7 +227,6 @@ export const boardOpeningSchema = z.object({
   title: z.string().nullable(),
   status: boardStatusSchema,
   state: boardStateSchema,
-  external: z.boolean(),
   lastActivityAt: z.date(),
   appliedAt: z.date().nullable(),
   source: applicationSourceSchema.nullable(),

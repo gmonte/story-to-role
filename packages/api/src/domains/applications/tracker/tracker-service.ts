@@ -20,6 +20,7 @@ import { encodeCursor, decodeCursor } from "@repo/api/utils/db/keyset";
 import {
   type ApplicationSource,
   type ApplicationStatus,
+  applicationStatusSchema,
   closedStatuses,
 } from "../schemas/application";
 import type {
@@ -58,28 +59,13 @@ const endOfDay = (date: Date, now: Date) => {
   return end < now ? end : now;
 };
 
-/** What an external application can start as: it was already sent. */
-const externalStatuses: ApplicationStatus[] = [
-  "applied",
-  "in_process",
-  "offer",
-  "hired",
-  "rejected",
-  "withdrawn",
-];
-
 /**
  * Whether the user may move an application to a status by hand: "No
  * response" is only set by time (tracker spec), and "Applied" with
  * documents goes through markApplied, which records what was sent.
  */
-function manualStatus(
-  application: { external: boolean },
-  status: ApplicationStatus
-) {
-  if (status === "no_response") return false;
-  if (status === "applied") return application.external;
-  return true;
+function manualStatus(status: ApplicationStatus) {
+  return status !== "no_response" && status !== "applied";
 }
 
 const defaultSettings: TrackerSettings = {
@@ -115,6 +101,12 @@ const seal = (cipher: UserCipher, value: string | null) =>
 
 type BoardRow = Awaited<ReturnType<TrackerRepository["boardRows"]>>[number];
 
+/** A board status that is an application's own (not Not analyzed, Analyzed or Closed). */
+const isApplicationStatus = (
+  status: BoardOpening["status"]
+): status is ApplicationStatus =>
+  applicationStatusSchema.options.includes(status as ApplicationStatus);
+
 /** Each row's resume origin; null for an opening with no application. */
 async function boardOrigins(repository: TrackerRepository, rows: BoardRow[]) {
   const candidates = await repository.resumeCandidates(
@@ -146,7 +138,6 @@ function openBoardRow(
     title: open(cipher, row.encryptedTitle),
     status: row.status,
     state: row.state,
-    external: row.external,
     lastActivityAt: row.lastActivityAt,
     appliedAt: row.appliedAt,
     source: row.source,
@@ -179,8 +170,8 @@ async function allMatching(
 
 /**
  * The tracker (tracker spec): every application from its first document to
- * the outcome, with few statuses and dated events, what was sent, external
- * applications and in-app reminders.
+ * the outcome, with few statuses and dated events, what was sent and in-app
+ * reminders.
  */
 export class TrackerService {
   constructor(private readonly db: DbClient) {}
@@ -362,9 +353,7 @@ export class TrackerService {
           title: opening.title,
           addedAt: opening.addedAt,
           application:
-            opening.applicationId &&
-            opening.status !== "analyzed" &&
-            opening.status !== "closed"
+            opening.applicationId && isApplicationStatus(opening.status)
               ? {
                   status: opening.status,
                   appliedAt: opening.appliedAt,
@@ -470,8 +459,7 @@ export class TrackerService {
 
   /**
    * Moves an application to another status, recorded on its timeline.
-   * "Applied" goes through markApplied (it records what was sent), except
-   * for an external application, which has no documents.
+   * "Applied" goes through markApplied, which records what was sent.
    */
   async setStatus(input: {
     userId: string;
@@ -486,7 +474,7 @@ export class TrackerService {
       const row = await this.requireApplication(tx, profile.id, input);
       const { application } = row;
       if (input.status === application.status) return;
-      if (!manualStatus(application, input.status)) {
+      if (!manualStatus(input.status)) {
         throw new TRPCError({ code: "BAD_REQUEST" });
       }
       // "Marking applied by mistake is undone by changing the status back"
@@ -505,10 +493,6 @@ export class TrackerService {
         encryptedText: input.note?.trim()
           ? cipher.encrypt(input.note.trim())
           : null,
-        appliedAt:
-          input.status === "applied"
-            ? (row.application.appliedAt ?? now)
-            : undefined,
       });
     });
   }
@@ -649,59 +633,6 @@ export class TrackerService {
   }
 
   /**
-   * An application made outside StoryToRole (tracker spec): company,
-   * title, link and optionally the description; no documents, no credits.
-   */
-  async createExternal(input: {
-    userId: string;
-    company: string;
-    title: string;
-    link: string;
-    description?: string;
-    status: ApplicationStatus;
-    appliedAt?: Date;
-    now?: Date;
-  }) {
-    const now = input.now ?? new Date();
-    const appliedAt = input.appliedAt ?? now;
-    if (appliedAt > now || !externalStatuses.includes(input.status)) {
-      throw new TRPCError({ code: "BAD_REQUEST" });
-    }
-    const profile = await this.requireProfile(input.userId);
-    return this.db.transaction(async (tx) => {
-      const cipher = await getUserCipher(tx, input.userId);
-      const seal = (value?: string) =>
-        value?.trim() ? cipher.encrypt(value.trim()) : null;
-      const opening = await new OpeningsRepository(tx).insertOpening({
-        profileId: profile.id,
-        kind: "posted",
-        status: "external",
-        encryptedCompany: seal(input.company),
-        encryptedTitle: seal(input.title),
-        encryptedSourceUrl: seal(input.link),
-        encryptedDescription: seal(input.description),
-      });
-      const repository = new TrackerRepository(tx);
-      const application = await repository.insertApplication({
-        profileId: profile.id,
-        openingId: opening.id,
-        external: true,
-        status: input.status,
-        statusChangedAt: now,
-        lastActivityAt: appliedAt,
-        appliedAt,
-      });
-      await repository.insertEvent({
-        applicationId: application.id,
-        kind: "status_change",
-        occurredAt: appliedAt,
-        toStatus: input.status,
-      });
-      return { applicationId: application.id, openingId: opening.id };
-    });
-  }
-
-  /**
    * The method's fields on an application (tracker spec): `undefined` keeps
    * a field, `null` clears it. The resume sent is only picked by hand when none
    * was recorded; one sent from StoryToRole records itself.
@@ -725,16 +656,15 @@ export class TrackerService {
         const owned = await repository.resumeVersions(profile.id, [
           input.resumeVersionId,
         ]);
-        // Sent from StoryToRole, it records itself; with nothing recorded
-        // (external, or applied without a resume) it is picked by hand.
+        // Sent from StoryToRole, it records itself; applied without a
+        // resume recorded, it is picked by hand.
         const submissions = await repository.listSubmissions(
           row.application.id
         );
         if (
           submissions.length > 0 ||
           owned.length === 0 ||
-          (!row.application.external &&
-            row.application.status === "in_preparation")
+          row.application.status === "in_preparation"
         ) {
           throw new TRPCError({ code: "BAD_REQUEST" });
         }
@@ -758,7 +688,7 @@ export class TrackerService {
     });
   }
 
-  /** The resume versions an external application can say it was sent with. */
+  /** The resume versions an application with nothing recorded can say it was sent with. */
   async resumeVersionOptions(userId: string): Promise<ResumeVersionRef[]> {
     const profile = await this.findProfile(userId);
     if (!profile) return [];
@@ -1011,7 +941,6 @@ export class TrackerService {
       company: open(cipher, row.encryptedCompany),
       title: open(cipher, row.encryptedTitle),
       status: row.application.status,
-      external: row.application.external,
       statusChangedAt: row.application.statusChangedAt,
       lastActivityAt: row.application.lastActivityAt,
       appliedAt: row.application.appliedAt,

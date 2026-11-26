@@ -20,8 +20,9 @@ export const applicationStatusDot: Record<ApplicationStatus, string> = {
   no_response: "bg-status-analyzed",
 };
 
-/** An opening with no application: analyzed, or closed without one. */
+/** An opening with no application: not analyzed, analyzed, or closed. */
 const boardOnlyDot = {
+  unanalyzed: "bg-border",
   analyzed: "bg-status-analyzed",
   closed: "bg-muted-foreground",
 };
@@ -38,7 +39,7 @@ export function ApplicationStatusDot({
       aria-hidden="true"
       className={cn(
         "size-2 shrink-0 rounded-full",
-        status === "analyzed" || status === "closed"
+        status === "unanalyzed" || status === "analyzed" || status === "closed"
           ? boardOnlyDot[status]
           : applicationStatusDot[status],
         className

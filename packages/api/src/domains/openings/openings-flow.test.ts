@@ -1488,6 +1488,71 @@ describe("openings and fit check", () => {
     });
   });
 
+  it("registers an opening without analysis, no task and no credits, to analyze later", async () => {
+    const ctx = await setup();
+    // Publishing the profile started its own tasks.
+    const triggered = ctx.trigger.trigger.mock.calls.length;
+    const tasks = (await ctx.db.select().from(tasksTable)).length;
+    await expect(
+      ctx.openings.register({
+        userId: ctx.user.id,
+        kind: "posted",
+        company: "Globex",
+      })
+    ).rejects.toMatchObject({ code: "BAD_REQUEST" });
+    const { openingId } = await ctx.openings.register({
+      userId: ctx.user.id,
+      kind: "posted",
+      company: "Globex",
+      title: "Staff Engineer",
+      description: posting,
+    });
+    expect(ctx.trigger.trigger).toHaveBeenCalledTimes(triggered);
+    expect(await ctx.db.select().from(tasksTable)).toHaveLength(tasks);
+    expect(await ctx.detail(openingId)).toMatchObject({
+      status: "unanalyzed",
+      company: "Globex",
+      title: "Staff Engineer",
+      fitCheck: null,
+    });
+
+    // Closed and reopened, it is still waiting for its analysis.
+    await ctx.openings.setClosed({
+      userId: ctx.user.id,
+      openingId,
+      closed: true,
+    });
+    await ctx.openings.setClosed({
+      userId: ctx.user.id,
+      openingId,
+      closed: false,
+    });
+    expect((await ctx.detail(openingId)).status).toBe("unanalyzed");
+
+    // Analyzed later, it keeps the company and title the user typed.
+    await ctx.openings.analyze({ userId: ctx.user.id, openingId });
+    expect(ctx.trigger.trigger).toHaveBeenCalledTimes(triggered + 1);
+    await ctx.analyze(openingId, fitScript(allMet));
+    expect(await ctx.detail(openingId)).toMatchObject({
+      status: "analyzed",
+      company: "Globex",
+      title: "Staff Engineer",
+    });
+  });
+
+  it("asks for a description or link before analyzing a registered opening", async () => {
+    const ctx = await setup();
+    const { openingId } = await ctx.openings.register({
+      userId: ctx.user.id,
+      kind: "posted",
+      company: "Globex",
+      title: "Staff Engineer",
+    });
+    await expect(
+      ctx.openings.analyze({ userId: ctx.user.id, openingId })
+    ).rejects.toMatchObject({ code: "PRECONDITION_FAILED" });
+  });
+
   it("analyzes an unsolicited opening without a fit check, but with a vector", async () => {
     const ctx = await setup();
     const { openingId } = await ctx.openings.createUnsolicited({

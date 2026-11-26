@@ -179,11 +179,10 @@ export function SentSection({ detail }: { detail: ApplicationDetail }) {
   const documentLabels = useDocumentLabels();
   const { save, pending } = useSaveDetails(detail);
   const [open, setOpen] = useState(false);
-  // An external application, or one marked as applied without any document,
-  // says by hand which resume it was sent with.
+  // One marked as applied without any document says by hand which resume
+  // it was sent with.
   const picksByHand =
-    (detail.external || detail.status !== "in_preparation") &&
-    detail.submissions.length === 0;
+    detail.status !== "in_preparation" && detail.submissions.length === 0;
   const options = useQuery({
     ...trpc.tracker.resumeVersions.queryOptions({}),
     enabled: picksByHand,

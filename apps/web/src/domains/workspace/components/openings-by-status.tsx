@@ -29,8 +29,8 @@ import { useTRPC } from "~/tools/trpc/client";
 import { sidebarBoardGroups, sidebarGroup } from "../utils/sidebar-group";
 
 /**
- * The openings grouped by status (workspace spec): analyzed, in
- * preparation, applied, in process, closed, each with its three latest
+ * The openings grouped by status (workspace spec): not analyzed,
+ * analyzed, in preparation, applied, in process, closed, each with its three latest
  * and “See more” to the Openings page filtered the same way; openings
  * being analyzed, failed or refused never reach that page, so they are
  * all listed.
@@ -80,6 +80,7 @@ export function OpeningsByStatus() {
       .filter((opening) => sidebarGroup(opening) === group)
       .map((opening) => ({ ...opening, openingId: opening.id }));
   const labels: Record<(typeof sidebarBoardGroups)[number]["group"], string> = {
+    unanalyzed: t.formatMessage({ defaultMessage: "Not analyzed" }),
     analyzed: t.formatMessage({ defaultMessage: "Analyzed openings" }),
     in_preparation: t.formatMessage({ defaultMessage: "In preparation" }),
     applied: t.formatMessage({ defaultMessage: "Applied" }),
@@ -107,12 +108,13 @@ export function OpeningsByStatus() {
       {board(1)}
       {board(2)}
       {board(3)}
+      {board(4)}
       <Group
         label={t.formatMessage({ defaultMessage: "Couldn't be analyzed" })}
         rows={transient("rejected")}
         total={transient("rejected").length}
       />
-      {board(4)}
+      {board(5)}
     </div>
   );
 }

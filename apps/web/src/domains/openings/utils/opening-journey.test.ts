@@ -78,9 +78,9 @@ describe("resolveView", () => {
     expect(
       resolveView("resume", availableViews({ status: "processing" }))
     ).toBe("opening");
-    expect(resolveView("letter", availableViews({ status: "external" }))).toBe(
-      "opening"
-    );
+    expect(
+      resolveView("letter", availableViews({ status: "unanalyzed" }))
+    ).toBe("opening");
   });
 });
 
@@ -99,7 +99,7 @@ describe("availableViews", () => {
       "rejected",
       "processing",
       "failed",
-      "external",
+      "unanalyzed",
     ] as const) {
       expect(availableViews({ status })).toEqual(["opening"]);
     }
@@ -124,7 +124,9 @@ describe("primaryAction", () => {
   });
 
   it("offers to analyze an external opening", () => {
-    expect(primaryAction({ ...analyzed, status: "external" })).toBe("analyze");
+    expect(primaryAction({ ...analyzed, status: "unanalyzed" })).toBe(
+      "analyze"
+    );
   });
 
   it("reopens a closed opening", () => {

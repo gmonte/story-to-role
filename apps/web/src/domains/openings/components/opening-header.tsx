@@ -393,7 +393,7 @@ function PrimaryActionButton({
   const refresh = useRefreshOpenings();
   const credits = useCredits();
   const analyze = useMutation(
-    trpc.openings.analyzeExternal.mutationOptions({
+    trpc.openings.analyze.mutationOptions({
       onSuccess: refresh,
       onError: (error) => toast.error(error.message),
     })
@@ -514,7 +514,10 @@ function OpeningMenu({
   );
   const excludeCompany = useExcludeCompany(openingId, opening.company);
   const [deleting, setDeleting] = useState(false);
-  const canClose = opening.status === "analyzed" || opening.status === "closed";
+  const canClose =
+    opening.status === "unanalyzed" ||
+    opening.status === "analyzed" ||
+    opening.status === "closed";
   const canExclude = opening.status === "analyzed" && !!opening.company;
 
   return (

@@ -16,8 +16,8 @@ export const openingStatusSchema = z.enum([
   "failed",
   "rejected",
   "closed",
-  // Registered by hand with an external application, not analyzed.
-  "external",
+  // Registered without analysis (no credits spent): analyzed later.
+  "unanalyzed",
 ]);
 export type OpeningStatus = z.infer<typeof openingStatusSchema>;
 

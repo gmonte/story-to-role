@@ -365,11 +365,8 @@ async function analyzeOpening(deps: Deps) {
     analyzed: {
       status: "analyzed",
       embedding: openingVector,
-      // A title the opening already has (the user's, maybe) stays.
-      encryptedTitle:
-        rereading && opening.encryptedTitle
-          ? opening.encryptedTitle
-          : cipher.encrypt(extracted.title),
+      // A title the opening already has (the user's) stays.
+      encryptedTitle: opening.encryptedTitle ?? cipher.encrypt(extracted.title),
       encryptedCompany:
         opening.encryptedCompany ??
         (extracted.company ? cipher.encrypt(extracted.company) : null),

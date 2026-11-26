@@ -38,6 +38,10 @@ export function useTrackerLabels() {
 
   const boardStatuses: Record<BoardStatus, string> = {
     ...statuses,
+    unanalyzed: t.formatMessage({
+      defaultMessage: "Not analyzed",
+      description: "One opening's status on the Openings page",
+    }),
     analyzed: t.formatMessage({
       defaultMessage: "Analyzed",
       description: "One opening's status on the Openings page",

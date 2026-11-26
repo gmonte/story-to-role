@@ -399,27 +399,6 @@ export class DocumentsRepository {
       .insert(documentSnapshotsTable)
       .values({ ...snapshot, profileVersionId: profileVersionId ?? null })
       .returning();
-    // A document now exists for its application: an external one isn't
-    // external anymore (tracker spec).
-    await this.tx
-      .update(applicationsTable)
-      .set({ external: false })
-      .where(
-        and(
-          eq(applicationsTable.external, true),
-          inArray(
-            applicationsTable.id,
-            this.tx
-              .select({ id: documentsTable.applicationId })
-              .from(documentsTable)
-              .innerJoin(
-                documentVersionsTable,
-                eq(documentVersionsTable.documentId, documentsTable.id)
-              )
-              .where(eq(documentVersionsTable.id, snapshot.versionId))
-          )
-        )
-      );
     return row;
   }
 

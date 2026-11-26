@@ -8,6 +8,7 @@ import { boardFieldValues } from "./board-filter";
 const boardStates = boardFieldValues.state;
 
 const openStatuses: BoardStatus[] = [
+  "unanalyzed",
   "analyzed",
   "in_preparation",
   "applied",
@@ -27,9 +28,11 @@ export function boardColumns(filter: BoardFilter): BoardStatus[] {
     const allowed = (filter.state?.length ? filter.state : boardStates).filter(
       (state) => !filter.stateNot?.includes(state)
     );
-    // An analyzed opening is always open; the other open statuses close
-    // with their opening, so they may be either.
-    if (status === "analyzed") return allowed.includes("open");
+    // An opening with no application is open until closed (then Closed);
+    // the other open statuses close with their opening, so may be either.
+    if (status === "unanalyzed" || status === "analyzed") {
+      return allowed.includes("open");
+    }
     if (openStatuses.includes(status)) return allowed.length > 0;
     return allowed.includes("closed");
   });

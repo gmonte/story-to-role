@@ -11,7 +11,7 @@ import {
 } from "@repo/api/tools/trpc";
 
 import { openingLimits, OpeningsService } from "./openings-service";
-import { conditionStanceSchema } from "./schemas/opening";
+import { conditionStanceSchema, openingKindSchema } from "./schemas/opening";
 import {
   openingDetailSchema,
   openingSummarySchema,
@@ -118,20 +118,54 @@ export const openingsRouter = createTRPCRouter({
       })
     ),
 
-  analyzeExternal: userProcedure
+  register: userProcedure
+    .meta(
+      openApiMeta(
+        "openings",
+        "POST",
+        "/openings/registered",
+        "Registers an opening without analysis: no credits are spent"
+      )
+    )
+    .input(
+      z.object({
+        kind: openingKindSchema,
+        company: z.string().trim().min(1).max(200),
+        title: z.string().trim().max(200).optional(),
+        description: z
+          .string()
+          .max(openingLimits.maxDescriptionCharacters)
+          .optional(),
+        link: z
+          .url({ protocol: /^https?$/ })
+          .max(2000)
+          .optional(),
+        notes: z
+          .string()
+          .trim()
+          .max(openingLimits.maxNotesCharacters)
+          .optional(),
+      })
+    )
+    .output(z.object({ openingId: z.uuid() }))
+    .mutation(({ ctx, input }) =>
+      new OpeningsService(db).register({ userId: ctx.userId, ...input })
+    ),
+
+  analyze: userProcedure
     .use(rateLimited("taskStart"))
     .meta(
       openApiMeta(
         "openings",
         "POST",
         "/openings/by-id/{openingId}/analyze",
-        "Analyzes an opening registered with an external application"
+        "Analyzes an opening registered without analysis"
       )
     )
     .input(z.object({ openingId: z.uuid() }))
     .output(z.object({ realtime: realtimeSubscriptionSchema }))
     .mutation(async ({ ctx, input }) => {
-      const { realtime } = await new OpeningsService(db).analyzeExternal({
+      const { realtime } = await new OpeningsService(db).analyze({
         userId: ctx.userId,
         ...input,
       });

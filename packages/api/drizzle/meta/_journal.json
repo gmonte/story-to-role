@@ -239,6 +239,20 @@
       "when": 1795716576768,
       "tag": "0033_drop_application_type",
       "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "7",
+      "when": 1795720205452,
+      "tag": "0034_drop_application_external",
+      "breakpoints": true
+    },
+    {
+      "idx": 35,
+      "version": "7",
+      "when": 1795720239059,
+      "tag": "0035_rename_external_openings_unanalyzed",
+      "breakpoints": true
     }
   ]
 }

@@ -184,7 +184,7 @@ function TrackerBlock({
   const statuses = applicationStatusSchema.options.filter(
     (status) =>
       status === detail.status ||
-      (status !== "no_response" && (detail.external || status !== "applied"))
+      (status !== "no_response" && status !== "applied")
   );
 
   return (
@@ -213,13 +213,6 @@ function TrackerBlock({
       >
         <div className="flex min-w-0 flex-wrap items-center gap-1.5">
           <ApplicationStatusBadge status={detail.status} />
-          {detail.external && (
-            <Badge variant="outline">
-              {t.formatMessage({
-                defaultMessage: "Applied outside StoryToRole",
-              })}
-            </Badge>
-          )}
         </div>
         {detail.status === "withdrawn" && (
           <p className="flex min-w-0 flex-col text-xs">
@@ -240,7 +233,7 @@ function TrackerBlock({
             </Button>
           </p>
         )}
-        {!detail.external && detail.status === "in_preparation" && (
+        {detail.status === "in_preparation" && (
           <MarkAppliedDialog
             applicationId={detail.id}
             openingId={openingId}

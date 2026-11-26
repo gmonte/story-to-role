@@ -19,15 +19,13 @@ export type StatusMove =
   | { kind: "rejected"; reason: "no_response" | "applied_from_preparation" };
 
 export function planStatusMove(
-  application: { status: ApplicationStatus; external: boolean },
+  application: { status: ApplicationStatus },
   to: ApplicationStatus
 ): StatusMove {
   if (to === application.status) return { kind: "none" };
   if (to === "no_response") return { kind: "rejected", reason: "no_response" };
   if (to === "withdrawn") return { kind: "withdraw" };
   if (to === "applied") {
-    // An application made elsewhere has no documents to record.
-    if (application.external) return { kind: "set_status" };
     return application.status === "in_preparation"
       ? { kind: "mark_applied" }
       : { kind: "rejected", reason: "applied_from_preparation" };
@@ -56,25 +54,24 @@ export type BoardMove =
     };
 
 export function planBoardMove(
-  card: { status: BoardStatus; external: boolean },
+  card: { status: BoardStatus },
   to: BoardStatus
 ): BoardMove {
   if (to === card.status) return { kind: "none" };
-  if (to === "analyzed") return { kind: "rejected", reason: "to_analyzed" };
+  if (to === "unanalyzed" || to === "analyzed") {
+    return { kind: "rejected", reason: "to_analyzed" };
+  }
   if (card.status === "closed") {
     return { kind: "rejected", reason: "from_closed" };
   }
-  if (card.status === "analyzed") {
+  if (card.status === "unanalyzed" || card.status === "analyzed") {
     if (to === "closed") return { kind: "close_opening" };
     // The new application starts in preparation, with no documents.
-    const then = planStatusMove(
-      { status: "in_preparation", external: false },
-      to
-    );
+    const then = planStatusMove({ status: "in_preparation" }, to);
     return then.kind === "rejected"
       ? then
       : { kind: "create_application", then };
   }
   if (to === "closed") return { kind: "rejected", reason: "to_closed" };
-  return planStatusMove({ status: card.status, external: card.external }, to);
+  return planStatusMove({ status: card.status }, to);
 }

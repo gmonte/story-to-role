@@ -2,12 +2,11 @@
 
 import type { ReactNode } from "react";
 
-import { CalendarDays, KanbanSquare, Plus, Settings } from "lucide-react";
+import { CalendarDays, KanbanSquare, Settings } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
 
 import { useTranslation } from "@repo/intl/use-translation";
-import { Button } from "@repo/web/components/ui/button";
 import { cn } from "@repo/web/lib/utils";
 
 import {
@@ -15,7 +14,6 @@ import {
   overviewTabPaths,
   type OverviewTab,
 } from "../utils/overview-tabs";
-import { ExternalApplicationDialog } from "./external-application-dialog";
 import { ReminderList } from "./reminder-list";
 
 const tabs: OverviewTab[] = ["tracking", "calendar", "settings"];
@@ -28,8 +26,7 @@ const tabIcons: Record<OverviewTab, ReactNode> = {
 
 /**
  * The Openings page's frame (tracker spec, “The Openings page”): what it
- * holds, “Applied elsewhere” and the reminders above the tabs, so every tab
- * shows them. Each tab is a route; a tab's content may use the full width.
+ * holds and the reminders above the tabs, so every tab shows them. Each tab is a route; a tab's content may use the full width.
  */
 export function OpeningsOverview({ children }: { children: ReactNode }) {
   const t = useTranslation();
@@ -47,22 +44,12 @@ export function OpeningsOverview({ children }: { children: ReactNode }) {
     <div className="w-full overflow-y-auto">
       <div className="flex w-full flex-col gap-6 py-6 text-sm">
         <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 px-6">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <p className="text-muted-foreground">
-              {t.formatMessage({
-                defaultMessage:
-                  "Every opening you analyzed, from the first look to the outcome.",
-              })}
-            </p>
-            <ExternalApplicationDialog
-              trigger={
-                <Button size="sm" variant="outline">
-                  <Plus />
-                  {t.formatMessage({ defaultMessage: "Applied elsewhere" })}
-                </Button>
-              }
-            />
-          </div>
+          <p className="text-muted-foreground">
+            {t.formatMessage({
+              defaultMessage:
+                "Every opening you added, from the first look to the outcome.",
+            })}
+          </p>
 
           <ReminderList />
 

@@ -5,6 +5,7 @@ import { boardColumns } from "./board-columns";
 describe("boardColumns", () => {
   it("shows every column with no filter, in the tracker's order", () => {
     expect(boardColumns({})).toEqual([
+      "unanalyzed",
       "analyzed",
       "in_preparation",
       "applied",
@@ -20,6 +21,7 @@ describe("boardColumns", () => {
 
   it("keeps the open columns for State is open", () => {
     expect(boardColumns({ state: ["open"] })).toEqual([
+      "unanalyzed",
       "analyzed",
       "in_preparation",
       "applied",

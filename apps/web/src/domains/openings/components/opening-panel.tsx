@@ -133,7 +133,7 @@ function OpeningScreen({
   const applicationFolded =
     view === "opening" &&
     layout === "two" &&
-    (worked || !!opening.applicationId);
+    (worked || opening.status === "unanalyzed" || !!opening.applicationId);
   const hasDocumentPanel =
     worked &&
     ((view === "resume" &&

@@ -13,7 +13,7 @@ export function BoardEmpty({ filter }: { filter: BoardFilter }) {
       {isDefaultBoardFilter(filter)
         ? t.formatMessage({
             defaultMessage:
-              "Nothing open right now. Add an opening to analyze it, or register one you applied to elsewhere.",
+              "Nothing open right now. Add an opening on New opening, analyzed now or later.",
           })
         : t.formatMessage({
             defaultMessage: "No openings match this filter.",

@@ -36,7 +36,7 @@ export function availableViews(input: {
     case "analyzed":
     case "closed":
       return openingViews;
-    case "external":
+    case "unanalyzed":
     case "processing":
     case "failed":
     case "rejected":
@@ -90,7 +90,7 @@ export function primaryAction(state: JourneyState): PrimaryAction | null {
       return "add_again";
     case "failed":
       return "retry_analysis";
-    case "external":
+    case "unanalyzed":
       return "analyze";
     case "closed":
       return "reopen";

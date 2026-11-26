@@ -1,17 +1,14 @@
 import { randomBytes } from "node:crypto";
 
-import { eq } from "drizzle-orm";
 import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { CareerRepository } from "@repo/api/domains/career/career-repository";
 import { getUserCipher } from "@repo/api/domains/encryption/user-cipher";
-import {
-  fitChecksTable,
-  openingsTable,
-} from "@repo/api/domains/openings/db/openings-tables";
+import { fitChecksTable } from "@repo/api/domains/openings/db/openings-tables";
 import { OpeningsRepository } from "@repo/api/domains/openings/openings-repository";
 import type { OpeningStatus } from "@repo/api/domains/openings/schemas/opening";
 import { createTestUser } from "@repo/api/test/create-test-user";
+import { appliedOpening } from "@repo/api/test/applied-opening";
 import {
   clearTestDatabase,
   closeTestDatabase,
@@ -71,15 +68,14 @@ async function setup() {
       limit: over.limit ?? 25,
       now,
     });
+  // An opening applied to with nothing from StoryToRole.
   const external = (company: string, appliedAt: Date) =>
-    tracker.createExternal({
+    appliedOpening({
       userId: user.id,
+      profileId: profile.id,
       company,
       title: "Engineer",
-      link: "https://example.com/jobs/1",
-      status: "applied",
       appliedAt,
-      now: appliedAt,
     });
   return { db, user, profile, tracker, opening, board, external };
 }
@@ -107,21 +103,26 @@ describe("the Openings board", () => {
     await closeTestDatabase();
   });
 
-  it("lists analyzed and closed openings with their board status", async () => {
+  it("lists unanalyzed, analyzed and closed openings with their board status", async () => {
     const ctx = await setup();
     await ctx.opening("Acme", { createdAt: ago(1) });
     await ctx.opening("Initech", { status: "closed", createdAt: ago(2) });
+    await ctx.opening("Registered", {
+      status: "unanalyzed",
+      createdAt: ago(4),
+    });
     await ctx.opening("Processing", { status: "processing" });
     await ctx.opening("Failed", { status: "failed" });
     await ctx.external("Globex", ago(3));
 
     const all = await ctx.board();
-    expect(all.total).toBe(3);
+    expect(all.total).toBe(4);
     expect(all.data.map((row) => [row.company, row.status, row.state])).toEqual(
       [
         ["Acme", "analyzed", "open"],
         ["Initech", "closed", "closed"],
         ["Globex", "applied", "open"],
+        ["Registered", "unanalyzed", "open"],
       ]
     );
     expect(all.data[0]).toMatchObject({
@@ -131,7 +132,11 @@ describe("the Openings board", () => {
     expect(all.data[2]).toMatchObject({ resumeOrigin: "not_recorded" });
 
     const open = await ctx.board({ state: ["open"] });
-    expect(open.data.map((row) => row.company)).toEqual(["Acme", "Globex"]);
+    expect(open.data.map((row) => row.company)).toEqual([
+      "Acme",
+      "Globex",
+      "Registered",
+    ]);
     const applied = await ctx.tracker.board({
       userId: ctx.user.id,
       filter: {},
@@ -247,15 +252,10 @@ describe("the Openings board", () => {
   it("lays out a month of milestones, filtered like the board", async () => {
     const ctx = await setup();
     await ctx.opening("Acme", { createdAt: new Date("2026-11-05T13:00:00Z") });
-    const { applicationId, openingId } = await ctx.external(
+    const { applicationId } = await ctx.external(
       "Globex",
       new Date("2026-11-10T13:00:00Z")
     );
-    // Registered that day (the database stamps today otherwise).
-    await ctx.db
-      .update(openingsTable)
-      .set({ createdAt: new Date("2026-11-10T12:00:00Z") })
-      .where(eq(openingsTable.id, openingId));
     await ctx.tracker.addEvent({
       userId: ctx.user.id,
       applicationId,

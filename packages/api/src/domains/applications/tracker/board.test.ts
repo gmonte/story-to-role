@@ -15,7 +15,6 @@ const row = (over: Partial<BoardOpening>): BoardOpening => ({
   title: "Platform Engineer",
   status: "analyzed",
   state: "open",
-  external: false,
   lastActivityAt: new Date("2026-11-01"),
   appliedAt: null,
   source: null,

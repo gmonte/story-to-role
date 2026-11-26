@@ -23,6 +23,7 @@ export function sidebarGroup(
  * same openings there (“See more”): an open status, or every closed one.
  */
 export const sidebarBoardGroups = [
+  { group: "unanalyzed", filter: { status: ["unanalyzed"] } },
   { group: "analyzed", filter: { status: ["analyzed"] } },
   {
     group: "in_preparation",

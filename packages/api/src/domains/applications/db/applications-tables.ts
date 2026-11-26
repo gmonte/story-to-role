@@ -39,9 +39,6 @@ export const applicationsTable = createTable(
       .notNull()
       .default("in_preparation"),
     tone: d.text().$type<Tone>().notNull().default("your_style"),
-    // Registered by hand for an opening applied to outside StoryToRole
-    // (tracker spec); it stops being external with its first document.
-    external: d.boolean().notNull().default(false),
     statusChangedAt: d
       .timestamp({ withTimezone: true })
       .default(sql`CURRENT_TIMESTAMP`)

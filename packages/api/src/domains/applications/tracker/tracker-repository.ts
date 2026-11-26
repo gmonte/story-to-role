@@ -60,9 +60,10 @@ const textList = (values: readonly string[]) =>
 
 /**
  * Where an opening stands (tracker spec, “Where an opening stands”): its
- * application's status, else Analyzed, or Closed for a closed opening.
+ * application's status, else Not analyzed or Analyzed, or Closed for a
+ * closed opening.
  */
-const boardStatus = sql<BoardStatus>`case when ${applicationsTable.id} is not null then ${applicationsTable.status} when ${openingsTable.status} = 'closed' then 'closed' else 'analyzed' end`;
+const boardStatus = sql<BoardStatus>`case when ${applicationsTable.id} is not null then ${applicationsTable.status} when ${openingsTable.status} in ('closed', 'unanalyzed') then ${openingsTable.status} else 'analyzed' end`;
 
 const boardState = sql<BoardState>`case when ${openingsTable.status} <> 'closed' and (${boardStatus}) in (${textList(openBoardStatuses)}) then 'open' else 'closed' end`;
 
@@ -124,8 +125,8 @@ export class TrackerRepository {
   }
 
   /**
-   * The Openings page's rows (tracker spec): every analyzed or closed
-   * opening, with or without an application, filtered on the structured
+   * The Openings page's rows (tracker spec): every opening added (analyzed
+   * or not) or closed, with or without an application, filtered on the structured
    * fields (ADR 0014). With `limit`, a keyset page in the sort's order (ADR
    * 0013); without, every matching row, for the service to sort itself.
    */
@@ -153,7 +154,6 @@ export class TrackerRepository {
         encryptedTitle: openingsTable.encryptedTitle,
         status: boardStatus,
         state: boardState,
-        external: sql<boolean>`coalesce(${applicationsTable.external}, false)`,
         lastActivityAt: lastActivity.mapWith(openingsTable.createdAt),
         appliedAt: applicationsTable.appliedAt,
         source: applicationsTable.source,
@@ -272,7 +272,7 @@ export class TrackerRepository {
       // Openings still processing, failed or refused never show.
       or(
         isNotNull(applicationsTable.id),
-        inArray(openingsTable.status, ["analyzed", "closed"])
+        inArray(openingsTable.status, ["unanalyzed", "analyzed", "closed"])
       )!,
     ];
     if (input.column) conditions.push(sql`(${boardStatus}) = ${input.column}`);

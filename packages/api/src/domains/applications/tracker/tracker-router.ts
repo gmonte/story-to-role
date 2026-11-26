@@ -237,30 +237,6 @@ export const trackerRouter = createTRPCRouter({
       return ok;
     }),
 
-  createExternal: userProcedure
-    .meta(
-      openApiMeta(
-        "tracker",
-        "POST",
-        "/applications/external",
-        "Registers an application made outside StoryToRole"
-      )
-    )
-    .input(
-      z.object({
-        company: z.string().trim().min(1).max(200),
-        title: z.string().trim().min(1).max(200),
-        link: z.url().max(2000),
-        description: z.string().max(20_000).optional(),
-        status: applicationStatusSchema,
-        appliedAt: z.coerce.date().optional(),
-      })
-    )
-    .output(z.object({ applicationId: z.uuid(), openingId: z.uuid() }))
-    .mutation(({ ctx, input }) =>
-      new TrackerService(db).createExternal({ userId: ctx.userId, ...input })
-    ),
-
   updateDetails: userProcedure
     .meta(
       openApiMeta(

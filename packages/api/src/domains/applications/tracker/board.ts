@@ -12,6 +12,7 @@ export const boardStatusOrder = boardStatusSchema.options;
 
 /** An opening is open while it stands in one of these (and isn't closed). */
 export const openBoardStatuses: BoardStatus[] = [
+  "unanalyzed",
   "analyzed",
   "in_preparation",
   "applied",

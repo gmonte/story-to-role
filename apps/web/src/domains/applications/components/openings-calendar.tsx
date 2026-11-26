@@ -3,7 +3,12 @@
 import { useEffect } from "react";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import {
+  CalendarCheck,
+  ChevronLeft,
+  ChevronRight,
+  Hourglass,
+} from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
@@ -165,9 +170,41 @@ export function OpeningsCalendar() {
         <>
           <MonthGrid month={month} markers={markers.data ?? []} />
           <DayList markers={markers.data ?? []} />
+          <Legend />
         </>
       )}
     </div>
+  );
+}
+
+/** What each kind of marker means. */
+function Legend() {
+  const t = useTranslation();
+  return (
+    <ul className="text-muted-foreground flex flex-wrap gap-x-4 gap-y-1 text-xs">
+      <li className="flex items-center gap-1.5">
+        <CalendarCheck
+          aria-hidden="true"
+          className="text-status-interview size-3"
+        />
+        {t.formatMessage({ defaultMessage: "An event you recorded" })}
+      </li>
+      <li className="flex items-center gap-1.5">
+        <span
+          aria-hidden="true"
+          className="bg-status-sent size-2 rounded-full"
+        />
+        {t.formatMessage({
+          defaultMessage: "What happened: added, applied, a status change",
+        })}
+      </li>
+      <li className="flex items-center gap-1.5">
+        <Hourglass aria-hidden="true" className="size-3" />
+        {t.formatMessage({
+          defaultMessage: "Expected, from your reminder settings",
+        })}
+      </li>
+    </ul>
   );
 }
 
@@ -303,6 +340,37 @@ function MilestoneDot({
   );
 }
 
+/**
+ * How a milestone shows its origin: an event the user booked (a dated
+ * note) with a calendar, a projection with an hourglass, and what the
+ * tracker recorded on its own with its status's dot.
+ */
+function MilestoneMark({
+  milestone,
+  className,
+}: {
+  milestone: Milestone;
+  className?: string;
+}) {
+  if (milestone.projected) {
+    return (
+      <Hourglass
+        aria-hidden="true"
+        className={cn("text-muted-foreground size-3 shrink-0", className)}
+      />
+    );
+  }
+  if (milestone.kind === "note") {
+    return (
+      <CalendarCheck
+        aria-hidden="true"
+        className={cn("text-status-interview size-3 shrink-0", className)}
+      />
+    );
+  }
+  return <MilestoneDot milestone={milestone} className={className} />;
+}
+
 function useMilestoneLabel() {
   const t = useTranslation();
   const labels = useTrackerLabels();
@@ -347,14 +415,25 @@ function MarkerButton({ marker }: { marker: CalendarMarker }) {
           type="button"
           title={name}
           className={cn(
-            "bg-card hover:border-primary flex w-full min-w-0 items-start gap-1.5 rounded-md border px-1.5 py-1 text-left text-xs",
-            marker.lead.projected && "border-dashed"
+            "hover:border-primary flex w-full min-w-0 items-start gap-1.5 rounded-md border px-1.5 py-1 text-left text-xs",
+            // Projected: only an outline; anything that happened, a card.
+            marker.lead.projected
+              ? "border-muted-foreground/50 text-muted-foreground border-dashed bg-transparent"
+              : "bg-card"
           )}
         >
-          <MilestoneDot milestone={marker.lead} className="mt-1" />
+          <MilestoneMark milestone={marker.lead} className="mt-0.5" />
           <span className="flex min-w-0 flex-1 flex-col">
             <span className="truncate font-medium">{name}</span>
-            <span className="text-muted-foreground truncate">
+            <span
+              className={cn(
+                "truncate",
+                marker.lead.projected && "italic",
+                marker.lead.kind === "note" && !marker.lead.projected
+                  ? "text-foreground"
+                  : "text-muted-foreground"
+              )}
+            >
               {label(marker.lead)}
             </span>
           </span>
@@ -378,7 +457,7 @@ function MarkerButton({ marker }: { marker: CalendarMarker }) {
         <ol className="flex flex-col gap-2">
           {marker.milestones.map((milestone, index) => (
             <li key={index} className="flex items-start gap-2">
-              <MilestoneDot milestone={milestone} />
+              <MilestoneMark milestone={milestone} className="mt-1" />
               <span className="flex min-w-0 flex-col">
                 <span className="break-words">{label(milestone)}</span>
                 <span className="text-muted-foreground text-xs">

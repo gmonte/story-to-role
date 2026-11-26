@@ -639,6 +639,17 @@ export class DocumentsRepository {
       });
   }
 
+  async deleteRenderedFile(snapshotId: string, template: string) {
+    await this.tx
+      .delete(renderedFilesTable)
+      .where(
+        and(
+          eq(renderedFilesTable.snapshotId, snapshotId),
+          eq(renderedFilesTable.template, template)
+        )
+      );
+  }
+
   /** Storage keys of the files rendered from one snapshot. */
   async renderedKeysOfSnapshot(snapshotId: string) {
     const rows = await this.tx

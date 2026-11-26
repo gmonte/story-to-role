@@ -3,7 +3,7 @@
 import type { ComponentProps } from "react";
 
 import { useQuery } from "@tanstack/react-query";
-import { ArrowUpRight } from "lucide-react";
+import { ArrowRight } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
@@ -177,7 +177,7 @@ function Group({
         >
           <span className="truncate">{title}</span>
           {/* Shows, on hover, that the title opens the list. */}
-          <ArrowUpRight
+          <ArrowRight
             aria-hidden="true"
             className="size-3 shrink-0 opacity-0 transition-opacity group-hover/heading:opacity-100 group-focus-visible/heading:opacity-100"
           />

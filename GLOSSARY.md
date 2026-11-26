@@ -108,6 +108,10 @@ _Avoid_: Manual entry, imported application
 A dated entry on an application's timeline ("HR interview on Nov 20"), recorded instead of adding statuses.
 _Avoid_: Step, stage, activity
 
+**Milestone**:
+A date in an opening's life shown on the calendar: the opening added, applied, a status change or a dated note, or a projected one (the follow-up reminder, the day it would turn "No response").
+_Avoid_: Calendar event, deadline
+
 **Fit check**:
 The method's screening, run automatically when an opening is added and shown as a hint: a high, medium or low band, each requirement backed by a profile passage or listed as a gap.
 _Avoid_: Fit score, match, assessment

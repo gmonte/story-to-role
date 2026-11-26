@@ -49,6 +49,7 @@ The meu-emprego-novo method in the product (ADR 0008): the profile document, its
 - Note: `positions`, `credentials`, `sensitive_items` and `career_goals` stayed until P5, P6 and P8 moved their readers to the profile. After P10 the leftovers were removed (migration `remove_leftover_career_tables`): those four tables, `application_overrides` (per-application sensitive-item overrides) with its router, the points' `encryptedSensitiveItems` columns, the `evidence` domain folder and the account export entries. The communication rules' "never include" filter moved to `domains/profile/rules/`. `locked_fact_overrides` and title equivalents stay.
 
 Acceptance:
+
 - [ ] No table, task, route or component of the old engine remains; `pnpm lint` and `pnpm test` pass.
 - [ ] A fresh database built from the baseline passes the migrations test; a recreated Clerk user gets a local user and welcome credits through the webhook.
 
@@ -61,6 +62,7 @@ Acceptance:
 - Note: the editor holds the profile as flat blocks, one per Markdown line (heading, paragraph, quote line, list item with its depth), so the round trip is lossless and each finding maps to its line; the official TipTap drag handle needs the Yjs collaboration packages, so the margin's "+" and handle and the `/` menu are the app's own.
 
 Acceptance:
+
 - [ ] A new profile starts from the template; each insert lands in its section, in format.
 - [ ] Findings are marked as the user types; "Fix format" corrects what it can and leaves the rest marked.
 - [ ] The downloaded file is the method's `profile_truth.md`.
@@ -73,6 +75,7 @@ Acceptance:
 - Note: `loadPublishedProfile` is the one reader of a published version (extract, passages, Markdown) for P5–P8.
 
 Acceptance:
+
 - [ ] Validating reviews only the changed sections and is charged; publishing creates a version even with open findings; a format error blocks it.
 - [ ] A published version's extract and passages are what the rest of the product reads.
 
@@ -87,6 +90,7 @@ Acceptance:
 - Note: validation's competency levels stay in the review panel (accept or reject there); they are not `profile_suggestions` rows.
 
 Acceptance:
+
 - [ ] Selecting a passage opens the agent with it; its suggestions show as tracked changes and only accepted ones reach the draft.
 - [ ] The agent never sends more than three questions in a message and never proposes a figure the user didn't give.
 
@@ -99,6 +103,7 @@ Acceptance:
 - Note: an import sees the suggestions still waiting and completes one instead of repeating it; imports hold the Free plan's credit reserve like the agent and validation; the acceptance's second half (imported figures staying out of generated documents) is met when P6 reads only `[medido]`.
 
 Acceptance:
+
 - [ ] A file that only restates the profile proposes nothing; one with a new fact proposes only that.
 - [ ] Imported figures are `[a confirmar]` and stay out of generated documents until resolved.
 
@@ -112,6 +117,7 @@ Acceptance:
 - Note: a broken preference is found three ways: the excluded company and an excluded sector the posting names by code, the other lines by a small call of their own that answers with the line's number, so the rule shown is the user's own text. Excluding a company publishes only that company (preferences never published start from the template). Excluding a company from the tracker comes with P9.
 
 Acceptance:
+
 - [ ] A requirement the profile marks as "studied" or "did not do" is a gap; an excluded company makes the band low.
 - [ ] Every met requirement links to a profile passage.
 
@@ -128,6 +134,7 @@ Acceptance:
 - Note: the lines' trace back to the profile in the editor comes with the coverage review (P7); the cover letter's length settings are stored now and enforced in P8; a user's own edits get the length warning, not shortening. Acceptance 1 (a React Native library resume brings mobile achievements forward; a General one each experience's strongest points) is a prompt instruction, checked live, not by a test.
 
 Acceptance:
+
 - [ ] A React Native library resume brings mobile achievements forward; a general one each experience's strongest points.
 - [ ] An `[estimado]` or `[a confirmar]` figure never appears; a very old experience appears only with the requirement that justified it; the length rules hold.
 
@@ -140,6 +147,7 @@ Acceptance:
 - Note: "send to my profile" takes a kept "profile" suggestion and proposes the bullet under the Results of its experience in the current draft (origin `application`); the experience is found by the position's derived id, so a renamed one is refused rather than guessed. The cover letter's review comes with P8; the trace in the editor now reads the frozen version's lines.
 
 Acceptance:
+
 - [x] A document with a figure the profile doesn't mark `[medido]` is pointed out (blocked until D4, which made every check a warning).
 - [x] The review never suggests covering a gap and ends with the method's statement.
 
@@ -154,6 +162,7 @@ Acceptance:
 - Note: nothing from the user reaches the profile except as a suggestion in its draft (origin `application`), found by the position's derived id: a saved motivation point about the user goes under the career direction line of Professional identity, a saved detail of the story under its position's Results, an instruction sent to the profile under its position's field (results, responsibilities or tools by its kind) or, with no position, under the career direction line of Professional identity, and a gap the user confirms lacking under the chosen position's "what I did not do" or Known gaps (a gap has no passage of the profile, so the user names the position or leaves it to Known gaps). A line the draft refuses (it has it already, or no longer has the place) stays in the application. The career goals table is no longer read or written; dropping it waits for the final cleanup.
 
 Acceptance:
+
 - [ ] Promoting an instruction creates a suggestion in the profile's draft, not a change.
 - [ ] Confirming a gap suggests it for "what I did not do" or Known gaps.
 
@@ -162,6 +171,7 @@ Acceptance:
 - The method's fields (source, application type, resume version sent, next step, the user's decline reason, which can become a preference rule) and its metrics (response rate per resume version and per source, time to first response, high-fit openings that reached an interview); notes and next steps (free text, where names and contacts end up) are encrypted and never reach a prompt: anything the AI reads of the tracker is its structured fields.
 
 Notes (decisions the spec left open):
+
 - Response: the company responded when the application ever reached In process, Offer, Hired or Rejected (a rejection is an answer); Withdrawn and No response are not responses. Interview: reached In process or beyond (In process, Offer, Hired), the closest structured signal since In process covers screening, interview or test. Time to first response is the median (not the average the spec's older wording says) of days from applying to the first such status change on the timeline; an external application created already past Applied has no dated response and stays out of the median. Defined in `tracker/metrics.ts`.
 - Periods filter by the day applied: last 30 days, last 90 days, all. High-fit uses the band of the opening's latest fit check. Metrics read only structured fields; nothing calls an AI.
 - Resume sent: from the submissions when sent from StoryToRole; for an external application, picked by hand among the user's resume versions (no foreign key, a deleted version stops resolving). Applications with no resume recorded are grouped as “Not recorded”.
@@ -170,6 +180,7 @@ Notes (decisions the spec left open):
 - The next step also shows with the follow-up and “No response” soon reminders.
 
 Acceptance:
+
 - [x] Sending a document from StoryToRole records its version on the application; the metrics count it.
 
 ### P10: LinkedIn
@@ -177,10 +188,12 @@ Acceptance:
 - The method's step 09, built like a general library document: the LinkedIn "About" and each experience's text, generated from the published profile with the same rules and coverage review, charged as a generation (resume spec, "LinkedIn").
 
 Acceptance:
+
 - [x] The LinkedIn text uses only the frozen profile: a figure the profile doesn't mark `[medido]` is pointed out (blocked until D4), and every experience keeps its locked facts.
 - [x] Each section has a copy action; nothing is changed on LinkedIn by StoryToRole.
 
 Notes:
+
 - A `linkedin` document kind (one per user, library-style, a version per language) whose content is `{about: Line, experiences: [{positionId, employer, title, startDate, endDate, lines}]}`; the About is one line with its paragraphs separated by a blank line. No migration: `documents.kind` is text.
 - No second rule set: code views the text as a resume (About as summary, experiences as the experience section) and reuses `assembleResume`, `checkDocument`, `keepReview` and the coverage review. Very old experiences under “relevant only” are left out, since a general text has no requirement to justify them.
 - One writer call and the coverage review against the focus “career as the profile states it”; charged as `generate_document` priced like a cover letter (20 × level).
@@ -196,6 +209,7 @@ After P10, before calling the MVP done. Raised by the owner while testing the fi
 - Privacy, already decided: nothing of a deleted account is kept, and the Stripe customer is deleted with it; Neon's history window is stated in the deletion notice (`privacySettings.databaseHistoryHours`).
 
 Acceptance:
+
 - [ ] Switching the interface to Brazilian Portuguese translates every screen.
 
 ## Document workspace
@@ -209,6 +223,7 @@ The resume and the cover letter edited like the profile, with an agent per docum
 - Findings (code checks, coverage review) as underlines with the hover card: Fix where code fixes it, Ignore.
 
 Acceptance:
+
 - [ ] A generated resume and a cover letter open in the PDF look; editing a bullet saves a snapshot and the PDF preview shows it.
 - [ ] Locked facts and section titles can't be edited in place.
 
@@ -219,6 +234,7 @@ Acceptance:
 - Charged per message like the profile agent.
 
 Acceptance:
+
 - [ ] Selecting a passage of the resume opens the agent with it, and the agent answers about it with the profile in view.
 
 ### D3: Suggestions in the document
@@ -228,6 +244,7 @@ Acceptance:
 - The user edits everything except the section titles; a reworded line keeps its trace (origin `edited`).
 
 Acceptance:
+
 - [x] Only accepted suggestions reach the document, each as a snapshot.
 - [x] Asked to, the agent writes a fact the user just told it, and refuses a figure nobody gave.
 - [x] The agent's change to a locked fact is refused unless the user asked for it in this conversation.
@@ -238,6 +255,7 @@ Acceptance:
 - “Profile version N is newer than this document's” with Use version N: the document freezes the newer version; traces and findings rerun against it.
 
 Acceptance:
+
 - [x] A line the user types that the profile doesn't back is pointed out, and Add to the profile creates a profile suggestion; after publishing and Use version N, it is no longer pointed out.
 
 ## Opening page
@@ -256,12 +274,57 @@ The opening page restructured after a product design review ([docs/design/openin
 
 - One Applications page with two views. **List**: filters (status, type, company, sent or not) and sorting. **Kanban**: a column per application status; dragging a card to another column changes its status (the same rules as the status select: “Applied” asks what was sent, “No response” only comes with time). A card opens the opening page.
 - Replaces the Tracker page's list; shares the tracker's queries and components.
-- Status: built (filters, sorting, kanban with native drag and drop and a status menu per card). The resume score column is not shown yet.
+- Status: built (filters, sorting, kanban with native drag and drop and a status menu per card). The resume score column is not shown yet. Replaced by the Openings page (V1–V4).
 
 ### O3: Mobile polish
 
 - The opening page and the document pages on a phone: sticky primary action, the Application and Fit blocks reachable in a tap, the document workspace in read mode with tap to edit, and the preview as a sheet.
 - Status: built (bottom bar with Fit, Application and the state's next step; read mode with Edit and Done; Index, Agent, Preview and Versions as sheets). Not yet checked on a real device.
+
+## Openings page
+
+The Applications page becomes **Openings** (`/app/openings`), with every analyzed opening, three tabs (Tracking, Calendar, Settings), a filter shared by Tracking and Calendar, and server-side pages (tracker spec, “The Openings page”; ADRs 0013 and 0014). Owner decisions: every opening listed, closed ones too, with Analyzed and Closed columns on the kanban; the default filter State is open; the metrics collapsible at the top of Tracking, ignoring the filter; the reminders in the layout above the tabs; the application type removed (the resume's origin replaces it); the calendar only shows, one month per request; the sidebar keeps three openings per status. No redirect from `/app/tracker`.
+
+### V1: The Openings page and its tabs
+
+- **Openings** in the sidebar (`/app/openings`), replacing Applications; `/app/tracker` is removed. A layout (route group, so the opening page stays outside it) with the title, “Applied elsewhere”, the active reminders and the tabs Tracking · Calendar · Settings as links.
+- Tracking keeps today's list and kanban, the kanban at full width; Settings holds the reminder settings; Calendar is a placeholder until V3.
+
+Acceptance:
+
+- [ ] The three tabs open at their routes, the reminders show on each, and the opening page has no tabs.
+
+### V2: All openings, the shared filter and pages from the server
+
+- The application type leaves the schema, the API and the UI (generated migration).
+- `openings.board`: openings with their board status, paged by a keyset cursor (ADR 0013), filtered on the server by status, state, company, source, fit, sent, resume origin and free text, sorted by last activity, sent date, company or status; encrypted fields decrypted only when the filter or sort needs them (ADR 0014). An optional status serves one kanban column.
+- The filter bar with chips (field, is / is not, values), the default State is open, the non-default notice with Restore default and the count; the filter in the URL.
+- The list in pages as the page scrolls; the kanban with Analyzed and Closed columns, each column paging inside itself with its total in the header, and the drag rules (out of Analyzed creates the application, Analyzed onto Closed closes the opening), moved at once and rolled back on failure.
+- The metrics in a collapsible block at the top of Tracking.
+
+Acceptance:
+
+- [ ] An analyzed opening shows in the Analyzed column; dragging it to In preparation creates its application and it stays there after a reload.
+- [ ] Filtering by company finds an opening by part of its name, and the list loads its next page as it scrolls.
+- [ ] Removing the default chip shows the closed openings and the notice; Restore default brings it back.
+
+### V3: The calendar
+
+- `openings.calendar`: one month (`month`, the viewer's `timeZone`, `show`), the filter's openings, their milestones grouped per opening and day, projections from the reminder settings; milestone logic in pure functions.
+- The month grid with previous, today and next, the marker with “+N” and its popover, the two modes, the list by day on a phone.
+
+Acceptance:
+
+- [ ] An opening added and applied on the same day shows one “Applied” marker with “+1”, whose popover lists both.
+- [ ] In Latest or next, an application with an interview note dated next week shows only that note.
+
+### V4: The sidebar's three per status
+
+- Each sidebar group lists its three latest openings and “See more (N)”, opening `/app/openings` filtered by that status; the groups of openings being analyzed, failed or refused stay complete.
+
+Acceptance:
+
+- [ ] With five applied openings, the group shows three and “See more (5)” opens the list filtered by Applied, with the non-default notice.
 
 ## LinkedIn page
 
@@ -276,6 +339,7 @@ The LinkedIn text moves out of the library to its own sidebar item, the second o
 - The page: the empty state with Generate my LinkedIn, then the document workspace (index, findings, the texts in blocks, choosing a headline, Copy text per section, versions on the right).
 
 Acceptance:
+
 - [x] LinkedIn is the sidebar's second item; generating writes headline options, About, experiences, projects, education, certifications and languages; each section copies its text.
 - [x] A language level reads on LinkedIn's scale in the output language; a headline option the profile doesn't back is not kept.
 
@@ -284,6 +348,7 @@ Acceptance:
 - **Generate this section again** on the headline, the About, an experience, a project and an education's description: a `linkedin_section` generation naming the section, charged as an adjustment (`generate_document` with the section hint, 10 × level), whose snapshot replaces that section only; the code checks run on it.
 
 Acceptance:
+
 - [x] Redoing one experience leaves the other sections, and the user's edits in them, untouched, in a new snapshot that undo reverts.
 
 ### L3: The agent on the LinkedIn text
@@ -291,6 +356,7 @@ Acceptance:
 - The document agent and its suggestions on the LinkedIn text, through its view as a resume: a change is located and applied on that view and mapped back; Talk about this and Talk to the agent from a finding work as on a resume.
 
 Acceptance:
+
 - [x] Asked to rewrite a bullet of an experience, the agent suggests it in place and Accept creates a snapshot.
 
 ## LinkedIn step by step
@@ -305,6 +371,7 @@ Creating the LinkedIn text becomes a guided flow, one step per section, with que
 - Generate this section again opens that section's step alone.
 
 Acceptance:
+
 - [x] Going through the steps without questions writes each section in its own snapshot, the other sections and the user's edits untouched, and Finish leaves a coverage review.
 - [x] Generate this section again on an experience opens the Experiences step for that position and rewrites only it.
 
@@ -314,6 +381,7 @@ Acceptance:
 - The answers split into points tied to a position, project or education, kept with the LinkedIn document as LinkedIn instructions; the LinkedIn writer and its checks read them as `instructions` (cited like profile lines, figures as the user wrote them), and the step lists them, removable.
 
 Acceptance:
+
 - [x] An answer giving a result's figure lets the Experiences step write a bullet with that figure, citing the instruction, with no figure finding.
 - [x] Skipping the questions writes the section from the profile alone, charging only the step.
 
@@ -322,5 +390,5 @@ Acceptance:
 - Each point is offered, one by one, as a suggestion in the profile's draft (origin `linkedin`): a position's Responsibilities or Results, a project's What I did, or the career direction; the step says it was sent, with a link to My career.
 
 Acceptance:
-- [x] A point sent to the profile appears as a pending suggestion; after accepting and publishing, a new resume can use it.
 
+- [x] A point sent to the profile appears as a pending suggestion; after accepting and publishing, a new resume can use it.

@@ -48,8 +48,10 @@ export function OpeningsOverview({ children }: { children: ReactNode }) {
   };
 
   return (
-    <div className="w-full overflow-y-auto">
-      <div className="flex w-full flex-col gap-6 py-6 text-sm">
+    // A tab that fills the screen (the kanban, marked `data-fill`) takes the
+    // height left below the tabs, and the page itself stops scrolling.
+    <div className="flex min-h-0 w-full flex-1 flex-col overflow-y-auto has-[[data-fill]]:overflow-hidden">
+      <div className="flex w-full flex-col gap-6 py-6 text-sm has-[[data-fill]]:min-h-0 has-[[data-fill]]:flex-1">
         <div className="flex w-full flex-col gap-6 px-6">
           <p className="text-muted-foreground">
             {t.formatMessage({

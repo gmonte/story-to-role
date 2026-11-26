@@ -71,7 +71,10 @@ export function TrackerView() {
   // The whole page uses the full width, so the kanban lines up with the
   // filter above it.
   return (
-    <div className="flex w-full flex-col gap-4 px-6">
+    <div
+      data-fill={view === "kanban" ? "" : undefined}
+      className="flex w-full flex-col gap-4 px-6 data-[fill]:min-h-0 data-[fill]:flex-1"
+    >
       <BoardFilterBar
         filter={filter}
         onChange={setFilter}

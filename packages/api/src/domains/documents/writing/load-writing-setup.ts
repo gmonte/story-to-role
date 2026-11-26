@@ -1,5 +1,6 @@
 import { CareerRepository } from "@repo/api/domains/career/career-repository";
 import type { UserCipher } from "@repo/api/domains/encryption/user-cipher";
+import { TasksRepository } from "@repo/api/domains/tasks/tasks-repository";
 import { UsersRepository } from "@repo/api/domains/users/users-repository";
 import type { DbClient } from "@repo/api/tools/db-client";
 
@@ -65,6 +66,16 @@ export async function loadWritingSetup(input: {
         JSON.parse(input.cipher.decrypt(styleRow.encryptedProfile))
       )
     : null;
+  // Samples with no profile are extracting only while their task runs: a
+  // failed or crashed one lets the user extract again.
+  const extracting =
+    !!profile &&
+    !!styleRow &&
+    !style &&
+    !!(await new TasksRepository(input.db).activeTask(
+      profile.id,
+      "extract_style_profile"
+    ));
 
   return {
     templateSections: withEveryCatalogSection(
@@ -76,13 +87,13 @@ export async function loadWritingSetup(input: {
       .parse({ ...defaultGenerationSettings, ...template?.generationSettings }),
     style: styleRow?.approvedAt ? style : null,
     styleDraft: style,
-    styleStatus: !styleRow
-      ? "none"
-      : !style
+    styleStatus: !style
+      ? extracting
         ? "extracting"
-        : styleRow.approvedAt
-          ? "approved"
-          : "draft",
+        : "none"
+      : styleRow?.approvedAt
+        ? "approved"
+        : "draft",
   };
 }
 

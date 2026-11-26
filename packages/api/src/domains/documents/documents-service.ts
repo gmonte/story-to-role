@@ -287,6 +287,8 @@ export class DocumentsService {
     userId: string;
     openingId: string;
   }): Promise<OpeningDocuments> {
+    // A run that crashed is failed first, so the page stops waiting.
+    await this.tasks.failCrashed(input.userId);
     const profile = await this.requireProfile(input.userId);
     return this.db.transaction(async (tx) => {
       const opening = await new OpeningsRepository(tx).findOpening({
@@ -332,6 +334,8 @@ export class DocumentsService {
     userId: string;
     documentId: string;
   }): Promise<DocumentView> {
+    // A run that crashed is failed first, so the page stops waiting.
+    await this.tasks.failCrashed(input.userId);
     const profile = await this.requireProfile(input.userId);
     return this.db.transaction(async (tx) => {
       const document = await new DocumentsRepository(tx).findDocument(

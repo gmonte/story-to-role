@@ -4,13 +4,17 @@ import { createTaskAi } from "@repo/api/domains/ai/create-task-ai";
 import { runTask } from "@repo/api/domains/tasks/run-task";
 import { taskMaxDuration } from "@repo/api/domains/tasks/task-durations";
 import { db } from "@repo/api/tools/db";
-import { localEmbedder } from "@repo/api/tools/embeddings/embedder";
+import {
+  embeddingMachine,
+  localEmbedder,
+} from "@repo/api/tools/embeddings/embedder";
 
 import { runAnalyzeOpening } from "../fit-check/run-analyze-opening";
 import { readLinkTask } from "./read-link-task";
 
 export const analyzeOpeningTask = task({
   id: "analyze_opening",
+  machine: embeddingMachine,
   retry: { maxAttempts: 1 },
   maxDuration: taskMaxDuration.analyze_opening,
   run: async ({ taskId }: { taskId: string }) => {

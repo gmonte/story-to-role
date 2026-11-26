@@ -19,6 +19,16 @@ export type Embedder = {
   embed(texts: string[], kind: EmbeddingKind): Promise<number[][]>;
 };
 
+/**
+ * The machine of every task that embeds: the model's runtime alone fills
+ * most of the default machine's 0.5 GB, which a run then exceeds and dies.
+ */
+export const embeddingMachine = "small-2x";
+
+// Texts embedded per model call: a batch's memory grows with its size
+// times the longest text, so one opening's thirty terms at once ran out.
+const batchSize = 8;
+
 let extractor: Promise<FeatureExtractionPipeline> | undefined;
 
 function getExtractor() {
@@ -34,10 +44,15 @@ export const localEmbedder: Embedder = {
   async embed(texts, kind) {
     if (texts.length === 0) return [];
     const model = await getExtractor();
-    const output = await model(
-      texts.map((text) => `${kind}: ${text}`),
-      { pooling: "mean", normalize: true }
-    );
-    return output.tolist() as number[][];
+    const vectors: number[][] = [];
+    for (let start = 0; start < texts.length; start += batchSize) {
+      const output = await model(
+        texts.slice(start, start + batchSize).map((text) => `${kind}: ${text}`),
+        { pooling: "mean", normalize: true }
+      );
+      vectors.push(...(output.tolist() as number[][]));
+      output.dispose();
+    }
+    return vectors;
   },
 };

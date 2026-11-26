@@ -4,6 +4,7 @@ import {
   eq,
   gt,
   inArray,
+  isNotNull,
   isNull,
   like,
   lt,
@@ -86,6 +87,29 @@ export class TasksRepository {
     return rows.flatMap((row) => (row.runId ? [row.runId] : []));
   }
 
+  /** The user's unfinished tasks that have a run, to ask about crashes. */
+  async unfinishedRuns(userId: string) {
+    return this.tx
+      .select({
+        id: tasksTable.id,
+        userId: tasksTable.userId,
+        type: tasksTable.type,
+        subjectId: tasksTable.subjectId,
+        funding: tasksTable.funding,
+        runId: tasksTable.runId,
+        createdAt: tasksTable.createdAt,
+        updatedAt: tasksTable.updatedAt,
+      })
+      .from(tasksTable)
+      .where(
+        and(
+          eq(tasksTable.userId, userId),
+          inArray(tasksTable.status, ["pending", "processing"]),
+          isNotNull(tasksTable.runId)
+        )
+      );
+  }
+
   /** The user's latest task their key stopped (out of credit, refused). */
   async lastStoppedByKey(userId: string) {
     const [row] = await this.tx
@@ -124,6 +148,7 @@ export class TasksRepository {
         id: tasksTable.id,
         userId: tasksTable.userId,
         type: tasksTable.type,
+        subjectId: tasksTable.subjectId,
         status: tasksTable.status,
         funding: tasksTable.funding,
         createdAt: tasksTable.createdAt,

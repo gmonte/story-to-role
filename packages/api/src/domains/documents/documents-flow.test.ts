@@ -2077,6 +2077,74 @@ describe("resume generation and snapshots", () => {
     ).rejects.toMatchObject({ code: "NOT_FOUND" });
   });
 
+  it("fails instructions whose split crashed, never splitting forever", async () => {
+    const ctx = await setup();
+    const crashed = vi.fn(async (_runId: string) => true);
+    const instructions = new InstructionsService(
+      ctx.db,
+      new TasksService(ctx.db, ctx.trigger, crashed)
+    );
+    await instructions.split({
+      userId: ctx.user.id,
+      openingId: ctx.opening.id,
+      text: "Emphasize people management.",
+    });
+    const get = () =>
+      instructions.get({ userId: ctx.user.id, openingId: ctx.opening.id });
+    expect(await get()).toMatchObject({ splitting: true });
+
+    // Quiet for a while, its run ran out of memory: it fails at once.
+    const minuteAgo = new Date(Date.now() - 60_000);
+    await ctx.db
+      .update(tasksTable)
+      .set({ createdAt: minuteAgo, updatedAt: minuteAgo });
+    expect(await get()).toMatchObject({ splitting: false, failed: true });
+    expect(crashed).toHaveBeenCalledWith("run");
+  });
+
+  it("fails a generation whose run died at the sweep, never generating forever", async () => {
+    const ctx = await setup();
+    const { generationId } = await ctx.documents.generateResume(ctx.request);
+    const generationOf = async () =>
+      (
+        await ctx.documents.forOpening({
+          userId: ctx.user.id,
+          openingId: ctx.opening.id,
+        })
+      ).documents.find((document) => document.generation?.id === generationId)
+        ?.generation;
+    expect(await generationOf()).toMatchObject({ status: "pending" });
+
+    await new TasksService(ctx.db, ctx.trigger).failStalled(
+      new Date(Date.now() + 2 * 60 * 60 * 1000)
+    );
+    expect(await generationOf()).toMatchObject({ status: "failed" });
+  });
+
+  it("extracts a style only while its task runs: a crashed one can start again", async () => {
+    const ctx = await setup();
+    const crashed = vi.fn(async (_runId: string) => true);
+    const writing = new WritingService(
+      ctx.db,
+      new TasksService(ctx.db, ctx.trigger, crashed)
+    );
+    await writing.extractStyle({
+      userId: ctx.user.id,
+      samples: ["I write short sentences."],
+    });
+    expect(await writing.get(ctx.user.id)).toMatchObject({
+      styleStatus: "extracting",
+    });
+
+    const minuteAgo = new Date(Date.now() - 60_000);
+    await ctx.db
+      .update(tasksTable)
+      .set({ createdAt: minuteAgo, updatedAt: minuteAgo });
+    expect(await writing.get(ctx.user.id)).toMatchObject({
+      styleStatus: "none",
+    });
+  });
+
   it("promoting an instruction creates a suggestion in the profile's draft, not a change", async () => {
     const ctx = await setup({
       markdown: profileMarkdown(),

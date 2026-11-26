@@ -59,6 +59,8 @@ export class InstructionsService {
     userId: string;
     openingId: string;
   }): Promise<ApplicationInstructions> {
+    // A run that crashed is failed first, so the page stops waiting.
+    await this.tasks.failCrashed(input.userId);
     const { profile, opening } = await this.requireOpening(
       input.userId,
       input.openingId

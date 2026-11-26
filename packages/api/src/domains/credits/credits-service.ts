@@ -4,6 +4,7 @@ import type { DbClient } from "@repo/api/tools/db-client";
 import { AiKeysRepository } from "@repo/api/domains/ai/ai-keys-repository";
 import { AiUsageRepository } from "@repo/api/domains/ai/ai-usage-repository";
 import { TasksRepository } from "@repo/api/domains/tasks/tasks-repository";
+import { TasksService } from "@repo/api/domains/tasks/tasks-service";
 import { decodeCursor, encodeCursor } from "@repo/api/utils/db/keyset";
 
 import { decideFunding } from "./credit-funding";
@@ -43,7 +44,10 @@ import { UsageStatementRepository } from "./usage-statement-repository";
 import { grantWelcomeCredits } from "./welcome-credits";
 
 export class CreditsService {
-  constructor(private readonly db: DbClient) {}
+  constructor(
+    private readonly db: DbClient,
+    private readonly tasks = new TasksService(db)
+  ) {}
 
   /**
    * The credit meter (billing spec, "Credit meter"): what the user can
@@ -51,6 +55,8 @@ export class CreditsService {
    * actions may cost. This month's plan credits are granted on the way.
    */
   async summary(userId: string, now = new Date()): Promise<CreditSummary> {
+    // A crashed run releases its reservation, so the meter stops waiting.
+    await this.tasks.failCrashed(userId);
     // Granting this month's credits is idempotent (by origin): no lock.
     return this.db.transaction(async (tx) => {
       const repository = new CreditsRepository(tx);

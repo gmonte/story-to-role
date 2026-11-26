@@ -181,6 +181,8 @@ export class OpeningsService {
     openingId: string;
   }): Promise<OpeningDetail> {
     const profile = await this.requireProfile(input.userId);
+    // A run that crashed is failed first, so the page stops waiting.
+    await this.tasks.failCrashed(input.userId);
     return this.db.transaction(async (tx) => {
       const openings = new OpeningsRepository(tx);
       const row = await openings.findOpening({

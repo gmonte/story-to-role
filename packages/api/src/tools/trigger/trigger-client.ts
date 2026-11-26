@@ -19,6 +19,16 @@ export const triggerClient = {
     return { runId: handle.id, accessToken: handle.publicAccessToken };
   },
 
+  /**
+   * Whether a run ended without succeeding: crashed (out of memory), timed
+   * out, failed or cancelled. A crash kills the process before the run can
+   * mark its task, so only Trigger.dev knows.
+   */
+  async hasRunFailed(runId: string) {
+    const run = await runs.retrieve(runId);
+    return run.isCompleted && !run.isSuccess;
+  },
+
   /** Stops a run (the account it works for is being deleted). */
   async cancel(runId: string) {
     await runs.cancel(runId);

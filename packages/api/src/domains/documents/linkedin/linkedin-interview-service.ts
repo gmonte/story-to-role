@@ -66,6 +66,8 @@ export class LinkedinInterviewService {
     versionId: string;
     section: string;
   }): Promise<LinkedinInterviewView> {
+    // A run that crashed is failed first, so the page stops waiting.
+    await this.tasks.failCrashed(input.userId);
     const { document, cipher } = await this.requireSection(input);
     const repository = new LinkedinInterviewRepository(this.db);
     const instructions = (

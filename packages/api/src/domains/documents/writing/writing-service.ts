@@ -29,6 +29,8 @@ export class WritingService {
   }
 
   async get(userId: string): Promise<WritingSetup> {
+    // A run that crashed is failed first, so the page stops waiting.
+    await this.tasks.failCrashed(userId);
     await this.requireProfile(userId);
     return this.db.transaction(async (tx) =>
       loadWritingSetup({

@@ -2,6 +2,7 @@ import { TRPCError } from "@trpc/server";
 
 import { importSettings } from "@repo/api/domains/profile/import/import-settings";
 import { TasksRepository } from "@repo/api/domains/tasks/tasks-repository";
+import { TasksService } from "@repo/api/domains/tasks/tasks-service";
 import type { DbClient } from "@repo/api/tools/db-client";
 import { getUserCipher } from "@repo/api/domains/encryption/user-cipher";
 import { ProfileRepository } from "@repo/api/domains/profile/profile-repository";
@@ -17,7 +18,10 @@ const notFound = () => new TRPCError({ code: "NOT_FOUND" });
  * here, which checks ownership and keeps all career text encrypted.
  */
 export class CareerService {
-  constructor(private readonly db: DbClient) {}
+  constructor(
+    private readonly db: DbClient,
+    private readonly tasks = new TasksService(db)
+  ) {}
 
   /** The profile is created on first use, in the interface language. */
   async getOrCreateProfile(input: {
@@ -99,6 +103,8 @@ export class CareerService {
     userId: string;
     defaultLanguage: InterviewLanguage;
   }): Promise<Timeline> {
+    // A run that crashed is failed first, so the page stops waiting.
+    await this.tasks.failCrashed(input.userId);
     const profile = await this.getOrCreateProfile(input);
     const cipher = await getUserCipher(this.db, input.userId);
     const documents = await new CareerRepository(this.db).listDocuments(

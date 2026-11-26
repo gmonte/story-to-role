@@ -452,6 +452,8 @@ export class ProfileService {
 
   /** The last validation, its progress while it runs and its report. */
   async latestValidation(userId: string): Promise<ProfileValidation | null> {
+    // A run that crashed is failed first, so the page stops waiting.
+    await this.tasks.failCrashed(userId);
     const repository = new ProfileRepository(this.db);
     const document = await repository.findDocument(userId, profileKind);
     const validation = document

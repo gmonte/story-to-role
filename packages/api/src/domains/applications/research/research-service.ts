@@ -45,6 +45,8 @@ export class ResearchService {
     userId: string;
     openingId: string;
   }): Promise<CompanyResearch> {
+    // A run that crashed is failed first, so the page stops waiting.
+    await this.tasks.failCrashed(input.userId);
     const { opening } = await this.requireOpening(
       input.userId,
       input.openingId

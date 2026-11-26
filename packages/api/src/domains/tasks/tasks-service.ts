@@ -1,5 +1,6 @@
 import { TRPCError } from "@trpc/server";
 
+import type { AiFunding } from "@repo/api/domains/ai/ai-funding";
 import { decideFunding } from "@repo/api/domains/credits/credit-funding";
 import {
   assertFits,
@@ -23,6 +24,7 @@ import { CreditsRepository } from "@repo/api/domains/credits/credits-repository"
 import type { DbClient } from "@repo/api/tools/db-client";
 import { triggerClient } from "@repo/api/tools/trigger/trigger-client";
 
+import { endSubject } from "./end-subject";
 import { finishTask, TaskCrashedError, TaskStalledError } from "./run-task";
 import { maxDurationOf, stallGraceMs } from "./task-durations";
 import { TasksRepository } from "./tasks-repository";
@@ -204,8 +206,8 @@ export class TasksService {
 
   /**
    * Fails the tasks whose run died (a crash or a deploy never lets it mark
-   * its task) or never started, releasing their reservations: nothing waits
-   * on them forever.
+   * its task) or never started, and the rows they worked on, releasing
+   * their reservations: nothing waits on them forever.
    */
   async failStalled(now = new Date()) {
     const repository = new TasksRepository(this.db);
@@ -220,46 +222,50 @@ export class TasksService {
             stallGraceMs
           : row.createdAt.getTime() + neverStartedMs;
       if (now.getTime() <= deadline) continue;
-      await finishTask({
-        db: this.db,
-        taskId: row.id,
-        userId: row.userId,
-        funding: row.funding,
-        error: new TaskStalledError(),
-      });
+      await this.endDead(row, new TaskStalledError());
     }
   }
 
   /**
-   * Fails the tasks of `type` on a row whose run already ended without
-   * marking them (a crash, such as running out of memory), so a page
-   * polling the row learns it now rather than at the sweep. Only a task
-   * quiet for a while is asked about: a run reports progress as it goes.
-   * True when one was failed.
+   * Fails the user's tasks whose run already ended without marking them
+   * (a crash, such as running out of memory), and the rows they worked
+   * on, so a page polling its work learns it now rather than at the
+   * sweep. Only a task quiet for a while is asked about: a run reports
+   * progress as it goes. Every query a page polls while work runs calls
+   * it first.
    */
-  async failCrashed(input: { subjectId: string; type: TaskType }) {
+  async failCrashed(userId: string) {
     const quietSince = Date.now() - quietBeforeCheckMs;
-    const rows = await new TasksRepository(this.db).unfinishedRuns(
-      input.subjectId,
-      input.type
-    );
-    let failed = false;
+    const rows = await new TasksRepository(this.db).unfinishedRuns(userId);
     for (const row of rows) {
       const lastSign = (row.updatedAt ?? row.createdAt).getTime();
       if (!row.runId || lastSign > quietSince) continue;
       // Trigger.dev unreachable: the sweep fails the task later.
       const crashed = await this.hasRunFailed(row.runId).catch(() => false);
       if (!crashed) continue;
-      await finishTask({
-        db: this.db,
-        taskId: row.id,
-        userId: row.userId,
-        funding: row.funding,
-        error: new TaskCrashedError(),
-      });
-      failed = true;
+      await this.endDead(row, new TaskCrashedError());
     }
-    return failed;
+  }
+
+  /** Fails a task whose run died, and the row it worked on. */
+  private async endDead(
+    row: {
+      id: string;
+      userId: string;
+      type: TaskType;
+      subjectId: string | null;
+      funding: AiFunding;
+    },
+    error: Error
+  ) {
+    await finishTask({
+      db: this.db,
+      taskId: row.id,
+      userId: row.userId,
+      funding: row.funding,
+      error,
+    });
+    await endSubject(this.db, row);
   }
 
   /**

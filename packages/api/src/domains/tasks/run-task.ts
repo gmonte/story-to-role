@@ -82,6 +82,13 @@ export class TaskStalledError extends Error {
   }
 }
 
+/** A task whose run ended without marking it: its process crashed. */
+export class TaskCrashedError extends Error {
+  constructor() {
+    super("The task's run crashed");
+  }
+}
+
 /**
  * Ends a task: marks it completed or failed and settles its credits. A
  * key-funded task that failed on the user's key marks the key, so the user

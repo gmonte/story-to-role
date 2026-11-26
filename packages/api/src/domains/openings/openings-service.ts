@@ -181,6 +181,7 @@ export class OpeningsService {
     openingId: string;
   }): Promise<OpeningDetail> {
     const profile = await this.requireProfile(input.userId);
+    await this.failCrashedAnalysis(profile.id, input.openingId);
     return this.db.transaction(async (tx) => {
       const openings = new OpeningsRepository(tx);
       const row = await openings.findOpening({
@@ -353,6 +354,21 @@ export class OpeningsService {
         });
       }
     );
+  }
+
+  /**
+   * An analysis whose run crashed (out of memory, say) never ends itself:
+   * the page reading it fails it as soon as Trigger.dev reports the crash.
+   */
+  private async failCrashedAnalysis(profileId: string, openingId: string) {
+    const openings = new OpeningsRepository(this.db);
+    const row = await openings.findOpening({ profileId, openingId });
+    if (row?.status !== "processing") return;
+    const crashed = await this.tasks.failCrashed({
+      subjectId: row.id,
+      type: "analyze_opening",
+    });
+    if (crashed) await openings.failAnalysis(row.id);
   }
 
   /**

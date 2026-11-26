@@ -1,5 +1,6 @@
 import { randomBytes } from "node:crypto";
 
+import { eq } from "drizzle-orm";
 import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { createAiClient } from "@repo/api/domains/ai/ai-client";
@@ -16,6 +17,7 @@ import {
 import { CareerService } from "@repo/api/domains/career/career-service";
 import { getUserCipher } from "@repo/api/domains/encryption/user-cipher";
 import { ProfileService } from "@repo/api/domains/profile/profile-service";
+import { tasksTable } from "@repo/api/domains/tasks/db/tasks-tables";
 import { TasksService } from "@repo/api/domains/tasks/tasks-service";
 import { createTestUser } from "@repo/api/test/create-test-user";
 import { fakeEmbedder } from "@repo/api/test/fake-embedder";
@@ -141,8 +143,9 @@ async function setup({ publish = true }: { publish?: boolean } = {}) {
   const cipher = await getUserCipher(db, user.id);
   const trigger = {
     trigger: vi.fn(async () => ({ runId: "run", accessToken: "t" })),
+    hasRunFailed: vi.fn(async (_runId: string) => false),
   };
-  const tasks = new TasksService(db, trigger);
+  const tasks = new TasksService(db, trigger, trigger.hasRunFailed);
   // The small AI call that rewrites a gap answer: scripted per test, and
   // failing (so the answer stays as written) unless a test sets it.
   const rewrite: {
@@ -223,6 +226,7 @@ async function setup({ publish = true }: { publish?: boolean } = {}) {
     db,
     user,
     cipher,
+    trigger,
     tasks,
     openings,
     rewrite,
@@ -1587,6 +1591,38 @@ describe("openings and fit check", () => {
     await ctx.openings.failStuckAnalyses(later);
 
     expect((await ctx.detail(openingId)).status).toBe("failed");
+  });
+
+  it("fails an opening as soon as its run crashed, without waiting for the sweep", async () => {
+    const ctx = await setup();
+    const openingId = await ctx.add();
+
+    // A run reporting progress is not asked about.
+    ctx.trigger.hasRunFailed.mockResolvedValue(true);
+    expect((await ctx.detail(openingId)).status).toBe("processing");
+    expect(ctx.trigger.hasRunFailed).not.toHaveBeenCalled();
+
+    // Quiet for a while: Trigger.dev says whether the run is still going.
+    const minuteAgo = new Date(Date.now() - 60_000);
+    await ctx.db
+      .update(tasksTable)
+      .set({ createdAt: minuteAgo, updatedAt: minuteAgo })
+      .where(eq(tasksTable.subjectId, openingId));
+    ctx.trigger.hasRunFailed.mockResolvedValueOnce(false);
+    expect((await ctx.detail(openingId)).status).toBe("processing");
+    expect(ctx.trigger.hasRunFailed).toHaveBeenCalledWith("run");
+
+    // Its process ran out of memory: the task and the opening fail now.
+    expect((await ctx.detail(openingId)).status).toBe("failed");
+    const [task] = await ctx.db
+      .select()
+      .from(tasksTable)
+      .where(eq(tasksTable.subjectId, openingId));
+    expect(task).toMatchObject({ status: "failed" });
+
+    // Trying again reads it from the start.
+    await ctx.openings.retryAnalysis({ userId: ctx.user.id, openingId });
+    expect((await ctx.detail(openingId)).status).toBe("processing");
   });
 
   it("deletes an opening with its application and documents, only for its owner", async () => {

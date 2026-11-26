@@ -86,6 +86,27 @@ export class TasksRepository {
     return rows.flatMap((row) => (row.runId ? [row.runId] : []));
   }
 
+  /** The unfinished tasks of `type` on a row, with their runs. */
+  async unfinishedRuns(subjectId: string, type: TaskType) {
+    return this.tx
+      .select({
+        id: tasksTable.id,
+        userId: tasksTable.userId,
+        funding: tasksTable.funding,
+        runId: tasksTable.runId,
+        createdAt: tasksTable.createdAt,
+        updatedAt: tasksTable.updatedAt,
+      })
+      .from(tasksTable)
+      .where(
+        and(
+          eq(tasksTable.subjectId, subjectId),
+          eq(tasksTable.type, type),
+          inArray(tasksTable.status, ["pending", "processing"])
+        )
+      );
+  }
+
   /** The user's latest task their key stopped (out of credit, refused). */
   async lastStoppedByKey(userId: string) {
     const [row] = await this.tx

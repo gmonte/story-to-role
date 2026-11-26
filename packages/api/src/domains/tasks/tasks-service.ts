@@ -23,7 +23,7 @@ import { CreditsRepository } from "@repo/api/domains/credits/credits-repository"
 import type { DbClient } from "@repo/api/tools/db-client";
 import { triggerClient } from "@repo/api/tools/trigger/trigger-client";
 
-import { finishTask, TaskStalledError } from "./run-task";
+import { finishTask, TaskCrashedError, TaskStalledError } from "./run-task";
 import { maxDurationOf, stallGraceMs } from "./task-durations";
 import { TasksRepository } from "./tasks-repository";
 import type { RealtimeSubscription, Task, TaskType } from "./schemas/task";
@@ -49,6 +49,9 @@ const keptFor = (tx: DbClient, userId: string, type: TaskType, now: Date) =>
 // A task never started is called dead this long after it was created.
 const neverStartedMs = 60 * 60 * 1000;
 
+// A task this long without news is checked with Trigger.dev for a crash.
+const quietBeforeCheckMs = 10_000;
+
 // Tasks that run one at a time per user (their task caps the key): an
 // import compares with the suggestions the one before it left waiting.
 const queuedPerUser: ReadonlySet<TaskType> = new Set<TaskType>([
@@ -61,7 +64,10 @@ export class TasksService {
     private readonly trigger: Pick<
       typeof triggerClient,
       "trigger"
-    > = triggerClient
+    > = triggerClient,
+    private readonly hasRunFailed: (runId: string) => Promise<boolean> = (
+      runId
+    ) => triggerClient.hasRunFailed(runId)
   ) {}
 
   /**
@@ -222,6 +228,38 @@ export class TasksService {
         error: new TaskStalledError(),
       });
     }
+  }
+
+  /**
+   * Fails the tasks of `type` on a row whose run already ended without
+   * marking them (a crash, such as running out of memory), so a page
+   * polling the row learns it now rather than at the sweep. Only a task
+   * quiet for a while is asked about: a run reports progress as it goes.
+   * True when one was failed.
+   */
+  async failCrashed(input: { subjectId: string; type: TaskType }) {
+    const quietSince = Date.now() - quietBeforeCheckMs;
+    const rows = await new TasksRepository(this.db).unfinishedRuns(
+      input.subjectId,
+      input.type
+    );
+    let failed = false;
+    for (const row of rows) {
+      const lastSign = (row.updatedAt ?? row.createdAt).getTime();
+      if (!row.runId || lastSign > quietSince) continue;
+      // Trigger.dev unreachable: the sweep fails the task later.
+      const crashed = await this.hasRunFailed(row.runId).catch(() => false);
+      if (!crashed) continue;
+      await finishTask({
+        db: this.db,
+        taskId: row.id,
+        userId: row.userId,
+        funding: row.funding,
+        error: new TaskCrashedError(),
+      });
+      failed = true;
+    }
+    return failed;
   }
 
   /**

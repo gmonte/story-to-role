@@ -4,7 +4,10 @@ import { createTaskAi } from "@repo/api/domains/ai/create-task-ai";
 import { createNeverIncludeFilter } from "@repo/api/domains/profile/rules/never-include-filter";
 import { runTask } from "@repo/api/domains/tasks/run-task";
 import { db } from "@repo/api/tools/db";
-import { localEmbedder } from "@repo/api/tools/embeddings/embedder";
+import {
+  embeddingMachine,
+  localEmbedder,
+} from "@repo/api/tools/embeddings/embedder";
 import { getStorage } from "@repo/api/tools/storage/storage";
 import { taskMaxDuration } from "@repo/api/domains/tasks/task-durations";
 
@@ -13,6 +16,7 @@ import { runAdaptDocument } from "../adaptation/run-adapt-document";
 
 export const adaptDocumentTask = task({
   id: "adapt_document",
+  machine: embeddingMachine,
   retry: { maxAttempts: 1 },
   maxDuration: taskMaxDuration.adapt_document,
   run: async ({ taskId }: { taskId: string }) => {

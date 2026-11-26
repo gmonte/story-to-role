@@ -61,7 +61,9 @@ export function OpeningsKanban({ filter }: { filter: BoardFilter }) {
 
   return (
     <>
-      <div className="flex gap-3 overflow-x-auto pb-2">
+      {/* Each column is as tall as its cards (up to the screen), not as the
+          tallest one. */}
+      <div className="flex items-start gap-3 overflow-x-auto pb-2">
         {boardColumns(filter).map((status) => (
           <KanbanColumn
             key={status}
@@ -251,7 +253,8 @@ function KanbanCard({
           {[opening.company, opening.title].filter(Boolean).join(" · ")}
         </span>
         <span className="text-muted-foreground">{days}</span>
-        {opening.applicationId && (
+        {/* What comes next; when sent or since says the line above. */}
+        {(!!opening.nextEvent || !!opening.nextStep) && (
           <span className="text-muted-foreground break-words">
             <ApplicationHint application={opening} />
           </span>

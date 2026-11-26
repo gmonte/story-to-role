@@ -99,7 +99,7 @@ export function OpeningsCalendar() {
   };
 
   return (
-    <div className="mx-auto flex w-full max-w-6xl flex-col gap-4 px-6">
+    <div className="flex w-full flex-col gap-4 px-6">
       <BoardFilterBar filter={filter} onChange={setFilter} />
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-1">

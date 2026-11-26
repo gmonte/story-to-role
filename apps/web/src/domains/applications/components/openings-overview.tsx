@@ -50,7 +50,7 @@ export function OpeningsOverview({ children }: { children: ReactNode }) {
   return (
     <div className="w-full overflow-y-auto">
       <div className="flex w-full flex-col gap-6 py-6 text-sm">
-        <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 px-6">
+        <div className="flex w-full flex-col gap-6 px-6">
           <p className="text-muted-foreground">
             {t.formatMessage({
               defaultMessage:

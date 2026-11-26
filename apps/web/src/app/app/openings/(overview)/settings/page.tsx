@@ -6,7 +6,7 @@ export default async function OpeningsSettingsPage() {
   await auth.protect();
 
   return (
-    <div className="mx-auto w-full max-w-6xl px-6">
+    <div className="w-full max-w-2xl px-6">
       <TrackerSettingsForm />
     </div>
   );

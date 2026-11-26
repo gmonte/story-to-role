@@ -6,7 +6,7 @@ export default async function OpeningsMetricsPage() {
   await auth.protect();
 
   return (
-    <div className="mx-auto w-full max-w-6xl px-6">
+    <div className="w-full px-6">
       <TrackerMetricsPanel />
     </div>
   );

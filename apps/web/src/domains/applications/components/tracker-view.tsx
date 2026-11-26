@@ -68,39 +68,36 @@ export function TrackerView() {
   // The list's pages; their total is the filter's count in both views.
   const board = useBoard({ filter, sort, limit: 25 });
 
+  // The whole page uses the full width, so the kanban lines up with the
+  // filter above it.
   return (
-    <div className="flex w-full flex-col gap-4">
-      {/* The filter first, where the calendar has it too. */}
-      <div className="mx-auto flex w-full max-w-6xl flex-col gap-4 px-6">
-        <BoardFilterBar
-          filter={filter}
-          onChange={setFilter}
-          total={board.total}
-          {...(view === "list" ? { sort, onSortChange: setSort } : {})}
-        />
-        <Tabs
-          value={view}
-          onValueChange={(value) => setView(value as View)}
-          className="self-start"
-        >
-          <TabsList>
-            <TabsTrigger value="list">
-              <List />
-              {t.formatMessage({ defaultMessage: "List" })}
-            </TabsTrigger>
-            <TabsTrigger value="kanban">
-              <Columns3 />
-              {t.formatMessage({ defaultMessage: "Kanban" })}
-            </TabsTrigger>
-          </TabsList>
-        </Tabs>
-        {view === "list" && <OpeningsList filter={filter} board={board} />}
-      </div>
-      {/* The kanban takes the full width. */}
-      {view === "kanban" && (
-        <div className="px-6">
-          <OpeningsKanban filter={filter} />
-        </div>
+    <div className="flex w-full flex-col gap-4 px-6">
+      <BoardFilterBar
+        filter={filter}
+        onChange={setFilter}
+        total={board.total}
+        {...(view === "list" ? { sort, onSortChange: setSort } : {})}
+      />
+      <Tabs
+        value={view}
+        onValueChange={(value) => setView(value as View)}
+        className="self-start"
+      >
+        <TabsList>
+          <TabsTrigger value="list">
+            <List />
+            {t.formatMessage({ defaultMessage: "List" })}
+          </TabsTrigger>
+          <TabsTrigger value="kanban">
+            <Columns3 />
+            {t.formatMessage({ defaultMessage: "Kanban" })}
+          </TabsTrigger>
+        </TabsList>
+      </Tabs>
+      {view === "list" ? (
+        <OpeningsList filter={filter} board={board} />
+      ) : (
+        <OpeningsKanban filter={filter} />
       )}
     </div>
   );

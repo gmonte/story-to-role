@@ -172,9 +172,9 @@ Acceptance:
 
 Notes (decisions the spec left open):
 
-- Response: the company responded when the application ever reached In process, Offer, Hired or Rejected (a rejection is an answer); Withdrawn and No response are not responses. Interview: reached In process or beyond (In process, Offer, Hired), the closest structured signal since In process covers screening, interview or test. Time to first response is the median (not the average the spec's older wording says) of days from applying to the first such status change on the timeline; an external application created already past Applied has no dated response and stays out of the median. Defined in `tracker/metrics.ts`.
+- Response: the company responded when the application ever reached In process, Offer, Hired or Rejected (a rejection is an answer); Withdrawn and No response are not responses. Interview: reached In process or beyond (In process, Offer, Hired), the closest structured signal since In process covers screening, interview or test. Time to first response is the median (not the average the spec's older wording says) of days from applying to the first such status change on the timeline; an application created already past Applied has no dated response and stays out of the median. Defined in `tracker/metrics.ts`.
 - Periods filter by the day applied: last 30 days, last 90 days, all. High-fit uses the band of the opening's latest fit check. Metrics read only structured fields; nothing calls an AI.
-- Resume sent: from the submissions when sent from StoryToRole; for an external application, picked by hand among the user's resume versions (no foreign key, a deleted version stops resolving). Applications with no resume recorded are grouped as “Not recorded”.
+- Resume sent: from the submissions when sent from StoryToRole; for one sent with nothing from StoryToRole, picked by hand among the user's resume versions (no foreign key, a deleted version stops resolving). Applications with no resume recorded are grouped as “Not recorded”.
 - Source is a short list plus free text (shown for “Other”); the free text, notes, next step and decline reason are encrypted, and a test fails if any file outside the tracker reads them. The opening's own notes (unsolicited openings) are a different field and unchanged.
 - A decline reason becomes a discard rule, and the company is excluded from the tracker, by the same direct path as excluding a company from an opening: the line is added to the preferences draft and published alone (`ProfileService.addDiscardRule` / `excludeCompany`). The reason's line breaks become spaces; a rule already present is not added twice.
 - The next step also shows with the follow-up and “No response” soon reminders.
@@ -287,7 +287,7 @@ The Applications page becomes **Openings** (`/app/openings`), with every analyze
 
 ### V1: The Openings page and its tabs
 
-- **Openings** in the sidebar (`/app/openings`), replacing Applications; `/app/tracker` is removed. A layout (route group, so the opening page stays outside it) with the title, “Applied elsewhere”, the active reminders and the tabs Tracking · Calendar · Settings as links.
+- **Openings** in the sidebar (`/app/openings`), replacing Applications; `/app/tracker` is removed. A layout (route group, so the opening page stays outside it) with the title, the active reminders and the tabs Tracking · Calendar · Settings as links.
 - Tracking keeps today's list and kanban, the kanban at full width; Settings holds the reminder settings; Calendar is a placeholder until V3.
 - Status: built. Not yet checked in the browser.
 
@@ -329,6 +329,20 @@ Acceptance:
 Acceptance:
 
 - [ ] With five applied openings, the group shows three and “See more (5)” opens the list filtered by Applied, with the non-default notice.
+
+### V5: Analysis is optional; no external applications
+
+Owner decisions: an opening is always added on New opening, analyzed now or later; there is no separate external application. Without credits the analysis is unavailable and the user names the company and title.
+
+- New opening gains “Analyze now” (on by default, off and unavailable without credits for a fit check); off, it asks for the company and title, keeps the text or link optional and registers the opening as `unanalyzed` (the old `external` status, renamed by a generated migration), with no credits spent.
+- The opening page of an unanalyzed opening shows the application block (Mark as applied) and “Analyze this opening” once it has a description or link; the analysis keeps the user's company and title. Closing and reopening it keeps it unanalyzed.
+- The board, its filter, the kanban and the sidebar gain Not analyzed, before Analyzed, with the same drag rules.
+- Removed: “Applied elsewhere” and its dialog, `tracker.createExternal`, `applications.external` (generated migration) and the rule that let an external application be set to Applied from any status, the “Elsewhere” badge, the glossary's External application.
+
+Acceptance:
+
+- [ ] With no credits, New opening registers an opening from a company and title; it shows under Not analyzed and can be marked as applied.
+- [ ] Analyzing it later keeps the typed company and title.
 
 ## LinkedIn page
 

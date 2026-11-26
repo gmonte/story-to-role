@@ -16,7 +16,10 @@ Hiring interview prep is out of the MVP.
 
 ## Flow
 
-1. The user adds an opening by pasting its description. Code first checks that the text looks like a job posting.
+1. The user adds an opening by pasting its description or giving its link. Code first checks that the text looks like a job posting.
+
+   **Analyze now, or later.** New opening has “Analyze now” on by default. Turned off, or unavailable when the credits can't pay for a fit check, the user types the company and the title, the text or link stays optional, and the opening is registered **not analyzed**, with no credits spent: it can be applied to and tracked like any other. Its page offers “Analyze this opening” once it has a description or link; the analysis keeps the company and title the user typed and only fills what is empty. Documents are written only for an analyzed opening.
+
 2. StoryToRole runs a **fit check** automatically, the method's screening (step 03), and shows it as a hint, never as a gate. A small AI call extracts the opening's keywords (hard skills, tools, certifications, languages) and requirements (seniority, years of experience, location, work model). Each keyword and requirement retrieves the closest passages of the published profile by vector similarity (ADR 0004); a cheap AI call then judges each one as met, partial or a gap, seeing only the requirements, the retrieved passages, the profile's overview (each position's title, employer and period, credentials and languages, from which years and seniority are read), the profile's declared gaps and the user's job preferences, never the whole profile. Anything under "what I did not do" and the known gaps count as gaps, never as coverage, and a competency marked "studied" (no professional use) counts as partial: those lines are never retrieved as passages, code makes a gap of a short requirement that a short gap line names (partial when a competency only studied names it), and for the rest the judge points at the line that says so. Vector similarity alone does not decide, since it misses seniority ("8+ years" against a junior history reads as similar) and hard requirements such as location or language. The hint shows the method's band:
    - **High:** covers at least 85% of the mandatory requirements with profile passages behind them, none missing, and the work model and location are acceptable.
    - **Medium:** covers at least 60% of them; one gap among many is not a low fit.
@@ -33,7 +36,7 @@ Hiring interview prep is out of the MVP.
    - **Use as is:** the latest snapshot of the chosen document's version is copied as the first snapshot of this application's document. No AI call is made. If the chosen document is in another language than the output language, it is copied and adapted instead, following the adaptation rules; this makes an AI call and counts as a generation, which the user is told before confirming. The source document does not change.
    - **Adjust** (the method's prompt 04b): a new document for this opening starting from the chosen version of the same family, changing only what is needed (see Generation rules). The user reviews the result. The source document does not change.
    - **Generate a new version** (the method's prompt 04) from the published profile.
-5. The application starts when the first document is generated or copied for the opening. Openings that were analyzed but never generated for stay in a list of analyzed openings, outside the tracker.
+5. The application starts when the first document is generated or copied for the opening, or when the user marks it as applied or moves its status (tracker spec).
 
 ## Embeddings
 

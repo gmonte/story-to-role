@@ -9,8 +9,8 @@ The tracker follows every application the user pursues, from the first document 
 ## Applications in the tracker
 
 - An application enters the tracker when its first document is generated or copied (see [resume-and-cover-letter.md](./resume-and-cover-letter.md)), or when the user marks the opening as applied or moves its status, even with no resume or cover letter written for it. Openings that were only analyzed, with neither, have no application: the Openings page still lists them (as “Analyzed”, see below), but the metrics never count them.
-- **Applying without a resume:** the opening page shows the status (“Not applied yet”) with “Mark as applied” and the status options even with no application; using them creates the application on the fly (the opening's owner only), with no documents. Marked as applied without documents, it has no submissions: the Sent section says “No resume recorded” and offers the same hand pick as an external application (a resume version, or not recorded). The applications list, board and metrics include it; the metrics group it under resume origin “Not recorded” and score “No score”.
-- **External applications:** the user can create an application by hand for an opening they applied to outside StoryToRole (company, title, link and, optionally, the description), with no documents and no credits spent. It is marked external; it stops being external once a document is generated or copied for it.
+- **Applying without a resume:** the opening page shows the status (“Not applied yet”) with “Mark as applied” and the status options even with no application; using them creates the application on the fly (the opening's owner only), with no documents. Marked as applied without documents, it has no submissions: the Sent section says “No resume recorded” and offers a hand pick (a resume version, or not recorded). The applications list, board and metrics include it; the metrics group it under resume origin “Not recorded” and score “No score”.
+- **Applications made elsewhere:** an application made outside StoryToRole is an opening like any other: added on New opening (analyzed, or registered without analysis, see [resume-and-cover-letter.md](./resume-and-cover-letter.md#flow)) and marked as applied with the day it was sent. There is no separate kind of application.
 - When the user marks an application as applied, it records the exact snapshot of each version sent; documents are never frozen.
 
 ## What each application records
@@ -20,7 +20,7 @@ The method's columns, beyond company, title, link and status. The method's appli
 | Field                       | Notes                                                                                                                                                                               |
 | --------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Source                      | Where the opening was found: LinkedIn, the company's site, a referral, a job board (a short list plus free text)                                                                    |
-| Resume sent                 | The family and version sent, recorded automatically when the document comes from StoryToRole, or picked by hand for an external application: what the user promised                 |
+| Resume sent                 | The family and version sent, recorded automatically when the document comes from StoryToRole, or picked by hand when none was sent from it: what the user promised                  |
 | Next step                   | Free text ("HR interview on Sep 20"), shown on the application and in reminders                                                                                                     |
 | Notes                       | Free text                                                                                                                                                                           |
 | Decline reason (the user's) | Why the user gave up, asked in a dialog when the status is set to Withdrawn (optional, editable later); it can become a rule in the job preferences document, which screening reads |
@@ -59,25 +59,25 @@ In-app only in the MVP, configurable and dismissible: a nudge to record a follow
 
 ## The Openings page
 
-The sidebar item **Openings** (`/app/openings`) lists every opening the user analyzed, with or without an application, closed ones included. A layout shared by its three tabs holds the title, “Applied elsewhere” and the active reminders, above the tabs, so the reminders show on every tab. The tabs are links, one route each: **Tracking** (`/app/openings`), **Calendar** (`/app/openings/calendar`) and **Settings** (`/app/openings/settings`). The opening page (`/app/openings/{openingId}`) is outside the layout.
+The sidebar item **Openings** (`/app/openings`) lists every opening the user added, analyzed or not, with or without an application, closed ones included. A layout shared by its three tabs holds the title and the active reminders, above the tabs, so the reminders show on every tab. The tabs are links, one route each: **Tracking** (`/app/openings`), **Calendar** (`/app/openings/calendar`) and **Settings** (`/app/openings/settings`). The opening page (`/app/openings/{openingId}`) is outside the layout.
 
 ### Where an opening stands
 
-Each opening listed has one board status: its application's status when it has one, else **Analyzed** (an analyzed opening), or **Closed** (a closed opening with no application). Openings still processing, whose analysis failed or that were refused never appear. An opening is **open** while its board status is Analyzed, In preparation, Applied, In process or Offer and the opening itself is not closed; otherwise it is **closed**.
+Each opening listed has one board status: its application's status when it has one, else **Not analyzed** (registered without analysis), **Analyzed**, or **Closed** (a closed opening with no application). Openings still processing, whose analysis failed or that were refused never appear. An opening is **open** while its board status is Not analyzed, Analyzed, In preparation, Applied, In process or Offer and the opening itself is not closed; otherwise it is **closed**.
 
 ### The filter
 
 Tracking and Calendar share one filter, kept in the URL and carried when switching between them. It is a bar of chips, as in GitLab's issue filter: clicking it lists the fields, then “is” or “is not”, then one or more values, and the choice becomes a chip; free text searches company and title. Values of one field combine with OR, fields with AND.
 
-| Field   | Values                                                                  |
-| ------- | ----------------------------------------------------------------------- |
-| Status  | The board statuses: Analyzed, the application statuses, Closed          |
-| State   | Open, closed                                                            |
-| Company | Text                                                                    |
-| Source  | The application's source list                                           |
-| Fit     | High, medium, low, not checked (the opening's latest fit check)         |
-| Sent    | Yes, no                                                                 |
-| Resume  | Written for the opening, from the library, not recorded (what was sent) |
+| Field   | Values                                                                       |
+| ------- | ---------------------------------------------------------------------------- |
+| Status  | The board statuses: Not analyzed, Analyzed, the application statuses, Closed |
+| State   | Open, closed                                                                 |
+| Company | Text                                                                         |
+| Source  | The application's source list                                                |
+| Fit     | High, medium, low, not checked (the opening's latest fit check)              |
+| Sent    | Yes, no                                                                      |
+| Resume  | Written for the opening, from the library, not recorded (what was sent)      |
 
 The default filter is **State is open**, shown as a removable chip; removing it is a state of its own in the URL. Whenever the filter differs from the default, the bar says so (“Not the default filter · Restore default”), the chips that are not the default stand out, and the count of matching openings shows. Notes, next steps and decline reasons are never searched.
 
@@ -88,7 +88,7 @@ Filtering runs on the server, which pages the results (ADR 0013); company, title
 The metrics come first, in a collapsible block (collapsed by default, remembered per viewer), above the filter: they ignore the filter, keep their own period and count applications only. Below the filter, two views (`?view=list|kanban`, remembered per viewer).
 
 - **List**: company, title, board status, resume (its origin), source, sent date, fit band and last activity; an opening with no application shows “—” for what it lacks, and its last activity is when it was added. Sorting by last activity (the default), sent date, company or status. It loads a page at a time as the page scrolls.
-- **Kanban**: full width, a column per board status in this order: Analyzed, In preparation, Applied, In process, Offer, Hired, Rejected, Withdrawn, No response, Closed. Each column loads its own pages as it scrolls inside, and its header shows how many openings it holds. Dragging a card to another column changes its status by the select's rules: “Applied” opens the dialog that asks what was sent (allowed with nothing), “Withdrawn” opens the give-up dialog (cancelling leaves the card), “No response” accepts no drop (it only comes with time), and “Applied” is refused for an application not in preparation unless made elsewhere. A card dragged out of Analyzed creates the application on the fly, as “Mark as applied” does on the opening page; an analyzed card dropped on Closed closes the opening; nothing can be dropped on Analyzed (an application is never undone), and Closed takes only cards from Analyzed. The card moves at once and goes back if the change fails. Each card has a status menu as the keyboard alternative, and opens the opening page.
+- **Kanban**: full width, a column per board status in this order: Not analyzed, Analyzed, In preparation, Applied, In process, Offer, Hired, Rejected, Withdrawn, No response, Closed. Each column loads its own pages as it scrolls inside, and its header shows how many openings it holds. Dragging a card to another column changes its status by the select's rules: “Applied” opens the dialog that asks what was sent (allowed with nothing), “Withdrawn” opens the give-up dialog (cancelling leaves the card), “No response” accepts no drop (it only comes with time), and “Applied” is refused for an application not in preparation unless made elsewhere. A card dragged out of Not analyzed or Analyzed creates the application on the fly, as “Mark as applied” does on the opening page; such a card dropped on Closed closes the opening; nothing can be dropped on either (an application is never undone, and only an analysis makes an opening analyzed), and Closed takes only cards from them. The card moves at once and goes back if the change fails. Each card has a status menu as the keyboard alternative, and opens the opening page.
 
 ### Calendar
 

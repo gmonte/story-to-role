@@ -102,6 +102,24 @@ export function OpeningsCalendar() {
     <div className="flex w-full flex-col gap-4 px-6">
       <BoardFilterBar filter={filter} onChange={setFilter} />
       <div className="flex flex-wrap items-center justify-between gap-2">
+        <div
+          className="flex gap-1"
+          role="radiogroup"
+          aria-label={t.formatMessage({ defaultMessage: "What to show" })}
+        >
+          {calendarShowSchema.options.map((option) => (
+            <Button
+              key={option}
+              size="sm"
+              role="radio"
+              aria-checked={show === option}
+              variant={show === option ? "secondary" : "ghost"}
+              onClick={() => setShow(option)}
+            >
+              {showLabels[option]}
+            </Button>
+          ))}
+        </div>
         <div className="flex items-center gap-1">
           <Button
             variant="outline"
@@ -128,30 +146,12 @@ export function OpeningsCalendar() {
           >
             <ChevronRight />
           </Button>
-          <h2 className="ml-2 text-base font-medium capitalize">
+          <h2 className="ml-2 text-base font-medium first-letter:uppercase">
             {t.formatDate(monthStart(month), {
               month: "long",
               year: "numeric",
             })}
           </h2>
-        </div>
-        <div
-          className="flex gap-1"
-          role="radiogroup"
-          aria-label={t.formatMessage({ defaultMessage: "What to show" })}
-        >
-          {calendarShowSchema.options.map((option) => (
-            <Button
-              key={option}
-              size="sm"
-              role="radio"
-              aria-checked={show === option}
-              variant={show === option ? "secondary" : "ghost"}
-              onClick={() => setShow(option)}
-            >
-              {showLabels[option]}
-            </Button>
-          ))}
         </div>
       </div>
 
@@ -247,7 +247,7 @@ function DayList({ markers }: { markers: CalendarMarker[] }) {
     <ol className="flex flex-col gap-4 md:hidden">
       {days.map((day) => (
         <li key={day} className="flex flex-col gap-1.5">
-          <h3 className="text-muted-foreground text-xs font-medium capitalize">
+          <h3 className="text-muted-foreground text-xs font-medium first-letter:uppercase">
             {t.formatDate(new Date(`${day}T12:00:00`), {
               weekday: "long",
               day: "numeric",

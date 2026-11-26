@@ -14,6 +14,10 @@ import {
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEditor, type Editor } from "@tiptap/react";
 
+import {
+  applyDocumentChange,
+  changeViolation,
+} from "@repo/api/domains/documents/changes/document-change";
 import { sectionMoveOf } from "@repo/api/domains/documents/changes/section-order";
 import {
   coverageFindingKey,
@@ -67,6 +71,10 @@ import {
 } from "../utils/document-editor-extensions";
 import { useDocumentAgent } from "./document-agent-context";
 import { originMarker } from "./editing";
+
+// lucide's LoaderCircle, as markup: the widget is plain DOM.
+const loaderIcon =
+  '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" class="animate-spin"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>';
 
 const infoIcon =
   '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>';
@@ -194,6 +202,31 @@ const readDelayMs = 150;
 // How long the user pauses before the edit becomes a snapshot.
 const saveDelayMs = 800;
 
+/** The lines of `after` that are new or reworded since `before`. */
+function writtenLines(before: DocumentBlock[], after: DocumentBlock[]) {
+  const previous = new Map(
+    before.flatMap((block) =>
+      "lineId" in block ? [[block.lineId, block.text] as const] : []
+    )
+  );
+  return after.flatMap((block) =>
+    "lineId" in block && previous.get(block.lineId) !== block.text
+      ? [block.lineId]
+      : []
+  );
+}
+
+/**
+ * The lines an accepted change wrote, waiting for the snapshot that links
+ * them to the profile (`snapshotId`, once the server answers); `traced`
+ * when the change names the passages it rests on.
+ */
+type Linking = {
+  lineIds: string[];
+  traced: boolean;
+  snapshotId: string | null;
+};
+
 const escapeRegExp = (text: string) =>
   text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
@@ -247,6 +280,12 @@ export function DocumentEditorProvider({
   const [saveStatus, setSaveStatus] = useState<SaveStatus>("saved");
   const [activeFinding, setActiveFinding] = useState<string | null>(null);
   const [hoveredFinding, setHoveredFinding] = useState<string | null>(null);
+  const [linking, setLinking] = useState<Linking | null>(null);
+  // The view caught up with the accepted snapshot: its lines show their
+  // origins now.
+  if (linking?.snapshotId && linking.snapshotId === version.snapshot.id) {
+    setLinking(null);
+  }
   // The snapshot the editor's text is written over.
   const base = useRef({
     snapshotId: version.snapshot.id,
@@ -266,6 +305,10 @@ export function DocumentEditorProvider({
   const markerLabel = t.formatMessage({
     defaultMessage: "Where this line comes from",
   });
+  const linkingLabel = t.formatMessage({
+    defaultMessage: "Linking to your experiences…",
+  });
+  const savingLabel = t.formatMessage({ defaultMessage: "Saving…" });
 
   /** Saves until what is saved is the latest text. */
   const flush = useCallback(async () => {
@@ -289,6 +332,10 @@ export function DocumentEditorProvider({
           content,
         });
         base.current = { snapshotId, content };
+        // Accepted lines still waiting wait for this newer snapshot now.
+        setLinking((current) =>
+          current?.snapshotId ? { ...current, snapshotId } : current
+        );
         if (latest.current === pending) latest.current = null;
         await refresh();
       }
@@ -621,10 +668,14 @@ export function DocumentEditorProvider({
     );
   };
   /**
-   * Accepts the given changes (all of them by default): the server writes
-   * a snapshot per change over what is saved, so the text is saved first;
-   * the new official snapshot then replaces the editor's text. Changes
-   * whose lines are gone stay waiting.
+   * Accepts the given changes (all of them by default), optimistically:
+   * their widgets leave and their lines are written in the text at once,
+   * as the server will write them, while a loader beside each written
+   * line says it is being linked to the profile. The server then writes a
+   * snapshot per change over what is saved (so the text is saved first,
+   * and nothing saves while it answers); its content replaces the text,
+   * which differs only in the ids of added lines. Changes whose lines are
+   * gone stay waiting; on a failure the text goes back.
    */
   const acceptChanges = async (
     documentChangeIds?: string[],
@@ -632,8 +683,60 @@ export function DocumentEditorProvider({
     editedReplacements?: Record<string, string>
   ) => {
     const ids = documentChangeIds ?? changes.map((change) => change.id);
-    if (!ids.length) return;
-    await flush();
+    if (!ids.length || !editor || editor.isDestroyed) return;
+    const wanted = (changesQuery.data ?? []).filter((change) =>
+      ids.includes(change.id)
+    );
+    forgetChanges(ids);
+    // Starts from what is saved, once no other save or accept is under way.
+    for (;;) {
+      while (inFlight.current) await flushing.current;
+      clearTimeout(readTimer.current);
+      latest.current = docToBlocks(editor.state.doc);
+      await flush();
+      if (!inFlight.current) break;
+    }
+    if (editor.isDestroyed) return;
+    inFlight.current = true;
+    let done!: () => void;
+    flushing.current = new Promise<void>((resolve) => (done = resolve));
+    clearTimeout(saveTimer.current);
+    const before = docToBlocks(editor.state.doc);
+    const show = (next: DocumentBlock[]) => {
+      resetDocument(editor, next);
+      // The text is what is saved (or about to be): no edit to save.
+      clearTimeout(readTimer.current);
+      setBlocks(next);
+    };
+    // The same steps as the server's, over the same content.
+    let content = base.current.content;
+    for (const proposed of wanted) {
+      const edited = editedReplacements?.[proposed.id];
+      const change =
+        edited === undefined
+          ? proposed
+          : { ...proposed, replace: edited, evidenceIds: [] };
+      const next =
+        edited !== undefined && changeViolation(content, change)
+          ? null
+          : applyDocumentChange(content, change, change.evidenceIds);
+      if (next) content = next;
+    }
+    const optimistic = contentToBlocks(content, version.language);
+    const traced = wanted.some(
+      (change) =>
+        change.evidenceIds.length > 0 &&
+        editedReplacements?.[change.id] === undefined
+    );
+    if (content !== base.current.content) {
+      show(optimistic);
+      setLinking({
+        lineIds: writtenLines(before, optimistic),
+        traced,
+        snapshotId: null,
+      });
+    }
+    setSaveStatus("saving");
     try {
       const result = await acceptOnServer({
         versionId: version.id,
@@ -641,7 +744,26 @@ export function DocumentEditorProvider({
         documentChangeIds: ids,
         editedReplacements,
       });
-      forgetChanges(result.accepted);
+      base.current = {
+        snapshotId: result.snapshotId,
+        content: result.content,
+      };
+      // Typed over while the server answered: the typing is saved over
+      // the new snapshot instead.
+      if (
+        !editor.isDestroyed &&
+        JSON.stringify(docToBlocks(editor.state.doc)) ===
+          JSON.stringify(optimistic)
+      ) {
+        show(contentToBlocks(base.current.content, version.language));
+      }
+      const written = writtenLines(before, docToBlocks(editor.state.doc));
+      setLinking(
+        written.length
+          ? { lineIds: written, traced, snapshotId: result.snapshotId }
+          : null
+      );
+      setSaveStatus("saved");
       // The others are located again: one whose lines moved is now stale.
       void refreshChanges();
       if (!result.accepted.length) {
@@ -652,8 +774,10 @@ export function DocumentEditorProvider({
           })
         );
       }
-      await refresh();
     } catch (error) {
+      if (!editor.isDestroyed) show(before);
+      setLinking(null);
+      setSaveStatus("saved");
       const code = (error as { data?: { code?: string } }).data?.code;
       if (code === "CONFLICT") {
         toast.error(
@@ -662,11 +786,15 @@ export function DocumentEditorProvider({
               "This version changed elsewhere. Your last edit was not saved.",
           })
         );
-        await refresh();
       } else {
         changesNotRecorded();
       }
+    } finally {
+      inFlight.current = false;
+      done();
     }
+    if (latest.current) void flush();
+    await refresh();
   };
   const rejectChanges = (documentChangeIds?: string[]) => {
     const ids = documentChangeIds ?? changes.map((change) => change.id);
@@ -905,11 +1033,32 @@ export function DocumentEditorProvider({
       const node = from === undefined ? null : doc.nodeAt(from);
       return node ? { from, to: from + node.nodeSize, node } : null;
     };
+    const linkingLines = new Set(linking?.lineIds);
     blocks.forEach((block, index) => {
       if (!("lineId" in block)) return;
-      const origin = lines.get(block.lineId)?.origin ?? { kind: "manual" };
       const range = nodeOf(index);
       if (!range) return;
+      // A line an accepted change wrote: its origin is on its way.
+      if (linkingLines.has(block.lineId)) {
+        specs.push({
+          kind: "widget",
+          at: range.from + 1 + range.node.content.size,
+          element: () => {
+            const loader = document.createElement("span");
+            loader.className = cn(
+              "text-muted-foreground ml-1.5 inline-flex items-center gap-1 align-[-2px] text-xs select-none"
+            );
+            loader.innerHTML = loaderIcon;
+            loader.append(linking?.traced ? linkingLabel : savingLabel);
+            loader.contentEditable = "false";
+            loader.setAttribute("role", "status");
+            return loader;
+          },
+          key: `linking-${block.lineId}`,
+        });
+        return;
+      }
+      const origin = lines.get(block.lineId)?.origin ?? { kind: "manual" };
       specs.push({
         kind: "node",
         from: range.from,
@@ -1129,6 +1278,7 @@ export function DocumentEditorProvider({
     changes,
     hoveredFinding,
     hoveredPassage,
+    linking,
     lines,
     indexOfLine,
     indexOfPassage,

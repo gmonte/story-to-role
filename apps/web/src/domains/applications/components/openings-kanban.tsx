@@ -64,7 +64,7 @@ export function OpeningsKanban({ filter }: { filter: BoardFilter }) {
       {/* From `md`, the columns fill the height left on the screen, all the
           same, and each scrolls inside; on a phone each grows with its
           cards, nearly as wide as the screen, snapping as it swipes. */}
-      <div className="flex snap-x snap-mandatory items-start gap-3 overflow-x-auto pb-2 md:min-h-0 md:flex-1 md:snap-none md:items-stretch">
+      <div className="flex snap-x snap-mandatory items-start gap-3 overflow-x-auto md:min-h-0 md:flex-1 md:snap-none md:items-stretch">
         {boardColumns(filter).map((status) => (
           <KanbanColumn
             key={status}

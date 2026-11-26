@@ -193,6 +193,62 @@ describe("validating and publishing the profile", () => {
     expect(version.validatedAt).not.toBeNull();
   });
 
+  it("proposes each competency as a name the profile can list", async () => {
+    const ctx = await setup();
+    const revision = await ctx.save(
+      profileText("melhorei a entrega.").replace(
+        "- Tecnologias: Python",
+        "- Tecnologias: Python, Kubernetes (EKS), CI/CD e GitOps"
+      ),
+      0
+    );
+    const { profileValidationId } = await ctx.profile.validate({
+      userId: ctx.user.id,
+      baseRevision: revision,
+    });
+    const { providerPackage } = fakeProviderPackage({
+      object: () => ({
+        findings: [],
+        competencies: [
+          { name: "Kubernetes (EKS)", level: "often", reason: "na Beta" },
+          { name: "CI/CD e GitOps", level: "occasional", reason: "na Beta" },
+          {
+            name: "Python, Kubernetes (EKS), CI/CD e GitOps",
+            level: "master",
+            reason: "a linha toda",
+          },
+        ],
+      }),
+    });
+    const ai = createAiClient({
+      db: ctx.db,
+      userId: ctx.user.id,
+      funding: "credits",
+      providerPackage,
+    });
+    const report = await runValidateProfile({
+      db: ctx.db,
+      ai,
+      cipher: await getUserCipher(ctx.db, ctx.user.id),
+      userId: ctx.user.id,
+      profileValidationId,
+      reportProgress: vi.fn(),
+    });
+    expect(
+      report.competencies.map(({ name, level, current }) => ({
+        name,
+        level,
+        current,
+      }))
+    ).toEqual([
+      { name: "Kubernetes", level: "often", current: null },
+      { name: "CI/CD", level: "occasional", current: null },
+      { name: "GitOps", level: "occasional", current: null },
+      // The rest of the line's names were proposed already.
+      { name: "Python", level: "master", current: "often" },
+    ]);
+  });
+
   it("never proposes a level for a concept, which is the person's to place", async () => {
     const ctx = await setup();
     const revision = await ctx.save(

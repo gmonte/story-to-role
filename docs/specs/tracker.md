@@ -59,7 +59,7 @@ In-app only in the MVP, configurable and dismissible: a nudge to record a follow
 
 ## The Openings page
 
-The sidebar item **Openings** (`/app/openings`) lists every opening the user added, analyzed or not, with or without an application, closed ones included. A layout shared by its three tabs holds the title and the active reminders, above the tabs, so the reminders show on every tab. The tabs are links, one route each: **Tracking** (`/app/openings`), **Calendar** (`/app/openings/calendar`) and **Settings** (`/app/openings/settings`). The opening page (`/app/openings/{openingId}`) is outside the layout.
+The sidebar item **Openings** (`/app/openings`) lists every opening the user added, analyzed or not, with or without an application, closed ones included. A layout shared by its three tabs holds the title and the active reminders, above the tabs, so the reminders show on every tab. The tabs are links, one route each: **Tracking** (`/app/openings`), **Calendar** (`/app/openings/calendar`), **Metrics** (`/app/openings/metrics`) and **Settings** (`/app/openings/settings`). The opening page (`/app/openings/{openingId}`) is outside the layout.
 
 ### Where an opening stands
 
@@ -83,9 +83,9 @@ The default filter is **State is open**, shown as a removable chip; removing it 
 
 Filtering runs on the server, which pages the results (ADR 0013); company, title and the free text are encrypted, so the service decrypts them only when the filter or the sort needs them (ADR 0014).
 
-### Tracking: metrics, list and kanban
+### Tracking: list and kanban
 
-The metrics come first, in a collapsible block (collapsed by default, remembered per viewer), above the filter: they ignore the filter, keep their own period and count applications only. Below the filter, two views (`?view=list|kanban`, remembered per viewer).
+The filter comes first, where the calendar has it too; below it, the choice between two views (`?view=list|kanban`, remembered per viewer).
 
 - **List**: company, title, board status, resume (its origin), source, sent date, fit band and last activity; an opening with no application shows “—” for what it lacks, and its last activity is when it was added. Sorting by last activity (the default), sent date, company or status. It loads a page at a time as the page scrolls.
 - **Kanban**: full width, a column per board status in this order: Not analyzed, Analyzed, In preparation, Applied, In process, Offer, Hired, Rejected, Withdrawn, No response, Closed. Each column loads its own pages as it scrolls inside, and its header shows how many openings it holds. Dragging a card to another column changes its status by the select's rules: “Applied” opens the dialog that asks what was sent (allowed with nothing), “Withdrawn” opens the give-up dialog (cancelling leaves the card), “No response” accepts no drop (it only comes with time), and “Applied” is refused for an application not in preparation unless made elsewhere. A card dragged out of Not analyzed or Analyzed creates the application on the fly, as “Mark as applied” does on the opening page; such a card dropped on Closed closes the opening; nothing can be dropped on either (an application is never undone, and only an analysis makes an opening analyzed), and Closed takes only cards from them. The card moves at once and goes back if the change fails. Each card has a status menu as the keyboard alternative, and opens the opening page.
@@ -97,6 +97,10 @@ A month of **milestones**, one month at a time (`?month=2026-11`, previous, toda
 - One marker per opening per day, labelled with that day's most advanced milestone, with a “+N” badge when the opening has more that day; hovering or tapping it opens a popover with all of them in order and a link to the opening. “Opening added” is a marker only when it is the opening's only milestone that day.
 - Two modes (`?show=latest|timeline`): **Latest or next** (the default) shows one marker per opening, its next milestone ahead, else its latest one; **Whole timeline** shows them all.
 - The calendar only shows; events are recorded on the opening page.
+
+### Metrics
+
+The method's metrics (see “Metrics” above) on a tab of their own: they ignore the filter, keep their own period and count applications only.
 
 ### Settings
 

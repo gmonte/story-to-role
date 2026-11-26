@@ -43,6 +43,7 @@ import { ThemeSwitcher } from "./theme-switcher";
 const overviewPaths: string[] = [
   "/app/openings",
   "/app/openings/calendar",
+  "/app/openings/metrics",
   "/app/openings/settings",
 ];
 

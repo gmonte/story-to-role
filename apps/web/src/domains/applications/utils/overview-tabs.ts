@@ -1,8 +1,9 @@
-export type OverviewTab = "tracking" | "calendar" | "settings";
+export type OverviewTab = "tracking" | "calendar" | "metrics" | "settings";
 
 export const overviewTabPaths: Record<OverviewTab, string> = {
   tracking: "/app/openings",
   calendar: "/app/openings/calendar",
+  metrics: "/app/openings/metrics",
   settings: "/app/openings/settings",
 };
 
@@ -10,12 +11,14 @@ export const overviewTabPaths: Record<OverviewTab, string> = {
 const ownParams: Record<OverviewTab, string[]> = {
   tracking: ["view"],
   calendar: ["month", "show"],
+  metrics: [],
   settings: [],
 };
 
 /**
  * A tab's address from the current query: Tracking and Calendar share the
- * filter, so it goes along between them; Settings takes none.
+ * filter, so it goes along between them; Metrics (which ignores the
+ * filter) and Settings take none.
  */
 export function overviewTabHref(
   tab: OverviewTab,
@@ -23,7 +26,7 @@ export function overviewTabHref(
   from: OverviewTab
 ) {
   const path = overviewTabPaths[tab];
-  if (tab === "settings") return path;
+  if (tab === "metrics" || tab === "settings") return path;
   const query = new URLSearchParams();
   for (const [key, value] of params.entries()) {
     if (from === tab || !ownParams[from].includes(key)) query.set(key, value);

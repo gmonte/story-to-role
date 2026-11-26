@@ -24,10 +24,20 @@ describe("overviewTabHref", () => {
     );
   });
 
-  it("gives Settings no query", () => {
+  it("gives Metrics and Settings no query", () => {
     const params = new URLSearchParams("status=applied");
+    expect(overviewTabHref("metrics", params, "tracking")).toBe(
+      "/app/openings/metrics"
+    );
     expect(overviewTabHref("settings", params, "tracking")).toBe(
       "/app/openings/settings"
+    );
+  });
+
+  it("brings the filter back from Metrics", () => {
+    const params = new URLSearchParams("status=applied");
+    expect(overviewTabHref("tracking", params, "metrics")).toBe(
+      "/app/openings?status=applied"
     );
   });
 });

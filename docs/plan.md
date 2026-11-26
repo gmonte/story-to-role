@@ -283,7 +283,7 @@ The opening page restructured after a product design review ([docs/design/openin
 
 ## Openings page
 
-The Applications page becomes **Openings** (`/app/openings`), with every analyzed opening, three tabs (Tracking, Calendar, Settings), a filter shared by Tracking and Calendar, and server-side pages (tracker spec, “The Openings page”; ADRs 0013 and 0014). Owner decisions: every opening listed, closed ones too, with Analyzed and Closed columns on the kanban; the default filter State is open; the metrics collapsible at the top of Tracking, ignoring the filter; the reminders in the layout above the tabs; the application type removed (the resume's origin replaces it); the calendar only shows, one month per request; the sidebar keeps three openings per status. No redirect from `/app/tracker`.
+The Applications page becomes **Openings** (`/app/openings`), with every analyzed opening, four tabs (Tracking, Calendar, Metrics, Settings), a filter shared by Tracking and Calendar, and server-side pages (tracker spec, “The Openings page”; ADRs 0013 and 0014). Owner decisions: every opening listed, closed ones too, with Analyzed and Closed columns on the kanban; the default filter State is open; the metrics on a tab of their own, ignoring the filter (first a block folded at the top of Tracking); the reminders in the layout above the tabs; the application type removed (the resume's origin replaces it); the calendar only shows, one month per request; the sidebar keeps three openings per status. No redirect from `/app/tracker`.
 
 ### V1: The Openings page and its tabs
 
@@ -301,7 +301,7 @@ Acceptance:
 - `tracker.board` (in the tracker, which alone reads the timeline and its free text): openings with their board status, paged by a keyset cursor (ADR 0013), filtered on the server by status, state, company, source, fit, sent, resume origin and free text, sorted by last activity, sent date, company or status; encrypted fields decrypted only when the filter or sort needs them (ADR 0014). An optional status serves one kanban column.
 - The filter bar with chips (field, is / is not, values), the default State is open, the non-default notice with Restore default and the count; the filter in the URL.
 - The list in pages as the page scrolls; the kanban with Analyzed and Closed columns, each column paging inside itself with its total in the header, and the drag rules (out of Analyzed creates the application, Analyzed onto Closed closes the opening), moved at once and rolled back on failure.
-- The metrics in a collapsible block at the top of Tracking.
+- The metrics in a collapsible block at the top of Tracking; later moved to their own tab, Metrics, with the filter first on Tracking and the list or kanban choice below it, so the filter sits where the calendar has it.
 - Status: built (migration `0033_drop_application_type`). The server side is covered by `board-service.test.ts` (statuses, keyset pages per sort, company and text in memory, fit, source, sent and resume filters); the drag rules by `planBoardMove`. Not yet checked in the browser.
 
 Acceptance:

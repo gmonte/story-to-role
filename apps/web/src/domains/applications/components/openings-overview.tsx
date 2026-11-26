@@ -2,7 +2,12 @@
 
 import type { ReactNode } from "react";
 
-import { CalendarDays, KanbanSquare, Settings } from "lucide-react";
+import {
+  ChartColumn,
+  CalendarDays,
+  KanbanSquare,
+  Settings,
+} from "lucide-react";
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
 
@@ -16,11 +21,12 @@ import {
 } from "../utils/overview-tabs";
 import { ReminderList } from "./reminder-list";
 
-const tabs: OverviewTab[] = ["tracking", "calendar", "settings"];
+const tabs: OverviewTab[] = ["tracking", "calendar", "metrics", "settings"];
 
 const tabIcons: Record<OverviewTab, ReactNode> = {
   tracking: <KanbanSquare className="size-4" />,
   calendar: <CalendarDays className="size-4" />,
+  metrics: <ChartColumn className="size-4" />,
   settings: <Settings className="size-4" />,
 };
 
@@ -37,6 +43,7 @@ export function OpeningsOverview({ children }: { children: ReactNode }) {
   const labels: Record<OverviewTab, string> = {
     tracking: t.formatMessage({ defaultMessage: "Tracking" }),
     calendar: t.formatMessage({ defaultMessage: "Calendar" }),
+    metrics: t.formatMessage({ defaultMessage: "Metrics" }),
     settings: t.formatMessage({ defaultMessage: "Settings" }),
   };
 

@@ -62,13 +62,8 @@ import {
   type PrimaryAction,
   primaryAction,
 } from "../utils/opening-journey";
-import {
-  bandClassName,
-  bandDotClassName,
-  bandTextClassName,
-  pendingGaps,
-  useExcludeCompany,
-} from "./fit-check-panel";
+import { pendingGaps, useExcludeCompany } from "./fit-check-panel";
+import { FitBandBadge } from "./fit-band-badge";
 import { DeleteOpeningDialog } from "./delete-opening-dialog";
 
 /** The documents of an opening the header and the steps both read. */
@@ -276,23 +271,10 @@ export function OpeningHeader({
             {opening.fitCheck && (
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <Badge
-                    variant="outline"
-                    className={cn(
-                      "cursor-default gap-1.5 border-transparent",
-                      bandClassName(opening.fitCheck.band),
-                      bandTextClassName(opening.fitCheck.band)
-                    )}
-                  >
-                    <span
-                      aria-hidden="true"
-                      className={cn(
-                        "size-1.5 rounded-full",
-                        bandDotClassName(opening.fitCheck.band)
-                      )}
-                    />
-                    {labels.band(opening.fitCheck.band)}
-                  </Badge>
+                  <FitBandBadge
+                    band={opening.fitCheck.band}
+                    className="cursor-default"
+                  />
                 </TooltipTrigger>
                 <TooltipContent>
                   {t.formatMessage({

@@ -12,6 +12,7 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@repo/web/components/ui/sheet";
+import { cn } from "@repo/web/lib/utils";
 
 import { useTrackerLabels } from "~/domains/applications/hooks/use-tracker-labels";
 
@@ -21,7 +22,7 @@ import {
   phoneActionTarget,
   type PrimaryAction,
 } from "../utils/opening-journey";
-import { pendingGaps } from "./fit-check-panel";
+import { bandTextClassName, pendingGaps } from "./fit-check-panel";
 
 /**
  * The opening page's bottom bar on a phone (workspace spec, "The opening
@@ -91,7 +92,16 @@ export function OpeningPhoneBar({
                 className="h-auto min-h-11 min-w-0 flex-1 px-2 py-1.5 text-xs leading-tight whitespace-normal"
                 onClick={() => setSheet(item.key)}
               >
-                <span className="line-clamp-2 text-center">{item.label}</span>
+                <span
+                  className={cn(
+                    "line-clamp-2 text-center",
+                    item.key === "fit" &&
+                      opening.fitCheck &&
+                      bandTextClassName(opening.fitCheck.band)
+                  )}
+                >
+                  {item.label}
+                </span>
               </Button>
             )
         )}

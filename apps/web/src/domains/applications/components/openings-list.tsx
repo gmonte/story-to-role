@@ -8,10 +8,9 @@ import type {
 } from "@repo/api/domains/applications/schemas/tracker";
 import { useTranslation } from "@repo/intl/use-translation";
 import { InfiniteScroll } from "@repo/web/components/pagination/infinite-scroll";
-import { Badge } from "@repo/web/components/ui/badge";
 import { Skeleton } from "@repo/web/components/ui/skeleton";
 
-import { useOpeningLabels } from "~/domains/openings/hooks/use-opening-labels";
+import { FitBandBadge } from "~/domains/openings/components/fit-band-badge";
 
 import type { useBoard } from "../hooks/use-board";
 import { useTrackerLabels } from "../hooks/use-tracker-labels";
@@ -59,7 +58,6 @@ export function OpeningsList({
 function OpeningListRow({ opening }: { opening: BoardOpening }) {
   const t = useTranslation();
   const labels = useTrackerLabels();
-  const openingLabels = useOpeningLabels();
   const missing = t.formatMessage({ defaultMessage: "—" });
   const sent = !opening.applicationId
     ? null
@@ -112,11 +110,7 @@ function OpeningListRow({ opening }: { opening: BoardOpening }) {
           </span>
         </span>
         <span className="flex flex-wrap gap-1">
-          {opening.fitBand && (
-            <Badge variant="outline">
-              {openingLabels.band(opening.fitBand)}
-            </Badge>
-          )}
+          {opening.fitBand && <FitBandBadge band={opening.fitBand} />}
           <ApplicationStatusBadge status={opening.status} />
         </span>
       </Link>

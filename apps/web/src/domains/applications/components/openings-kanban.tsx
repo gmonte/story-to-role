@@ -20,7 +20,6 @@ import type {
 } from "@repo/api/domains/applications/schemas/tracker";
 import { useTranslation } from "@repo/intl/use-translation";
 import { InfiniteScroll } from "@repo/web/components/pagination/infinite-scroll";
-import { Badge } from "@repo/web/components/ui/badge";
 import { Button } from "@repo/web/components/ui/button";
 import {
   DropdownMenu,
@@ -32,7 +31,7 @@ import { Skeleton } from "@repo/web/components/ui/skeleton";
 import { toast } from "@repo/web/components/ui/sonner";
 import { cn } from "@repo/web/lib/utils";
 
-import { useOpeningLabels } from "~/domains/openings/hooks/use-opening-labels";
+import { FitBandBadge } from "~/domains/openings/components/fit-band-badge";
 import { useTRPC } from "~/tools/trpc/client";
 
 import { useBoard } from "../hooks/use-board";
@@ -201,7 +200,6 @@ function KanbanCard({
 }) {
   const t = useTranslation();
   const labels = useTrackerLabels();
-  const openingLabels = useOpeningLabels();
   const now = new Date();
   const days = opening.appliedAt
     ? t.formatMessage(
@@ -261,9 +259,7 @@ function KanbanCard({
           </span>
         )}
         {opening.fitBand && (
-          <Badge variant="outline" className="self-start">
-            {openingLabels.band(opening.fitBand)}
-          </Badge>
+          <FitBandBadge band={opening.fitBand} className="self-start" />
         )}
       </Link>
       {targets.length > 0 && (

@@ -10,12 +10,16 @@ import {
   type TrackerMetrics,
   metricsPeriodSchema,
 } from "@repo/api/domains/applications/schemas/tracker";
+import type { FitBand } from "@repo/api/domains/openings/schemas/opening";
 import { useTranslation } from "@repo/intl/use-translation";
 import { Button } from "@repo/web/components/ui/button";
 import { Skeleton } from "@repo/web/components/ui/skeleton";
+import { cn } from "@repo/web/lib/utils";
 
 import { useTRPC } from "~/tools/trpc/client";
 import { useOpeningLabels } from "~/domains/openings/hooks/use-opening-labels";
+import { FitBandDot } from "~/domains/openings/components/fit-band-badge";
+import { bandTextClassName } from "~/domains/openings/components/fit-check-panel";
 
 import { useTrackerLabels } from "../hooks/use-tracker-labels";
 
@@ -231,6 +235,7 @@ function MetricsBody({ metrics }: { metrics: TrackerMetrics }) {
           })}
           rows={metrics.byFit.map((group) => ({
             key: group.band ?? "none",
+            band: group.band,
             label: group.band
               ? openingLabels.band(group.band)
               : t.formatMessage({ defaultMessage: "Not checked" }),
@@ -264,6 +269,8 @@ function RateGroup({
   rows: Array<{
     key: string;
     label: string;
+    // A fit band's row shows the band's color.
+    band?: FitBand | null;
     group: { sent: number; responded: number };
   }>;
   rate: (group: { sent: number; responded: number }) => string;
@@ -275,7 +282,15 @@ function RateGroup({
       <ul className="flex flex-col gap-1.5">
         {rows.map((row) => (
           <li key={row.key} className="flex min-w-0 flex-col">
-            <span className="truncate">{row.label}</span>
+            <span
+              className={cn(
+                "flex min-w-0 items-center gap-1.5",
+                row.band && bandTextClassName(row.band)
+              )}
+            >
+              {row.band && <FitBandDot band={row.band} />}
+              <span className="truncate">{row.label}</span>
+            </span>
             <span className="text-muted-foreground text-xs break-words">
               {rate(row.group)}
             </span>

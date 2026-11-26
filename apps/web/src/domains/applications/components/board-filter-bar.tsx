@@ -8,6 +8,7 @@ import type {
   BoardFilter,
   BoardSort,
 } from "@repo/api/domains/applications/schemas/tracker";
+import type { FitBand } from "@repo/api/domains/openings/schemas/opening";
 import { useTranslation } from "@repo/intl/use-translation";
 import { Button } from "@repo/web/components/ui/button";
 import { Checkbox } from "@repo/web/components/ui/checkbox";
@@ -25,6 +26,8 @@ import {
   SelectValue,
 } from "@repo/web/components/ui/select";
 import { cn } from "@repo/web/lib/utils";
+
+import { FitBandDot } from "~/domains/openings/components/fit-band-badge";
 
 import { useTrackerLabels } from "../hooks/use-tracker-labels";
 import {
@@ -321,6 +324,9 @@ function FilterEditor({
                   )
                 }
               />
+              {field === "fit" && value !== "not_checked" && (
+                <FitBandDot band={value as FitBand} />
+              )}
               {labels.filterValue(field, value)}
             </label>
           ))}

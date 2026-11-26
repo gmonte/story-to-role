@@ -260,7 +260,7 @@ function MonthGrid({
                 >
                   {t.formatDate(date, { day: "numeric" })}
                 </span>
-                <div className="flex max-h-40 flex-col gap-1 overflow-y-auto">
+                <div className="flex flex-col gap-1">
                   {dayMarkers.map((marker) => (
                     <MarkerButton
                       key={`${marker.openingId}-${marker.day}`}

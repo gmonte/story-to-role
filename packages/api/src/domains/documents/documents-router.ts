@@ -196,6 +196,7 @@ export const documentsRouter = createTRPCRouter({
         accepted: z.array(z.uuid()),
         skipped: z.array(z.uuid()),
         snapshotId: z.uuid(),
+        content: documentContentSchema,
       })
     )
     .mutation(({ ctx, input }) =>

@@ -57,7 +57,8 @@ export class ChangesService {
    * and accepted by the user. A change whose lines were edited away is
    * skipped and keeps waiting: the editor offers to reject it. The edit
    * must start from the official snapshot, so a tab with older text never
-   * writes over a newer one.
+   * writes over a newer one. Answers with the content written, which the
+   * editor shows in place of the one it applied on its own.
    */
   async acceptChanges(input: {
     userId: string;
@@ -122,7 +123,7 @@ export class ChangesService {
         resolution: "accepted",
         documentChangeIds: accepted,
       });
-      return { accepted, skipped, snapshotId: latest.id };
+      return { accepted, skipped, snapshotId: latest.id, content };
     });
   }
 

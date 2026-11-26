@@ -404,6 +404,7 @@ describe("proposed changes", () => {
     });
     expect(result.accepted).toEqual([b.change.id]);
     const content = await ctx.latest();
+    expect(result.content).toEqual(content);
     const lines =
       content.kind === "resume" &&
       content.sections[2].kind === "experience" &&

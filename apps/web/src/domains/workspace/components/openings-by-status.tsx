@@ -3,6 +3,7 @@
 import type { ComponentProps } from "react";
 
 import { useQuery } from "@tanstack/react-query";
+import { ArrowUpRight } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
@@ -93,7 +94,7 @@ export function OpeningsByStatus() {
   };
 
   return (
-    <div className="flex flex-col gap-3">
+    <div className="flex flex-col gap-5">
       <Group
         label={t.formatMessage({ defaultMessage: "Openings being analyzed" })}
         rows={transient("processing")}
@@ -169,9 +170,17 @@ function Group({
       {href ? (
         <Link
           href={href}
-          className={cn(heading, "hover:text-foreground hover:underline")}
+          className={cn(
+            heading,
+            "group/heading hover:text-foreground flex items-center gap-1"
+          )}
         >
-          {title}
+          <span className="truncate">{title}</span>
+          {/* Shows, on hover, that the title opens the list. */}
+          <ArrowUpRight
+            aria-hidden="true"
+            className="size-3 shrink-0 opacity-0 transition-opacity group-hover/heading:opacity-100 group-focus-visible/heading:opacity-100"
+          />
         </Link>
       ) : (
         <span className={heading}>{title}</span>

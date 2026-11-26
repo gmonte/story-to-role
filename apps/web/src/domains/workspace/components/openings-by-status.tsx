@@ -1,6 +1,6 @@
 "use client";
 
-import type { ReactNode } from "react";
+import type { ComponentProps } from "react";
 
 import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
@@ -31,7 +31,7 @@ import { sidebarBoardGroups, sidebarGroup } from "../utils/sidebar-group";
 /**
  * The openings grouped by status (workspace spec): not analyzed,
  * analyzed, in preparation, applied, in process, closed, each with its three latest
- * and “See more” to the Openings page filtered the same way; openings
+ * and a title that opens the Openings page filtered the same way; openings
  * being analyzed, failed or refused never reach that page, so they are
  * all listed.
  */
@@ -119,11 +119,9 @@ export function OpeningsByStatus() {
   );
 }
 
-/** A group the Openings page lists: its three latest, then “See more”. */
+/** A group the Openings page lists: its three latest, its title a link there. */
 function BoardGroup({ label, filter }: { label: string; filter: BoardFilter }) {
-  const t = useTranslation();
   const page = useBoard({ filter, sort: "activity", limit: shown });
-  const total = page.total ?? 0;
   const rows = page.rows.slice(0, shown).map((opening: BoardOpening) => ({
     openingId: opening.openingId,
     company: opening.company,
@@ -135,32 +133,11 @@ function BoardGroup({ label, filter }: { label: string; filter: BoardFilter }) {
     <Group
       label={label}
       rows={rows}
-      total={total}
-      more={
-        total > shown && (
-          <SidebarMenuItem>
-            <SidebarMenuButton
-              asChild
-              size="sm"
-              className="text-muted-foreground"
-            >
-              <Link
-                href={{
-                  pathname: "/app/openings",
-                  query: Object.fromEntries(
-                    boardQueryToParams(filter, "activity")
-                  ),
-                }}
-              >
-                {t.formatMessage(
-                  { defaultMessage: "See more ({count, number})" },
-                  { count: total }
-                )}
-              </Link>
-            </SidebarMenuButton>
-          </SidebarMenuItem>
-        )
-      }
+      total={page.total ?? 0}
+      href={{
+        pathname: "/app/openings",
+        query: Object.fromEntries(boardQueryToParams(filter, "activity")),
+      }}
     />
   );
 }
@@ -169,25 +146,36 @@ function Group({
   label,
   rows,
   total,
-  more,
+  href,
 }: {
   label: string;
   rows: Row[];
   total: number;
-  more?: ReactNode;
+  // The group's title opens the Openings page filtered the same way.
+  href?: ComponentProps<typeof Link>["href"];
 }) {
   const t = useTranslation();
   const openingLabels = useOpeningLabels();
   const pathname = usePathname();
   if (rows.length === 0) return null;
+  const heading =
+    "text-muted-foreground truncate px-2 text-[11px] font-semibold tracking-[0.07em] whitespace-nowrap uppercase";
+  const title = t.formatMessage(
+    { defaultMessage: "{group} ({count, number})" },
+    { group: label, count: total }
+  );
   return (
     <div className="flex flex-col gap-1">
-      <span className="text-muted-foreground truncate px-2 text-[11px] font-semibold tracking-[0.07em] whitespace-nowrap uppercase">
-        {t.formatMessage(
-          { defaultMessage: "{group} ({count, number})" },
-          { group: label, count: total }
-        )}
-      </span>
+      {href ? (
+        <Link
+          href={href}
+          className={cn(heading, "hover:text-foreground hover:underline")}
+        >
+          {title}
+        </Link>
+      ) : (
+        <span className={heading}>{title}</span>
+      )}
       <SidebarMenu>
         {rows.map((opening) => {
           const href = `/app/openings/${opening.openingId}` as const;
@@ -231,7 +219,6 @@ function Group({
             </SidebarMenuItem>
           );
         })}
-        {more}
       </SidebarMenu>
     </div>
   );

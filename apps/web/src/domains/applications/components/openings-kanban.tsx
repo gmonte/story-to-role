@@ -61,9 +61,10 @@ export function OpeningsKanban({ filter }: { filter: BoardFilter }) {
 
   return (
     <>
-      {/* The columns fill the height left on the screen, all the same, and
-          each scrolls inside. */}
-      <div className="flex min-h-0 flex-1 gap-3 overflow-x-auto pb-2">
+      {/* From `md`, the columns fill the height left on the screen, all the
+          same, and each scrolls inside; on a phone each grows with its
+          cards, nearly as wide as the screen, snapping as it swipes. */}
+      <div className="flex snap-x snap-mandatory items-start gap-3 overflow-x-auto pb-2 md:min-h-0 md:flex-1 md:snap-none md:items-stretch">
         {boardColumns(filter).map((status) => (
           <KanbanColumn
             key={status}
@@ -140,7 +141,7 @@ function KanbanColumn({
         onDrop();
       }}
       className={cn(
-        "bg-muted/40 flex min-h-0 w-64 shrink-0 flex-col gap-2 rounded-lg border p-2",
+        "bg-muted/40 flex w-[85vw] shrink-0 snap-start flex-col gap-2 rounded-lg border p-2 md:min-h-0 md:w-64",
         over && "border-primary bg-muted"
       )}
     >
@@ -154,7 +155,7 @@ function KanbanColumn({
         </span>
       </h2>
       {/* Each column scrolls on its own and loads its next page there. */}
-      <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
+      <div className="flex flex-col md:min-h-0 md:flex-1 md:overflow-y-auto">
         {column.isLoading ? (
           <div className="flex flex-col gap-2">
             {[0, 1].map((index) => (

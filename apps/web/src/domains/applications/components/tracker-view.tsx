@@ -73,7 +73,7 @@ export function TrackerView() {
   return (
     <div
       data-fill={view === "kanban" ? "" : undefined}
-      className="flex w-full flex-col gap-4 px-6 data-[fill]:min-h-0 data-[fill]:flex-1"
+      className="flex w-full flex-col gap-4 px-6 md:data-[fill]:min-h-0 md:data-[fill]:flex-1"
     >
       <BoardFilterBar
         filter={filter}

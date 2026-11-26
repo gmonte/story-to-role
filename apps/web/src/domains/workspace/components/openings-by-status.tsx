@@ -179,7 +179,7 @@ function Group({
           {/* Shows, on hover, that the title opens the list. */}
           <ArrowRight
             aria-hidden="true"
-            className="size-3 shrink-0 opacity-0 transition-opacity group-hover/heading:opacity-100 group-focus-visible/heading:opacity-100"
+            className="size-3.5 shrink-0 opacity-0 transition-opacity group-hover/heading:opacity-100 group-focus-visible/heading:opacity-100"
           />
         </Link>
       ) : (

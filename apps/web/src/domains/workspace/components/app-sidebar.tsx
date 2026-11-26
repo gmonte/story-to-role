@@ -40,6 +40,12 @@ import { LanguageSwitcher } from "./language-switcher";
 import { OpeningsByStatus } from "./openings-by-status";
 import { ThemeSwitcher } from "./theme-switcher";
 
+const overviewPaths: string[] = [
+  "/app/openings",
+  "/app/openings/calendar",
+  "/app/openings/settings",
+];
+
 export function AppSidebar() {
   const t = useTranslation();
   const pathname = usePathname();
@@ -64,10 +70,12 @@ export function AppSidebar() {
       icon: Library,
     },
     {
-      href: "/app/tracker",
-      label: t.formatMessage({ defaultMessage: "Applications" }),
+      href: "/app/openings",
+      label: t.formatMessage({ defaultMessage: "Openings" }),
       icon: KanbanSquare,
       count: reminders.data?.length,
+      // Its tabs only: an opening's page and New opening are elsewhere.
+      active: overviewPaths.includes(pathname),
     },
     {
       href: "/app/openings/new",
@@ -91,7 +99,10 @@ export function AppSidebar() {
           <SidebarGroupContent>
             <SidebarMenu>
               {items.map((item) => {
-                const active = pathname.startsWith(item.href);
+                const active =
+                  "active" in item
+                    ? item.active
+                    : pathname.startsWith(item.href);
                 return (
                   <SidebarMenuItem key={item.href}>
                     <SidebarMenuButton

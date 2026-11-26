@@ -125,7 +125,12 @@ export function OpeningPageBody({
   const worked = opening.status === "analyzed" || opening.status === "closed";
   const recheck = isRecheck(opening);
   const showFit = worked || recheck;
-  const showApplication = worked || recheck || !!opening.applicationId;
+  // An opening registered without analysis can be applied to all the same.
+  const showApplication =
+    worked ||
+    recheck ||
+    opening.status === "unanalyzed" ||
+    !!opening.applicationId;
   const description = <DescriptionColumn opening={opening} />;
   const fit = showFit && (
     <section id="fit-column">
@@ -475,19 +480,18 @@ function DescriptionBody({ opening }: { opening: OpeningDetail }) {
   const labels = useOpeningLabels();
   return (
     <>
-      {opening.status === "external" && (
+      {opening.status === "unanalyzed" && (
         <div className="bg-card flex flex-col gap-2 rounded-lg border p-4 text-sm">
           <p>
             {t.formatMessage({
               defaultMessage:
-                "You applied to this opening outside StoryToRole, so it wasn’t analyzed. Analyze it to see your fit and write documents for it.",
+                "This opening was added without analysis. Analyze it to see your fit and write documents for it; you can apply to it and track it either way.",
             })}
           </p>
           {!opening.description && !opening.sourceUrl && (
             <p className="text-muted-foreground">
               {t.formatMessage({
-                defaultMessage:
-                  "Without its description or link, there is nothing to analyze.",
+                defaultMessage: "Paste its description below to analyze it.",
               })}
             </p>
           )}

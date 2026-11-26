@@ -4,14 +4,23 @@ import { db } from "@repo/api/tools/db";
 import { ok, okSchema, openApiMeta } from "@repo/api/tools/openapi";
 import { createTRPCRouter, userProcedure } from "@repo/api/tools/trpc";
 import { templateLanguage } from "@repo/api/domains/profile/template-language";
+import {
+  createPaginationOutputSchema,
+  paginationParamsSchema,
+} from "@repo/api/utils/schemas/pagination";
 
 import {
   applicationSourceSchema,
   applicationStatusSchema,
-  applicationTypeSchema,
 } from "../schemas/application";
 import {
   applicationDetailSchema,
+  boardFilterSchema,
+  boardOpeningSchema,
+  boardSortSchema,
+  boardStatusSchema,
+  calendarMarkerSchema,
+  calendarShowSchema,
   metricsPeriodSchema,
   reminderSchema,
   resumeVersionRefSchema,
@@ -22,6 +31,16 @@ import {
 import { TrackerService } from "./tracker-service";
 
 const applicationInput = z.object({ applicationId: z.uuid() });
+
+/** An IANA time zone this runtime knows. */
+function isTimeZone(timeZone: string) {
+  try {
+    new Intl.DateTimeFormat("en-US", { timeZone });
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 export const trackerRouter = createTRPCRouter({
   list: userProcedure
@@ -36,6 +55,72 @@ export const trackerRouter = createTRPCRouter({
     .input(z.object({}))
     .output(z.array(trackedApplicationSchema))
     .query(({ ctx }) => new TrackerService(db).list(ctx.userId)),
+
+  board: userProcedure
+    .meta(
+      openApiMeta(
+        "tracker",
+        "GET",
+        "/openings/board",
+        "Returns a page of the Openings page: every analyzed opening, filtered and sorted, or one kanban column"
+      )
+    )
+    .input(
+      paginationParamsSchema.extend(boardFilterSchema.shape).extend({
+        sort: boardSortSchema.default("activity"),
+        // One kanban column.
+        column: boardStatusSchema.optional(),
+      })
+    )
+    .output(createPaginationOutputSchema({ dataSchema: boardOpeningSchema }))
+    .query(({ ctx, input }) => {
+      const {
+        cursor,
+        limit,
+        sort,
+        column,
+        direction: _direction,
+        ...filter
+      } = input;
+      return new TrackerService(db).board({
+        userId: ctx.userId,
+        filter,
+        sort,
+        column,
+        cursor,
+        limit,
+      });
+    }),
+
+  calendar: userProcedure
+    .meta(
+      openApiMeta(
+        "tracker",
+        "GET",
+        "/openings/calendar",
+        "Returns the milestones of the openings the filter matches in a span of days (a month's weeks), per opening and day in the viewer's time zone"
+      )
+    )
+    .input(
+      boardFilterSchema.extend({
+        from: z.iso.date(),
+        to: z.iso.date(),
+        timeZone: z.string().refine(isTimeZone, "Unknown time zone"),
+        show: calendarShowSchema.default("latest"),
+      })
+    )
+    .output(z.array(calendarMarkerSchema))
+    .query(({ ctx, input }) => {
+      const { from, to, timeZone, show, ...filter } = input;
+      return new TrackerService(db).calendar({
+        userId: ctx.userId,
+        filter,
+        from,
+        to,
+        timeZone,
+        show,
+      });
+    }),
 
   get: userProcedure
     .meta(
@@ -154,30 +239,6 @@ export const trackerRouter = createTRPCRouter({
       return ok;
     }),
 
-  createExternal: userProcedure
-    .meta(
-      openApiMeta(
-        "tracker",
-        "POST",
-        "/applications/external",
-        "Registers an application made outside StoryToRole"
-      )
-    )
-    .input(
-      z.object({
-        company: z.string().trim().min(1).max(200),
-        title: z.string().trim().min(1).max(200),
-        link: z.url().max(2000),
-        description: z.string().max(20_000).optional(),
-        status: applicationStatusSchema,
-        appliedAt: z.coerce.date().optional(),
-      })
-    )
-    .output(z.object({ applicationId: z.uuid(), openingId: z.uuid() }))
-    .mutation(({ ctx, input }) =>
-      new TrackerService(db).createExternal({ userId: ctx.userId, ...input })
-    ),
-
   updateDetails: userProcedure
     .meta(
       openApiMeta(
@@ -191,7 +252,6 @@ export const trackerRouter = createTRPCRouter({
       applicationInput.extend({
         source: applicationSourceSchema.nullable().optional(),
         sourceDetail: z.string().max(200).nullable().optional(),
-        applicationType: applicationTypeSchema.nullable().optional(),
         // The resume version an external application was sent with.
         resumeVersionId: z.uuid().nullable().optional(),
         nextStep: z.string().max(2000).nullable().optional(),

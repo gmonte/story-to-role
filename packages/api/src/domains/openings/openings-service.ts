@@ -27,7 +27,11 @@ import type { ProfileLanguage } from "@repo/api/domains/profile/truth/sections";
 import { stallGraceMs } from "@repo/api/domains/tasks/task-durations";
 
 import type { openingsTable } from "./db/openings-tables";
-import { conditionCategories, type ConditionStance } from "./schemas/opening";
+import {
+  conditionCategories,
+  type ConditionStance,
+  type OpeningKind,
+} from "./schemas/opening";
 import { rewriteGapAnswer } from "./fit-check/rewrite-gap-answer";
 import { OpeningsRepository } from "./openings-repository";
 import {
@@ -118,6 +122,45 @@ export class OpeningsService {
       kind: "posted",
       encryptedSourceUrl: cipher.encrypt(input.url),
     }));
+  }
+
+  /**
+   * Registers an opening without analysis (resume spec, “Analyze now, or
+   * later”): the user names the company and title, no credits are spent,
+   * and the text or link waits for an analysis.
+   */
+  async register(input: {
+    userId: string;
+    kind: OpeningKind;
+    company: string;
+    title?: string;
+    description?: string;
+    link?: string;
+    notes?: string;
+  }): Promise<{ openingId: string }> {
+    const company = input.company.trim();
+    const title = input.title?.trim();
+    // A posted opening is named by its title; an unsolicited one may not have one.
+    if (!company || (input.kind === "posted" && !title)) {
+      throw new TRPCError({ code: "BAD_REQUEST" });
+    }
+    const profile = await this.requireProfile(input.userId);
+    return this.db.transaction(async (tx) => {
+      const cipher = await getUserCipher(tx, input.userId);
+      const seal = (value?: string) =>
+        value?.trim() ? cipher.encrypt(value.trim()) : null;
+      const opening = await new OpeningsRepository(tx).insertOpening({
+        profileId: profile.id,
+        kind: input.kind,
+        status: "unanalyzed",
+        encryptedCompany: cipher.encrypt(company),
+        encryptedTitle: seal(title),
+        encryptedDescription: seal(input.description),
+        encryptedSourceUrl: seal(input.link),
+        encryptedNotes: seal(input.notes),
+      });
+      return { openingId: opening.id };
+    });
   }
 
   /** No vacancy: only the company is required (resume spec). */
@@ -323,16 +366,16 @@ export class OpeningsService {
   }
 
   /**
-   * Analyzes an opening registered with an external application, once the
-   * user wants documents for it: the fit check, at its usual cost.
+   * Analyzes an opening registered without analysis, once the user wants
+   * it: the fit check, at its usual cost.
    */
-  async analyzeExternal(input: { userId: string; openingId: string }) {
+  async analyze(input: { userId: string; openingId: string }) {
     const profile = await this.requireProfile(input.userId);
     const row = await new OpeningsRepository(this.db).findOpening({
       profileId: profile.id,
       openingId: input.openingId,
     });
-    if (row?.status !== "external") throw notFound();
+    if (row?.status !== "unanalyzed") throw notFound();
     if (!row.encryptedDescription && !row.encryptedSourceUrl) {
       throw new TRPCError({ code: "PRECONDITION_FAILED" });
     }
@@ -342,7 +385,7 @@ export class OpeningsService {
     });
     // Only one request moves it on: a second click analyzes nothing twice.
     const claimed = await new OpeningsRepository(this.db).moveStatus(row.id, {
-      from: "external",
+      from: "unanalyzed",
       to: "processing",
     });
     if (!claimed) throw new TRPCError({ code: "CONFLICT" });
@@ -351,7 +394,7 @@ export class OpeningsService {
       async () => {
         await new OpeningsRepository(this.db).moveStatus(row.id, {
           from: "processing",
-          to: "external",
+          to: "unanalyzed",
         });
       }
     );
@@ -488,17 +531,20 @@ export class OpeningsService {
         profileId: profile.id,
         openingId: input.openingId,
       });
-      // An external opening was never analyzed: its application closes.
       if (
         !row ||
         row.status === "processing" ||
         row.status === "failed" ||
-        row.status === "rejected" ||
-        row.status === "external"
+        row.status === "rejected"
       )
         throw notFound();
+      // Reopened, it is analyzed again only if it ever was.
       await openings.updateOpening(row.id, {
-        status: input.closed ? "closed" : "analyzed",
+        status: input.closed
+          ? "closed"
+          : row.embedding
+            ? "analyzed"
+            : "unanalyzed",
         closedAt: input.closed ? new Date() : null,
       });
     });

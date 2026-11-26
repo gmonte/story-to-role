@@ -15,21 +15,35 @@ import { OpeningsService } from "@repo/api/domains/openings/openings-service";
 import { ProfileService } from "@repo/api/domains/profile/profile-service";
 import type { ProfileLanguage } from "@repo/api/domains/profile/truth/sections";
 import type { DbClient } from "@repo/api/tools/db-client";
+import { encodeCursor, decodeCursor } from "@repo/api/utils/db/keyset";
 
 import {
   type ApplicationSource,
   type ApplicationStatus,
-  type ApplicationType,
+  applicationStatusSchema,
   closedStatuses,
 } from "../schemas/application";
 import type {
   ApplicationDetail,
+  BoardFilter,
+  CalendarMarker,
+  CalendarShow,
+  BoardOpening,
+  BoardSort,
+  BoardStatus,
   MetricsPeriod,
   Reminder,
   ResumeVersionRef,
   TrackedApplication,
   TrackerSettings,
 } from "../schemas/tracker";
+import {
+  compareBoardRows,
+  matchesMemoryFilter,
+  needsMemory,
+  resumeOriginOf,
+} from "./board";
+import { calendarMarkers } from "./calendar";
 import { computeMetrics, type MetricsRow } from "./metrics";
 import { computeReminders } from "./reminders";
 import { TrackerRepository } from "./tracker-repository";
@@ -45,28 +59,13 @@ const endOfDay = (date: Date, now: Date) => {
   return end < now ? end : now;
 };
 
-/** What an external application can start as: it was already sent. */
-const externalStatuses: ApplicationStatus[] = [
-  "applied",
-  "in_process",
-  "offer",
-  "hired",
-  "rejected",
-  "withdrawn",
-];
-
 /**
  * Whether the user may move an application to a status by hand: "No
  * response" is only set by time (tracker spec), and "Applied" with
  * documents goes through markApplied, which records what was sent.
  */
-function manualStatus(
-  application: { external: boolean },
-  status: ApplicationStatus
-) {
-  if (status === "no_response") return false;
-  if (status === "applied") return application.external;
-  return true;
+function manualStatus(status: ApplicationStatus) {
+  return status !== "no_response" && status !== "applied";
 }
 
 const defaultSettings: TrackerSettings = {
@@ -100,10 +99,79 @@ function versionRef(cipher: UserCipher, row: VersionRow): ResumeVersionRef {
 const seal = (cipher: UserCipher, value: string | null) =>
   value?.trim() ? cipher.encrypt(value.trim()) : null;
 
+type BoardRow = Awaited<ReturnType<TrackerRepository["boardRows"]>>[number];
+
+/** A board status that is an application's own (not Not analyzed, Analyzed or Closed). */
+const isApplicationStatus = (
+  status: BoardOpening["status"]
+): status is ApplicationStatus =>
+  applicationStatusSchema.options.includes(status as ApplicationStatus);
+
+/** Each row's resume origin; null for an opening with no application. */
+async function boardOrigins(repository: TrackerRepository, rows: BoardRow[]) {
+  const candidates = await repository.resumeCandidates(
+    rows.flatMap((row) => (row.applicationId ? [row.applicationId] : []))
+  );
+  const byApplication = Map.groupBy(
+    candidates,
+    (candidate) => candidate.applicationId
+  );
+  return new Map(
+    rows.map((row) => [
+      row.openingId,
+      row.applicationId
+        ? resumeOriginOf(byApplication.get(row.applicationId) ?? [])
+        : null,
+    ])
+  );
+}
+
+function openBoardRow(
+  cipher: UserCipher,
+  row: BoardRow,
+  origin: BoardOpening["resumeOrigin"]
+): BoardOpening & { addedAt: Date } {
+  return {
+    openingId: row.openingId,
+    applicationId: row.applicationId,
+    company: open(cipher, row.encryptedCompany),
+    title: open(cipher, row.encryptedTitle),
+    status: row.status,
+    state: row.state,
+    lastActivityAt: row.lastActivityAt,
+    appliedAt: row.appliedAt,
+    source: row.source,
+    fitBand: row.fitBand,
+    resumeOrigin: origin,
+    nextStep: open(cipher, row.encryptedNextStep),
+    nextEvent: null,
+    addedAt: row.addedAt,
+  };
+}
+
+/**
+ * Every opening the filter matches, decrypted, in the sort's order: the
+ * structured filters in SQL, then company, title and the resume's origin
+ * in memory (ADR 0014).
+ */
+async function allMatching(
+  repository: TrackerRepository,
+  cipher: UserCipher,
+  query: { profileId: string; filter: BoardFilter; column?: BoardStatus },
+  sort: BoardSort
+) {
+  const rows = await repository.boardRows({ ...query, sort: "activity" });
+  const resumes = await boardOrigins(repository, rows);
+  return rows
+    .map((row) => openBoardRow(cipher, row, resumes.get(row.openingId) ?? null))
+    .filter((row) => matchesMemoryFilter(row, query.filter))
+    .sort(compareBoardRows(sort));
+}
+
 /**
  * The tracker (tracker spec): every application from its first document to
- * the outcome, with few statuses and dated events, what was sent, external
- * applications and in-app reminders.
+ * the outcome, with few statuses and dated events, what was sent and in-app
+ * reminders.
  */
 export class TrackerService {
   constructor(private readonly db: DbClient) {}
@@ -136,6 +204,182 @@ export class TrackerService {
               }
             : null,
         };
+      });
+    });
+  }
+
+  /**
+   * A page of the Openings page (tracker spec, “The Openings page”): every
+   * analyzed opening, filtered on the server. Structured filters page by a
+   * keyset in SQL (ADR 0013); a filter or sort on company, title or the
+   * resume's origin decrypts and derives in memory, and the cursor carries
+   * the position (ADR 0014).
+   */
+  async board(input: {
+    userId: string;
+    filter: BoardFilter;
+    sort: BoardSort;
+    column?: BoardStatus;
+    cursor?: string | null;
+    limit: number;
+    now?: Date;
+  }): Promise<{
+    data: BoardOpening[];
+    nextCursor: string | null;
+    total: number;
+  }> {
+    const now = input.now ?? new Date();
+    const profile = await this.findProfile(input.userId);
+    if (!profile) return { data: [], nextCursor: null, total: 0 };
+    return this.db.transaction(async (tx) => {
+      const repository = new TrackerRepository(tx);
+      const cipher = await getUserCipher(tx, input.userId);
+      const query = {
+        profileId: profile.id,
+        filter: input.filter,
+        column: input.column,
+      };
+      let page: BoardOpening[];
+      let nextCursor: string | null = null;
+      let total: number;
+      const after = decodeCursor(input.cursor);
+      if (needsMemory(input.filter, input.sort)) {
+        const found = await allMatching(repository, cipher, query, input.sort);
+        const offset =
+          after?.keys[0] === "offset" && typeof after.keys[1] === "number"
+            ? after.keys[1]
+            : 0;
+        const next = offset + input.limit;
+        page = found.slice(offset, next);
+        nextCursor =
+          next < found.length
+            ? encodeCursor({ keys: ["offset", next], id: "" })
+            : null;
+        total = found.length;
+      } else {
+        const sort = input.sort as Exclude<BoardSort, "company">;
+        const keys = after?.keys[0] === "keyset" ? after.keys.slice(1) : null;
+        const rows = await repository.boardRows({
+          ...query,
+          sort,
+          after:
+            after &&
+            keys?.every(
+              (key): key is string | number =>
+                typeof key === "string" || typeof key === "number"
+            )
+              ? { keys, id: after.id }
+              : null,
+          // One more than shown tells whether a next page exists.
+          limit: input.limit + 1,
+        });
+        const shown = rows.slice(0, input.limit);
+        const resumes = await boardOrigins(repository, shown);
+        page = shown.map((row) =>
+          openBoardRow(cipher, row, resumes.get(row.openingId) ?? null)
+        );
+        const last = shown[shown.length - 1];
+        if (rows.length > input.limit && last) {
+          const sortKeys =
+            sort === "sent"
+              ? [last.sentKey, last.activityKey]
+              : sort === "status"
+                ? [last.statusRank, last.activityKey]
+                : [last.activityKey];
+          nextCursor = encodeCursor({
+            keys: ["keyset", ...sortKeys],
+            id: last.openingId,
+          });
+        }
+        total = await repository.boardCount(query);
+      }
+
+      const events = await repository.nextEvents(
+        page.flatMap((row) => (row.applicationId ? [row.applicationId] : [])),
+        now
+      );
+      const data = page.map((row) => {
+        const event = events.find(
+          (item) => item.applicationId === row.applicationId
+        );
+        return event
+          ? {
+              ...row,
+              nextEvent: {
+                occurredAt: event.occurredAt,
+                text: open(cipher, event.encryptedText),
+              },
+            }
+          : row;
+      });
+      return { data, nextCursor, total };
+    });
+  }
+
+  /**
+   * A span of the calendar, the weeks a month's grid shows (tracker spec,
+   * “Calendar”): the milestones of
+   * the openings the filter matches, one marker per opening per day in the
+   * viewer's time zone. Notes are decrypted for the screen only.
+   */
+  async calendar(input: {
+    userId: string;
+    filter: BoardFilter;
+    from: string;
+    to: string;
+    timeZone: string;
+    show: CalendarShow;
+    now?: Date;
+  }): Promise<CalendarMarker[]> {
+    const now = input.now ?? new Date();
+    const profile = await this.findProfile(input.userId);
+    if (!profile) return [];
+    const settings = await this.settingsOf(profile.id);
+    return this.db.transaction(async (tx) => {
+      const repository = new TrackerRepository(tx);
+      const cipher = await getUserCipher(tx, input.userId);
+      const openings = await allMatching(
+        repository,
+        cipher,
+        { profileId: profile.id, filter: input.filter },
+        "activity"
+      );
+      const applicationIds = openings.flatMap((opening) =>
+        opening.applicationId ? [opening.applicationId] : []
+      );
+      const events = await repository.timelines(applicationIds);
+      return calendarMarkers({
+        openings: openings.map((opening) => ({
+          openingId: opening.openingId,
+          company: opening.company,
+          title: opening.title,
+          status: opening.status,
+          addedAt: opening.addedAt,
+          application:
+            opening.applicationId && isApplicationStatus(opening.status)
+              ? {
+                  status: opening.status,
+                  appliedAt: opening.appliedAt,
+                  lastActivityAt: opening.lastActivityAt,
+                  events: events
+                    .filter(
+                      (event) => event.applicationId === opening.applicationId
+                    )
+                    .map((event) => ({
+                      kind: event.kind,
+                      occurredAt: event.occurredAt,
+                      text: open(cipher, event.encryptedText),
+                      toStatus: event.toStatus,
+                    })),
+                }
+              : null,
+        })),
+        from: input.from,
+        to: input.to,
+        timeZone: input.timeZone,
+        show: input.show,
+        settings,
+        now,
       });
     });
   }
@@ -219,8 +463,7 @@ export class TrackerService {
 
   /**
    * Moves an application to another status, recorded on its timeline.
-   * "Applied" goes through markApplied (it records what was sent), except
-   * for an external application, which has no documents.
+   * "Applied" goes through markApplied, which records what was sent.
    */
   async setStatus(input: {
     userId: string;
@@ -235,7 +478,7 @@ export class TrackerService {
       const row = await this.requireApplication(tx, profile.id, input);
       const { application } = row;
       if (input.status === application.status) return;
-      if (!manualStatus(application, input.status)) {
+      if (!manualStatus(input.status)) {
         throw new TRPCError({ code: "BAD_REQUEST" });
       }
       // "Marking applied by mistake is undone by changing the status back"
@@ -254,10 +497,6 @@ export class TrackerService {
         encryptedText: input.note?.trim()
           ? cipher.encrypt(input.note.trim())
           : null,
-        appliedAt:
-          input.status === "applied"
-            ? (row.application.appliedAt ?? now)
-            : undefined,
       });
     });
   }
@@ -398,59 +637,6 @@ export class TrackerService {
   }
 
   /**
-   * An application made outside StoryToRole (tracker spec): company,
-   * title, link and optionally the description; no documents, no credits.
-   */
-  async createExternal(input: {
-    userId: string;
-    company: string;
-    title: string;
-    link: string;
-    description?: string;
-    status: ApplicationStatus;
-    appliedAt?: Date;
-    now?: Date;
-  }) {
-    const now = input.now ?? new Date();
-    const appliedAt = input.appliedAt ?? now;
-    if (appliedAt > now || !externalStatuses.includes(input.status)) {
-      throw new TRPCError({ code: "BAD_REQUEST" });
-    }
-    const profile = await this.requireProfile(input.userId);
-    return this.db.transaction(async (tx) => {
-      const cipher = await getUserCipher(tx, input.userId);
-      const seal = (value?: string) =>
-        value?.trim() ? cipher.encrypt(value.trim()) : null;
-      const opening = await new OpeningsRepository(tx).insertOpening({
-        profileId: profile.id,
-        kind: "posted",
-        status: "external",
-        encryptedCompany: seal(input.company),
-        encryptedTitle: seal(input.title),
-        encryptedSourceUrl: seal(input.link),
-        encryptedDescription: seal(input.description),
-      });
-      const repository = new TrackerRepository(tx);
-      const application = await repository.insertApplication({
-        profileId: profile.id,
-        openingId: opening.id,
-        external: true,
-        status: input.status,
-        statusChangedAt: now,
-        lastActivityAt: appliedAt,
-        appliedAt,
-      });
-      await repository.insertEvent({
-        applicationId: application.id,
-        kind: "status_change",
-        occurredAt: appliedAt,
-        toStatus: input.status,
-      });
-      return { applicationId: application.id, openingId: opening.id };
-    });
-  }
-
-  /**
    * The method's fields on an application (tracker spec): `undefined` keeps
    * a field, `null` clears it. The resume sent is only picked by hand when none
    * was recorded; one sent from StoryToRole records itself.
@@ -460,7 +646,6 @@ export class TrackerService {
     applicationId: string;
     source?: ApplicationSource | null;
     sourceDetail?: string | null;
-    applicationType?: ApplicationType | null;
     resumeVersionId?: string | null;
     nextStep?: string | null;
     notes?: string | null;
@@ -475,16 +660,15 @@ export class TrackerService {
         const owned = await repository.resumeVersions(profile.id, [
           input.resumeVersionId,
         ]);
-        // Sent from StoryToRole, it records itself; with nothing recorded
-        // (external, or applied without a resume) it is picked by hand.
+        // Sent from StoryToRole, it records itself; applied without a
+        // resume recorded, it is picked by hand.
         const submissions = await repository.listSubmissions(
           row.application.id
         );
         if (
           submissions.length > 0 ||
           owned.length === 0 ||
-          (!row.application.external &&
-            row.application.status === "in_preparation")
+          row.application.status === "in_preparation"
         ) {
           throw new TRPCError({ code: "BAD_REQUEST" });
         }
@@ -494,7 +678,6 @@ export class TrackerService {
       const changes = {
         source: input.source,
         encryptedSourceDetail: text(input.sourceDetail),
-        applicationType: input.applicationType,
         pickedResumeVersionId: input.resumeVersionId,
         encryptedNextStep: text(input.nextStep),
         encryptedNotes: text(input.notes),
@@ -509,7 +692,7 @@ export class TrackerService {
     });
   }
 
-  /** The resume versions an external application can say it was sent with. */
+  /** The resume versions an application with nothing recorded can say it was sent with. */
   async resumeVersionOptions(userId: string): Promise<ResumeVersionRef[]> {
     const profile = await this.findProfile(userId);
     if (!profile) return [];
@@ -762,12 +945,10 @@ export class TrackerService {
       company: open(cipher, row.encryptedCompany),
       title: open(cipher, row.encryptedTitle),
       status: row.application.status,
-      external: row.application.external,
       statusChangedAt: row.application.statusChangedAt,
       lastActivityAt: row.application.lastActivityAt,
       appliedAt: row.application.appliedAt,
       source: row.application.source,
-      applicationType: row.application.applicationType,
       nextStep: open(cipher, row.application.encryptedNextStep),
       fitBand: null,
       nextEvent: null,

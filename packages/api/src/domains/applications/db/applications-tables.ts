@@ -10,7 +10,6 @@ import { createTable } from "@repo/api/utils/db/create-table";
 import type {
   ApplicationSource,
   ApplicationStatus,
-  ApplicationType,
 } from "../schemas/application";
 
 /**
@@ -40,9 +39,6 @@ export const applicationsTable = createTable(
       .notNull()
       .default("in_preparation"),
     tone: d.text().$type<Tone>().notNull().default("your_style"),
-    // Registered by hand for an opening applied to outside StoryToRole
-    // (tracker spec); it stops being external with its first document.
-    external: d.boolean().notNull().default(false),
     statusChangedAt: d
       .timestamp({ withTimezone: true })
       .default(sql`CURRENT_TIMESTAMP`)
@@ -58,7 +54,6 @@ export const applicationsTable = createTable(
     // reach a prompt; the free text (all encrypted) never does.
     source: d.text().$type<ApplicationSource>(),
     encryptedSourceDetail: d.text(),
-    applicationType: d.text().$type<ApplicationType>(),
     // The resume the user says an external application was sent with: a
     // resume version picked by hand. Applications sent from StoryToRole
     // read it from their submissions instead.

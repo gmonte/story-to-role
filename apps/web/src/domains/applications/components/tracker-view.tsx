@@ -1,34 +1,17 @@
 "use client";
 
-import { useState, useSyncExternalStore } from "react";
+import { useSyncExternalStore } from "react";
 
-import { useMutation, useQuery } from "@tanstack/react-query";
-import { Columns3, List, Plus } from "lucide-react";
+import { Columns3, List } from "lucide-react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
-import type { TrackerSettings } from "@repo/api/domains/applications/schemas/tracker";
 import { useTranslation } from "@repo/intl/use-translation";
-import { Button } from "@repo/web/components/ui/button";
-import { Checkbox } from "@repo/web/components/ui/checkbox";
-import { Input } from "@repo/web/components/ui/input";
-import { Label } from "@repo/web/components/ui/label";
-import { toast } from "@repo/web/components/ui/sonner";
 import { Tabs, TabsList, TabsTrigger } from "@repo/web/components/ui/tabs";
-import { Skeleton } from "@repo/web/components/ui/skeleton";
 
-import { useTRPC } from "~/tools/trpc/client";
-
-import { useRefreshTracker, useTracker } from "../hooks/use-tracker";
-import {
-  filtersToParams,
-  parseFilters,
-  type ApplicationFilters,
-} from "../utils/application-filters";
-import { ApplicationFiltersBar, ApplicationsList } from "./applications-list";
-import { ApplicationsKanban } from "./applications-kanban";
-import { ExternalApplicationDialog } from "./external-application-dialog";
-import { ReminderList } from "./reminder-list";
-import { TrackerMetricsPanel } from "./tracker-metrics-panel";
+import { useBoard, useBoardQuery } from "../hooks/use-board";
+import { BoardFilterBar } from "./board-filter-bar";
+import { OpeningsKanban } from "./openings-kanban";
+import { OpeningsList } from "./openings-list";
 
 type View = "list" | "kanban";
 const viewKey = "applications-view";
@@ -75,218 +58,50 @@ function useView(): [View, (view: View) => void] {
 }
 
 /**
- * The Applications page (tracker spec): every application from its first
- * document to the outcome, as a filtered list or a kanban by status, with
- * the reminders and metrics on top.
+ * The Openings page's Tracking tab (tracker spec, “Tracking”): the filter,
+ * then every opening it matches, as a list or a kanban.
  */
 export function TrackerView() {
   const t = useTranslation();
-  const router = useRouter();
-  const pathname = usePathname();
-  const params = useSearchParams();
-  const tracker = useTracker();
-  const applications = tracker.data ?? [];
   const [view, setView] = useView();
-  const filters = parseFilters(params);
-  const setFilters = (next: ApplicationFilters) => {
-    const query = new URLSearchParams(params.toString());
-    for (const key of ["status", "type", "company", "sent", "sort"]) {
-      query.delete(key);
-    }
-    for (const [key, value] of Object.entries(filtersToParams(next))) {
-      query.set(key, value);
-    }
-    router.replace(`${pathname}?${query.toString()}`, { scroll: false });
-  };
+  const { filter, sort, setFilter, setSort } = useBoardQuery();
+  // The list's pages; their total is the filter's count in both views.
+  const board = useBoard({ filter, sort, limit: 25 });
 
+  // The whole page uses the full width, so the kanban lines up with the
+  // filter above it.
   return (
-    <div className="w-full overflow-y-auto">
-      <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 p-6 text-sm">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <p className="text-muted-foreground">
-            {t.formatMessage({
-              defaultMessage:
-                "Every application from its first document to the outcome. Openings you only analyzed stay out of it.",
-            })}
-          </p>
-          <ExternalApplicationDialog
-            trigger={
-              <Button size="sm" variant="outline">
-                <Plus />
-                {t.formatMessage({ defaultMessage: "Applied elsewhere" })}
-              </Button>
-            }
-          />
-        </div>
-
-        <ReminderList />
-
-        <TrackerMetricsPanel />
-
-        {!tracker.data ? (
-          // The view's room while the applications load: rows for the
-          // list, columns of cards for the kanban.
-          <div className="flex flex-col gap-3">
-            <Skeleton className="h-9 w-44" />
-            {view === "list" ? (
-              [0, 1, 2, 3, 4].map((index) => (
-                <Skeleton key={index} className="h-14 w-full rounded-lg" />
-              ))
-            ) : (
-              <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-                {[3, 2, 2, 1].map((cards, column) => (
-                  <div key={column} className="flex flex-col gap-2">
-                    <Skeleton className="h-4 w-24" />
-                    {Array.from({ length: cards }, (_, index) => (
-                      <Skeleton
-                        key={index}
-                        className="h-20 w-full rounded-md"
-                      />
-                    ))}
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        ) : applications.length === 0 ? (
-          <p className="text-muted-foreground rounded-lg border border-dashed p-6 text-center">
-            {t.formatMessage({
-              defaultMessage:
-                "No applications yet. One starts when you generate a document for an opening, or add one you made elsewhere.",
-            })}
-          </p>
-        ) : (
-          <section className="flex min-w-0 flex-col gap-3">
-            <Tabs
-              value={view}
-              onValueChange={(value) => setView(value as View)}
-            >
-              <TabsList>
-                <TabsTrigger value="list">
-                  <List />
-                  {t.formatMessage({ defaultMessage: "List" })}
-                </TabsTrigger>
-                <TabsTrigger value="kanban">
-                  <Columns3 />
-                  {t.formatMessage({ defaultMessage: "Kanban" })}
-                </TabsTrigger>
-              </TabsList>
-            </Tabs>
-            {view === "list" ? (
-              <ApplicationsList
-                applications={applications}
-                filters={filters}
-                onFiltersChange={setFilters}
-              />
-            ) : (
-              <div className="flex min-w-0 flex-col gap-3">
-                <ApplicationFiltersBar
-                  filters={filters}
-                  onChange={setFilters}
-                  withSort={false}
-                />
-                <ApplicationsKanban
-                  applications={applications}
-                  filters={filters}
-                />
-              </div>
-            )}
-          </section>
-        )}
-
-        <TrackerSettingsForm />
-      </div>
-    </div>
-  );
-}
-
-/** Reminders are configurable (tracker spec). */
-function TrackerSettingsForm() {
-  const trpc = useTRPC();
-  const settings = useQuery(trpc.tracker.settings.queryOptions({}));
-  if (!settings.data) return null;
-  // Mounted once the settings arrive: the inputs start from them.
-  return <SettingsForm initial={settings.data} />;
-}
-
-function SettingsForm({ initial }: { initial: TrackerSettings }) {
-  const t = useTranslation();
-  const trpc = useTRPC();
-  const refresh = useRefreshTracker();
-  const [value, setValue] = useState(initial);
-  const save = useMutation(
-    trpc.tracker.updateSettings.mutationOptions({
-      onSuccess: async () => {
-        await refresh();
-        toast.success(t.formatMessage({ defaultMessage: "Settings saved." }));
-      },
-      onError: (error) => toast.error(error.message),
-    })
-  );
-  return (
-    <form
-      className="bg-card flex flex-col gap-3 rounded-lg border p-4"
-      onSubmit={(event) => {
-        event.preventDefault();
-        save.mutate(value);
-      }}
+    <div
+      data-fill={view === "kanban" ? "" : undefined}
+      className="flex w-full flex-col gap-4 px-6 md:data-[fill]:min-h-0 md:data-[fill]:flex-1"
     >
-      <h2 className="font-medium">
-        {t.formatMessage({ defaultMessage: "Reminders" })}
-      </h2>
-      <label className="flex items-center gap-2">
-        <Checkbox
-          checked={value.remindersEnabled}
-          onCheckedChange={(checked) =>
-            setValue({ ...value, remindersEnabled: checked === true })
-          }
-        />
-        {t.formatMessage({ defaultMessage: "Show reminders" })}
-      </label>
-      <div className="grid gap-3 sm:grid-cols-2">
-        <div className="grid gap-1.5">
-          <Label htmlFor="follow-up-days">
-            {t.formatMessage({
-              defaultMessage: "Suggest a follow-up after (days)",
-            })}
-          </Label>
-          <Input
-            id="follow-up-days"
-            type="number"
-            min={1}
-            max={90}
-            value={value.followUpDays}
-            onChange={(event) =>
-              setValue({ ...value, followUpDays: Number(event.target.value) })
-            }
-          />
-        </div>
-        <div className="grid gap-1.5">
-          <Label htmlFor="no-response-days">
-            {t.formatMessage({
-              defaultMessage: "Close as “No response” after (days)",
-            })}
-          </Label>
-          <Input
-            id="no-response-days"
-            type="number"
-            min={7}
-            max={180}
-            value={value.noResponseDays}
-            onChange={(event) =>
-              setValue({ ...value, noResponseDays: Number(event.target.value) })
-            }
-          />
-        </div>
-      </div>
-      <Button
-        type="submit"
-        size="sm"
+      <BoardFilterBar
+        filter={filter}
+        onChange={setFilter}
+        total={board.total}
+        {...(view === "list" ? { sort, onSortChange: setSort } : {})}
+      />
+      <Tabs
+        value={view}
+        onValueChange={(value) => setView(value as View)}
         className="self-start"
-        disabled={save.isPending}
       >
-        {t.formatMessage({ defaultMessage: "Save" })}
-      </Button>
-    </form>
+        <TabsList>
+          <TabsTrigger value="list">
+            <List />
+            {t.formatMessage({ defaultMessage: "List" })}
+          </TabsTrigger>
+          <TabsTrigger value="kanban">
+            <Columns3 />
+            {t.formatMessage({ defaultMessage: "Kanban" })}
+          </TabsTrigger>
+        </TabsList>
+      </Tabs>
+      {view === "list" ? (
+        <OpeningsList filter={filter} board={board} />
+      ) : (
+        <OpeningsKanban filter={filter} />
+      )}
+    </div>
   );
 }

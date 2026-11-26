@@ -67,16 +67,27 @@ export class CareerService {
   async startState(userId: string) {
     const repository = new CareerRepository(this.db);
     const profile = await repository.findProfileByUserId(userId);
-    if (!profile) return { path: null, hasStarted: false, hasOpening: false };
-    const [hasStarted, hasProfileDocument, hasOpening] = await Promise.all([
-      repository.hasStarted(profile.id),
-      new ProfileRepository(this.db).hasDocument(userId),
-      repository.hasOpening(profile.id),
-    ]);
+    if (!profile) {
+      return {
+        path: null,
+        hasStarted: false,
+        hasOpening: false,
+        hasPublishedProfile: false,
+      };
+    }
+    const profiles = new ProfileRepository(this.db);
+    const [hasStarted, hasProfileDocument, hasOpening, published] =
+      await Promise.all([
+        repository.hasStarted(profile.id),
+        profiles.hasDocument(userId),
+        repository.hasOpening(profile.id),
+        profiles.findDocument(userId, "profile"),
+      ]);
     return {
       path: profile.startPath,
       hasStarted: hasStarted || hasProfileDocument,
       hasOpening,
+      hasPublishedProfile: !!published?.publishedVersionId,
     };
   }
 

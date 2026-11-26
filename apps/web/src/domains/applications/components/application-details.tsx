@@ -6,9 +6,7 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 
 import {
   type ApplicationSource,
-  type ApplicationType,
   applicationSourceSchema,
-  applicationTypeSchema,
 } from "@repo/api/domains/applications/schemas/application";
 import type { ApplicationDetail } from "@repo/api/domains/applications/schemas/tracker";
 import { useTranslation } from "@repo/intl/use-translation";
@@ -39,7 +37,6 @@ import {
 type Details = {
   source?: ApplicationSource | null;
   sourceDetail?: string | null;
-  applicationType?: ApplicationType | null;
   resumeVersionId?: string | null;
   nextStep?: string | null;
   notes?: string | null;
@@ -172,38 +169,6 @@ function InlineValue({
   );
 }
 
-/** Standard (a profile reused across openings) or dedicated. */
-export function TypeSection({ detail }: { detail: ApplicationDetail }) {
-  const t = useTranslation();
-  const labels = useTrackerLabels();
-  const { save, pending } = useSaveDetails(detail);
-  return (
-    <Section
-      label={t.formatMessage({ defaultMessage: "Application type" })}
-      action={
-        <OptionsPopover
-          label={t.formatMessage({ defaultMessage: "Edit application type" })}
-          value={detail.applicationType}
-          disabled={pending}
-          options={applicationTypeSchema.options.map((value) => ({
-            value,
-            label: labels.types[value],
-          }))}
-          onSelect={(applicationType) => save({ applicationType })}
-        />
-      }
-    >
-      {detail.applicationType ? (
-        <p className="text-sm break-words">
-          {labels.types[detail.applicationType]}
-        </p>
-      ) : (
-        <Empty>{t.formatMessage({ defaultMessage: "Not recorded" })}</Empty>
-      )}
-    </Section>
-  );
-}
-
 /**
  * The versions sent. An external application has no submission, so its
  * resume is picked by hand.
@@ -214,11 +179,10 @@ export function SentSection({ detail }: { detail: ApplicationDetail }) {
   const documentLabels = useDocumentLabels();
   const { save, pending } = useSaveDetails(detail);
   const [open, setOpen] = useState(false);
-  // An external application, or one marked as applied without any document,
-  // says by hand which resume it was sent with.
+  // One marked as applied without any document says by hand which resume
+  // it was sent with.
   const picksByHand =
-    (detail.external || detail.status !== "in_preparation") &&
-    detail.submissions.length === 0;
+    detail.status !== "in_preparation" && detail.submissions.length === 0;
   const options = useQuery({
     ...trpc.tracker.resumeVersions.queryOptions({}),
     enabled: picksByHand,

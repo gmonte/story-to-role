@@ -14,6 +14,7 @@ import { getUserCipher } from "@repo/api/domains/encryption/user-cipher";
 import { fitChecksTable } from "@repo/api/domains/openings/db/openings-tables";
 import { ProfileService } from "@repo/api/domains/profile/profile-service";
 import { createTestUser } from "@repo/api/test/create-test-user";
+import { appliedOpening } from "@repo/api/test/applied-opening";
 import {
   clearTestDatabase,
   closeTestDatabase,
@@ -188,13 +189,11 @@ async function setup() {
   });
   const profile = await career.findProfileByUserId(user.id);
   const tracker = new TrackerService(db);
+  // An opening applied to with nothing from StoryToRole.
   const external = (appliedAt = now) =>
-    tracker.createExternal({
+    appliedOpening({
       userId: user.id,
-      company: "Globex",
-      title: "Platform Engineer",
-      link: "https://example.com/jobs/1",
-      status: "applied",
+      profileId: profile.id,
       appliedAt,
       now,
     });
@@ -360,7 +359,6 @@ describe("tracker, the method's fields", () => {
     await ctx.tracker.updateDetails({
       userId: ctx.user.id,
       applicationId: first.applicationId,
-      applicationType: "external",
       resumeVersionId: generated.id,
     });
 
@@ -383,7 +381,6 @@ describe("tracker, the method's fields", () => {
     await ctx.tracker.updateDetails({
       userId: ctx.user.id,
       applicationId: second.applicationId,
-      applicationType: "external",
       resumeVersionId: copy.id,
     });
 
@@ -436,7 +433,6 @@ describe("tracker, the method's fields", () => {
     await ctx.tracker.updateDetails({
       userId: ctx.user.id,
       applicationId,
-      applicationType: "external",
       source: "other",
       sourceDetail: "Meetup",
       resumeVersionId: version.id,
@@ -466,7 +462,6 @@ describe("tracker, the method's fields", () => {
     expect(detail).toMatchObject({
       source: "other",
       sourceDetail: "Meetup",
-      applicationType: "external",
       nextStep: "HR call with Ana (ana@globex.com)",
       notes: "Ana's phone 555-0100",
       declineReason: "Onsite five days",
@@ -496,11 +491,10 @@ describe("tracker, the method's fields", () => {
     expect(cleared.notes).toBeNull();
     expect(cleared.nextStep).not.toBeNull();
 
-    // One still in preparation records its own: no hand-picking. (Applied
-    // without a resume, it picks by hand like an external one.)
+    // One still in preparation records its own: no hand-picking.
     await ctx.db
       .update(applicationsTable)
-      .set({ external: false, status: "in_preparation" })
+      .set({ status: "in_preparation" })
       .where(eq(applicationsTable.id, applicationId));
     await expect(
       ctx.tracker.updateDetails({

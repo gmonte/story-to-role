@@ -2,7 +2,7 @@ import { randomBytes } from "node:crypto";
 
 import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { TrackerService } from "@repo/api/domains/applications/tracker/tracker-service";
+import { appliedOpening } from "@repo/api/test/applied-opening";
 import { createTestUser } from "@repo/api/test/create-test-user";
 import {
   clearTestDatabase,
@@ -41,6 +41,7 @@ describe("onboarding start", () => {
       path: null,
       hasStarted: false,
       hasOpening: false,
+      hasPublishedProfile: false,
     });
 
     await career.chooseStart({ ...input, path: "opening" });
@@ -76,12 +77,12 @@ describe("onboarding start", () => {
     expect(await career.startState(user.id)).toMatchObject({
       hasStarted: false,
     });
-    await new TrackerService(db).createExternal({
+    const profile = await career.getOrCreateProfile(input);
+    await appliedOpening({
       userId: user.id,
-      company: "Globex",
+      profileId: profile.id,
       title: "SRE",
-      link: "https://example.com/jobs/1",
-      status: "applied",
+      appliedAt: new Date(),
     });
 
     expect(await career.startState(user.id)).toMatchObject({

@@ -6,13 +6,13 @@ import { CareerRepository } from "@repo/api/domains/career/career-repository";
 import { DocumentsRepository } from "@repo/api/domains/documents/documents-repository";
 import { getUserCipher } from "@repo/api/domains/encryption/user-cipher";
 import { OpeningsRepository } from "@repo/api/domains/openings/openings-repository";
-import { OpeningsService } from "@repo/api/domains/openings/openings-service";
 import { createTestUser } from "@repo/api/test/create-test-user";
 import {
   clearTestDatabase,
   closeTestDatabase,
   getTestDatabase,
 } from "@repo/api/test/pglite";
+import { appliedOpening } from "@repo/api/test/applied-opening";
 
 import { TrackerService } from "./tracker-service";
 
@@ -38,13 +38,11 @@ async function setup() {
   });
   const profile = await career.findProfileByUserId(user.id);
   const tracker = new TrackerService(db);
+  // An opening applied to with nothing from StoryToRole.
   const external = (input: { appliedAt?: Date } = {}) =>
-    tracker.createExternal({
+    appliedOpening({
       userId: user.id,
-      company: "Globex",
-      title: "Platform Engineer",
-      link: "https://example.com/jobs/1",
-      status: "applied",
+      profileId: profile.id,
       appliedAt: input.appliedAt ?? now,
       now,
     });
@@ -58,56 +56,6 @@ describe("tracker", () => {
 
   afterAll(async () => {
     await closeTestDatabase();
-  });
-
-  it("registers an external application without documents or credits", async () => {
-    const ctx = await setup();
-    const { applicationId, openingId } = await ctx.external();
-
-    const [application] = await ctx.tracker.list(ctx.user.id, now);
-    expect(application).toMatchObject({
-      id: applicationId,
-      company: "Globex",
-      title: "Platform Engineer",
-      status: "applied",
-      external: true,
-    });
-    const openings = await new OpeningsService(ctx.db).list(ctx.user.id);
-    expect(openings[0]).toMatchObject({
-      id: openingId,
-      status: "external",
-      applicationStatus: "applied",
-    });
-  });
-
-  it("stops being external once a document exists, not when one starts", async () => {
-    const ctx = await setup();
-    const { openingId } = await ctx.external();
-    const documents = new DocumentsRepository(ctx.db);
-    const application = await documents.findOrInsertApplication({
-      profileId: ctx.profile.id,
-      openingId,
-    });
-    expect((await ctx.tracker.list(ctx.user.id, now))[0].external).toBe(true);
-
-    const document = await documents.findOrInsertApplicationDocument({
-      profileId: ctx.profile.id,
-      applicationId: application.id,
-      kind: "resume",
-    });
-    const version = await documents.insertVersion({
-      documentId: document.id,
-      language: "en-US",
-    });
-    await documents.insertSnapshot({
-      versionId: version.id,
-      sequence: 1,
-      origin: "generated",
-      author: "ai",
-      encryptedContent: "x",
-    });
-
-    expect((await ctx.tracker.list(ctx.user.id, now))[0].external).toBe(false);
   });
 
   it("never sets No response by hand", async () => {

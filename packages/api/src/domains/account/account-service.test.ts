@@ -12,6 +12,7 @@ import { getUserCipher } from "@repo/api/domains/encryption/user-cipher";
 import { AgentChatRepository } from "@repo/api/domains/agents/agent-chat-repository";
 import { DocumentsRepository } from "@repo/api/domains/documents/documents-repository";
 import { createTestUser } from "@repo/api/test/create-test-user";
+import { appliedOpening } from "@repo/api/test/applied-opening";
 import {
   clearTestDatabase,
   closeTestDatabase,
@@ -104,12 +105,11 @@ async function setup() {
     storageKey,
   });
   const tracker = new TrackerService(db);
-  const { applicationId } = await tracker.createExternal({
+  const { applicationId } = await appliedOpening({
     userId: user.id,
-    company: "Globex",
+    profileId: profile.id,
     title: "SRE",
-    link: "https://example.com/jobs/1",
-    status: "applied",
+    appliedAt: new Date(),
   });
   await tracker.addEvent({
     userId: user.id,
@@ -161,7 +161,7 @@ describe("account", () => {
       expect.objectContaining({ text: "HR interview went well" })
     );
     expect(read("openings/openings.json")).toEqual([
-      expect.objectContaining({ company: "Globex", status: "external" }),
+      expect.objectContaining({ company: "Globex", status: "analyzed" }),
     ]);
     const imported = Object.keys(zip).find((name) =>
       name.startsWith("imported-files/")

@@ -93,20 +93,20 @@ _Avoid_: Style, mood
 ## Openings and applications
 
 **Opening**:
-A target the user may apply to at one company: a posted vacancy, or a company the user wants to approach even with no vacancy open.
-_Avoid_: Job, vacancy, role, posting, target
+A target the user may apply to at one company: a posted vacancy, or a company the user wants to approach even with no vacancy open. Analyzed when added, or registered not analyzed (no credits) and analyzed later.
+_Avoid_: Job, vacancy, role, posting, target, external application
 
 **Application**:
-The user's pursuit of one opening, which starts when its first document is generated or copied, when the user marks the opening as applied or moves its status without any document, or when it is registered by hand as an external application and closes hired, rejected, withdrawn or with no response.
+The user's pursuit of one opening, which starts when its first document is generated or copied, or when the user marks the opening as applied or moves its status without any document, and closes hired, rejected, withdrawn or with no response.
 _Avoid_: Candidacy, job, tracker entry
-
-**External application**:
-An application the user made outside StoryToRole and registered by hand, with no documents and no credits spent; it stops being external once a document exists for it.
-_Avoid_: Manual entry, imported application
 
 **Event**:
 A dated entry on an application's timeline ("HR interview on Nov 20"), recorded instead of adding statuses.
 _Avoid_: Step, stage, activity
+
+**Milestone**:
+A date in an opening's life shown on the calendar: the opening added, applied, a status change or a dated note, or a projected one (the follow-up reminder, the day it would turn "No response").
+_Avoid_: Calendar event, deadline
 
 **Fit check**:
 The method's screening, run automatically when an opening is added and shown as a hint: a high, medium or low band, each requirement backed by a profile passage or listed as a gap.

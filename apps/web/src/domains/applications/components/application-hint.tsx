@@ -7,7 +7,10 @@ import { useTranslation } from "@repo/intl/use-translation";
 export function ApplicationHint({
   application,
 }: {
-  application: TrackedApplication;
+  application: Pick<
+    TrackedApplication,
+    "nextEvent" | "nextStep" | "appliedAt" | "lastActivityAt"
+  > & { statusChangedAt?: Date };
 }) {
   const t = useTranslation();
   if (application.nextEvent) {
@@ -38,7 +41,10 @@ export function ApplicationHint({
   return t.formatMessage(
     { defaultMessage: "Since {date}" },
     {
-      date: t.formatDate(application.statusChangedAt, { dateStyle: "medium" }),
+      date: t.formatDate(
+        application.statusChangedAt ?? application.lastActivityAt,
+        { dateStyle: "medium" }
+      ),
     }
   );
 }

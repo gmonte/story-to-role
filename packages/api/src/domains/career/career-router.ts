@@ -77,6 +77,8 @@ export const careerRouter = createTRPCRouter({
         path: startPathSchema.nullable(),
         hasStarted: z.boolean(),
         hasOpening: z.boolean(),
+        // Home is the Openings page once the profile is published.
+        hasPublishedProfile: z.boolean(),
       })
     )
     .query(({ ctx }) => new CareerService(db).startState(ctx.userId)),

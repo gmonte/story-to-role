@@ -19,6 +19,8 @@ import {
   boardOpeningSchema,
   boardSortSchema,
   boardStatusSchema,
+  calendarMarkerSchema,
+  calendarShowSchema,
   metricsPeriodSchema,
   reminderSchema,
   resumeVersionRefSchema,
@@ -29,6 +31,16 @@ import {
 import { TrackerService } from "./tracker-service";
 
 const applicationInput = z.object({ applicationId: z.uuid() });
+
+/** An IANA time zone this runtime knows. */
+function isTimeZone(timeZone: string) {
+  try {
+    new Intl.DateTimeFormat("en-US", { timeZone });
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 export const trackerRouter = createTRPCRouter({
   list: userProcedure
@@ -77,6 +89,34 @@ export const trackerRouter = createTRPCRouter({
         column,
         cursor,
         limit,
+      });
+    }),
+
+  calendar: userProcedure
+    .meta(
+      openApiMeta(
+        "tracker",
+        "GET",
+        "/openings/calendar",
+        "Returns one month of milestones of the openings the filter matches, per opening and day in the viewer's time zone"
+      )
+    )
+    .input(
+      boardFilterSchema.extend({
+        month: z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/),
+        timeZone: z.string().refine(isTimeZone, "Unknown time zone"),
+        show: calendarShowSchema.default("latest"),
+      })
+    )
+    .output(z.array(calendarMarkerSchema))
+    .query(({ ctx, input }) => {
+      const { month, timeZone, show, ...filter } = input;
+      return new TrackerService(db).calendar({
+        userId: ctx.userId,
+        filter,
+        month,
+        timeZone,
+        show,
       });
     }),
 

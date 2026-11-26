@@ -242,3 +242,41 @@ export const boardOpeningSchema = z.object({
   nextStep: z.string().nullable(),
 });
 export type BoardOpening = z.infer<typeof boardOpeningSchema>;
+
+export const calendarShowSchema = z.enum(["latest", "timeline"]);
+export type CalendarShow = z.infer<typeof calendarShowSchema>;
+
+/** A milestone's kind (tracker spec, “Calendar”); the last two are projected. */
+export const milestoneKindSchema = z.enum([
+  "added",
+  "applied",
+  "status_change",
+  "note",
+  "follow_up",
+  "no_response",
+]);
+export type MilestoneKind = z.infer<typeof milestoneKindSchema>;
+
+export const milestoneSchema = z.object({
+  kind: milestoneKindSchema,
+  at: z.date(),
+  projected: z.boolean(),
+  // A status change's new status.
+  status: applicationStatusSchema.nullable(),
+  // A note's text (encrypted at rest, never in a prompt).
+  text: z.string().nullable(),
+});
+export type Milestone = z.infer<typeof milestoneSchema>;
+
+/** One opening's milestones on one day, the most advanced first. */
+export const calendarMarkerSchema = z.object({
+  openingId: z.uuid(),
+  company: z.string().nullable(),
+  title: z.string().nullable(),
+  // The day in the viewer's time zone, as YYYY-MM-DD.
+  day: z.string(),
+  lead: milestoneSchema,
+  // Every milestone of that day, in time order (the lead included).
+  milestones: z.array(milestoneSchema),
+});
+export type CalendarMarker = z.infer<typeof calendarMarkerSchema>;

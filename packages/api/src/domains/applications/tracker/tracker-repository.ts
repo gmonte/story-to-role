@@ -147,6 +147,7 @@ export class TrackerRepository {
     const query = this.tx
       .select({
         openingId: openingsTable.id,
+        addedAt: openingsTable.createdAt,
         applicationId: applicationsTable.id,
         encryptedCompany: openingsTable.encryptedCompany,
         encryptedTitle: openingsTable.encryptedTitle,
@@ -188,6 +189,21 @@ export class TrackerRepository {
       )
       .where(this.boardWhere(input));
     return row?.count ?? 0;
+  }
+
+  /** The applications' timelines, for the calendar's milestones. */
+  async timelines(applicationIds: string[]) {
+    if (applicationIds.length === 0) return [];
+    return this.tx
+      .select({
+        applicationId: applicationEventsTable.applicationId,
+        kind: applicationEventsTable.kind,
+        occurredAt: applicationEventsTable.occurredAt,
+        encryptedText: applicationEventsTable.encryptedText,
+        toStatus: applicationEventsTable.toStatus,
+      })
+      .from(applicationEventsTable)
+      .where(inArray(applicationEventsTable.applicationId, applicationIds));
   }
 
   /**

@@ -25,6 +25,8 @@ import {
 import type {
   ApplicationDetail,
   BoardFilter,
+  CalendarMarker,
+  CalendarShow,
   BoardOpening,
   BoardSort,
   BoardStatus,
@@ -40,6 +42,7 @@ import {
   needsMemory,
   resumeOriginOf,
 } from "./board";
+import { calendarMarkers } from "./calendar";
 import { computeMetrics, type MetricsRow } from "./metrics";
 import { computeReminders } from "./reminders";
 import { TrackerRepository } from "./tracker-repository";
@@ -109,6 +112,70 @@ function versionRef(cipher: UserCipher, row: VersionRow): ResumeVersionRef {
 /** Free text from a form: empty clears it. */
 const seal = (cipher: UserCipher, value: string | null) =>
   value?.trim() ? cipher.encrypt(value.trim()) : null;
+
+type BoardRow = Awaited<ReturnType<TrackerRepository["boardRows"]>>[number];
+
+/** Each row's resume origin; null for an opening with no application. */
+async function boardOrigins(repository: TrackerRepository, rows: BoardRow[]) {
+  const candidates = await repository.resumeCandidates(
+    rows.flatMap((row) => (row.applicationId ? [row.applicationId] : []))
+  );
+  return new Map(
+    rows.map((row) => [
+      row.openingId,
+      row.applicationId
+        ? resumeOriginOf(
+            candidates.filter(
+              (candidate) => candidate.applicationId === row.applicationId
+            )
+          )
+        : null,
+    ])
+  );
+}
+
+function openBoardRow(
+  cipher: UserCipher,
+  row: BoardRow,
+  origin: BoardOpening["resumeOrigin"]
+): BoardOpening & { addedAt: Date } {
+  return {
+    openingId: row.openingId,
+    applicationId: row.applicationId,
+    company: open(cipher, row.encryptedCompany),
+    title: open(cipher, row.encryptedTitle),
+    status: row.status,
+    state: row.state,
+    external: row.external,
+    lastActivityAt: row.lastActivityAt,
+    appliedAt: row.appliedAt,
+    source: row.source,
+    fitBand: row.fitBand,
+    resumeOrigin: origin,
+    nextStep: open(cipher, row.encryptedNextStep),
+    nextEvent: null,
+    addedAt: row.addedAt,
+  };
+}
+
+/**
+ * Every opening the filter matches, decrypted, in the sort's order: the
+ * structured filters in SQL, then company, title and the resume's origin
+ * in memory (ADR 0014).
+ */
+async function allMatching(
+  repository: TrackerRepository,
+  cipher: UserCipher,
+  query: { profileId: string; filter: BoardFilter; column?: BoardStatus },
+  sort: BoardSort
+) {
+  const rows = await repository.boardRows({ ...query, sort: "activity" });
+  const resumes = await boardOrigins(repository, rows);
+  return rows
+    .map((row) => openBoardRow(cipher, row, resumes.get(row.openingId) ?? null))
+    .filter((row) => matchesMemoryFilter(row, query.filter))
+    .sort(compareBoardRows(sort));
+}
 
 /**
  * The tracker (tracker spec): every application from its first document to
@@ -181,52 +248,12 @@ export class TrackerService {
         filter: input.filter,
         column: input.column,
       };
-      type Row = Awaited<ReturnType<TrackerRepository["boardRows"]>>[number];
-      const origins = async (rows: Row[]) => {
-        const candidates = await repository.resumeCandidates(
-          rows.flatMap((row) => (row.applicationId ? [row.applicationId] : []))
-        );
-        return new Map(
-          rows.map((row) => [
-            row.openingId,
-            row.applicationId
-              ? resumeOriginOf(
-                  candidates.filter(
-                    (candidate) => candidate.applicationId === row.applicationId
-                  )
-                )
-              : null,
-          ])
-        );
-      };
-      const opened = (row: Row, origin: BoardOpening["resumeOrigin"]) => ({
-        openingId: row.openingId,
-        applicationId: row.applicationId,
-        company: open(cipher, row.encryptedCompany),
-        title: open(cipher, row.encryptedTitle),
-        status: row.status,
-        state: row.state,
-        external: row.external,
-        lastActivityAt: row.lastActivityAt,
-        appliedAt: row.appliedAt,
-        source: row.source,
-        fitBand: row.fitBand,
-        resumeOrigin: origin,
-        nextStep: open(cipher, row.encryptedNextStep),
-        nextEvent: null as BoardOpening["nextEvent"],
-      });
-
       let page: BoardOpening[];
       let nextCursor: string | null = null;
       let total: number;
       const after = decodeCursor(input.cursor);
       if (needsMemory(input.filter, input.sort)) {
-        const rows = await repository.boardRows({ ...query, sort: "activity" });
-        const resumes = await origins(rows);
-        const found = rows
-          .map((row) => opened(row, resumes.get(row.openingId) ?? null))
-          .filter((row) => matchesMemoryFilter(row, input.filter))
-          .sort(compareBoardRows(input.sort));
+        const found = await allMatching(repository, cipher, query, input.sort);
         const offset =
           after?.keys[0] === "offset" && typeof after.keys[1] === "number"
             ? after.keys[1]
@@ -256,9 +283,9 @@ export class TrackerService {
           limit: input.limit + 1,
         });
         const shown = rows.slice(0, input.limit);
-        const resumes = await origins(shown);
+        const resumes = await boardOrigins(repository, shown);
         page = shown.map((row) =>
-          opened(row, resumes.get(row.openingId) ?? null)
+          openBoardRow(cipher, row, resumes.get(row.openingId) ?? null)
         );
         const last = shown[shown.length - 1];
         if (rows.length > input.limit && last) {
@@ -295,6 +322,72 @@ export class TrackerService {
           : row;
       });
       return { data, nextCursor, total };
+    });
+  }
+
+  /**
+   * One month of the calendar (tracker spec, “Calendar”): the milestones of
+   * the openings the filter matches, one marker per opening per day in the
+   * viewer's time zone. Notes are decrypted for the screen only.
+   */
+  async calendar(input: {
+    userId: string;
+    filter: BoardFilter;
+    month: string;
+    timeZone: string;
+    show: CalendarShow;
+    now?: Date;
+  }): Promise<CalendarMarker[]> {
+    const now = input.now ?? new Date();
+    const profile = await this.findProfile(input.userId);
+    if (!profile) return [];
+    const settings = await this.settingsOf(profile.id);
+    return this.db.transaction(async (tx) => {
+      const repository = new TrackerRepository(tx);
+      const cipher = await getUserCipher(tx, input.userId);
+      const openings = await allMatching(
+        repository,
+        cipher,
+        { profileId: profile.id, filter: input.filter },
+        "activity"
+      );
+      const applicationIds = openings.flatMap((opening) =>
+        opening.applicationId ? [opening.applicationId] : []
+      );
+      const events = await repository.timelines(applicationIds);
+      return calendarMarkers({
+        openings: openings.map((opening) => ({
+          openingId: opening.openingId,
+          company: opening.company,
+          title: opening.title,
+          addedAt: opening.addedAt,
+          application:
+            opening.applicationId &&
+            opening.status !== "analyzed" &&
+            opening.status !== "closed"
+              ? {
+                  status: opening.status,
+                  appliedAt: opening.appliedAt,
+                  lastActivityAt: opening.lastActivityAt,
+                  events: events
+                    .filter(
+                      (event) => event.applicationId === opening.applicationId
+                    )
+                    .map((event) => ({
+                      kind: event.kind,
+                      occurredAt: event.occurredAt,
+                      text: open(cipher, event.encryptedText),
+                      toStatus: event.toStatus,
+                    })),
+                }
+              : null,
+        })),
+        month: input.month,
+        timeZone: input.timeZone,
+        show: input.show,
+        settings,
+        now,
+      });
     });
   }
 

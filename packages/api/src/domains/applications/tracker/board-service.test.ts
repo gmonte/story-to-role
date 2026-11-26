@@ -1,10 +1,14 @@
 import { randomBytes } from "node:crypto";
 
+import { eq } from "drizzle-orm";
 import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { CareerRepository } from "@repo/api/domains/career/career-repository";
 import { getUserCipher } from "@repo/api/domains/encryption/user-cipher";
-import { fitChecksTable } from "@repo/api/domains/openings/db/openings-tables";
+import {
+  fitChecksTable,
+  openingsTable,
+} from "@repo/api/domains/openings/db/openings-tables";
 import { OpeningsRepository } from "@repo/api/domains/openings/openings-repository";
 import type { OpeningStatus } from "@repo/api/domains/openings/schemas/opening";
 import { createTestUser } from "@repo/api/test/create-test-user";
@@ -238,6 +242,55 @@ describe("the Openings board", () => {
       "Unchecked",
     ]);
     expect(await names({ resume: ["not_recorded"] })).toEqual(["Sent"]);
+  });
+
+  it("lays out a month of milestones, filtered like the board", async () => {
+    const ctx = await setup();
+    await ctx.opening("Acme", { createdAt: new Date("2026-11-05T13:00:00Z") });
+    const { applicationId, openingId } = await ctx.external(
+      "Globex",
+      new Date("2026-11-10T13:00:00Z")
+    );
+    // Registered that day (the database stamps today otherwise).
+    await ctx.db
+      .update(openingsTable)
+      .set({ createdAt: new Date("2026-11-10T12:00:00Z") })
+      .where(eq(openingsTable.id, openingId));
+    await ctx.tracker.addEvent({
+      userId: ctx.user.id,
+      applicationId,
+      occurredAt: new Date("2026-11-27T15:00:00Z"),
+      text: "HR interview",
+      now,
+    });
+
+    const month = (show: "latest" | "timeline", filter: BoardFilter = {}) =>
+      ctx.tracker.calendar({
+        userId: ctx.user.id,
+        filter,
+        month: "2026-11",
+        timeZone: "America/Sao_Paulo",
+        show,
+        now,
+      });
+    const latest = await month("latest");
+    expect(
+      latest.map((marker) => [marker.company, marker.day, marker.lead.kind])
+    ).toEqual([
+      ["Acme", "2026-11-05", "added"],
+      ["Globex", "2026-11-27", "note"],
+    ]);
+    expect(latest[1].lead.text).toBe("HR interview");
+
+    const timeline = await month("timeline", { company: ["glob"] });
+    expect(timeline.map((marker) => marker.lead.kind)).toEqual([
+      "applied",
+      "note",
+    ]);
+    expect(timeline[0].milestones.map((m) => m.kind)).toEqual([
+      "added",
+      "applied",
+    ]);
   });
 
   it("shows only the user's own openings", async () => {

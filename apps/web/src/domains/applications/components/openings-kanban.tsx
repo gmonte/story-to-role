@@ -436,6 +436,24 @@ function useBoardMove() {
           setPending({ opening, applicationId: null, kind: "mark_applied" });
           return;
         }
+        if (plan.then.kind === "withdraw") {
+          // Giving up needs the application first, then asks why.
+          ensure.mutate(
+            { openingId: opening.openingId },
+            {
+              onSuccess: ({ applicationId: created }) => {
+                void refresh();
+                setPending({
+                  opening,
+                  applicationId: created,
+                  kind: "withdraw",
+                });
+              },
+              onError: (error) => toast.error(error.message),
+            }
+          );
+          return;
+        }
         void run(opening, to, async () => {
           const created = await ensure.mutateAsync({
             openingId: opening.openingId,

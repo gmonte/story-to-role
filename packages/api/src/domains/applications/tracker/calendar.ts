@@ -121,8 +121,9 @@ export function dayIn(date: Date, timeZone: string) {
 /**
  * The month's markers: one per opening per day, labelled by that day's
  * most advanced milestone; “Opening added” labels only a day it has alone.
- * In `latest`, each opening shows only its next milestone ahead, else its
- * latest one, and only when that falls in the month.
+ * In `latest`, each opening shows only its next milestone ahead (a real
+ * one before a projection), else its latest one, and only when that falls
+ * in the month.
  */
 export function calendarMarkers(input: {
   openings: CalendarOpening[];
@@ -135,13 +136,12 @@ export function calendarMarkers(input: {
   const markers: CalendarMarker[] = [];
   for (const opening of input.openings) {
     const all = milestonesOf(opening, input.settings, input.now);
+    const ahead = all.filter((milestone) => milestone.at > input.now);
+    // What is booked (an interview) comes before what is only projected.
+    const next = ahead.find((milestone) => !milestone.projected) ?? ahead.at(0);
+    const latest = all.filter((milestone) => milestone.at <= input.now).at(-1);
     const shown =
-      input.show === "latest"
-        ? [
-            all.find((milestone) => milestone.at > input.now) ??
-              all.filter((milestone) => milestone.at <= input.now).at(-1)!,
-          ]
-        : all;
+      input.show === "latest" ? [next ?? latest].filter((m) => !!m) : all;
     const byDay = new Map<string, Milestone[]>();
     for (const milestone of shown) {
       const key = dayIn(milestone.at, input.timeZone);

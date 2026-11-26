@@ -120,15 +120,15 @@ async function boardOrigins(repository: TrackerRepository, rows: BoardRow[]) {
   const candidates = await repository.resumeCandidates(
     rows.flatMap((row) => (row.applicationId ? [row.applicationId] : []))
   );
+  const byApplication = Map.groupBy(
+    candidates,
+    (candidate) => candidate.applicationId
+  );
   return new Map(
     rows.map((row) => [
       row.openingId,
       row.applicationId
-        ? resumeOriginOf(
-            candidates.filter(
-              (candidate) => candidate.applicationId === row.applicationId
-            )
-          )
+        ? resumeOriginOf(byApplication.get(row.applicationId) ?? [])
         : null,
     ])
   );

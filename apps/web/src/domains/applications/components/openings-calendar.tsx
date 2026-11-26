@@ -276,12 +276,19 @@ const kindDot: Record<Exclude<Milestone["kind"], "status_change">, string> = {
   no_response: "bg-muted-foreground",
 };
 
-function MilestoneDot({ milestone }: { milestone: Milestone }) {
+function MilestoneDot({
+  milestone,
+  className,
+}: {
+  milestone: Milestone;
+  className?: string;
+}) {
   return (
     <span
       aria-hidden="true"
       className={cn(
         "size-2 shrink-0 rounded-full",
+        className,
         milestone.kind === "status_change" && milestone.status
           ? applicationStatusDot[milestone.status]
           : kindDot[
@@ -325,24 +332,27 @@ function useMilestoneLabel() {
 function MarkerButton({ marker }: { marker: CalendarMarker }) {
   const t = useTranslation();
   const label = useMilestoneLabel();
-  const name = marker.company ?? marker.title ?? "";
+  // The opening as the sidebar names it: openings at one company differ by
+  // title.
+  const name = [marker.company, marker.title].filter(Boolean).join(" · ");
   const more = marker.milestones.length - 1;
   return (
     <Popover>
       <PopoverTrigger asChild>
         <button
           type="button"
+          title={name}
           className={cn(
-            "bg-card hover:border-primary flex w-full min-w-0 items-center gap-1.5 rounded-md border px-1.5 py-1 text-left text-xs",
+            "bg-card hover:border-primary flex w-full min-w-0 items-start gap-1.5 rounded-md border px-1.5 py-1 text-left text-xs",
             marker.lead.projected && "border-dashed"
           )}
         >
-          <MilestoneDot milestone={marker.lead} />
-          <span className="min-w-0 flex-1 truncate">
-            {t.formatMessage(
-              { defaultMessage: "{company} · {milestone}" },
-              { company: name, milestone: label(marker.lead) }
-            )}
+          <MilestoneDot milestone={marker.lead} className="mt-1" />
+          <span className="flex min-w-0 flex-1 flex-col">
+            <span className="truncate font-medium">{name}</span>
+            <span className="text-muted-foreground truncate">
+              {label(marker.lead)}
+            </span>
           </span>
           {more > 0 && (
             <span className="bg-secondary text-secondary-foreground shrink-0 rounded-sm px-1 font-mono text-[10px] font-medium">

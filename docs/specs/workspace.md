@@ -36,6 +36,8 @@ Right after sign-up the user chooses how to start:
 
 The privacy notice appears along the way, only when needed.
 
+Afterwards, the workspace opens on the Openings page once the profile is published, and on My career until then.
+
 ## Chat scope
 
 Every chat belongs to a context: the profile agent, an opening or a document. There is no general-purpose chat. The topic gate judges each message against its context; off-topic messages get a fixed reply and never reach the main model.

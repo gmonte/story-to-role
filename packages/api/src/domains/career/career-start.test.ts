@@ -41,6 +41,7 @@ describe("onboarding start", () => {
       path: null,
       hasStarted: false,
       hasOpening: false,
+      hasPublishedProfile: false,
     });
 
     await career.chooseStart({ ...input, path: "opening" });

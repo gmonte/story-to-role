@@ -338,6 +338,7 @@ Owner decisions: an opening is always added on New opening, analyzed now or late
 - The opening page of an unanalyzed opening shows the application block (Mark as applied) and “Analyze this opening” once it has a description or link; the analysis keeps the user's company and title. Closing and reopening it keeps it unanalyzed.
 - The board, its filter, the kanban and the sidebar gain Not analyzed, before Analyzed, with the same drag rules.
 - Removed: “Applied elsewhere” and its dialog, `tracker.createExternal`, `applications.external` (generated migration) and the rule that let an external application be set to Applied from any status, the “Elsewhere” badge, the glossary's External application.
+- Status: built (`openings.register`, `openings.analyze`; migrations `0034_drop_application_external` and `0035_rename_external_openings_unanalyzed`, the second a custom data migration). Covered in `openings-flow.test.ts` and `board-service.test.ts`. Not yet checked in the browser.
 
 Acceptance:
 

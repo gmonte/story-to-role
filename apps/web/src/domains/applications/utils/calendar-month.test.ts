@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { isMonth, monthWeeks, shiftMonth } from "./calendar-month";
+import { isMonth, monthSpan, monthWeeks, shiftMonth } from "./calendar-month";
 
 describe("calendar months", () => {
   it("shifts across years", () => {
@@ -25,6 +25,17 @@ describe("calendar months", () => {
     expect(monthWeeks("2026-12")[0][0]).toMatchObject({
       day: "2026-11-29",
       inMonth: false,
+    });
+  });
+
+  it("spans the whole weeks the grid shows", () => {
+    expect(monthSpan("2026-11")).toEqual({
+      from: "2026-11-01",
+      to: "2026-12-05",
+    });
+    expect(monthSpan("2026-12")).toEqual({
+      from: "2026-11-29",
+      to: "2027-01-02",
     });
   });
 });

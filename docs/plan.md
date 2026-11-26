@@ -283,7 +283,7 @@ The opening page restructured after a product design review ([docs/design/openin
 
 ## Openings page
 
-The Applications page becomes **Openings** (`/app/openings`), with every analyzed opening, four tabs (Tracking, Calendar, Metrics, Settings), a filter shared by Tracking and Calendar, and server-side pages (tracker spec, “The Openings page”; ADRs 0013 and 0014). Owner decisions: every opening listed, closed ones too, with Analyzed and Closed columns on the kanban; the default filter State is open; the metrics on a tab of their own, ignoring the filter (first a block folded at the top of Tracking); the reminders in the layout above the tabs; the application type removed (the resume's origin replaces it); the calendar only shows, one month per request; the sidebar keeps three openings per status. No redirect from `/app/tracker`.
+The Applications page becomes **Openings** (`/app/openings`), with every analyzed opening, four tabs (Tracking, Calendar, Metrics, Settings), a filter shared by Tracking and Calendar, and server-side pages (tracker spec, “The Openings page”; ADRs 0013 and 0014). Owner decisions: every opening listed, closed ones too, with Analyzed and Closed columns on the kanban; the default filter State is open; the metrics on a tab of their own, ignoring the filter (first a block folded at the top of Tracking); the reminders in the layout above the tabs; the application type removed (the resume's origin replaces it); the calendar only shows, one month's weeks per request; the sidebar keeps three openings per status. No redirect from `/app/tracker`.
 
 ### V1: The Openings page and its tabs
 
@@ -312,7 +312,7 @@ Acceptance:
 
 ### V3: The calendar
 
-- `tracker.calendar`: one month (`month`, the viewer's `timeZone`, `show`), the filter's openings, their milestones grouped per opening and day, projections from the reminder settings; milestone logic in pure functions.
+- `tracker.calendar`: the weeks a month's grid shows (`from` and `to` days, the viewer's `timeZone`, `show`), the filter's openings, their milestones grouped per opening and day, projections from the reminder settings; milestone logic in pure functions.
 - The month grid with previous, today and next, the marker with “+N” and its popover, the two modes, the list by day on a phone.
 - Status: built (`tracker/calendar.ts`, tested in `calendar.test.ts` and `board-service.test.ts`; the week starts on Sunday). Not yet checked in the browser.
 

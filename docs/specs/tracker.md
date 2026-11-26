@@ -92,10 +92,10 @@ The filter comes first, where the calendar has it too; below it, the choice betw
 
 ### Calendar
 
-A month of **milestones**, one month at a time (`?month=2026-11`, previous, today and next), for the openings the filter matches, laid out in the viewer's time zone; on a phone, the same month as a list by day. The milestones are the opening added, the application applied, each status change, each dated note on the timeline (a note's text shows only on screen) and two projections, drawn dashed and only ahead: the follow-up reminder and the day the application would turn “No response”, from the reminder settings. The next step has no date and is not a milestone.
+A month of **milestones**, one month at a time (`?month=2026-11`, previous, today and next), for the openings the filter matches, laid out in the viewer's time zone; the grid shows whole weeks, and the days it borrows from the months around show their milestones too. On a phone, the same days as a list by day. The milestones are the opening added, the application applied, each status change, each dated note on the timeline (a note's text shows only on screen) and two projections, drawn dashed and only ahead: the follow-up reminder and the day the application would turn “No response”, from the reminder settings. The next step has no date and is not a milestone.
 
 - One marker per opening per day, labelled with that day's most advanced milestone, with a “+N” badge when the opening has more that day; hovering or tapping it opens a popover with all of them in order and a link to the opening. “Opening added” is a marker only when it is the opening's only milestone that day.
-- Two modes (`?show=latest|timeline`): **Latest or next** (the default) shows one marker per opening, its next milestone ahead, else its latest one; **Whole timeline** shows them all.
+- Two modes (`?show=latest|timeline`): **Latest or next** (the default) shows one marker per opening, its next milestone ahead, else its latest one; **Whole timeline** shows them all. A booked milestone ahead (a dated note) comes before a projection.
 - The calendar only shows; events are recorded on the opening page.
 
 ### Metrics

@@ -268,7 +268,8 @@ describe("the Openings board", () => {
       ctx.tracker.calendar({
         userId: ctx.user.id,
         filter,
-        month: "2026-11",
+        from: "2026-11-01",
+        to: "2026-12-05",
         timeZone: "America/Sao_Paulo",
         show,
         now,

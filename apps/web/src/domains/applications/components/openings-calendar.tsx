@@ -31,6 +31,7 @@ import {
   dayOf,
   isMonth,
   monthOf,
+  monthSpan,
   monthStart,
   monthWeeks,
   shiftMonth,
@@ -73,20 +74,23 @@ export function OpeningsCalendar() {
   const queryClient = useQueryClient();
   const { filter, setFilter } = useBoardQuery();
   const { month, show, setMonth, setShow } = useCalendarQuery();
-  const input = (target: string) => ({
-    ...filter,
-    month: target,
-    timeZone: timeZone(),
-    show,
-  });
-  const markers = useQuery(trpc.tracker.calendar.queryOptions(input(month)));
+  // The weeks the grid shows, so the days of the months around it that
+  // share a week show their milestones too.
+  const markers = useQuery(
+    trpc.tracker.calendar.queryOptions({
+      ...filter,
+      ...monthSpan(month),
+      timeZone: timeZone(),
+      show,
+    })
+  );
   // The months around it, so stepping through them shows at once.
   useEffect(() => {
     for (const delta of [-1, 1]) {
       void queryClient.prefetchQuery(
         trpc.tracker.calendar.queryOptions({
           ...filter,
-          month: shiftMonth(month, delta),
+          ...monthSpan(shiftMonth(month, delta)),
           timeZone: timeZone(),
           show,
         })

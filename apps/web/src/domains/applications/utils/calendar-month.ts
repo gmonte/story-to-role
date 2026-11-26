@@ -47,3 +47,9 @@ export function monthWeeks(month: string) {
   } while (monthOf(cursor) === month);
   return weeks;
 }
+
+/** The first and last days the month's grid shows (its whole weeks). */
+export function monthSpan(month: string) {
+  const weeks = monthWeeks(month);
+  return { from: weeks[0][0].day, to: weeks[weeks.length - 1][6].day };
+}

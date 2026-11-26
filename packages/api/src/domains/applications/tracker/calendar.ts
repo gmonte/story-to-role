@@ -119,15 +119,17 @@ export function dayIn(date: Date, timeZone: string) {
 }
 
 /**
- * The month's markers: one per opening per day, labelled by that day's
- * most advanced milestone; “Opening added” labels only a day it has alone.
- * In `latest`, each opening shows only its next milestone ahead (a real
- * one before a projection), else its latest one, and only when that falls
- * in the month.
+ * The markers of a span of days (the weeks a month's grid shows): one per
+ * opening per day, labelled by that day's most advanced milestone;
+ * “Opening added” labels only a day it has alone. In `latest`, each
+ * opening shows only its next milestone ahead (a real one before a
+ * projection), else its latest one, and only when that falls in the span.
  */
 export function calendarMarkers(input: {
   openings: CalendarOpening[];
-  month: string;
+  // The first and last days shown, as YYYY-MM-DD, both included.
+  from: string;
+  to: string;
   timeZone: string;
   show: CalendarShow;
   settings: TrackerSettings;
@@ -145,7 +147,7 @@ export function calendarMarkers(input: {
     const byDay = new Map<string, Milestone[]>();
     for (const milestone of shown) {
       const key = dayIn(milestone.at, input.timeZone);
-      if (!key.startsWith(`${input.month}-`)) continue;
+      if (key < input.from || key > input.to) continue;
       byDay.set(key, [...(byDay.get(key) ?? []), milestone]);
     }
     for (const [key, milestones] of byDay) {

@@ -27,11 +27,17 @@ const opening = (over: Partial<CalendarOpening> = {}): CalendarOpening => ({
 
 const markers = (
   openings: CalendarOpening[],
-  over: { show?: "latest" | "timeline"; month?: string; timeZone?: string } = {}
+  over: {
+    show?: "latest" | "timeline";
+    from?: string;
+    to?: string;
+    timeZone?: string;
+  } = {}
 ) =>
   calendarMarkers({
     openings,
-    month: over.month ?? "2026-11",
+    from: over.from ?? "2026-11-01",
+    to: over.to ?? "2026-11-30",
     timeZone: over.timeZone ?? "America/Sao_Paulo",
     show: over.show ?? "timeline",
     settings,
@@ -140,6 +146,16 @@ describe("calendarMarkers", () => {
     expect(dayIn(late.addedAt, "UTC")).toBe("2026-12-01");
   });
 
+  it("takes the days of the weeks around the month, not only its own", () => {
+    const early = opening({ addedAt: at("2026-12-02T15:00:00Z") });
+    // November's grid runs to Saturday, Dec 5.
+    expect(
+      markers([early], { from: "2026-11-01", to: "2026-12-05" }).map(
+        (m) => m.day
+      )
+    ).toEqual(["2026-12-02"]);
+  });
+
   it("shows only the next milestone ahead, else the latest, in Latest", () => {
     const interview = opening({
       application: {
@@ -182,6 +198,12 @@ describe("calendarMarkers", () => {
       markers([closed], { show: "latest" }).map((m) => m.lead.status)
     ).toEqual(["rejected"]);
     // Its latest milestone is in November: October shows nothing.
-    expect(markers([closed], { show: "latest", month: "2026-10" })).toEqual([]);
+    expect(
+      markers([closed], {
+        show: "latest",
+        from: "2026-10-01",
+        to: "2026-10-31",
+      })
+    ).toEqual([]);
   });
 });

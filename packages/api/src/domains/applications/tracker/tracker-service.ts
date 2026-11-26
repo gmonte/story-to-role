@@ -317,14 +317,16 @@ export class TrackerService {
   }
 
   /**
-   * One month of the calendar (tracker spec, “Calendar”): the milestones of
+   * A span of the calendar, the weeks a month's grid shows (tracker spec,
+   * “Calendar”): the milestones of
    * the openings the filter matches, one marker per opening per day in the
    * viewer's time zone. Notes are decrypted for the screen only.
    */
   async calendar(input: {
     userId: string;
     filter: BoardFilter;
-    month: string;
+    from: string;
+    to: string;
     timeZone: string;
     show: CalendarShow;
     now?: Date;
@@ -371,7 +373,8 @@ export class TrackerService {
                 }
               : null,
         })),
-        month: input.month,
+        from: input.from,
+        to: input.to,
         timeZone: input.timeZone,
         show: input.show,
         settings,

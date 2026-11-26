@@ -98,23 +98,25 @@ export const trackerRouter = createTRPCRouter({
         "tracker",
         "GET",
         "/openings/calendar",
-        "Returns one month of milestones of the openings the filter matches, per opening and day in the viewer's time zone"
+        "Returns the milestones of the openings the filter matches in a span of days (a month's weeks), per opening and day in the viewer's time zone"
       )
     )
     .input(
       boardFilterSchema.extend({
-        month: z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/),
+        from: z.iso.date(),
+        to: z.iso.date(),
         timeZone: z.string().refine(isTimeZone, "Unknown time zone"),
         show: calendarShowSchema.default("latest"),
       })
     )
     .output(z.array(calendarMarkerSchema))
     .query(({ ctx, input }) => {
-      const { month, timeZone, show, ...filter } = input;
+      const { from, to, timeZone, show, ...filter } = input;
       return new TrackerService(db).calendar({
         userId: ctx.userId,
         filter,
-        month,
+        from,
+        to,
         timeZone,
         show,
       });

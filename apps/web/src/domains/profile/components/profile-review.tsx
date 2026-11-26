@@ -11,6 +11,7 @@ import {
 
 import { useTranslation } from "@repo/intl/use-translation";
 import { extractProfile } from "@repo/api/domains/profile/truth/extract";
+import { competencyNames } from "@repo/api/domains/profile/truth/insert";
 import { Badge } from "@repo/web/components/ui/badge";
 import { Button } from "@repo/web/components/ui/button";
 import { cn } from "@repo/web/lib/utils";
@@ -45,18 +46,22 @@ export function ProfileReview() {
   const report = validation.data?.report;
   if (!report) return null;
 
-  // A proposal already applied (or rejected) leaves the list.
+  // A proposal already applied (or rejected) leaves the list: every name
+  // it stands for, as the profile reads them back, is at its level. One
+  // whose name the profile can't list as a competency never shows.
   const levels = new Map(
     extractProfile(blocks).competencies.map((c) => [
       c.name.toLowerCase(),
       c.level,
     ])
   );
-  const proposals = report.competencies.filter(
-    (proposal) =>
+  const proposals = report.competencies.filter((proposal) => {
+    const names = competencyNames(proposal.name);
+    return (
       !isLevelProposalRejected(proposal) &&
-      levels.get(proposal.name.toLowerCase()) !== proposal.level
-  );
+      names.some((name) => levels.get(name.toLowerCase()) !== proposal.level)
+    );
+  });
 
   return (
     <section className="space-y-2">

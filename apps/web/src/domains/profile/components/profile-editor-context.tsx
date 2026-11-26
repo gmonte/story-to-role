@@ -29,6 +29,7 @@ import {
   type QuickAction,
 } from "@repo/api/domains/profile/truth/quick-fix";
 import {
+  competencyNames,
   insertEntry,
   setCompetencyLevel,
   type ProfileEntry,
@@ -972,7 +973,14 @@ export function ProfileEditorProvider({
       dismissed.includes(levelProposalKey(proposal)),
     applyCompetencyLevel: (name, level) => {
       if (!editor) return;
-      applyBlocks(editor, setCompetencyLevel(currentBlocks(), name, level));
+      // Each name the proposal stands for, as the profile reads it back.
+      applyBlocks(
+        editor,
+        competencyNames(name).reduce(
+          (current, each) => setCompetencyLevel(current, each, level),
+          currentBlocks()
+        )
+      );
     },
     fixWholeFormat: () => {
       if (!editor) return;

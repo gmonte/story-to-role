@@ -12,6 +12,7 @@ import {
 import { parseBlocks, serializeBlocks } from "../truth/blocks";
 import { changedChunks } from "../truth/chunks";
 import { extractProfile } from "../truth/extract";
+import { competencyNames } from "../truth/insert";
 import { isConceptLevel, languageNames } from "../truth/sections";
 import { readStructure } from "../truth/structure";
 
@@ -123,9 +124,14 @@ export async function runValidateProfile(deps: {
       const quote = findQuote(source, finding.quote);
       return quote ? [{ ...finding, quote }] : [];
     }),
-    // Only competencies the profile names: "Accept" writes the name into it.
+    // Only competencies the profile names, each as a name its level's line
+    // can list (the extract reads it back): "Accept" writes it there.
     competencies: object.competencies
-      .filter((proposal) => findQuote(source, proposal.name))
+      .flatMap((proposal) =>
+        competencyNames(proposal.name)
+          .filter((name) => findQuote(source, name))
+          .map((name) => ({ ...proposal, name }))
+      )
       .map((proposal) => ({
         ...proposal,
         current: current.get(proposal.name.toLowerCase()) ?? null,
@@ -135,6 +141,13 @@ export async function runValidateProfile(deps: {
         (proposal) =>
           proposal.current !== proposal.level &&
           !isConceptLevel(proposal.current)
+      )
+      // One proposal per competency: the first one left.
+      .filter(
+        (proposal, index, all) =>
+          all.findIndex(
+            (other) => other.name.toLowerCase() === proposal.name.toLowerCase()
+          ) === index
       ),
     reviewed: chunks.map((chunk) => chunk.title),
   };

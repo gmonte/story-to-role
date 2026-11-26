@@ -310,6 +310,14 @@ export function insertEntry(
 }
 
 /**
+ * The competency names a proposed name stands for, as the extract reads
+ * them back from a level's line: “Kubernetes (EKS)” is Kubernetes, “CI/CD
+ * e GitOps” two names, and a phrase too long for a name is none.
+ */
+export const competencyNames = (name: string) =>
+  splitNames(name).map((found) => found.name);
+
+/**
  * Moves a competency to a level (a validation's proposal the user
  * accepted): it leaves the line it was on, if any, and joins its level's.
  */

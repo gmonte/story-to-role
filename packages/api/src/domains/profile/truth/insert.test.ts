@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 
 import { parseBlocks, serializeBlocks } from "./blocks";
-import { insertEntry, setCompetencyLevel } from "./insert";
+import { extractProfile } from "./extract";
+import { competencyNames, insertEntry, setCompetencyLevel } from "./insert";
 import { lintProfile } from "./lint";
 import { profileTemplate } from "./template";
 
@@ -182,6 +183,26 @@ describe("the insert menu", () => {
     expect(out).toContain("- Uso com frequência: SQL\n");
     expect(out).toContain("- Experiência pontual: Docker");
   });
+  it("reads a proposed name as the competencies the profile can list", () => {
+    expect(competencyNames("Kubernetes (EKS)")).toEqual(["Kubernetes"]);
+    expect(competencyNames("CI/CD e GitOps")).toEqual(["CI/CD", "GitOps"]);
+    expect(competencyNames("AWS: Lambda")).toEqual(["Lambda"]);
+    expect(
+      competencyNames("Arquitetura de microsserviços orientada a eventos")
+    ).toEqual([]);
+    // Each name it stands for, once moved, reads back at its level.
+    const markdown = "## Competências\n\n- Domino: Python\n";
+    const blocks = competencyNames("CI/CD e GitOps").reduce(
+      (current, name) => setCompetencyLevel(current, name, "often"),
+      parseBlocks(markdown)
+    );
+    expect(extractProfile(blocks).competencies).toEqual([
+      { name: "Python", level: "master" },
+      { name: "CI/CD", level: "often" },
+      { name: "GitOps", level: "often" },
+    ]);
+  });
+
   it("adds a public name to the dictionary, inline or as a sub-item", () => {
     const base = `# Perfil\n\n## Regras de comunicação\n\n- Nunca afirmar: liderança`;
     const created = insert(base, {

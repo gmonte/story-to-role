@@ -99,14 +99,19 @@ export class PdfService {
       acknowledgeWarnings
     );
     if (await repository.findRenderedFile(latest.id, pdfTemplate)) return true;
-    if (!(await new TasksRepository(tx).activeTask(latest.id, "render_pdf"))) {
-      await this.tasks.start({
-        userId,
-        type: "render_pdf",
-        subjectId: latest.id,
-      });
-    }
+    await this.startRender(tx, userId, latest.id);
     return false;
+  }
+
+  private async startRender(tx: DbClient, userId: string, snapshotId: string) {
+    if (await new TasksRepository(tx).activeTask(snapshotId, "render_pdf")) {
+      return;
+    }
+    await this.tasks.start({
+      userId,
+      type: "render_pdf",
+      subjectId: snapshotId,
+    });
   }
 
   async request(input: {
@@ -187,6 +192,7 @@ export class PdfService {
 
   /** The version's official PDF and its suggested name; null until rendered. */
   private async readVersion(
+    userId: string,
     cipher: UserCipher,
     version: Version,
     document: Document,
@@ -205,8 +211,16 @@ export class PdfService {
       snapshot: latest,
     });
     const file = await repository.findRenderedFile(latest.id, pdfTemplate);
-    const stored = file && (await this.storage.get(file.storageKey));
-    if (!stored) return null;
+    if (!file) return null;
+    const stored = await this.storage.get(file.storageKey);
+    if (!stored) {
+      // Storage is only a cache (resume spec, "Rendering"): a purged file,
+      // or a database copied without its files, renders anew from the
+      // snapshot, and the version shows it rendering meanwhile.
+      await repository.deleteRenderedFile(latest.id, pdfTemplate);
+      await this.startRender(this.db, userId, latest.id);
+      return null;
+    }
     const nameFor = await fileNamer(this.db, cipher, document);
     return {
       bytes: Buffer.from(cipher.decrypt(stored.toString()), "base64"),
@@ -229,6 +243,7 @@ export class PdfService {
     );
     const cipher = await getUserCipher(this.db, input.userId);
     return this.readVersion(
+      input.userId,
       cipher,
       version,
       document,
@@ -248,18 +263,22 @@ export class PdfService {
     );
     const cipher = await getUserCipher(this.db, input.userId);
     const files = [];
+    // Every version is read, so each file gone from storage starts
+    // rendering at once rather than one per request.
+    let missing = false;
     for (const version of versions) {
       const document = documents.find((row) => row.id === version.documentId)!;
       const file = await this.readVersion(
+        input.userId,
         cipher,
         version,
         document,
         input.acknowledgeWarnings
       );
-      if (!file) return null;
-      files.push(file);
+      if (file) files.push(file);
+      else missing = true;
     }
-    if (files.length === 0) return null;
+    if (missing || files.length === 0) return null;
     const names = uniqueFileNames(files);
     const open = (value: string | null) =>
       value ? cipher.decrypt(value) : null;

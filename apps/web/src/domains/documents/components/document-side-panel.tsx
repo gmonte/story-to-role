@@ -48,6 +48,7 @@ import { useTRPC } from "~/tools/trpc/client";
 import { useDocumentLabels } from "../hooks/use-document-labels";
 import { useDocumentAgent } from "./document-agent-context";
 import { useRefreshDocuments } from "../hooks/use-opening-documents";
+import { usePdfFile } from "../hooks/use-pdf-file";
 import { hasWarnings } from "../utils/version-checks";
 import { AdaptVersionDialog } from "./adapt-version-dialog";
 import { VersionChecks } from "./documents-panel";
@@ -237,6 +238,12 @@ export function PdfPreview({
   const snapshotId = version.snapshot.id;
   const canRender = !warned;
   const { mutate } = request;
+  const file = usePdfFile(
+    ready && !warned
+      ? `/api/documents/versions/${version.id}/pdf?inline=1&snapshot=${snapshotId}${acknowledged ? "&acknowledge=1" : ""}`
+      : null,
+    refresh
+  );
 
   // A snapshot is rendered once the user pauses: typing makes a snapshot
   // every few seconds, and rendering each would flood the server.
@@ -285,11 +292,11 @@ export function PdfPreview({
   }
   return (
     <div className={cn("flex flex-col gap-2", fill && "min-h-0 flex-1")}>
-      {ready ? (
+      {ready && file?.url ? (
         <iframe
           key={snapshotId}
           title={t.formatMessage({ defaultMessage: "PDF preview" })}
-          src={`/api/documents/versions/${version.id}/pdf?inline=1${acknowledged ? "&acknowledge=1" : ""}#toolbar=0&view=FitH`}
+          src={`${file.url}#toolbar=0&view=FitH`}
           className={cn(
             "bg-muted w-full rounded-lg border",
             // In the column it takes the height left above its footer; in
@@ -304,8 +311,16 @@ export function PdfPreview({
             fill ? "min-h-0 flex-1" : "aspect-[1/1.414]"
           )}
         >
-          <Loader2 className="size-4 animate-spin" />
-          {t.formatMessage({ defaultMessage: "Rendering the PDF…" })}
+          {ready && file?.failed ? (
+            t.formatMessage({ defaultMessage: "The PDF couldn't be opened." })
+          ) : (
+            <>
+              <Loader2 className="size-4 animate-spin" />
+              {ready
+                ? t.formatMessage({ defaultMessage: "Opening the PDF…" })
+                : t.formatMessage({ defaultMessage: "Rendering the PDF…" })}
+            </>
+          )}
         </div>
       )}
       <div className="flex items-center justify-between gap-2">

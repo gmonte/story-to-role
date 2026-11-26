@@ -3102,6 +3102,99 @@ describe("resume generation and snapshots", () => {
     await rm(rootDir, { recursive: true, force: true });
   });
 
+  it("renders a PDF again when its cached file is gone from storage", async () => {
+    const ctx = await setup();
+    const line = {
+      text: "Led a team of 5 engineers.",
+      evidence_ids: [ctx.evidence[1].id],
+    };
+    await ctx.generate("quick", {
+      drafts: [ctx.draft([line]), ctx.draft([line])],
+      ratings: [8, 5],
+    });
+    const rootDir = await mkdtemp(path.join(tmpdir(), "pdfs-"));
+    const storage = createLocalStorage({ rootDir });
+    const tasks = new TasksService(ctx.db, ctx.trigger);
+    const pdfs = new PdfService(ctx.db, tasks, storage);
+    const documents = new DocumentsService(ctx.db, tasks, storage);
+    const view = async () =>
+      (
+        await documents.forOpening({
+          userId: ctx.user.id,
+          openingId: ctx.opening.id,
+        })
+      ).documents[0].versions[0];
+    const version = await view();
+    const render = () =>
+      runRenderPdf({
+        db: ctx.db,
+        cipher: ctx.cipher,
+        storage,
+        userId: ctx.user.id,
+        snapshotId: version.snapshot.id,
+      });
+    await render();
+    expect((await view()).pdf.ready).toBe(true);
+
+    // The storage is a cache: a database copied without its files, or a
+    // purged cache, leaves the row without its file.
+    await rm(path.join(rootDir, "users"), { recursive: true, force: true });
+    const calls = ctx.trigger.trigger.mock.calls.length;
+    expect(
+      await pdfs.read({ userId: ctx.user.id, versionId: version.id })
+    ).toBeNull();
+    expect(ctx.trigger.trigger.mock.calls.length).toBe(calls + 1);
+    expect(ctx.trigger.trigger).toHaveBeenLastCalledWith(
+      "render_pdf",
+      expect.anything()
+    );
+    expect((await view()).pdf).toMatchObject({ ready: false, rendering: true });
+    // Reading again while it renders starts nothing new.
+    await pdfs.read({ userId: ctx.user.id, versionId: version.id });
+    expect(ctx.trigger.trigger.mock.calls.length).toBe(calls + 1);
+
+    await render();
+    expect((await view()).pdf.ready).toBe(true);
+    const file = await pdfs.read({
+      userId: ctx.user.id,
+      versionId: version.id,
+    });
+    expect(file?.bytes.subarray(0, 5).toString()).toBe("%PDF-");
+
+    // The ZIP reads every version, so one request renders each lost file.
+    const { versionId: copyId } = await ctx.documents.duplicate({
+      userId: ctx.user.id,
+      versionId: version.id,
+    });
+    const versions = async () =>
+      (
+        await documents.forOpening({
+          userId: ctx.user.id,
+          openingId: ctx.opening.id,
+        })
+      ).documents[0].versions;
+    const copy = (await versions()).find((row) => row.id === copyId)!;
+    await runRenderPdf({
+      db: ctx.db,
+      cipher: ctx.cipher,
+      storage,
+      userId: ctx.user.id,
+      snapshotId: copy.snapshot.id,
+    });
+    expect((await versions()).every((row) => row.pdf.ready)).toBe(true);
+    await rm(path.join(rootDir, "users"), { recursive: true, force: true });
+    expect(
+      await pdfs.readApplicationZip({
+        userId: ctx.user.id,
+        openingId: ctx.opening.id,
+      })
+    ).toBeNull();
+    expect(
+      (await versions()).every((row) => !row.pdf.ready && row.pdf.rendering)
+    ).toBe(true);
+    await rm(rootDir, { recursive: true, force: true });
+  });
+
   it("deletes a library document with its versions and cached PDFs, and nothing else", async () => {
     const ctx = await setup();
     const line = {

@@ -550,11 +550,7 @@ function OpeningMenu({
           )}
           {canZip && (
             <DropdownMenuItem disabled={zip.busy} onSelect={zip.run}>
-              {zip.rendering ? (
-                <Loader2 className="animate-spin" />
-              ) : (
-                <Download />
-              )}
+              {zip.busy ? <Loader2 className="animate-spin" /> : <Download />}
               {zip.label}
             </DropdownMenuItem>
           )}

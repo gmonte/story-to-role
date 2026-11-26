@@ -289,6 +289,7 @@ The Applications page becomes **Openings** (`/app/openings`), with every analyze
 
 - **Openings** in the sidebar (`/app/openings`), replacing Applications; `/app/tracker` is removed. A layout (route group, so the opening page stays outside it) with the title, “Applied elsewhere”, the active reminders and the tabs Tracking · Calendar · Settings as links.
 - Tracking keeps today's list and kanban, the kanban at full width; Settings holds the reminder settings; Calendar is a placeholder until V3.
+- Status: built. Not yet checked in the browser.
 
 Acceptance:
 
@@ -297,10 +298,11 @@ Acceptance:
 ### V2: All openings, the shared filter and pages from the server
 
 - The application type leaves the schema, the API and the UI (generated migration).
-- `openings.board`: openings with their board status, paged by a keyset cursor (ADR 0013), filtered on the server by status, state, company, source, fit, sent, resume origin and free text, sorted by last activity, sent date, company or status; encrypted fields decrypted only when the filter or sort needs them (ADR 0014). An optional status serves one kanban column.
+- `tracker.board` (in the tracker, which alone reads the timeline and its free text): openings with their board status, paged by a keyset cursor (ADR 0013), filtered on the server by status, state, company, source, fit, sent, resume origin and free text, sorted by last activity, sent date, company or status; encrypted fields decrypted only when the filter or sort needs them (ADR 0014). An optional status serves one kanban column.
 - The filter bar with chips (field, is / is not, values), the default State is open, the non-default notice with Restore default and the count; the filter in the URL.
 - The list in pages as the page scrolls; the kanban with Analyzed and Closed columns, each column paging inside itself with its total in the header, and the drag rules (out of Analyzed creates the application, Analyzed onto Closed closes the opening), moved at once and rolled back on failure.
 - The metrics in a collapsible block at the top of Tracking.
+- Status: built (migration `0033_drop_application_type`). The server side is covered by `board-service.test.ts` (statuses, keyset pages per sort, company and text in memory, fit, source, sent and resume filters); the drag rules by `planBoardMove`. Not yet checked in the browser.
 
 Acceptance:
 
@@ -310,8 +312,9 @@ Acceptance:
 
 ### V3: The calendar
 
-- `openings.calendar`: one month (`month`, the viewer's `timeZone`, `show`), the filter's openings, their milestones grouped per opening and day, projections from the reminder settings; milestone logic in pure functions.
+- `tracker.calendar`: one month (`month`, the viewer's `timeZone`, `show`), the filter's openings, their milestones grouped per opening and day, projections from the reminder settings; milestone logic in pure functions.
 - The month grid with previous, today and next, the marker with “+N” and its popover, the two modes, the list by day on a phone.
+- Status: built (`tracker/calendar.ts`, tested in `calendar.test.ts` and `board-service.test.ts`; the week starts on Sunday). Not yet checked in the browser.
 
 Acceptance:
 
@@ -321,6 +324,7 @@ Acceptance:
 ### V4: The sidebar's three per status
 
 - Each sidebar group lists its three latest openings and “See more (N)”, opening `/app/openings` filtered by that status; the groups of openings being analyzed, failed or refused stay complete.
+- Status: built (an open group's link adds State is open, so it lists what the group counts). Not yet checked in the browser.
 
 Acceptance:
 

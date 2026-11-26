@@ -33,6 +33,7 @@
     "lint-staged": "catalog:quality",
     "prettier": "catalog:quality",
     "tsx": "catalog:common",
-    "typescript": "catalog:common"
+    "typescript": "catalog:common",
+    "vercel": "catalog:root"
   }
 }

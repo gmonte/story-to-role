@@ -4,6 +4,7 @@ import {
   awaitingStatuses,
 } from "../schemas/application";
 import type {
+  BoardStatus,
   CalendarMarker,
   CalendarShow,
   Milestone,
@@ -16,6 +17,7 @@ export type CalendarOpening = {
   openingId: string;
   company: string | null;
   title: string | null;
+  status: BoardStatus;
   addedAt: Date;
   // Null for an opening with no application.
   application: {
@@ -159,6 +161,7 @@ export function calendarMarkers(input: {
         openingId: opening.openingId,
         company: opening.company,
         title: opening.title,
+        status: opening.status,
         day: key,
         lead,
         milestones,

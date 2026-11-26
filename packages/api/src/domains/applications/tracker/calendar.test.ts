@@ -20,6 +20,7 @@ const opening = (over: Partial<CalendarOpening> = {}): CalendarOpening => ({
   openingId: "00000000-0000-4000-8000-000000000001",
   company: "Acme",
   title: "Engineer",
+  status: "analyzed",
   addedAt: at("2026-11-05T13:00:00Z"),
   application: null,
   ...over,

@@ -41,7 +41,10 @@ import {
   monthWeeks,
   shiftMonth,
 } from "../utils/calendar-month";
-import { applicationStatusDot } from "./application-status-badge";
+import {
+  ApplicationStatusDot,
+  applicationStatusDot,
+} from "./application-status-badge";
 import { BoardFilterBar } from "./board-filter-bar";
 
 const timeZone = () => Intl.DateTimeFormat().resolvedOptions().timeZone;
@@ -195,7 +198,8 @@ function Legend() {
           className="bg-status-sent size-2 rounded-full"
         />
         {t.formatMessage({
-          defaultMessage: "What happened: added, applied, a status change",
+          defaultMessage:
+            "The dot: the application's status (for an event or what's expected, its status now)",
         })}
       </li>
       <li className="flex items-center gap-1.5">
@@ -408,12 +412,13 @@ function MarkerButton({ marker }: { marker: CalendarMarker }) {
   // title.
   const name = [marker.company, marker.title].filter(Boolean).join(" · ");
   const more = marker.milestones.length - 1;
+  // An event the user recorded (a dated note).
+  const booked = marker.lead.kind === "note" && !marker.lead.projected;
   return (
     <Popover>
       <PopoverTrigger asChild>
         <button
           type="button"
-          title={name}
           className={cn(
             "hover:border-primary flex w-full min-w-0 items-start gap-1.5 rounded-md border px-1.5 py-1 text-left text-xs",
             // Projected: only an outline; anything that happened, a card.
@@ -422,19 +427,27 @@ function MarkerButton({ marker }: { marker: CalendarMarker }) {
               : "bg-card"
           )}
         >
-          <MilestoneMark milestone={marker.lead} className="mt-0.5" />
+          {/* The status's color always: the milestone's own for what
+              happened, the opening's current one for an event or a
+              projection, which say what they are with an icon below. */}
+          {booked || marker.lead.projected ? (
+            <ApplicationStatusDot status={marker.status} className="mt-1" />
+          ) : (
+            <MilestoneDot milestone={marker.lead} className="mt-1" />
+          )}
           <span className="flex min-w-0 flex-1 flex-col">
-            <span className="truncate font-medium">{name}</span>
+            <span className="font-medium break-words">{name}</span>
             <span
               className={cn(
-                "truncate",
+                "flex min-w-0 items-center gap-1",
                 marker.lead.projected && "italic",
-                marker.lead.kind === "note" && !marker.lead.projected
-                  ? "text-foreground"
-                  : "text-muted-foreground"
+                booked ? "text-foreground" : "text-muted-foreground"
               )}
             >
-              {label(marker.lead)}
+              {(booked || marker.lead.projected) && (
+                <MilestoneMark milestone={marker.lead} />
+              )}
+              <span className="truncate">{label(marker.lead)}</span>
             </span>
           </span>
           {more > 0 && (

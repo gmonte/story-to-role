@@ -353,6 +353,7 @@ export class TrackerService {
           openingId: opening.openingId,
           company: opening.company,
           title: opening.title,
+          status: opening.status,
           addedAt: opening.addedAt,
           application:
             opening.applicationId && isApplicationStatus(opening.status)

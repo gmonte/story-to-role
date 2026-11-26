@@ -272,6 +272,8 @@ export const calendarMarkerSchema = z.object({
   openingId: z.uuid(),
   company: z.string().nullable(),
   title: z.string().nullable(),
+  // Where the opening stands now (its color on an event or a projection).
+  status: boardStatusSchema,
   // The day in the viewer's time zone, as YYYY-MM-DD.
   day: z.string(),
   lead: milestoneSchema,

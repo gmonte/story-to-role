@@ -8,7 +8,7 @@ on:
       - staging
 
 env:
-  VERCEL_CLI_VERSION: "65.16.0"
+  VERCEL_CLI_VERSION: "67.0.0"
 
 jobs:
   cleanup:

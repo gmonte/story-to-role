@@ -1,1 +1,8 @@
 pnpm lint-staged
+
+# when a version source file is part of this commit, propagate the pinned versions
+# (Node from package.json engines.node, vercel from pnpm-workspace.yaml) to the files
+# that hard-code them (.nvmrc, .github/workflows) in the same commit.
+if git diff --cached --name-only | grep -qxE 'package.json|pnpm-workspace.yaml'; then
+  bash scripts/sync-versions.sh && git add .nvmrc .github/workflows
+fi

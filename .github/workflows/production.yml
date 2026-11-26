@@ -15,7 +15,7 @@ env:
   SKIP_ENV_VALIDATION: "true"
   NODE_DISABLE_COMPILE_CACHE: "1"
   NODE_OPTIONS: --no-node-snapshot
-  VERCEL_CLI_VERSION: "65.16.0"
+  VERCEL_CLI_VERSION: "67.0.0"
 
 jobs:
   deploy-production:

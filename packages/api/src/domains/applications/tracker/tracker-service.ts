@@ -15,21 +15,31 @@ import { OpeningsService } from "@repo/api/domains/openings/openings-service";
 import { ProfileService } from "@repo/api/domains/profile/profile-service";
 import type { ProfileLanguage } from "@repo/api/domains/profile/truth/sections";
 import type { DbClient } from "@repo/api/tools/db-client";
+import { encodeCursor, decodeCursor } from "@repo/api/utils/db/keyset";
 
 import {
   type ApplicationSource,
   type ApplicationStatus,
-  type ApplicationType,
   closedStatuses,
 } from "../schemas/application";
 import type {
   ApplicationDetail,
+  BoardFilter,
+  BoardOpening,
+  BoardSort,
+  BoardStatus,
   MetricsPeriod,
   Reminder,
   ResumeVersionRef,
   TrackedApplication,
   TrackerSettings,
 } from "../schemas/tracker";
+import {
+  compareBoardRows,
+  matchesMemoryFilter,
+  needsMemory,
+  resumeOriginOf,
+} from "./board";
 import { computeMetrics, type MetricsRow } from "./metrics";
 import { computeReminders } from "./reminders";
 import { TrackerRepository } from "./tracker-repository";
@@ -137,6 +147,154 @@ export class TrackerService {
             : null,
         };
       });
+    });
+  }
+
+  /**
+   * A page of the Openings page (tracker spec, “The Openings page”): every
+   * analyzed opening, filtered on the server. Structured filters page by a
+   * keyset in SQL (ADR 0013); a filter or sort on company, title or the
+   * resume's origin decrypts and derives in memory, and the cursor carries
+   * the position (ADR 0014).
+   */
+  async board(input: {
+    userId: string;
+    filter: BoardFilter;
+    sort: BoardSort;
+    column?: BoardStatus;
+    cursor?: string | null;
+    limit: number;
+    now?: Date;
+  }): Promise<{
+    data: BoardOpening[];
+    nextCursor: string | null;
+    total: number;
+  }> {
+    const now = input.now ?? new Date();
+    const profile = await this.findProfile(input.userId);
+    if (!profile) return { data: [], nextCursor: null, total: 0 };
+    return this.db.transaction(async (tx) => {
+      const repository = new TrackerRepository(tx);
+      const cipher = await getUserCipher(tx, input.userId);
+      const query = {
+        profileId: profile.id,
+        filter: input.filter,
+        column: input.column,
+      };
+      type Row = Awaited<ReturnType<TrackerRepository["boardRows"]>>[number];
+      const origins = async (rows: Row[]) => {
+        const candidates = await repository.resumeCandidates(
+          rows.flatMap((row) => (row.applicationId ? [row.applicationId] : []))
+        );
+        return new Map(
+          rows.map((row) => [
+            row.openingId,
+            row.applicationId
+              ? resumeOriginOf(
+                  candidates.filter(
+                    (candidate) => candidate.applicationId === row.applicationId
+                  )
+                )
+              : null,
+          ])
+        );
+      };
+      const opened = (row: Row, origin: BoardOpening["resumeOrigin"]) => ({
+        openingId: row.openingId,
+        applicationId: row.applicationId,
+        company: open(cipher, row.encryptedCompany),
+        title: open(cipher, row.encryptedTitle),
+        status: row.status,
+        state: row.state,
+        external: row.external,
+        lastActivityAt: row.lastActivityAt,
+        appliedAt: row.appliedAt,
+        source: row.source,
+        fitBand: row.fitBand,
+        resumeOrigin: origin,
+        nextStep: open(cipher, row.encryptedNextStep),
+        nextEvent: null as BoardOpening["nextEvent"],
+      });
+
+      let page: BoardOpening[];
+      let nextCursor: string | null = null;
+      let total: number;
+      const after = decodeCursor(input.cursor);
+      if (needsMemory(input.filter, input.sort)) {
+        const rows = await repository.boardRows({ ...query, sort: "activity" });
+        const resumes = await origins(rows);
+        const found = rows
+          .map((row) => opened(row, resumes.get(row.openingId) ?? null))
+          .filter((row) => matchesMemoryFilter(row, input.filter))
+          .sort(compareBoardRows(input.sort));
+        const offset =
+          after?.keys[0] === "offset" && typeof after.keys[1] === "number"
+            ? after.keys[1]
+            : 0;
+        const next = offset + input.limit;
+        page = found.slice(offset, next);
+        nextCursor =
+          next < found.length
+            ? encodeCursor({ keys: ["offset", next], id: "" })
+            : null;
+        total = found.length;
+      } else {
+        const sort = input.sort as Exclude<BoardSort, "company">;
+        const keys = after?.keys[0] === "keyset" ? after.keys.slice(1) : null;
+        const rows = await repository.boardRows({
+          ...query,
+          sort,
+          after:
+            after &&
+            keys?.every(
+              (key): key is string | number =>
+                typeof key === "string" || typeof key === "number"
+            )
+              ? { keys, id: after.id }
+              : null,
+          // One more than shown tells whether a next page exists.
+          limit: input.limit + 1,
+        });
+        const shown = rows.slice(0, input.limit);
+        const resumes = await origins(shown);
+        page = shown.map((row) =>
+          opened(row, resumes.get(row.openingId) ?? null)
+        );
+        const last = shown[shown.length - 1];
+        if (rows.length > input.limit && last) {
+          const sortKeys =
+            sort === "sent"
+              ? [last.sentKey, last.activityKey]
+              : sort === "status"
+                ? [last.statusRank, last.activityKey]
+                : [last.activityKey];
+          nextCursor = encodeCursor({
+            keys: ["keyset", ...sortKeys],
+            id: last.openingId,
+          });
+        }
+        total = await repository.boardCount(query);
+      }
+
+      const events = await repository.nextEvents(
+        page.flatMap((row) => (row.applicationId ? [row.applicationId] : [])),
+        now
+      );
+      const data = page.map((row) => {
+        const event = events.find(
+          (item) => item.applicationId === row.applicationId
+        );
+        return event
+          ? {
+              ...row,
+              nextEvent: {
+                occurredAt: event.occurredAt,
+                text: open(cipher, event.encryptedText),
+              },
+            }
+          : row;
+      });
+      return { data, nextCursor, total };
     });
   }
 
@@ -460,7 +618,6 @@ export class TrackerService {
     applicationId: string;
     source?: ApplicationSource | null;
     sourceDetail?: string | null;
-    applicationType?: ApplicationType | null;
     resumeVersionId?: string | null;
     nextStep?: string | null;
     notes?: string | null;
@@ -494,7 +651,6 @@ export class TrackerService {
       const changes = {
         source: input.source,
         encryptedSourceDetail: text(input.sourceDetail),
-        applicationType: input.applicationType,
         pickedResumeVersionId: input.resumeVersionId,
         encryptedNextStep: text(input.nextStep),
         encryptedNotes: text(input.notes),
@@ -767,7 +923,6 @@ export class TrackerService {
       lastActivityAt: row.application.lastActivityAt,
       appliedAt: row.application.appliedAt,
       source: row.application.source,
-      applicationType: row.application.applicationType,
       nextStep: open(cipher, row.application.encryptedNextStep),
       fitBand: null,
       nextEvent: null,

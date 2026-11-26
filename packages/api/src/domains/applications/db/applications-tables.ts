@@ -10,7 +10,6 @@ import { createTable } from "@repo/api/utils/db/create-table";
 import type {
   ApplicationSource,
   ApplicationStatus,
-  ApplicationType,
 } from "../schemas/application";
 
 /**
@@ -58,7 +57,6 @@ export const applicationsTable = createTable(
     // reach a prompt; the free text (all encrypted) never does.
     source: d.text().$type<ApplicationSource>(),
     encryptedSourceDetail: d.text(),
-    applicationType: d.text().$type<ApplicationType>(),
     // The resume the user says an external application was sent with: a
     // resume version picked by hand. Applications sent from StoryToRole
     // read it from their submissions instead.

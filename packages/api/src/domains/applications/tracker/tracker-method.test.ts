@@ -360,7 +360,6 @@ describe("tracker, the method's fields", () => {
     await ctx.tracker.updateDetails({
       userId: ctx.user.id,
       applicationId: first.applicationId,
-      applicationType: "external",
       resumeVersionId: generated.id,
     });
 
@@ -383,7 +382,6 @@ describe("tracker, the method's fields", () => {
     await ctx.tracker.updateDetails({
       userId: ctx.user.id,
       applicationId: second.applicationId,
-      applicationType: "external",
       resumeVersionId: copy.id,
     });
 
@@ -436,7 +434,6 @@ describe("tracker, the method's fields", () => {
     await ctx.tracker.updateDetails({
       userId: ctx.user.id,
       applicationId,
-      applicationType: "external",
       source: "other",
       sourceDetail: "Meetup",
       resumeVersionId: version.id,
@@ -466,7 +463,6 @@ describe("tracker, the method's fields", () => {
     expect(detail).toMatchObject({
       source: "other",
       sourceDetail: "Meetup",
-      applicationType: "external",
       nextStep: "HR call with Ana (ana@globex.com)",
       notes: "Ana's phone 555-0100",
       declineReason: "Onsite five days",

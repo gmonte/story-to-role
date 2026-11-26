@@ -3,9 +3,17 @@
 import type {
   ApplicationSource,
   ApplicationStatus,
-  ApplicationType,
 } from "@repo/api/domains/applications/schemas/application";
+import type {
+  BoardState,
+  BoardStatus,
+  FitFilter,
+  ResumeOrigin,
+  SentFilter,
+} from "@repo/api/domains/applications/schemas/tracker";
 import { useTranslation } from "@repo/intl/use-translation";
+
+import type { BoardFilterField } from "../utils/board-filter";
 
 /** The tracker's statuses in the user's language. */
 export function useTrackerLabels() {
@@ -27,24 +35,87 @@ export function useTrackerLabels() {
     job_board: t.formatMessage({ defaultMessage: "Job board" }),
     other: t.formatMessage({ defaultMessage: "Other" }),
   };
-  const types: Record<ApplicationType, string> = {
-    // Stored as “simplified”: the same profile reused across openings (a
-    // job board's quick apply, a talent platform).
-    simplified: t.formatMessage({
-      defaultMessage: "Standard (the same profile you use for many openings)",
+
+  const boardStatuses: Record<BoardStatus, string> = {
+    ...statuses,
+    analyzed: t.formatMessage({
+      defaultMessage: "Analyzed",
+      description: "One opening's status on the Openings page",
     }),
-    // Stored as “external”: a document or form made for this opening only.
-    external: t.formatMessage({
-      defaultMessage: "Dedicated (a document or form made for this opening)",
+    closed: t.formatMessage({
+      defaultMessage: "Closed",
+      description: "One opening's status on the Openings page",
     }),
+  };
+  const states: Record<BoardState, string> = {
+    open: t.formatMessage({
+      defaultMessage: "Open",
+      description: "An opening's state in the Openings filter",
+    }),
+    closed: t.formatMessage({
+      defaultMessage: "Closed",
+      description: "An opening's state in the Openings filter",
+    }),
+  };
+  const fits: Record<FitFilter, string> = {
+    high: t.formatMessage({ defaultMessage: "High fit" }),
+    medium: t.formatMessage({ defaultMessage: "Medium fit" }),
+    low: t.formatMessage({ defaultMessage: "Low fit" }),
+    not_checked: t.formatMessage({ defaultMessage: "Not checked" }),
+  };
+  const sent: Record<SentFilter, string> = {
+    sent: t.formatMessage({
+      defaultMessage: "Sent",
+      description: "A value of the Sent filter on the Openings page",
+    }),
+    not_sent: t.formatMessage({ defaultMessage: "Not sent" }),
+  };
+  const resumeOrigins: Record<ResumeOrigin, string> = {
+    written: t.formatMessage({ defaultMessage: "Written for the opening" }),
+    library: t.formatMessage({ defaultMessage: "From the library" }),
+    not_recorded: t.formatMessage({ defaultMessage: "Not recorded" }),
+  };
+  const fields: Record<BoardFilterField, string> = {
+    status: t.formatMessage({ defaultMessage: "Status" }),
+    state: t.formatMessage({ defaultMessage: "State" }),
+    company: t.formatMessage({ defaultMessage: "Company" }),
+    source: t.formatMessage({ defaultMessage: "Source" }),
+    fit: t.formatMessage({ defaultMessage: "Fit" }),
+    sent: t.formatMessage({
+      defaultMessage: "Sent",
+      description: "A field of the Openings filter",
+    }),
+    resume: t.formatMessage({ defaultMessage: "Resume" }),
+  };
+  /** A filter value's name; company values are the user's own text. */
+  const filterValue = (field: BoardFilterField, value: string) => {
+    switch (field) {
+      case "status":
+        return boardStatuses[value as BoardStatus];
+      case "state":
+        return states[value as BoardState];
+      case "source":
+        return sources[value as ApplicationSource];
+      case "fit":
+        return fits[value as FitFilter];
+      case "sent":
+        return sent[value as SentFilter];
+      case "resume":
+        return resumeOrigins[value as ResumeOrigin];
+      case "company":
+        return value;
+    }
   };
   return {
     status: (status: ApplicationStatus) => statuses[status],
+    boardStatus: (status: BoardStatus) => boardStatuses[status],
+    resumeOrigin: (origin: ResumeOrigin) => resumeOrigins[origin],
+    field: (field: BoardFilterField) => fields[field],
+    filterValue,
     source: (source: ApplicationSource | null) =>
       source
         ? sources[source]
         : t.formatMessage({ defaultMessage: "Source not recorded" }),
     sources,
-    types,
   };
 }

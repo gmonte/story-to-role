@@ -232,6 +232,13 @@
       "when": 1795410607979,
       "tag": "0032_add_opening_description_read_at",
       "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "7",
+      "when": 1795716576768,
+      "tag": "0033_drop_application_type",
+      "breakpoints": true
     }
   ]
 }

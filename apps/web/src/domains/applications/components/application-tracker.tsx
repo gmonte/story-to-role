@@ -43,7 +43,6 @@ import {
   NotesSection,
   SentSection,
   SourceSection,
-  TypeSection,
 } from "./application-details";
 import { WithdrawDialog } from "./withdraw-dialog";
 import {
@@ -262,7 +261,6 @@ function TrackerBlock({
       </Section>
 
       <SourceSection key={`source-${detail.id}`} detail={detail} />
-      <TypeSection detail={detail} />
       <SentSection detail={detail} />
       <NextStepSection key={`next-${detail.id}`} detail={detail} />
       <NotesSection key={`notes-${detail.id}`} detail={detail} />

@@ -7,3 +7,10 @@ export const today = () => new Date().toLocaleDateString("en-CA");
  */
 export const dayToDate = (day: string) =>
   day === today() ? new Date() : new Date(`${day}T12:00:00`);
+
+const day = 24 * 60 * 60 * 1000;
+
+/** Whole days from `from` to `now`, never negative. */
+export function daysSince(from: Date, now: Date) {
+  return Math.max(0, Math.floor((now.getTime() - from.getTime()) / day));
+}

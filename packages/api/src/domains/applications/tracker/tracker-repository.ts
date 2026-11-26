@@ -7,6 +7,8 @@ import {
   inArray,
   isNotNull,
   lt,
+  or,
+  type SQL,
   sql,
 } from "drizzle-orm";
 
@@ -34,6 +36,13 @@ import {
   type ApplicationStatus,
   awaitingStatuses,
 } from "../schemas/application";
+import type {
+  BoardFilter,
+  BoardSort,
+  BoardState,
+  BoardStatus,
+} from "../schemas/tracker";
+import { boardStatusOrder, openBoardStatuses } from "./board";
 
 type Insert<T extends { $inferInsert: unknown }> = T["$inferInsert"];
 
@@ -42,6 +51,44 @@ const applicationColumns = {
   encryptedCompany: openingsTable.encryptedCompany,
   encryptedTitle: openingsTable.encryptedTitle,
 };
+
+const textList = (values: readonly string[]) =>
+  sql.join(
+    values.map((value) => sql`${value}`),
+    sql`, `
+  );
+
+/**
+ * Where an opening stands (tracker spec, “Where an opening stands”): its
+ * application's status, else Analyzed, or Closed for a closed opening.
+ */
+const boardStatus = sql<BoardStatus>`case when ${applicationsTable.id} is not null then ${applicationsTable.status} when ${openingsTable.status} = 'closed' then 'closed' else 'analyzed' end`;
+
+const boardState = sql<BoardState>`case when ${openingsTable.status} <> 'closed' and (${boardStatus}) in (${textList(openBoardStatuses)}) then 'open' else 'closed' end`;
+
+/** An opening with no application last moved when it was added or closed. */
+const lastActivity = sql`coalesce(${applicationsTable.lastActivityAt}, ${openingsTable.closedAt}, ${openingsTable.createdAt})`;
+
+const latestBand = sql<
+  "high" | "medium" | "low" | null
+>`(select ${fitChecksTable.band} from ${fitChecksTable} where ${fitChecksTable.openingId} = ${openingsTable.id} order by ${fitChecksTable.createdAt} desc limit 1)`;
+
+const statusRank = sql<number>`array_position(array[${textList(boardStatusOrder)}]::text[], ${boardStatus})`;
+
+/** Not sent sorts last among dates newest first. */
+const sentKey = sql`coalesce(${applicationsTable.appliedAt}, '-infinity'::timestamptz)`;
+
+/** The filter's fields SQL sees, as text to match against the values. */
+const boardFields = {
+  status: boardStatus,
+  state: boardState,
+  source: sql`${applicationsTable.source}`,
+  fit: sql`coalesce(${latestBand}, 'not_checked')`,
+  sent: sql`case when ${applicationsTable.appliedAt} is not null then 'sent' else 'not_sent' end`,
+} as const;
+
+/** A keyset boundary: the sort's keys as Postgres text, and the id. */
+export type BoardKeyset = { keys: Array<string | number>; id: string };
 
 export class TrackerRepository {
   constructor(private readonly tx: DbClient) {}
@@ -74,6 +121,171 @@ export class TrackerRepository {
         )
       )
       .then((rows) => rows[0] ?? null);
+  }
+
+  /**
+   * The Openings page's rows (tracker spec): every analyzed or closed
+   * opening, with or without an application, filtered on the structured
+   * fields (ADR 0014). With `limit`, a keyset page in the sort's order (ADR
+   * 0013); without, every matching row, for the service to sort itself.
+   */
+  boardRows(input: {
+    profileId: string;
+    filter: BoardFilter;
+    column?: BoardStatus;
+    sort: Exclude<BoardSort, "company">;
+    after?: BoardKeyset | null;
+    limit?: number;
+  }) {
+    const after = input.after ? this.boardAfter(input.sort, input.after) : null;
+    const order =
+      input.sort === "sent"
+        ? [desc(sentKey), desc(lastActivity), desc(openingsTable.id)]
+        : input.sort === "status"
+          ? [asc(statusRank), desc(lastActivity), desc(openingsTable.id)]
+          : [desc(lastActivity), desc(openingsTable.id)];
+    const query = this.tx
+      .select({
+        openingId: openingsTable.id,
+        applicationId: applicationsTable.id,
+        encryptedCompany: openingsTable.encryptedCompany,
+        encryptedTitle: openingsTable.encryptedTitle,
+        status: boardStatus,
+        state: boardState,
+        external: sql<boolean>`coalesce(${applicationsTable.external}, false)`,
+        lastActivityAt: lastActivity.mapWith(openingsTable.createdAt),
+        appliedAt: applicationsTable.appliedAt,
+        source: applicationsTable.source,
+        fitBand: latestBand,
+        encryptedNextStep: applicationsTable.encryptedNextStep,
+        // The keyset's keys, as Postgres text: a JS date drops microseconds.
+        activityKey: sql<string>`(${lastActivity})::text`,
+        sentKey: sql<string>`(${sentKey})::text`,
+        statusRank,
+      })
+      .from(openingsTable)
+      .leftJoin(
+        applicationsTable,
+        eq(applicationsTable.openingId, openingsTable.id)
+      )
+      .where(and(this.boardWhere(input), after ?? undefined))
+      .orderBy(...order)
+      .$dynamic();
+    return input.limit ? query.limit(input.limit) : query;
+  }
+
+  async boardCount(input: {
+    profileId: string;
+    filter: BoardFilter;
+    column?: BoardStatus;
+  }) {
+    const [row] = await this.tx
+      .select({ count: sql<number>`count(*)::int` })
+      .from(openingsTable)
+      .leftJoin(
+        applicationsTable,
+        eq(applicationsTable.openingId, openingsTable.id)
+      )
+      .where(this.boardWhere(input));
+    return row?.count ?? 0;
+  }
+
+  /**
+   * Where each application's resume came from: the resumes sent, the one
+   * picked by hand and its own resume's versions; a version is a library
+   * one when copied from the library or a library document itself.
+   */
+  async resumeCandidates(applicationIds: string[]) {
+    if (applicationIds.length === 0) return [];
+    const library = sql<boolean>`(${documentVersionsTable.libraryVersionId} is not null or ${documentsTable.applicationId} is null)`;
+    const resumes = and(
+      eq(documentsTable.kind, "resume"),
+      eq(documentVersionsTable.documentId, documentsTable.id)
+    );
+    const sent = await this.tx
+      .select({
+        applicationId: applicationSubmissionsTable.applicationId,
+        library,
+        at: applicationSubmissionsTable.createdAt,
+      })
+      .from(applicationSubmissionsTable)
+      .innerJoin(
+        documentVersionsTable,
+        eq(documentVersionsTable.id, applicationSubmissionsTable.versionId)
+      )
+      .innerJoin(documentsTable, resumes)
+      .where(
+        inArray(applicationSubmissionsTable.applicationId, applicationIds)
+      );
+    const picked = await this.tx
+      .select({
+        applicationId: applicationsTable.id,
+        library,
+        at: documentVersionsTable.createdAt,
+      })
+      .from(applicationsTable)
+      .innerJoin(
+        documentVersionsTable,
+        eq(documentVersionsTable.id, applicationsTable.pickedResumeVersionId)
+      )
+      .innerJoin(documentsTable, resumes)
+      .where(inArray(applicationsTable.id, applicationIds));
+    const own = await this.tx
+      .select({
+        applicationId: sql<string>`${documentsTable.applicationId}`,
+        library,
+        at: documentVersionsTable.createdAt,
+      })
+      .from(documentsTable)
+      .innerJoin(documentVersionsTable, resumes)
+      .where(inArray(documentsTable.applicationId, applicationIds));
+    return [
+      ...sent.map((row) => ({ ...row, kind: "sent" as const })),
+      ...picked.map((row) => ({ ...row, kind: "picked" as const })),
+      ...own.map((row) => ({ ...row, kind: "own" as const })),
+    ];
+  }
+
+  private boardWhere(input: {
+    profileId: string;
+    filter: BoardFilter;
+    column?: BoardStatus;
+  }) {
+    const conditions: SQL[] = [
+      eq(openingsTable.profileId, input.profileId),
+      // Openings still processing, failed or refused never show.
+      or(
+        isNotNull(applicationsTable.id),
+        inArray(openingsTable.status, ["analyzed", "closed"])
+      )!,
+    ];
+    if (input.column) conditions.push(sql`(${boardStatus}) = ${input.column}`);
+    for (const [field, expression] of Object.entries(boardFields)) {
+      const key = field as keyof typeof boardFields;
+      const is = input.filter[key];
+      const not = input.filter[`${key}Not`];
+      // A missing value (no application) matches no value: never "is",
+      // always "is not".
+      const matches = (values: readonly string[]) =>
+        sql`coalesce((${expression}) in (${textList(values)}), false)`;
+      if (is?.length) conditions.push(matches(is));
+      if (not?.length) conditions.push(sql`not ${matches(not)}`);
+    }
+    return and(...conditions);
+  }
+
+  /** Rows after a keyset boundary, in the sort's order. */
+  private boardAfter(sort: Exclude<BoardSort, "company">, after: BoardKeyset) {
+    const [first, second] = after.keys;
+    const id = sql`${after.id}::uuid`;
+    switch (sort) {
+      case "activity":
+        return sql`((${lastActivity}), ${openingsTable.id}) < (${first}::timestamptz, ${id})`;
+      case "sent":
+        return sql`((${sentKey}), (${lastActivity}), ${openingsTable.id}) < (${first}::timestamptz, ${second}::timestamptz, ${id})`;
+      case "status":
+        return sql`((${statusRank}) > ${first}::int or ((${statusRank}) = ${first}::int and ((${lastActivity}), ${openingsTable.id}) < (${second}::timestamptz, ${id})))`;
+    }
   }
 
   async insertApplication(row: Insert<typeof applicationsTable>) {

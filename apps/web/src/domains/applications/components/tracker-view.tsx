@@ -2,22 +2,23 @@
 
 import { useSyncExternalStore } from "react";
 
-import { Columns3, List } from "lucide-react";
+import { ChevronDown, Columns3, List } from "lucide-react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
 import { useTranslation } from "@repo/intl/use-translation";
-import { Skeleton } from "@repo/web/components/ui/skeleton";
+import { Button } from "@repo/web/components/ui/button";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@repo/web/components/ui/collapsible";
 import { Tabs, TabsList, TabsTrigger } from "@repo/web/components/ui/tabs";
 import { cn } from "@repo/web/lib/utils";
 
-import { useTracker } from "../hooks/use-tracker";
-import {
-  filtersToParams,
-  parseFilters,
-  type ApplicationFilters,
-} from "../utils/application-filters";
-import { ApplicationFiltersBar, ApplicationsList } from "./applications-list";
-import { ApplicationsKanban } from "./applications-kanban";
+import { useBoard, useBoardQuery } from "../hooks/use-board";
+import { BoardFilterBar } from "./board-filter-bar";
+import { OpeningsKanban } from "./openings-kanban";
+import { OpeningsList } from "./openings-list";
 import { TrackerMetricsPanel } from "./tracker-metrics-panel";
 
 type View = "list" | "kanban";
@@ -64,71 +65,70 @@ function useView(): [View, (view: View) => void] {
   return [view, setView];
 }
 
+const metricsKey = "openings-metrics-open";
+const metricsListeners = new Set<() => void>();
+
+/** Whether this viewer keeps the metrics open; they start collapsed. */
+function useMetricsOpen(): [boolean, (open: boolean) => void] {
+  const open = useSyncExternalStore(
+    (listener) => {
+      metricsListeners.add(listener);
+      return () => metricsListeners.delete(listener);
+    },
+    () => {
+      try {
+        return localStorage.getItem(metricsKey) === "true";
+      } catch {
+        return false;
+      }
+    },
+    () => false
+  );
+  const setOpen = (next: boolean) => {
+    try {
+      localStorage.setItem(metricsKey, String(next));
+    } catch {
+      // Not remembered.
+    }
+    metricsListeners.forEach((listener) => listener());
+  };
+  return [open, setOpen];
+}
+
 /**
- * The Openings page's Tracking tab (tracker spec): the metrics, then every
- * application as a filtered list or a kanban by status.
+ * The Openings page's Tracking tab (tracker spec, “Tracking”): the metrics
+ * first (they ignore the filter), then the filter and every opening it
+ * matches, as a list or a kanban.
  */
 export function TrackerView() {
   const t = useTranslation();
-  const router = useRouter();
-  const pathname = usePathname();
-  const params = useSearchParams();
-  const tracker = useTracker();
-  const applications = tracker.data ?? [];
   const [view, setView] = useView();
-  const filters = parseFilters(params);
-  const setFilters = (next: ApplicationFilters) => {
-    const query = new URLSearchParams(params.toString());
-    for (const key of ["status", "type", "company", "sent", "sort"]) {
-      query.delete(key);
-    }
-    for (const [key, value] of Object.entries(filtersToParams(next))) {
-      query.set(key, value);
-    }
-    router.replace(`${pathname}?${query.toString()}`, { scroll: false });
-  };
+  const [metricsOpen, setMetricsOpen] = useMetricsOpen();
+  const { filter, sort, setFilter, setSort } = useBoardQuery();
+  // The list's pages; their total is the filter's count in both views.
+  const board = useBoard({ filter, sort, limit: 25 });
 
   return (
-    // The kanban takes the full width; the list keeps a reading width.
-    <div
-      className={cn(
-        "mx-auto flex w-full flex-col gap-6 px-6",
-        view === "list" && "max-w-6xl"
-      )}
-    >
-      <TrackerMetricsPanel />
+    <div className="flex w-full flex-col gap-6">
+      <div className="mx-auto flex w-full max-w-6xl flex-col gap-4 px-6">
+        <Collapsible open={metricsOpen} onOpenChange={setMetricsOpen}>
+          <CollapsibleTrigger asChild>
+            <Button variant="ghost" size="sm" className="-ml-2">
+              <ChevronDown
+                className={cn(
+                  "transition-transform",
+                  !metricsOpen && "-rotate-90"
+                )}
+              />
+              {t.formatMessage({ defaultMessage: "Metrics" })}
+            </Button>
+          </CollapsibleTrigger>
+          <CollapsibleContent className="pt-2">
+            <TrackerMetricsPanel />
+          </CollapsibleContent>
+        </Collapsible>
 
-      {!tracker.data ? (
-        // The view's room while the applications load: rows for the
-        // list, columns of cards for the kanban.
-        <div className="flex flex-col gap-3">
-          <Skeleton className="h-9 w-44" />
-          {view === "list" ? (
-            [0, 1, 2, 3, 4].map((index) => (
-              <Skeleton key={index} className="h-14 w-full rounded-lg" />
-            ))
-          ) : (
-            <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-              {[3, 2, 2, 1].map((cards, column) => (
-                <div key={column} className="flex flex-col gap-2">
-                  <Skeleton className="h-4 w-24" />
-                  {Array.from({ length: cards }, (_, index) => (
-                    <Skeleton key={index} className="h-20 w-full rounded-md" />
-                  ))}
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      ) : applications.length === 0 ? (
-        <p className="text-muted-foreground rounded-lg border border-dashed p-6 text-center">
-          {t.formatMessage({
-            defaultMessage:
-              "No applications yet. One starts when you generate a document for an opening, or add one you made elsewhere.",
-          })}
-        </p>
-      ) : (
-        <section className="flex min-w-0 flex-col gap-3">
+        <div className="flex flex-wrap items-start justify-between gap-3">
           <Tabs value={view} onValueChange={(value) => setView(value as View)}>
             <TabsList>
               <TabsTrigger value="list">
@@ -141,26 +141,20 @@ export function TrackerView() {
               </TabsTrigger>
             </TabsList>
           </Tabs>
-          {view === "list" ? (
-            <ApplicationsList
-              applications={applications}
-              filters={filters}
-              onFiltersChange={setFilters}
-            />
-          ) : (
-            <div className="flex min-w-0 flex-col gap-3">
-              <ApplicationFiltersBar
-                filters={filters}
-                onChange={setFilters}
-                withSort={false}
-              />
-              <ApplicationsKanban
-                applications={applications}
-                filters={filters}
-              />
-            </div>
-          )}
-        </section>
+        </div>
+        <BoardFilterBar
+          filter={filter}
+          onChange={setFilter}
+          total={board.total}
+          {...(view === "list" ? { sort, onSortChange: setSort } : {})}
+        />
+        {view === "list" && <OpeningsList filter={filter} board={board} />}
+      </div>
+      {/* The kanban takes the full width. */}
+      {view === "kanban" && (
+        <div className="px-6">
+          <OpeningsKanban filter={filter} />
+        </div>
       )}
     </div>
   );

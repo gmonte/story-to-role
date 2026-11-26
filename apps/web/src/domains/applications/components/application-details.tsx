@@ -6,9 +6,7 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 
 import {
   type ApplicationSource,
-  type ApplicationType,
   applicationSourceSchema,
-  applicationTypeSchema,
 } from "@repo/api/domains/applications/schemas/application";
 import type { ApplicationDetail } from "@repo/api/domains/applications/schemas/tracker";
 import { useTranslation } from "@repo/intl/use-translation";
@@ -39,7 +37,6 @@ import {
 type Details = {
   source?: ApplicationSource | null;
   sourceDetail?: string | null;
-  applicationType?: ApplicationType | null;
   resumeVersionId?: string | null;
   nextStep?: string | null;
   notes?: string | null;
@@ -169,38 +166,6 @@ function InlineValue({
     >
       {empty}
     </Button>
-  );
-}
-
-/** Standard (a profile reused across openings) or dedicated. */
-export function TypeSection({ detail }: { detail: ApplicationDetail }) {
-  const t = useTranslation();
-  const labels = useTrackerLabels();
-  const { save, pending } = useSaveDetails(detail);
-  return (
-    <Section
-      label={t.formatMessage({ defaultMessage: "Application type" })}
-      action={
-        <OptionsPopover
-          label={t.formatMessage({ defaultMessage: "Edit application type" })}
-          value={detail.applicationType}
-          disabled={pending}
-          options={applicationTypeSchema.options.map((value) => ({
-            value,
-            label: labels.types[value],
-          }))}
-          onSelect={(applicationType) => save({ applicationType })}
-        />
-      }
-    >
-      {detail.applicationType ? (
-        <p className="text-sm break-words">
-          {labels.types[detail.applicationType]}
-        </p>
-      ) : (
-        <Empty>{t.formatMessage({ defaultMessage: "Not recorded" })}</Empty>
-      )}
-    </Section>
   );
 }
 

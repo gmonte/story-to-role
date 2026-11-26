@@ -9,7 +9,6 @@ import { fitBandSchema } from "@repo/api/domains/openings/schemas/opening";
 import {
   applicationSourceSchema,
   applicationStatusSchema,
-  applicationTypeSchema,
 } from "./application";
 
 /**
@@ -50,7 +49,6 @@ export const trackedApplicationSchema = z.object({
   appliedAt: z.date().nullable(),
   // The method's fields; next step is free text (encrypted, never in a prompt).
   source: applicationSourceSchema.nullable(),
-  applicationType: applicationTypeSchema.nullable(),
   nextStep: z.string().nullable(),
   // The opening's latest fit band (the list view only; the detail leaves it empty).
   fitBand: fitBandSchema.nullable(),
@@ -153,3 +151,94 @@ export const trackerMetricsSchema = z.object({
   }),
 });
 export type TrackerMetrics = z.infer<typeof trackerMetricsSchema>;
+
+/**
+ * Where an opening stands on the Openings page (tracker spec, “Where an
+ * opening stands”): its application's status, else Analyzed, or Closed for
+ * a closed opening with no application.
+ */
+export const boardStatusSchema = z.enum([
+  "analyzed",
+  ...applicationStatusSchema.options,
+  "closed",
+]);
+export type BoardStatus = z.infer<typeof boardStatusSchema>;
+
+export const boardStateSchema = z.enum(["open", "closed"]);
+export type BoardState = z.infer<typeof boardStateSchema>;
+
+/** The resume an application sent (or will): written for it, or a library one. */
+export const resumeOriginSchema = z.enum([
+  "written",
+  "library",
+  "not_recorded",
+]);
+export type ResumeOrigin = z.infer<typeof resumeOriginSchema>;
+
+export const fitFilterSchema = z.enum([
+  ...fitBandSchema.options,
+  "not_checked",
+]);
+export type FitFilter = z.infer<typeof fitFilterSchema>;
+
+export const sentFilterSchema = z.enum(["sent", "not_sent"]);
+export type SentFilter = z.infer<typeof sentFilterSchema>;
+
+export const boardSortSchema = z.enum([
+  "activity",
+  "sent",
+  "company",
+  "status",
+]);
+export type BoardSort = z.infer<typeof boardSortSchema>;
+
+const filterText = z.string().trim().min(1).max(200);
+
+/**
+ * The Openings page's filter: each field's values to match (`status`) or
+ * to leave out (`statusNot`); values of a field combine with OR, fields
+ * with AND. Flat, so a GET carries it as query parameters.
+ */
+export const boardFilterSchema = z.object({
+  status: z.array(boardStatusSchema).optional(),
+  statusNot: z.array(boardStatusSchema).optional(),
+  state: z.array(boardStateSchema).optional(),
+  stateNot: z.array(boardStateSchema).optional(),
+  company: z.array(filterText).optional(),
+  companyNot: z.array(filterText).optional(),
+  source: z.array(applicationSourceSchema).optional(),
+  sourceNot: z.array(applicationSourceSchema).optional(),
+  fit: z.array(fitFilterSchema).optional(),
+  fitNot: z.array(fitFilterSchema).optional(),
+  sent: z.array(sentFilterSchema).optional(),
+  sentNot: z.array(sentFilterSchema).optional(),
+  resume: z.array(resumeOriginSchema).optional(),
+  resumeNot: z.array(resumeOriginSchema).optional(),
+  // Free text: company or title.
+  q: filterText.optional(),
+});
+export type BoardFilter = z.infer<typeof boardFilterSchema>;
+
+/** One opening on the Openings page's list or kanban. */
+export const boardOpeningSchema = z.object({
+  openingId: z.uuid(),
+  applicationId: z.uuid().nullable(),
+  company: z.string().nullable(),
+  title: z.string().nullable(),
+  status: boardStatusSchema,
+  state: boardStateSchema,
+  external: z.boolean(),
+  lastActivityAt: z.date(),
+  appliedAt: z.date().nullable(),
+  source: applicationSourceSchema.nullable(),
+  fitBand: fitBandSchema.nullable(),
+  // Null for an opening with no application.
+  resumeOrigin: resumeOriginSchema.nullable(),
+  // The next dated event still ahead, if any.
+  nextEvent: z
+    .object({ occurredAt: z.date(), text: z.string().nullable() })
+    .nullable(),
+  // The method's next step (free text, encrypted, never in a prompt).
+  nextStep: z.string().nullable(),
+});
+export type BoardOpening = z.infer<typeof boardOpeningSchema>;

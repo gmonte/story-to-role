@@ -38,5 +38,3 @@ export const applicationSourceSchema = z.enum([
 export type ApplicationSource = z.infer<typeof applicationSourceSchema>;
 
 /** Simplified (one-click on a job board) or external (the company's own form). */
-export const applicationTypeSchema = z.enum(["simplified", "external"]);
-export type ApplicationType = z.infer<typeof applicationTypeSchema>;

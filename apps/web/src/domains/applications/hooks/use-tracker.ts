@@ -4,11 +4,6 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { useTRPC } from "~/tools/trpc/client";
 
-export function useTracker() {
-  const trpc = useTRPC();
-  return useQuery(trpc.tracker.list.queryOptions({}));
-}
-
 export function useReminders() {
   const trpc = useTRPC();
   return useQuery({

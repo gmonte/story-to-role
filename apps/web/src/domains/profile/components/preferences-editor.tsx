@@ -339,7 +339,7 @@ function Editor({ draft }: { draft: ProfileDraft }) {
         <div className="p-4 pb-0 md:hidden">
           <DocumentSwitch current={kind} />
         </div>
-        <div className="bg-background/95 sticky top-12 z-10 flex flex-wrap items-center gap-2 border-b px-4 py-2 backdrop-blur md:top-0">
+        <div className="bg-background/95 sticky top-12 z-10 flex transform-gpu flex-wrap items-center gap-2 border-b px-4 py-2 backdrop-blur md:top-0">
           <span
             className={
               autosave.status === "error" || autosave.status === "conflict"

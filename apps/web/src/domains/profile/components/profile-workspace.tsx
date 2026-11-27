@@ -54,7 +54,7 @@ export function ProfileWorkspace() {
         </div>
         {/* The toolbar and, while suggestions wait, their bar stay pinned
             to the top of the scrolling text. */}
-        <div className="sticky top-12 z-20 md:top-0">
+        <div className="sticky top-12 z-20 transform-gpu md:top-0">
           <ProfileToolbar />
           <ProfileSuggestionsBar />
         </div>

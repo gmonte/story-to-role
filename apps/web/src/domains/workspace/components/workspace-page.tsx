@@ -25,10 +25,12 @@ export function WorkspacePage({
   // scrolling, Brave left them half folded after a pull to refresh, hiding
   // the header. From md up the page fills the screen and its columns scroll.
   // Clipped, not hidden: a hidden overflow can still be scrolled by the
-  // browser, pushing the header out of sight.
+  // browser, pushing the header out of sight. The sticky bars are layers of
+  // their own (transform-gpu): iOS paints composited content over a sticky
+  // bar whatever its z-index.
   return (
     <SidebarInset className="min-h-svh min-w-0 overflow-x-clip md:h-[calc(100svh-1rem)] md:min-h-0 md:overflow-clip md:border">
-      <header className="bg-background sticky top-0 z-30 flex h-12 shrink-0 items-center gap-2 border-b px-3 md:static">
+      <header className="bg-background sticky top-0 z-30 flex h-12 shrink-0 transform-gpu items-center gap-2 border-b px-3 md:static">
         <SidebarTrigger />
         <Separator orientation="vertical" className="h-4!" />
         <h1 className="truncate text-sm font-medium">{title}</h1>

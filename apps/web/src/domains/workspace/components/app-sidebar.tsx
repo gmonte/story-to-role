@@ -25,6 +25,7 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
   SidebarSeparator,
+  useSidebar,
 } from "@repo/web/components/ui/sidebar";
 import { cn } from "@repo/web/lib/utils";
 
@@ -53,6 +54,7 @@ export function AppSidebar() {
   const trpc = useTRPC();
   const { data: isAdmin } = useQuery(trpc.credits.isAdmin.queryOptions({}));
   const reminders = useReminders();
+  const { isMobile, setOpenMobile } = useSidebar();
 
   const items = [
     {
@@ -88,89 +90,104 @@ export function AppSidebar() {
 
   return (
     <Sidebar collapsible="icon" variant="inset">
-      <SidebarHeader>
-        <Link href="/app/career" className="flex h-10 items-center px-2">
-          <BrandLockup className="group-data-[collapsible=icon]:hidden" />
-          <BrandMark className="hidden size-6 group-data-[collapsible=icon]:block" />
-        </Link>
-      </SidebarHeader>
+      {/* On a phone the menu covers the page, so following any of its links
+          closes it, even one to the page already open. */}
+      <div
+        className="contents"
+        onClick={(event) => {
+          if (
+            isMobile &&
+            event.target instanceof Element &&
+            event.target.closest("a[href]")
+          ) {
+            setOpenMobile(false);
+          }
+        }}
+      >
+        <SidebarHeader>
+          <Link href="/app/career" className="flex h-10 items-center px-2">
+            <BrandLockup className="group-data-[collapsible=icon]:hidden" />
+            <BrandMark className="hidden size-6 group-data-[collapsible=icon]:block" />
+          </Link>
+        </SidebarHeader>
 
-      <SidebarContent>
-        <SidebarGroup>
-          <SidebarGroupContent>
-            <SidebarMenu>
-              {items.map((item) => {
-                const active =
-                  "active" in item
-                    ? item.active
-                    : pathname.startsWith(item.href);
-                return (
-                  <SidebarMenuItem key={item.href}>
-                    <SidebarMenuButton
-                      asChild
-                      isActive={active}
-                      tooltip={item.label}
-                    >
-                      <Link href={item.href}>
-                        {/* ADR 0012: the orange marks where you are. */}
-                        <item.icon
-                          className={cn(active && "text-brand-accent")}
-                        />
-                        <span>{item.label}</span>
-                      </Link>
-                    </SidebarMenuButton>
-                    {"count" in item && !!item.count && (
-                      <SidebarMenuBadge>{item.count}</SidebarMenuBadge>
-                    )}
-                  </SidebarMenuItem>
-                );
-              })}
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
+        <SidebarContent>
+          <SidebarGroup>
+            <SidebarGroupContent>
+              <SidebarMenu>
+                {items.map((item) => {
+                  const active =
+                    "active" in item
+                      ? item.active
+                      : pathname.startsWith(item.href);
+                  return (
+                    <SidebarMenuItem key={item.href}>
+                      <SidebarMenuButton
+                        asChild
+                        isActive={active}
+                        tooltip={item.label}
+                      >
+                        <Link href={item.href}>
+                          {/* ADR 0012: the orange marks where you are. */}
+                          <item.icon
+                            className={cn(active && "text-brand-accent")}
+                          />
+                          <span>{item.label}</span>
+                        </Link>
+                      </SidebarMenuButton>
+                      {"count" in item && !!item.count && (
+                        <SidebarMenuBadge>{item.count}</SidebarMenuBadge>
+                      )}
+                    </SidebarMenuItem>
+                  );
+                })}
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
 
-        <SidebarSeparator className="mx-4 group-data-[collapsible=icon]:hidden" />
-        <SidebarGroup className="group-data-[collapsible=icon]:hidden">
-          <SidebarGroupContent>
-            <OpeningsByStatus />
-          </SidebarGroupContent>
-        </SidebarGroup>
-      </SidebarContent>
+          <SidebarSeparator className="mx-4 group-data-[collapsible=icon]:hidden" />
+          <SidebarGroup className="group-data-[collapsible=icon]:hidden">
+            <SidebarGroupContent>
+              <OpeningsByStatus />
+            </SidebarGroupContent>
+          </SidebarGroup>
+        </SidebarContent>
 
-      <SidebarFooter>
-        <SidebarSeparator className="mx-2" />
-        <SidebarMenu>
-          {/* Admin heads the footer: a tool apart from the work above. */}
-          {isAdmin && (
+        <SidebarFooter>
+          <SidebarSeparator className="mx-2" />
+          <SidebarMenu>
+            {/* Admin heads the footer: a tool apart from the work above. */}
+            {isAdmin && (
+              <SidebarMenuItem>
+                <SidebarMenuButton
+                  asChild
+                  isActive={pathname.startsWith("/app/admin")}
+                  tooltip={adminLabel}
+                >
+                  <Link href="/app/admin/usage">
+                    <ShieldCheck />
+                    <span>{adminLabel}</span>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+            )}
             <SidebarMenuItem>
-              <SidebarMenuButton
-                asChild
-                isActive={pathname.startsWith("/app/admin")}
-                tooltip={adminLabel}
-              >
-                <Link href="/app/admin/usage">
-                  <ShieldCheck />
-                  <span>{adminLabel}</span>
-                </Link>
-              </SidebarMenuButton>
+              <CreditMeter />
+              <OutOfCreditsNotice />
             </SidebarMenuItem>
-          )}
-          <SidebarMenuItem>
-            <CreditMeter />
-            <OutOfCreditsNotice />
-          </SidebarMenuItem>
-          <SidebarMenuItem>
-            <LanguageSwitcher />
-          </SidebarMenuItem>
-          <SidebarMenuItem>
-            <ThemeSwitcher />
-          </SidebarMenuItem>
-          {/* The account stands apart from the settings above it. */}
-          <SidebarMenuItem className="mt-3">
-            <UserButton />
-          </SidebarMenuItem>
-        </SidebarMenu>
-      </SidebarFooter>
+            <SidebarMenuItem>
+              <LanguageSwitcher />
+            </SidebarMenuItem>
+            <SidebarMenuItem>
+              <ThemeSwitcher />
+            </SidebarMenuItem>
+            {/* The account stands apart from the settings above it. */}
+            <SidebarMenuItem className="mt-3">
+              <UserButton />
+            </SidebarMenuItem>
+          </SidebarMenu>
+        </SidebarFooter>
+      </div>
     </Sidebar>
   );
 }

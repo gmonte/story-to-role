@@ -140,33 +140,35 @@ export function PeriodPicker({
 
   return (
     <section className="flex flex-wrap items-end gap-3">
-      <div className="flex flex-col gap-1">
-        <Label htmlFor="usage-from">
-          {t.formatMessage({ defaultMessage: "From" })}
-        </Label>
-        <Input
-          id="usage-from"
-          type="date"
-          value={from}
-          max={to}
-          onChange={(event) =>
-            event.target.value && setPeriod({ from: event.target.value, to })
-          }
-        />
-      </div>
-      <div className="flex flex-col gap-1">
-        <Label htmlFor="usage-to">
-          {t.formatMessage({ defaultMessage: "To" })}
-        </Label>
-        <Input
-          id="usage-to"
-          type="date"
-          value={to}
-          min={from}
-          onChange={(event) =>
-            event.target.value && setPeriod({ from, to: event.target.value })
-          }
-        />
+      <div className="grid w-full grid-cols-2 gap-3 sm:w-auto">
+        <div className="flex min-w-0 flex-col gap-1">
+          <Label htmlFor="usage-from">
+            {t.formatMessage({ defaultMessage: "From" })}
+          </Label>
+          <Input
+            id="usage-from"
+            type="date"
+            value={from}
+            max={to}
+            onChange={(event) =>
+              event.target.value && setPeriod({ from: event.target.value, to })
+            }
+          />
+        </div>
+        <div className="flex min-w-0 flex-col gap-1">
+          <Label htmlFor="usage-to">
+            {t.formatMessage({ defaultMessage: "To" })}
+          </Label>
+          <Input
+            id="usage-to"
+            type="date"
+            value={to}
+            min={from}
+            onChange={(event) =>
+              event.target.value && setPeriod({ from, to: event.target.value })
+            }
+          />
+        </div>
       </div>
       <div className="flex flex-wrap gap-2">
         <Button variant="outline" onClick={() => setPeriod(null)}>

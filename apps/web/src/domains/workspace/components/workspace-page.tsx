@@ -20,8 +20,11 @@ export function WorkspacePage({
   panel?: ReactNode;
   body?: ReactNode;
 }) {
+  // Clipped, not hidden: a hidden overflow can still be scrolled by the
+  // browser (bringing a focused field into view), pushing the header out of
+  // sight; only the columns inside scroll.
   return (
-    <SidebarInset className="h-svh min-w-0 overflow-hidden md:h-[calc(100svh-1rem)] md:border">
+    <SidebarInset className="h-svh min-w-0 overflow-clip md:h-[calc(100svh-1rem)] md:border">
       <header className="flex h-12 shrink-0 items-center gap-2 border-b px-3">
         <SidebarTrigger />
         <Separator orientation="vertical" className="h-4!" />

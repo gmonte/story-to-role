@@ -20,12 +20,15 @@ export function WorkspacePage({
   panel?: ReactNode;
   body?: ReactNode;
 }) {
+  // On a phone the window scrolls, under a sticky header: iOS browsers
+  // fold their toolbars as the window scrolls, and with only inner columns
+  // scrolling, Brave left them half folded after a pull to refresh, hiding
+  // the header. From md up the page fills the screen and its columns scroll.
   // Clipped, not hidden: a hidden overflow can still be scrolled by the
-  // browser (bringing a focused field into view), pushing the header out of
-  // sight; only the columns inside scroll.
+  // browser, pushing the header out of sight.
   return (
-    <SidebarInset className="h-svh min-w-0 overflow-clip md:h-[calc(100svh-1rem)] md:border">
-      <header className="flex h-12 shrink-0 items-center gap-2 border-b px-3">
+    <SidebarInset className="min-h-svh min-w-0 overflow-x-clip md:h-[calc(100svh-1rem)] md:min-h-0 md:overflow-clip md:border">
+      <header className="bg-background sticky top-0 z-30 flex h-12 shrink-0 items-center gap-2 border-b px-3 md:static">
         <SidebarTrigger />
         <Separator orientation="vertical" className="h-4!" />
         <h1 className="truncate text-sm font-medium">{title}</h1>

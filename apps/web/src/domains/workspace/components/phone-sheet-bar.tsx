@@ -37,7 +37,7 @@ export function PhoneSheetBar({
 
   return (
     <>
-      <div className="bg-background/95 flex shrink-0 gap-2 border-t px-3 pt-2 pb-[calc(0.5rem+env(safe-area-inset-bottom))] backdrop-blur">
+      <div className="bg-background/95 sticky bottom-0 z-20 flex shrink-0 gap-2 border-t px-3 pt-2 pb-[calc(0.5rem+env(safe-area-inset-bottom))] backdrop-blur">
         {tabs.map((tab) => (
           <Button
             key={tab.key}

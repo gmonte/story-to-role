@@ -93,7 +93,7 @@ export function DocumentWorkspace({
             {left}
           </ResizableAside>
         )}
-        <div className="min-w-0 flex-1 overflow-y-auto">
+        <div className="min-w-0 flex-1 md:overflow-y-auto">
           <DocumentToolbar
             versions={versions}
             select={select}
@@ -252,7 +252,7 @@ function DocumentToolbar({
   }[saveStatus];
 
   return (
-    <div className="bg-background/95 sticky top-0 z-10 flex flex-col gap-2 border-b px-4 py-2 backdrop-blur">
+    <div className="bg-background/95 sticky top-12 z-10 flex transform-gpu flex-col gap-2 border-b px-4 py-2 backdrop-blur md:top-0">
       <div className="flex flex-wrap items-center justify-between gap-2">
         {/* On a phone the index and the score share the first line, the
             legend goes under them. */}

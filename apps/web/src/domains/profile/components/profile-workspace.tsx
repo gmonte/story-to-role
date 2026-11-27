@@ -47,6 +47,11 @@ export function ProfileWorkspace() {
         <ProfileReview />
       </ResizableAside>
       <div className="min-w-0 flex-1 overflow-y-auto">
+        {/* The index column is hidden on small screens; the switch to the
+            preferences shows above the text there. */}
+        <div className="p-4 pb-0 md:hidden">
+          <DocumentSwitch current="profile" />
+        </div>
         {/* The toolbar and, while suggestions wait, their bar stay pinned
             to the top of the scrolling text. */}
         <div className="sticky top-0 z-20">

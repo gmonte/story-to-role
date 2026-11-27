@@ -64,8 +64,14 @@ const endOfDay = (date: Date, now: Date) => {
  * response" is only set by time (tracker spec), and "Applied" with
  * documents goes through markApplied, which records what was sent.
  */
-function manualStatus(status: ApplicationStatus) {
-  return status !== "no_response" && status !== "applied";
+/**
+ * A status the user sets by hand: "No response" only comes with time, and
+ * "Applied" records what was sent, unless the application was already sent
+ * (back to Applied, keeping that record).
+ */
+function manualStatus(status: ApplicationStatus, appliedAt: Date | null) {
+  if (status === "no_response") return false;
+  return status !== "applied" || appliedAt !== null;
 }
 
 const defaultSettings: TrackerSettings = {
@@ -478,7 +484,7 @@ export class TrackerService {
       const row = await this.requireApplication(tx, profile.id, input);
       const { application } = row;
       if (input.status === application.status) return;
-      if (!manualStatus(input.status)) {
+      if (!manualStatus(input.status, application.appliedAt)) {
         throw new TRPCError({ code: "BAD_REQUEST" });
       }
       // "Marking applied by mistake is undone by changing the status back"

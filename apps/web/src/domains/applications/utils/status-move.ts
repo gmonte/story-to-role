@@ -8,8 +8,9 @@ import type { BoardStatus } from "@repo/api/domains/applications/schemas/tracker
  * - `withdraw`: giving up asks for the reason;
  * - `set_status`: a plain change;
  * - `none`: it is already there;
- * - `rejected`: "No response" only comes with time, and "Applied" with
- *   documents only comes from "In preparation", through the dialog.
+ * - `rejected`: "No response" only comes with time, and an application
+ *   never sent reaches "Applied" only from "In preparation", through the
+ *   dialog; one already sent goes back to it as a plain change.
  */
 export type StatusMove =
   | { kind: "none" }
@@ -19,15 +20,18 @@ export type StatusMove =
   | { kind: "rejected"; reason: "no_response" | "applied_from_preparation" };
 
 export function planStatusMove(
-  application: { status: ApplicationStatus },
+  application: { status: ApplicationStatus; appliedAt?: Date | null },
   to: ApplicationStatus
 ): StatusMove {
   if (to === application.status) return { kind: "none" };
   if (to === "no_response") return { kind: "rejected", reason: "no_response" };
   if (to === "withdrawn") return { kind: "withdraw" };
   if (to === "applied") {
-    return application.status === "in_preparation"
-      ? { kind: "mark_applied" }
+    if (application.status === "in_preparation")
+      return { kind: "mark_applied" };
+    // Already sent: back to Applied, keeping what was sent and when.
+    return application.appliedAt
+      ? { kind: "set_status" }
       : { kind: "rejected", reason: "applied_from_preparation" };
   }
   return { kind: "set_status" };
@@ -54,7 +58,7 @@ export type BoardMove =
     };
 
 export function planBoardMove(
-  card: { status: BoardStatus },
+  card: { status: BoardStatus; appliedAt?: Date | null },
   to: BoardStatus
 ): BoardMove {
   if (to === card.status) return { kind: "none" };
@@ -73,5 +77,5 @@ export function planBoardMove(
       : { kind: "create_application", then };
   }
   if (to === "closed") return { kind: "rejected", reason: "to_closed" };
-  return planStatusMove({ status: card.status }, to);
+  return planStatusMove({ status: card.status, appliedAt: card.appliedAt }, to);
 }

@@ -13,11 +13,24 @@ describe("planStatusMove", () => {
     expect(planStatusMove(mine, "applied")).toEqual({ kind: "mark_applied" });
   });
 
-  it("rejects applying from a later status", () => {
+  it("rejects applying from a later status when it was never sent", () => {
     expect(planStatusMove({ status: "in_process" }, "applied")).toEqual({
       kind: "rejected",
       reason: "applied_from_preparation",
     });
+  });
+
+  it("goes back to applied at once when it was already sent", () => {
+    const sent = { appliedAt: new Date("2026-11-10") };
+    expect(
+      planStatusMove({ status: "in_process", ...sent }, "applied")
+    ).toEqual({ kind: "set_status" });
+    expect(planStatusMove({ status: "rejected", ...sent }, "applied")).toEqual({
+      kind: "set_status",
+    });
+    expect(planBoardMove({ status: "in_process", ...sent }, "applied")).toEqual(
+      { kind: "set_status" }
+    );
   });
 
   it("asks for the reason when giving up", () => {

@@ -70,6 +70,52 @@ describe("tracker", () => {
     ).rejects.toMatchObject({ code: "BAD_REQUEST" });
   });
 
+  it("goes back to Applied only once it was sent, keeping when", async () => {
+    const ctx = await setup();
+    const appliedAt = new Date(now.getTime() - 5 * day);
+    const { applicationId } = await ctx.external({ appliedAt });
+    await ctx.tracker.setStatus({
+      userId: ctx.user.id,
+      applicationId,
+      status: "in_process",
+      now,
+    });
+    await ctx.tracker.setStatus({
+      userId: ctx.user.id,
+      applicationId,
+      status: "applied",
+      now,
+    });
+    const detail = await ctx.tracker.get({
+      userId: ctx.user.id,
+      applicationId,
+    });
+    expect(detail.status).toBe("applied");
+    expect(detail.appliedAt).toEqual(appliedAt);
+
+    // Never sent: Applied records what was sent, from In preparation.
+    await ctx.tracker.setStatus({
+      userId: ctx.user.id,
+      applicationId,
+      status: "in_preparation",
+      now,
+    });
+    await ctx.tracker.setStatus({
+      userId: ctx.user.id,
+      applicationId,
+      status: "in_process",
+      now,
+    });
+    await expect(
+      ctx.tracker.setStatus({
+        userId: ctx.user.id,
+        applicationId,
+        status: "applied",
+        now,
+      })
+    ).rejects.toMatchObject({ code: "BAD_REQUEST" });
+  });
+
   it("keeps an application with an interview booked ahead open", async () => {
     const ctx = await setup();
     const { applicationId } = await ctx.external({

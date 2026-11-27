@@ -373,7 +373,7 @@ function useBoardMove() {
     }),
     applied_from_preparation: t.formatMessage({
       defaultMessage:
-        "Only an application in preparation can be marked as applied.",
+        "An application never sent is marked as applied from In preparation.",
     }),
     to_analyzed: t.formatMessage({
       defaultMessage: "An application can’t go back to Analyzed.",

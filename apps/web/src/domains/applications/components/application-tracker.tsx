@@ -179,12 +179,13 @@ function TrackerBlock({
   // Giving up is the withdrawn status: it asks for the reason first, and
   // cancelling leaves the status as it was.
   const [withdrawing, setWithdrawing] = useState(false);
-  // "No response" only comes with time; "Applied" with documents goes
-  // through the dialog that records what was sent.
+  // "No response" only comes with time; "Applied" goes through the dialog
+  // that records what was sent, unless it was already sent (back to it).
   const statuses = applicationStatusSchema.options.filter(
     (status) =>
       status === detail.status ||
-      (status !== "no_response" && status !== "applied")
+      (status !== "no_response" &&
+        (status !== "applied" || detail.appliedAt !== null))
   );
 
   return (
